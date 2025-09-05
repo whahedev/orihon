@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orihon — OpenPlanetaryMap &amp; NASA Trek</title>
+    <link rel="stylesheet" href="./orihon.css" />
+    <style>
+      :root {
+        --ink: #141a22;
+        --muted: #5a6675;
+        --line: #d5dde6;
+        --panel: #eef2f6;
+        --accent: #0f766e;
+        --accent-soft: #d4f0ec;
+        --space: #1c2430;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(900px 420px at 8% -8%, var(--accent-soft) 0%, transparent 55%),
+          linear-gradient(180deg, #e9eef4 0%, #f7f9fb 45%, #e8eef4 100%);
+      }
+
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100vh;
+      }
+
+      header, footer { padding: 1rem 1.25rem; }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem 1.5rem;
+        align-items: end;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, white 72%, transparent);
+        backdrop-filter: blur(8px);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1.35rem;
+        letter-spacing: -0.02em;
+      }
+
+      header p {
+        margin: 0.25rem 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        align-items: center;
+      }
+
+      label[for="basemap-select"] {
+        font-size: 0.85rem;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      #basemap-select {
+        appearance: none;
+        min-width: 18rem;
+        max-width: min(100%, 24rem);
+        padding: 0.55rem 2rem 0.55rem 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background:
+          white
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%235a6675' d='M1 1l5 5 5-5'/%3E%3C/svg%3E")
+          no-repeat right 0.75rem center;
+        color: var(--ink);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      #basemap-select:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.45rem 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: white;
+        color: var(--accent);
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      main {
+        padding: 1rem 1.25rem 1.25rem;
+        display: grid;
+        gap: 0.85rem;
+      }
+
+      #map {
+        direction: ltr;
+        unicode-bidi: isolate;
+        width: 100%;
+        height: min(74vh, 760px);
+        min-height: 440px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--space);
+        box-shadow: 0 18px 40px rgba(20, 26, 34, 0.1);
+      }
+
+      .hint {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.45;
+      }
+
+      footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      code {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.86em;
+      }
+
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Orihon × planetary basemaps</h1>
+        <p>OPM Web Mercator XYZ + NASA Trek OGC WMTS (equirectangular).</p>
+      </div>
+      <div class="toolbar">
+        <label for="basemap-select">Basemap</label>
+        <select id="basemap-select" aria-label="Planetary basemap">
+          <optgroup label="OpenPlanetaryMap (XYZ / Web Mercator)">
+            <option value="opm-mars" selected>OPM Mars v0.2</option>
+            <option value="opm-moon">OPM Moon v0.1</option>
+          </optgroup>
+          <optgroup label="NASA Trek (WMTS / equirectangular)">
+            <option value="trek-moon-wac">Moon Trek · LRO WAC mosaic</option>
+            <option value="trek-mars-viking">Mars Trek · Viking MDIM</option>
+            <option value="trek-mars-mola">Mars Trek · MOLA / HRSC shade</option>
+          </optgroup>
+        </select>
+        <span class="badge" id="status-badge">OPM · Mars</span>
+      </div>
+    </header>
+
+    <main>
+      <div id="map" role="application" dir="ltr"></div>
+      <p class="hint" id="page-hint">
+        <a href="https://www.openplanetary.org/opm/basemaps" target="_blank" rel="noopener noreferrer">OpenPlanetaryMap</a>
+        uses Web Mercator XYZ via <code>tileLayer</code>.
+        <a href="https://trek.nasa.gov/tiles/apidoc/trekAPI.html?body=moon" target="_blank" rel="noopener noreferrer">NASA Trek WMTS</a>
+        is equirectangular (2×1 tiles at z0), so this demo lays tiles with <code>imageOverlay</code> by lon/lat bounds.
+      </p>
+    </main>
+
+    <footer>
+      Built with <code>orihon.global.js</code> · PolyForm Noncommercial 1.0.0 ·
+      OPM © OpenPlanetary · Trek imagery courtesy NASA / JPL / ASU
+    </footer>
+
+    <script src="./orihon.global.js"></script>
+    <script>
+      const { createMap, tileLayer, imageOverlay, marker } = Orihon;
+
+      const CENTER = [0, 0];
+      const DEFAULT_ZOOM = 3;
+
+      const LAYERS = {
+        "opm-mars": {
+          kind: "xyz",
+          badge: "OPM · Mars",
+          url: "https://cartocdn-gusc.global.ssl.fastly.net/opmbuilder/api/v1/map/named/opm-mars-basemap-v0-2/all/{z}/{x}/{y}.png",
+          maxZoom: 9,
+          attribution:
+            '&copy; <a href="https://www.openplanetary.org/opm/basemaps">OpenPlanetaryMap</a> Mars basemap v0.2'
+        },
+        "opm-moon": {
+          kind: "xyz",
+          badge: "OPM · Moon",
+          url: "https://cartocdn-gusc.global.ssl.fastly.net/opmbuilder/api/v1/map/named/opm-moon-basemap-v0-1/all/{z}/{x}/{y}.png",
+          maxZoom: 8,
+          attribution:
+            '&copy; <a href="https://www.openplanetary.org/opm/basemaps">OpenPlanetaryMap</a> Moon basemap v0.1'
+        },
+        "trek-moon-wac": {
+          kind: "trek-wmts",
+          badge: "Trek · Moon WAC",
+          endpoint:
+            "https://trek.nasa.gov/tiles/Moon/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm",
+          ext: "jpg",
+          maxZoom: 8,
+          attribution:
+            '&copy; <a href="https://trek.nasa.gov/tiles/apidoc/trekAPI.html?body=moon">NASA Moon Trek</a> LRO WAC'
+        },
+        "trek-mars-viking": {
+          kind: "trek-wmts",
+          badge: "Trek · Mars Viking",
+          endpoint:
+            "https://trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm",
+          ext: "jpg",
+          maxZoom: 7,
+          attribution:
+            '&copy; <a href="https://trek.nasa.gov/tiles/apidoc/trekAPI.html?body=mars">NASA Mars Trek</a> Viking MDIM'
+        },
+        "trek-mars-mola": {
+          kind: "trek-wmts",
+          badge: "Trek · Mars MOLA",
+          endpoint:
+            "https://trek.nasa.gov/tiles/Mars/EQ/Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw/1.0.0/default/default028mm",
+          ext: "jpg",
+          maxZoom: 8,
+          attribution:
+            '&copy; <a href="https://trek.nasa.gov/tiles/apidoc/trekAPI.html?body=mars">NASA Mars Trek</a> MOLA/HRSC'
+        }
+      };
+
+      /**
+       * NASA Trek EQ WMTS uses geographic tiling: MatrixWidth=2^(z+1), MatrixHeight=2^z.
+       * Orihon is Web Mercator, so we place each WMTS tile as an imageOverlay on lon/lat bounds.
+       * @see https://trek.nasa.gov/tiles/apidoc/trekAPI.html?body=moon
+       */
+      class TrekWmtsLayer {
+        constructor(map, options) {
+          this.map = map;
+          this.options = options;
+          this.tiles = new Map();
+          this._onView = () => this.sync();
+          this._attrKey = null;
+        }
+
+        addTo(map = this.map) {
+          this.map = map;
+          this.map.on("moveend", this._onView);
+          this.map.on("zoomend", this._onView);
+          this.map.on("resize", this._onView);
+          this._attrKey = this.options.attribution;
+          if (this._attrKey) this.map.addAttribution(this._attrKey);
+          this.sync();
+          return this;
+        }
+
+        remove() {
+          this.map.off("moveend", this._onView);
+          this.map.off("zoomend", this._onView);
+          this.map.off("resize", this._onView);
+          for (const overlay of this.tiles.values()) this.map.removeLayer(overlay);
+          this.tiles.clear();
+          if (this._attrKey) this.map.removeAttribution(this._attrKey);
+          this._attrKey = null;
+          return this;
+        }
+
+        sync() {
+          const z = Math.max(
+            0,
+            Math.min(this.options.maxZoom, Math.round(this.map.getZoom()))
+          );
+          const cols = 2 ** (z + 1);
+          const rows = 2 ** z;
+          const degX = 360 / cols;
+          const degY = 180 / rows;
+
+          // Clamp to Web Mercator-friendly latitudes so overlays stay finite.
+          const mercMax = 85.05;
+          const bounds = this.map.getBounds();
+          const west = Math.max(-180, bounds.west - degX);
+          const east = Math.min(180, bounds.east + degX);
+          const south = Math.max(-mercMax, bounds.south - degY);
+          const north = Math.min(mercMax, bounds.north + degY);
+
+          const col0 = Math.max(0, Math.floor((west + 180) / degX));
+          const col1 = Math.min(cols - 1, Math.floor((east + 180) / degX));
+          const row0 = Math.max(0, Math.floor((90 - north) / degY));
+          const row1 = Math.min(rows - 1, Math.floor((90 - south) / degY));
+
+          const needed = new Set();
+          for (let row = row0; row <= row1; row++) {
+            for (let col = col0; col <= col1; col++) {
+              const key = `${z}/${row}/${col}`;
+              needed.add(key);
+              if (this.tiles.has(key)) continue;
+
+              const tileWest = -180 + col * degX;
+              const tileEast = tileWest + degX;
+              const tileNorth = Math.min(mercMax, 90 - row * degY);
+              const tileSouth = Math.max(-mercMax, tileNorth - degY);
+              if (tileSouth >= tileNorth) continue;
+
+              const url = `${this.options.endpoint}/${z}/${row}/${col}.${this.options.ext}`;
+              const overlay = imageOverlay(
+                url,
+                [
+                  [tileSouth, tileWest],
+                  [tileNorth, tileEast]
+                ],
+                {
+                  pane: "tile",
+                  opacity: 1,
+                  className: "oh-trek-tile",
+                  crossOrigin: "anonymous",
+                  zIndex: 0
+                }
+              ).addTo(this.map);
+              this.tiles.set(key, overlay);
+            }
+          }
+
+          for (const [key, overlay] of this.tiles) {
+            if (needed.has(key)) continue;
+            this.map.removeLayer(overlay);
+            this.tiles.delete(key);
+          }
+        }
+      }
+
+      const select = document.getElementById("basemap-select");
+      const badge = document.getElementById("status-badge");
+      const mapEl = document.getElementById("map");
+
+      const map = createMap(mapEl, {
+        center: CENTER,
+        zoom: DEFAULT_ZOOM,
+        minZoom: 1,
+        maxZoom: 9,
+        ariaLabel: "Planetary basemap"
+      });
+
+      let active = null;
+
+      function clearActive() {
+        if (!active) return;
+        if (active.kind === "xyz") map.removeLayer(active.layer);
+        else active.layer.remove();
+        active = null;
+      }
+
+      function setBasemap(key) {
+        const cfg = LAYERS[key] || LAYERS["opm-mars"];
+        clearActive();
+
+        if (cfg.kind === "xyz") {
+          const layer = tileLayer(cfg.url, {
+            attribution: cfg.attribution,
+            maxZoom: cfg.maxZoom,
+            maxNativeZoom: cfg.maxZoom,
+            tms: false
+          }).addTo(map);
+          active = { kind: "xyz", layer };
+        } else {
+          const layer = new TrekWmtsLayer(map, {
+            endpoint: cfg.endpoint,
+            ext: cfg.ext,
+            maxZoom: cfg.maxZoom,
+            attribution: cfg.attribution
+          }).addTo(map);
+          active = { kind: "trek-wmts", layer };
+        }
+
+        if (map.getZoom() > cfg.maxZoom) map.setZoom(cfg.maxZoom);
+        badge.textContent = cfg.badge;
+        select.value = key in LAYERS ? key : "opm-mars";
+      }
+
+      marker(CENTER, { title: "Equator / prime meridian" })
+        .bindPopup("<strong>0°, 0°</strong><br>Planetary demo center")
+        .addTo(map);
+
+      select.addEventListener("change", () => setBasemap(select.value));
+      setBasemap(select.value);
+
+      window.__orihonOpmDemo = { map, layers: LAYERS, TrekWmtsLayer };
+    </script>
+  </body>
+</html>

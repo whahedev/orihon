@@ -1,0 +1,589 @@
+.oh-map {
+  /* Keep map geometry LTR even inside RTL pages (left/right + transform-origin). */
+  direction: ltr;
+  unicode-bidi: isolate;
+  position: relative;
+  overflow: hidden;
+  min-height: 160px;
+  background: #dbe4ea;
+  color: #172026;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  touch-action: none;
+  user-select: none;
+}
+
+.oh-map:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: -3px;
+}
+
+.oh-box-zoom {
+  position: absolute;
+  z-index: 1200;
+  border: 2px solid #2563eb;
+  background: rgba(37, 99, 235, .14);
+  pointer-events: none;
+}
+
+.oh-viewport,
+.oh-pane,
+.oh-control-pane {
+  position: absolute;
+  inset: 0;
+}
+
+.oh-pane {
+  transform-origin: 0 0;
+}
+
+/* Pane stack (Leaflet-like): marker z-index uses screen Y and must stay inside marker pane. */
+.oh-tile-pane {
+  z-index: 200;
+}
+
+.oh-overlay-pane {
+  z-index: 400;
+}
+
+.oh-marker-pane {
+  z-index: 600;
+}
+
+.oh-tooltip-pane {
+  z-index: 650;
+  pointer-events: none;
+}
+
+.oh-popup-pane {
+  z-index: 700;
+  pointer-events: none;
+}
+
+.oh-canvas-base {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.oh-tile-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.oh-tile-level {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+  transform-origin: 0 0;
+}
+
+.oh-grid-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.oh-tile {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  opacity: 0;
+  transform-origin: 0 0;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.oh-tile-loaded {
+  opacity: 1;
+}
+
+.oh-svg-layer {
+  position: absolute;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.oh-canvas-path-batch,
+.oh-webgl-path-batch {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.oh-svg-layer .oh-interactive {
+  cursor: pointer;
+  pointer-events: visiblePainted;
+}
+
+.oh-marker {
+  position: absolute;
+  width: 24px;
+  height: 36px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.oh-marker-pin {
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: 0 auto;
+  border: 2px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: #e11d48;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .28);
+  transform: rotate(-45deg);
+}
+
+.oh-marker-pin::after {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 6px;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.oh-marker-custom {
+  overflow: visible;
+}
+
+.oh-marker:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+  border-radius: 5px;
+}
+
+.oh-marker-icon,
+.oh-marker-shadow,
+.oh-div-icon {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: block;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.oh-video-overlay,
+.oh-svg-overlay {
+  position: absolute;
+  display: block;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.oh-video-overlay {
+  object-fit: fill;
+}
+
+.oh-video-overlay.oh-interactive,
+.oh-svg-overlay.oh-interactive {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.oh-cluster-marker {
+  z-index: 2;
+}
+
+.oh-cluster-icon {
+  display: grid;
+  place-items: center;
+  border: 3px solid rgba(255, 255, 255, .9);
+  border-radius: 50%;
+  background: #0f766e;
+  color: #fff;
+  box-shadow: 0 2px 9px rgba(15, 23, 42, .28);
+  font: 700 12px/1 system-ui, sans-serif;
+}
+
+.oh-cluster-icon--sm {
+  background: #14b8a6;
+}
+
+.oh-cluster-icon--md {
+  background: #0f766e;
+}
+
+.oh-cluster-icon--lg {
+  background: #c2410c;
+}
+
+.oh-cluster-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.oh-suggest-list {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oh-suggest-item,
+.oh-suggest-empty {
+  margin: 0;
+}
+
+.oh-suggest-button {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid #d7e0e4;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172026;
+  font: inherit;
+  text-align: left;
+}
+
+.oh-suggest-item.is-active .oh-suggest-button,
+.oh-suggest-button:focus-visible {
+  border-color: #0f766e;
+  outline: 2px solid rgba(15, 118, 110, .18);
+}
+
+.oh-suggest-empty {
+  padding: 7px 9px;
+  color: #68787f;
+  font-size: 12px;
+}
+
+.oh-marker-shadow {
+  z-index: -1;
+}
+
+.oh-div-icon {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.oh-image-overlay {
+  position: absolute;
+  display: block;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.oh-webgl-point-layer {
+  position: absolute;
+  display: block;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.oh-webgl-tile-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.oh-heat-layer {
+  position: absolute;
+  display: block;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.oh-image-overlay.oh-interactive {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.oh-popup,
+.oh-tooltip {
+  position: absolute;
+  width: max-content;
+  max-width: min(280px, 70vw);
+  pointer-events: auto;
+}
+
+.oh-popup {
+  min-width: 130px;
+  padding: 10px 30px 10px 12px;
+  border: 1px solid rgba(23, 32, 38, .16);
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(23, 32, 38, .2);
+  color: #26373f;
+  font-size: 13px;
+  line-height: 1.4;
+  transform: translate(-50%, -100%);
+}
+
+.oh-popup::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid rgba(23, 32, 38, .16);
+  border-bottom: 1px solid rgba(23, 32, 38, .16);
+  background: #fff;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.oh-popup-close {
+  position: absolute;
+  z-index: 1;
+  top: 3px;
+  right: 3px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #61717a;
+  font: 20px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.oh-popup-close:hover {
+  color: #172026;
+}
+
+.oh-tooltip {
+  padding: 5px 7px;
+  border: 1px solid rgba(23, 32, 38, .14);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 3px 10px rgba(23, 32, 38, .14);
+  color: #34444d;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.oh-tooltip-top {
+  transform: translate(-50%, -100%);
+}
+
+.oh-tooltip-bottom {
+  transform: translate(-50%, 0);
+}
+
+.oh-tooltip-left {
+  transform: translate(-100%, -50%);
+}
+
+.oh-tooltip-right {
+  transform: translate(0, -50%);
+}
+
+.oh-tooltip-center {
+  transform: translate(-50%, -50%);
+}
+
+.oh-control-pane {
+  pointer-events: none;
+}
+
+.oh-control-corner {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.oh-top-right {
+  top: 12px;
+  right: 12px;
+}
+
+.oh-top-left {
+  top: 12px;
+  left: 12px;
+}
+
+.oh-bottom-left {
+  left: 12px;
+  bottom: 12px;
+}
+
+.oh-bottom-right {
+  right: 12px;
+  bottom: 12px;
+}
+
+.oh-zoom-control {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, .12);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .16);
+}
+
+.oh-control-button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: rgba(255, 255, 255, .96);
+  color: #172026;
+  font: 600 20px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.oh-control-button:hover {
+  background: #f4f7f9;
+}
+
+.oh-control-button:disabled {
+  color: #9aa7ae;
+  cursor: default;
+}
+
+.oh-control-loading .oh-control-button {
+  cursor: progress;
+}
+
+.oh-control-button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.oh-scale-control {
+  display: grid;
+  justify-items: start;
+  border: solid #172026;
+  border-width: 0 0 0 2px;
+  color: #172026;
+  font-size: 12px;
+  text-align: center;
+  text-shadow: 0 1px #fff;
+}
+
+.oh-scale-line {
+  box-sizing: border-box;
+  height: 18px;
+  border: solid #172026;
+  border-width: 0 2px 2px 0;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.oh-attribution-control {
+  max-width: min(70vw, 560px);
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, .9);
+  color: #334155;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: right;
+  white-space: normal;
+}
+
+.oh-layers-control {
+  display: grid;
+  justify-items: end;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, .12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .16);
+}
+
+.oh-layers-toggle {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #172026;
+  font: 600 20px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.oh-layers-list {
+  min-width: 170px;
+  max-height: min(55vh, 360px);
+  padding: 6px 10px 9px;
+  overflow-y: auto;
+}
+
+.oh-layers-heading {
+  margin: 5px 0 3px;
+  color: #65747d;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.oh-layers-option {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  gap: 7px;
+  color: #34444d;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.oh-layers-option input {
+  margin: 0;
+  accent-color: #0d8879;
+}
+
+.oh-layers-control:not(.oh-layers-expanded) .oh-layers-list {
+  display: none;
+}
+
+.oh-layers-control.oh-layers-expanded .oh-layers-toggle {
+  border-bottom: 1px solid rgba(15, 23, 42, .1);
+}
+
+.oh-custom-control {
+  border: 1px solid rgba(15, 23, 42, .12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .14);
+}
+
+.oh-custom-control-content {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 9px;
+  color: #26373f;
+  font-size: 12px;
+}
+
+.oh-dragging,
+.oh-dragging .oh-marker {
+  cursor: grabbing;
+}

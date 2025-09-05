@@ -1,0 +1,14 @@
+node_modules/
+**/node_modules/
+dist/
+playwright-report/
+**/playwright-report/
+test-results/
+**/test-results/
+*.tgz
+*.tsbuildinfo
+.DS_Store
+.npmrc
+.env
+.env.*
+_legacy_root/

@@ -1,0 +1,125 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  CircleMarker,
+  DivIcon,
+  GridLayer,
+  Icon,
+  ImageOverlay,
+  LayersControl,
+  Marker,
+  Popup,
+  Rectangle,
+  SVGOverlay,
+  Tooltip,
+  VideoOverlay,
+  circle,
+  circleMarker,
+  divIcon,
+  gridLayer,
+  icon,
+  imageOverlay,
+  latLngBounds,
+  layersControl,
+  marker,
+  rectangle,
+  svgOverlay,
+  videoOverlay
+} from "../dist/index.js";
+
+test("layers expose popup and tooltip binding API", () => {
+  const layer = marker([52.52, 13.405]);
+  layer.bindPopup("Popup").bindTooltip("Tooltip");
+
+  assert.ok(layer.getPopup() instanceof Popup);
+  assert.ok(layer.getTooltip() instanceof Tooltip);
+  assert.equal(layer.isPopupOpen(), false);
+  assert.equal(layer.isTooltipOpen(), false);
+
+  layer.unbindPopup().unbindTooltip();
+  assert.equal(layer.getPopup(), null);
+  assert.equal(layer.getTooltip(), null);
+});
+
+test("Icon and DivIcon retain size and anchor semantics", () => {
+  const image = icon({ iconUrl: "marker.png", iconSize: [30, 40], iconAnchor: [15, 40] });
+  const div = divIcon({ content: "A", iconSize: [28, 28] });
+
+  assert.ok(image instanceof Icon);
+  assert.deepEqual(image.getSize().toArray(), [30, 40]);
+  assert.deepEqual(image.getAnchor().toArray(), [15, 40]);
+  assert.ok(div instanceof DivIcon);
+  assert.deepEqual(div.getAnchor().toArray(), [14, 14]);
+
+  const layer = new Marker([0, 0], { icon: div });
+  assert.equal(layer.getIcon(), div);
+  layer.setIcon(image);
+  assert.equal(layer.getIcon(), image);
+});
+
+test("Rectangle, Circle and CircleMarker expose mutable geometry", () => {
+  const box = latLngBounds([10, 20], [12, 24]);
+  const area = rectangle(box);
+  const dot = circleMarker([11, 22], { radius: 12 });
+  const metric = circle([11, 22], 1000);
+
+  assert.ok(area instanceof Rectangle);
+  assert.equal(area.getBounds().toBBoxString(), "20,10,24,12");
+  area.setBounds([[0, 1], [2, 3]]);
+  assert.equal(area.getBounds().toBBoxString(), "1,0,3,2");
+
+  assert.ok(dot instanceof CircleMarker);
+  assert.equal(dot.getRadius(), 12);
+  dot.setRadius(18).setLatLng([5, 6]);
+  assert.equal(dot.getRadius(), 18);
+  assert.deepEqual(dot.getLatLng().toArray(), [5, 6]);
+  assert.equal(metric.getBounds().contains(metric.getLatLng()), true);
+});
+
+test("ImageOverlay and LayersControl factories expose lifecycle state", () => {
+  const overlay = imageOverlay("overlay.png", [[55, 37], [56, 38]], { opacity: 0.5 });
+  const base = marker([0, 0]);
+  const control = layersControl({ Base: base }, { Image: overlay }, { collapsed: false });
+
+  assert.ok(overlay instanceof ImageOverlay);
+  assert.equal(overlay.getBounds().toBBoxString(), "37,55,38,56");
+  assert.equal(overlay.options.zIndex, 0);
+  overlay.setBounds([[1, 2], [3, 4]]).setOpacity(0.7).setZIndex(4).setUrl("next.png");
+  assert.equal(overlay.getBounds().toBBoxString(), "2,1,4,3");
+  assert.equal(overlay.url, "next.png");
+
+  assert.ok(control instanceof LayersControl);
+  assert.equal(control.entries.length, 2);
+  control.removeLayer(base);
+  assert.equal(control.entries.length, 1);
+});
+
+test("GridLayer, VideoOverlay and SVGOverlay expose stage four factories", () => {
+  const grid = gridLayer({ tileSize: 512, opacity: 0.5 });
+  const video = videoOverlay(["a.webm", "a.mp4"], [[55, 37], [56, 38]], { controls: true });
+  const svg = svgOverlay("<svg viewBox=\"0 0 10 10\"></svg>", [[55, 37], [56, 38]], { opacity: 0.6 });
+
+  assert.ok(grid instanceof GridLayer);
+  assert.equal(grid.getTileSize(), 512);
+  grid.setOpacity(0.8).setZIndex(3);
+  assert.equal(grid.options.opacity, 0.8);
+  assert.equal(grid.options.zIndex, 3);
+
+  assert.ok(video instanceof VideoOverlay);
+  assert.deepEqual(video.urls, ["a.webm", "a.mp4"]);
+  assert.equal(video.getBounds().toBBoxString(), "37,55,38,56");
+
+  assert.ok(svg instanceof SVGOverlay);
+  assert.equal(svg.getBounds().toBBoxString(), "37,55,38,56");
+});
+
+test("media overlays become interactive when a popup is bound", () => {
+  const overlayBounds = [[52.48, 13.30], [52.55, 13.45]];
+  const image = imageOverlay("image.png", overlayBounds).bindPopup("image");
+  const video = videoOverlay("video.mp4", overlayBounds).bindPopup("video");
+  const svg = svgOverlay("<svg xmlns='http://www.w3.org/2000/svg'/>", overlayBounds).bindPopup("svg");
+  assert.equal(image.options.interactive, true);
+  assert.equal(video.options.interactive, true);
+  assert.equal(svg.options.interactive, true);
+});
+

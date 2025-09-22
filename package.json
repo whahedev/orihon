@@ -1,6 +1,6 @@
 {
   "name": "orihon",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Unfold the world. A lightweight, high-performance mapping library — less weight, more space.",
   "type": "module",
   "main": "./dist/index.js",

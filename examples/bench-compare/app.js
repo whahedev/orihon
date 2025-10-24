@@ -9,7 +9,7 @@ import {
   webglHeatLayer,
   webglPointLayer,
   webglTileLayer
-} from "/dist/index.js";
+} from "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.esm.js";
 import { createMapLibreRawPoints } from "./maplibre-raw.js";
 
 const CENTER = [50.1, 14.4];
@@ -2978,7 +2978,7 @@ function renderResults(scenario, rows) {
 
 function refreshBundleSizes() {
   const patterns = [
-    { label: "Orihon bundle", match: /\/dist\/(index|orihon)\./ },
+    { label: "Orihon bundle", match: /(?:\/npm\/orihon@[^/]+\/dist\/|\borihon)(?:\.esm|\.global|\.css|\/index\.)/ },
     { label: "Leaflet", match: /leaflet@[^/]+\/dist\/leaflet\.js/ },
     { label: "Leaflet.markercluster", match: /leaflet\.markercluster/ },
     { label: "Leaflet.heat", match: /leaflet\.heat|leaflet-heat/ },

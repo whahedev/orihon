@@ -1,0 +1,43 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "examples/bench-compare/**"
+      - "examples/lab/**"
+      - "examples/site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare site
+        run: |
+          mkdir -p _site/lab _site/bench
+          cp examples/site/index.html _site/index.html
+          cp -R examples/lab/. _site/lab/
+          cp -R examples/bench-compare/. _site/bench/
+          # Lab local server helpers are not needed on Pages.
+          rm -f _site/lab/server.js
+          rm -rf _site/lab/examples
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

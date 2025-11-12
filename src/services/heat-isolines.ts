@@ -1,4 +1,4 @@
-import { MAX_LAT, TILE_SIZE, latLng, type LatLngBoundsLike, type LatLngLike, latLngBounds } from "../geo.js";
+import { TILE_SIZE, latLng, projectMercator01, type LatLngBoundsLike, type LatLngLike, latLngBounds } from "../geo.js";
 
 export type HeatIsolineInput = LatLngLike | [number, number, number?];
 
@@ -69,8 +69,8 @@ export function buildHeatIsolines(
 
   // Approximate CSS px across the bounds at this zoom (Web Mercator).
   const scale = TILE_SIZE * 2 ** zoom;
-  const mercW = Math.abs(lngToMercatorX(east) - lngToMercatorX(west)) * scale;
-  const mercH = Math.abs(latToMercatorY(north) - latToMercatorY(south)) * scale;
+  const mercW = Math.abs(projectMercator01(0, east).x - projectMercator01(0, west).x) * scale;
+  const mercH = Math.abs(projectMercator01(north, 0).y - projectMercator01(south, 0).y) * scale;
   const cssSpan = Math.max(mercW, mercH, 1);
   const cellCss = cssSpan / Math.max(cols, rows);
   const radiusCells = Math.max(1.25, kernelCss / cellCss);
@@ -336,20 +336,8 @@ function normalizeHeat(value: HeatIsolineInput): { lat: number; lng: number; wei
   return { lat: point.lat, lng: point.lng, weight: 1 };
 }
 
-function lngToMercatorX(lng: number): number {
-  const wrapped = ((((lng + 180) % 360) + 360) % 360) - 180;
-  return (wrapped + 180) / 360;
-}
-
-function latToMercatorY(lat: number): number {
-  let clamped = lat;
-  if (clamped > MAX_LAT) clamped = MAX_LAT;
-  else if (clamped < -MAX_LAT) clamped = -MAX_LAT;
-  const sin = Math.sin((clamped * Math.PI) / 180);
-  return 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
-}
-
-function heatRadiusScale(zoom: number, scaleZoom: number): number {
+/** Screen kernel scale: shrink when zoomed out; flat when zooming in. */
+export function heatRadiusScale(zoom: number, scaleZoom: number): number {
   const dz = zoom - scaleZoom;
   if (dz >= 0) return 1;
   const geo = Math.pow(2, dz);

@@ -1,5 +1,5 @@
 import { Evented, type OrihonEvent, type EventHandler } from "./events.js";
-import { latLng, type LatLngLike } from "./geo.js";
+import { latLng, type LatLng, type LatLngLike, type Point } from "./geo.js";
 import type { Orihon } from "./map.js";
 import type { OverlayContent, Popup, PopupOptions, Tooltip, TooltipOptions } from "./overlays/div-overlay.js";
 
@@ -7,6 +7,26 @@ export interface LayerOptions {
   pane?: string;
   attribution?: string;
 }
+
+export type QuerySource = "svg" | "dom" | "canvas" | "webgl" | "cluster" | "object";
+
+export interface QueryHit {
+  layer: Layer;
+  latlng: LatLng;
+  source: QuerySource;
+  id?: string | number;
+  index?: number;
+  feature?: unknown;
+}
+
+export interface QueryOptions {
+  tolerance?: number;
+  layers?: Layer[];
+  pane?: string;
+  limit?: number;
+}
+
+export type ResolvedQueryOptions = Required<QueryOptions>;
 
 type PopupFactory = (content: OverlayContent, options?: PopupOptions) => Popup;
 type TooltipFactory = (content: OverlayContent, options?: TooltipOptions) => Tooltip;
@@ -186,5 +206,13 @@ export class Layer<TOptions extends LayerOptions = LayerOptions> extends Evented
     return fallback ? this._overlayAnchor() : undefined;
   }
 
+  /** Camera frames call `render()` only when this returns true. */
+  wantsFrameRender(): boolean {
+    return true;
+  }
+
   render(): void {}
+
+  /** Optional renderer-specific hit-test used by map.query(). */
+  queryHit?(point: Point, options: ResolvedQueryOptions): QueryHit | QueryHit[] | null;
 }

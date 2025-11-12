@@ -152,7 +152,6 @@ export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDiv
         if (generation !== this._contentGeneration || !this.contentNode) return;
         this.contentNode.removeAttribute("aria-busy");
         this.#mountContent(resolved, context, generation);
-        this.render();
       }).catch((error: unknown) => {
         if (generation !== this._contentGeneration || !this.contentNode) return;
         this.contentNode.removeAttribute("aria-busy");
@@ -177,6 +176,7 @@ export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDiv
     if (!container || generation !== this._contentGeneration || value === null || value === undefined) return;
     if (typeof Node !== "undefined" && value instanceof Node) {
       container.replaceChildren(value);
+      this._contentDidRender();
       return;
     }
     if (isMountable(value)) {
@@ -191,7 +191,10 @@ export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDiv
           value.unmount?.(container, context);
         };
         if (generation !== this._contentGeneration || this.contentNode !== container) dispose();
-        else this._contentCleanup = dispose;
+        else {
+          this._contentCleanup = dispose;
+          this._contentDidRender();
+        }
       };
       try {
         const mounted = value.mount(container, context);
@@ -203,6 +206,12 @@ export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDiv
       return;
     }
     container.textContent = String(value);
+    this._contentDidRender();
+  }
+
+  /** Called after synchronous or asynchronous content has completed mounting. */
+  protected _contentDidRender(): void {
+    this.render();
   }
 
   #disposeContent(invalidate = true): void {
@@ -333,6 +342,11 @@ export class Popup extends DivOverlay<ResolvedPopupOptions> {
     super.setLatLng(value);
     this.#scheduleAutoPan();
     return this;
+  }
+
+  protected override _contentDidRender(): void {
+    super._contentDidRender();
+    this.#scheduleAutoPan();
   }
 
   #scheduleAutoPan(): void {

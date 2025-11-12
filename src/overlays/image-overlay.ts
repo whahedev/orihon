@@ -1,4 +1,4 @@
-import { createEl, listen } from "../dom.js";
+import { createEl, listen, listenTap } from "../dom.js";
 import { LatLngBounds, latLngBounds, type LatLngBoundsLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
@@ -167,7 +167,7 @@ export class ImageOverlay extends Layer<ResolvedImageOverlayOptions> {
     this._interactiveUnsub = null;
     if (!this.image || !this.map || !this.options.interactive) return;
     this.image.classList.add("oh-interactive");
-    this._interactiveUnsub = listen(this.image, "click", (event) => {
+    this._interactiveUnsub = listenTap(this.image, (event) => {
       event.stopPropagation();
       const rect = this.map!.container.getBoundingClientRect();
       this.emit("click", {

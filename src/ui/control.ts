@@ -1,5 +1,4 @@
 import { createEl, listen } from "../dom.js";
-import { distance } from "../geo.js";
 import type { Layer } from "../layer.js";
 import type { Orihon, ControlPosition } from "../map.js";
 import { resolveLocale, type OrihonLocale, type LocaleInput } from "./locale.js";
@@ -113,8 +112,18 @@ export class ZoomControl extends Control<ZoomControlOptions> {
 
   override render(): void {
     if (!this.map) return;
-    if (this.zoomInButton) this.zoomInButton.disabled = this.map.zoom >= this.map.options.maxZoom;
-    if (this.zoomOutButton) this.zoomOutButton.disabled = this.map.zoom <= this.map.options.minZoom;
+    if (this.zoomInButton) {
+      const title = this.options.zoomInTitle ?? this.locale.zoomIn;
+      this.zoomInButton.disabled = this.map.zoom >= this.map.options.maxZoom;
+      this.zoomInButton.title = title;
+      this.zoomInButton.setAttribute("aria-label", title);
+    }
+    if (this.zoomOutButton) {
+      const title = this.options.zoomOutTitle ?? this.locale.zoomOut;
+      this.zoomOutButton.disabled = this.map.zoom <= this.map.options.minZoom;
+      this.zoomOutButton.title = title;
+      this.zoomOutButton.setAttribute("aria-label", title);
+    }
   }
 }
 
@@ -151,7 +160,7 @@ export class ScaleControl extends Control<ScaleControlOptions> {
     const a = this.map.containerPointToLatLng({ x: 0, y: this.map.size.height });
     const maxWidth = Math.max(40, Number(this.options.maxWidth ?? 100));
     const b = this.map.containerPointToLatLng({ x: maxWidth, y: this.map.size.height });
-    const meters = distance(a, b);
+    const meters = this.map.distance(a, b);
     const units = this.options.units ?? "metric";
     const metric = formatMetricScale(meters, this.locale);
     const imperial = formatImperialScale(meters, this.locale);
@@ -224,6 +233,12 @@ export class GeolocationControl extends Control<GeolocationControlOptions> {
     this._active = false;
     this.button = null;
     super.onRemove();
+  }
+
+  override render(): void {
+    if (!this.button || this.button.disabled) return;
+    this.button.title = this.locale.locate;
+    this.button.setAttribute("aria-label", this.locale.locate);
   }
 
   #settle(): void {
@@ -363,6 +378,11 @@ export class LayersControl extends Control<LayersControlOptions> {
 
   override render(): void {
     if (!this.map || !this.form) return;
+    if (this.toggleButton) {
+      this.toggleButton.title = this.locale.layers;
+      this.toggleButton.setAttribute("aria-label", this.locale.layers);
+    }
+    this.form.setAttribute("aria-label", this.locale.layers);
     for (const unsubscribe of this.inputUnsub.splice(0)) unsubscribe();
     this.form.textContent = "";
     let hasBase = false;

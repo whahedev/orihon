@@ -1,7 +1,10 @@
 import { createEl } from "../dom.js";
-import { MAX_LAT, TILE_SIZE, latLng, type LatLngLike } from "../geo.js";
+import { TILE_SIZE, latLng, projectMercator01, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
+import { assertMercator } from "../crs.js";
+import { heatRadiusScale } from "../services/heat-isolines.js";
+import { compileShader, linkProgram } from "../webgl-utils.js";
 
 export type WebGLHeatInput = LatLngLike | [number, number, number?];
 
@@ -176,7 +179,7 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
       for (let i = 0; i < points.length; i++) {
         const next = normalizeHeat(points[i]);
         if (!next) continue;
-        const m = latLngToMercator(next.lat, next.lng);
+        const m = projectMercator01(next.lat, next.lng);
         buf[write++] = m.x;
         buf[write++] = m.y;
         buf[write++] = next.weight;
@@ -188,7 +191,7 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
       for (const item of points) {
         const next = normalizeHeat(item);
         if (!next) continue;
-        const m = latLngToMercator(next.lat, next.lng);
+        const m = projectMercator01(next.lat, next.lng);
         values.push(m.x, m.y, next.weight);
       }
       this._dataBuf = new Float32Array(values);
@@ -206,20 +209,14 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
   }
 
   clear(): this {
-    this.data = new Float32Array();
-    this._count = 0;
-    this._aggData = new Float32Array(0);
-    this._aggCount = 0;
-    this._aggZoom = Number.NaN;
-    this._drawData = new Float32Array(0);
-    this._drawn = 0;
+    this.#releaseCpuBuffers();
     this._gpuBytes = 0;
-    this._bufferDirty = true;
     this.render();
     return this;
   }
 
   override onAdd(map: Orihon): void {
+    assertMercator(map.crs);
     this._disposed = false;
     super.onAdd(map);
     const pane = this.getPane();
@@ -270,7 +267,17 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
     }
     this.canvas = null;
     this.renderer = "none";
-    this.#releaseCpuBuffers();
+    // Keep source points (`data` / `_count`) so remove→add toggles still draw.
+    // Drop only derived GPU-facing caches; call `clear()` to wipe points.
+    this._aggData = new Float32Array(0);
+    this._aggCount = 0;
+    this._aggZoom = Number.NaN;
+    this._drawData = new Float32Array(0);
+    this._drawn = 0;
+    this._drawSignature = "";
+    this._bufferDirty = true;
+    this._cssW = 0;
+    this._cssH = 0;
     super.onRemove();
   }
 
@@ -395,8 +402,10 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
       uniform float u_minOpacity;
       uniform float u_opacity;
       void main() {
-        // FBO texture is upside-down vs screen NDC in WebGL1.
-        float t = texture2D(u_intensity, vec2(v_uv.x, 1.0 - v_uv.y)).r;
+        // Intensity pass already maps CSS Y-down → NDC Y-up, so FBO v matches
+        // screen NDC. Do not flip again here (that mirrors heat about mid-Y and
+        // makes blobs drift opposite the basemap on zoom).
+        float t = texture2D(u_intensity, v_uv).r;
         if (t < u_minOpacity) discard;
         // Soft curve keeps mid-density blues/greens before clipping to red.
         t = clamp(pow(t, 0.85), 0.0, 1.0);
@@ -828,61 +837,8 @@ function normalizeHeat(value: WebGLHeatInput): { lat: number; lng: number; weigh
   return { lat: point.lat, lng: point.lng, weight: 1 };
 }
 
-function latLngToMercator(lat: number, lng: number): { x: number; y: number } {
-  let clampedLat = lat;
-  if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
-  else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
-  const wrappedLng = ((((lng + 180) % 360) + 360) % 360) - 180;
-  const sin = Math.sin((clampedLat * Math.PI) / 180);
-  return {
-    x: (wrappedLng + 180) / 360,
-    y: 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)
-  };
-}
-
-/** Screen kernel scale: shrink when zoomed out; flat when zooming in (geographic size shrinks). */
-function heatRadiusScale(zoom: number, scaleZoom: number): number {
-  const dz = zoom - scaleZoom;
-  if (dz >= 0) return 1;
-  const geo = Math.pow(2, dz);
-  return Math.max(0.22, geo * 0.55 + 0.45 * Math.pow(geo, 0.35));
-}
-
-/**
- * Intensity scale: ease down when zooming in so dense packs don't saturate to solid red.
- * Stays ~1 at/below scaleZoom (radius shrink handles overview).
- */
 function heatIntensityScale(zoom: number, scaleZoom: number): number {
   const dz = zoom - scaleZoom;
   if (dz <= 0) return 1;
   return 1 / Math.pow(2, Math.min(dz, 6) * 0.45);
-}
-
-function compileShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
-}
-
-function linkProgram(
-  gl: WebGLRenderingContext,
-  vertex: WebGLShader,
-  fragment: WebGLShader
-): WebGLProgram | null {
-  const program = gl.createProgram();
-  if (!program) return null;
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    gl.deleteProgram(program);
-    return null;
-  }
-  return program;
 }

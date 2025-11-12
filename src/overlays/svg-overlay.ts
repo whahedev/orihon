@@ -1,4 +1,4 @@
-import { listen } from "../dom.js";
+import { listenTap } from "../dom.js";
 import { LatLngBounds, latLngBounds, type LatLngBoundsLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
@@ -143,7 +143,7 @@ export class SVGOverlay extends Layer<ResolvedSVGOverlayOptions> {
     this._interactiveUnsub = null;
     if (!this.element || !this.map || !this.options.interactive) return;
     this.element.classList.add("oh-interactive");
-    this._interactiveUnsub = listen(this.element, "click", (event) => {
+    this._interactiveUnsub = listenTap(this.element, (event) => {
       event.stopPropagation();
       const rect = this.map!.container.getBoundingClientRect();
       this.emit("click", {
@@ -173,15 +173,29 @@ export function svgOverlay(content: SVGOverlayContent, value: LatLngBoundsLike, 
   return new SVGOverlay(content, value, options);
 }
 
-const DANGEROUS_SVG_TAGS = new Set(["script", "foreignobject", "iframe", "object", "embed"]);
+const DANGEROUS_SVG_TAGS = new Set(
+  "script,foreignobject,iframe,object,embed,style,use,image,feimage,a,video,audio,animate,set,animatetransform,animatemotion".split(",")
+);
 
-/** Strip scripts, event handlers and javascript: URLs from parsed SVG strings before DOM insertion. */
+const URL_SVG_ATTRS = new Set(["href", "xlink:href", "src", "poster"]);
+
+export function svgTagIsDangerous(tag: string): boolean {
+  return DANGEROUS_SVG_TAGS.has(tag.toLowerCase());
+}
+
+export function svgAttributeIsDangerous(name: string, value: string): boolean {
+  const n = name.toLowerCase();
+  const v = value.trim();
+  if (n.startsWith("on") || n === "style") return true;
+  if (URL_SVG_ATTRS.has(n)) return Boolean(v) && !v.startsWith("#");
+  return /^(?:javascript|data|vbscript):/i.test(v);
+}
+
+/** Strip scripts, handlers, external URLs and unsafe tags from parsed SVG strings before DOM insertion. */
 export function sanitizeSvgElement(root: SVGElement): SVGElement {
   const scrubAttributes = (element: Element): void => {
     for (const attribute of [...element.attributes]) {
-      const name = attribute.name.toLowerCase();
-      const value = attribute.value.trim();
-      if (name.startsWith("on") || /^(?:javascript|data|vbscript):/i.test(value)) {
+      if (svgAttributeIsDangerous(attribute.name, attribute.value)) {
         element.removeAttribute(attribute.name);
       }
     }
@@ -192,7 +206,7 @@ export function sanitizeSvgElement(root: SVGElement): SVGElement {
   let node = walker.nextNode();
   while (node) {
     if (node instanceof Element) {
-      if (DANGEROUS_SVG_TAGS.has(node.tagName.toLowerCase())) remove.push(node);
+      if (svgTagIsDangerous(node.tagName)) remove.push(node);
       else scrubAttributes(node);
     }
     node = walker.nextNode();

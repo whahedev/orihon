@@ -1,5 +1,5 @@
 import { EARTH_RADIUS, TILE_SIZE, unproject } from "../geo.js";
-import { TileLayer, type TileLayerOptions } from "./tile-layer.js";
+import { TileLayer, modulo, type TileLayerOptions } from "./tile-layer.js";
 
 export type WMSParameterValue = string | number | boolean;
 
@@ -12,10 +12,6 @@ export interface WMSTileLayerOptions extends TileLayerOptions {
   crs?: "EPSG:3857" | "EPSG:4326" | string;
   uppercase?: boolean;
   params?: Record<string, WMSParameterValue>;
-}
-
-function modulo(value: number, divisor: number): number {
-  return ((value % divisor) + divisor) % divisor;
 }
 
 export class WMSTileLayer extends TileLayer {

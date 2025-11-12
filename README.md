@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![downloads](https://img.shields.io/npm/dm/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![CI](https://github.com/whahedev/orihon/actions/workflows/ci.yml/badge.svg)](https://github.com/whahedev/orihon/actions/workflows/ci.yml)
-[![full size](https://img.shields.io/badge/full-≤70_KiB_gzip-0f766e)](https://github.com/whahedev/orihon#tiers)
+[![full size](https://img.shields.io/badge/full-≤75_KiB_gzip-0f766e)](https://github.com/whahedev/orihon#tiers)
 [![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial-555)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-ready-3178c6)](./tsconfig.json)
 
@@ -20,7 +20,7 @@ Geometry moves.
 Surfaces connect.  
 The world keeps unfolding.
 
-At just **70 KB gzipped**, Orihon stays small where it matters — without sacrificing speed or capability.
+At less than **75 KiB gzipped**, Orihon stays small where it matters — without sacrificing speed or capability.
 
 In benchmarks, Orihon outperforms Leaflet, OpenLayers, and MapLibre, delivering faster rendering and interaction while keeping the core remarkably compact.
 
@@ -52,7 +52,9 @@ Orihon is built as three intentional surfaces. Start narrow; grow only when the 
 | **Standard** | `orihon/standard` | Core + markers, SVG/canvas vectors, GeoJSON (`svg`/`canvas`), popups, controls, overlays, locales — **no WebGL** |
 | **Advanced** | `orihon` | Standard + WebGL (points, heat, path batch, raster tiles), MVT, ObjectManager, routing, traffic, offline, workers, adapters |
 
-**WebGL policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `webglHeatLayer`, `webglTileLayer`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets).
+Optional entries keep product-specific integrations outside those tier budgets: `orihon/draw`, `orihon/react`, `orihon/pmtiles`, `orihon/controls`, `orihon/geo` and `orihon/popup-content`.
+
+**WebGL policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `webglHeatLayer`, `tileLayer({ renderer: "webgl"|"auto" })` / `webglTileLayer`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets).
 
 ```js
 // Core — basemap only
@@ -63,9 +65,16 @@ import { createMap, tileLayer, marker, geoJSON, zoomControl } from "orihon/stand
 
 // Advanced — GPU when volume / camera stress needs it
 import { createMap, objectManager, webglPointLayer, geoJSON } from "orihon";
+
+// Product integrations stay separate
+import { drawControl } from "orihon/draw";
+import { Map, TileLayer, Marker, Popup } from "orihon/react";
+import { createPMTilesProvider } from "orihon/pmtiles";
+import { fullscreenControl, measureControl, miniMap, graticuleLayer } from "orihon/controls";
+import { bufferPoint } from "orihon/geo";
 ```
 
-Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 35 KiB, full (Advanced + WebGL) ≤ 70 KiB. Prefer the smallest entry that covers the feature set.
+Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 35 KiB, full (Advanced + WebGL) ≤ 75 KiB. Prefer the smallest entry that covers the feature set.
 
 **ObjectManager** is the Advanced-tier answer to heavy datasets: render and manage 100,000+ map objects without keeping 100,000 DOM markers alive.
 
@@ -117,16 +126,16 @@ Script-tag / CDN build:
 Everything in Core, plus:
 
 - Markers, icons / `DivIcon`, SVG polylines, polygons with holes, rectangles, circles and circle markers.
-- `MarkerCollection` — viewport-culled DOM or auto WebGL for large point sets (50k+).
 - GeoJSON with `filter`, `style`, `pointToLayer`, `onEachFeature`.
 - Popups and tooltips (`bindPopup`, `bindTooltip`, auto-pan).
-- Image / video / SVG overlays, WMS tiles, canvas base layer, `LayerGroup` / `FeatureGroup`.
+- Image / video / SVG overlays, WMS and WMTS tiles, canvas labels with collision, canvas base layer, `LayerGroup` / `FeatureGroup`.
 - Zoom, scale, attribution, geolocation, layers and custom controls with locales (`en`, `ru`, `ar`, `tr`, `zh`, `de`, `fr`, `da`, `hi`).
 
 ### Advanced
 
 Everything in Standard, plus:
 
+- `MarkerCollection` — viewport-culled DOM or auto WebGL for large point sets (50k+); `iconMinZoom` switches to DivIcon markers when zoomed in.
 - `ObjectManager` / `RemoteObjectManager` — high-volume collections with viewport DOM, clustering and stale-request cancellation.
 - `WebGLPointLayer`, `WebGLHeatLayer`, `HeatIsolineLayer` / `buildHeatIsolines`, MVT-capable `VectorTileLayer`, canvas `heatLayer`.
 - Provider-based search, suggest, routing and traffic.
@@ -168,8 +177,10 @@ const map = createMap("map", { center: [55.75, 37.62], zoom: 11 });
 tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
 const manager = objectManager({
-  cluster: true,
-  clusterRadius: 60
+  clusterize: true,
+  clusterGridSize: 60,
+  clusterRenderer: "auto",
+  layoutWorker: "auto"
 }).addTo(map);
 
 manager.add(
@@ -322,9 +333,7 @@ map.behaviors.enable("dblClick");
 
 Orihon 1.0 keeps advanced modules opt-in for large datasets and production diagnostics without making the everyday map heavier.
 
-Public stress demo: [`examples/webgl-points-demo`](examples/webgl-points-demo) — switch **100k / 500k / 1M** points and live-read FPS, frame time, memory, visible and rendered counts through `performanceInspector` (`npm run demo:webgl`).
-
-Comparative engine bench: [`examples/bench-compare`](examples/bench-compare) — same point workload across Orihon, Leaflet, OpenLayers and MapLibre (`npm run demo:bench`, live at [whahedev.github.io/orihon/bench](https://whahedev.github.io/orihon/bench/)). Full capability playground: [`examples/lab`](examples/lab) (`npm run demo:lab`, live at [whahedev.github.io/orihon/lab](https://whahedev.github.io/orihon/lab/)).
+Scale showcase: [`examples/showcase`](examples/showcase) — Core → Standard → Advanced, then 100k+ stress scenes (`npm run demo:showcase`, live at [whahedev.github.io/orihon/showcase](https://whahedev.github.io/orihon/showcase/)). Comparative engine bench: [`examples/bench-compare`](examples/bench-compare) — same point workload across Orihon, Leaflet, OpenLayers and MapLibre (`npm run demo:bench`, live at [whahedev.github.io/orihon/bench](https://whahedev.github.io/orihon/bench/)).
 
 ```js
 const points = webglPointLayer(bigPointArray, {
@@ -341,7 +350,14 @@ const vectorTiles = vectorTileLayer({
 }).addTo(map);
 
 const mvtProvider = createMVTProvider("/mvt/{z}/{x}/{y}.pbf", { layer: "roads" });
-vectorTileLayer({ provider: mvtProvider }).addTo(map);
+vectorTileLayer({
+  provider: mvtProvider,
+  renderer: "canvas",
+  paint: [
+    { layer: "water", type: "fill", fill: "#a0c8f0" },
+    { layer: "roads", type: "line", stroke: "#fff", strokeWidth: 1.5, minZoom: 8 }
+  ]
+}).addTo(map);
 
 points.setViewTransform({ rotation: 25, pitch: 35 });
 
@@ -387,7 +403,9 @@ For a script-tag/global setup:
 | --- | --- |
 | `orihon.core.esm.js` | ≤ 22 KiB gzip |
 | `orihon.standard.esm.js` | ≤ 35 KiB gzip |
-| `orihon.esm.js` | ≤ 70 KiB gzip (Advanced + WebGL) |
+| `orihon.esm.js` | ≤ 75 KiB gzip (Advanced + WebGL) |
+| `orihon.controls.esm.js` | ≤ 8 KiB gzip (imports shared modules) |
+| `orihon.geo.esm.js` | ≤ 2 KiB gzip (imports shared geometry) |
 
 Raw minified sizes are larger; production cost is the gzip figure. Prefer modular imports when you do not need the full surface.
 
@@ -398,12 +416,12 @@ Raw minified sizes are larger; production cost is the gzip figure. Prefer modula
 - [Pricing](docs/PRICING.md)
 - [License FAQ](docs/LICENSE-FAQ.md)
 - [Commercial License Agreement](docs/COMMERCIAL-LICENSE.md)
-- [Library comparison](docs/COMPARE.md)
+- [Enhancement roadmap](docs/ROADMAP.md)
 - [Recipes](docs/RECIPES.md)
 - [Plugin development](docs/PLUGINS.md)
-- [WebGL points demo](examples/webgl-points-demo) (`npm run demo:webgl`)
-- [Capability lab](examples/lab) (`npm run demo:lab` · [live](https://whahedev.github.io/orihon/lab/))
+- [Scale showcase](examples/showcase) (`npm run demo:showcase` · [live](https://whahedev.github.io/orihon/showcase/))
 - [Engine benchmark](examples/bench-compare) (`npm run demo:bench` · [live](https://whahedev.github.io/orihon/bench/))
+- [Examples hub](https://whahedev.github.io/orihon/)
 
 ## Design Goals
 

@@ -2,6 +2,7 @@ import { LayerGroup } from "../layer-group.js";
 import { GeoJSONLayer, type GeoJSONFeature, type GeoJSONOptions } from "./geojson.js";
 import type { LatLngBoundsLike } from "../geo.js";
 import type { Orihon } from "../map.js";
+import { circleMarker, type PathOptions } from "./vector.js";
 
 export interface VectorTileCoordinates {
   x: number;
@@ -15,6 +16,15 @@ export type VectorTileProvider = (
   coordinates: VectorTileCoordinates
 ) => Promise<GeoJSONFeature[] | null | undefined> | GeoJSONFeature[] | null | undefined;
 
+export interface MVTPaintRule extends PathOptions {
+  layer: string;
+  type: "fill" | "line" | "circle";
+  minZoom?: number;
+  maxZoom?: number;
+  radius?: number;
+  filter?: (feature: GeoJSONFeature) => boolean;
+}
+
 export interface VectorTileLayerOptions extends Omit<GeoJSONOptions, "filter" | "style"> {
   minZoom?: number;
   maxZoom?: number;
@@ -22,6 +32,7 @@ export interface VectorTileLayerOptions extends Omit<GeoJSONOptions, "filter" | 
   provider: VectorTileProvider;
   filter?: GeoJSONOptions["filter"];
   style?: GeoJSONOptions["style"] | ((feature: GeoJSONFeature, tile: VectorTileCoordinates) => Record<string, unknown>);
+  paint?: MVTPaintRule[];
 }
 
 interface TileState {
@@ -43,6 +54,7 @@ export class VectorTileLayer extends LayerGroup {
       buffer: 1,
       filter: undefined,
       style: undefined,
+      paint: [],
       pointToLayer: undefined,
       onEachFeature: undefined,
       ...options
@@ -107,13 +119,38 @@ export class VectorTileLayer extends LayerGroup {
     try {
       const features = await this.options.provider(coordinates);
       if (controller.signal.aborted || !this.map || !this.tiles.has(key)) return;
-      const layer = new GeoJSONLayer({ type: "FeatureCollection", features: features || [] }, {
+      const sourceFeatures = features || [];
+      const usePaint = this.options.style == null && this.options.paint.length > 0;
+      const paintByFeature = new WeakMap<GeoJSONFeature, MVTPaintRule>();
+      const renderedFeatures = usePaint ? sourceFeatures.flatMap((feature) => {
+        const geometryType = feature.geometry?.type ?? "";
+        const sourceLayer = String(feature.properties?.layer ?? "");
+        const matches = this.options.paint.filter((paint) =>
+          paint.layer === sourceLayer
+          && z >= (paint.minZoom ?? -Infinity)
+          && z <= (paint.maxZoom ?? Infinity)
+          && (paint.type === "circle" ? geometryType.includes("Point")
+            : paint.type === "line" ? geometryType.includes("Line")
+              : geometryType.includes("Polygon"))
+          && (!paint.filter || paint.filter(feature))
+        );
+        return matches.map((paint) => {
+          const clone = { ...feature, properties: feature.properties ? { ...feature.properties } : feature.properties };
+          paintByFeature.set(clone, paint);
+          return clone;
+        });
+      }) : sourceFeatures;
+      const layer = new GeoJSONLayer({ type: "FeatureCollection", features: renderedFeatures }, {
+        ...this.options,
         filter: this.options.filter,
-        pointToLayer: this.options.pointToLayer,
+        pointToLayer: this.options.pointToLayer ?? (usePaint ? (feature, position) => {
+          const paint = paintByFeature.get(feature);
+          return circleMarker(position, { ...paintStyle(paint), radius: paint?.radius ?? 3 });
+        } : undefined),
         onEachFeature: this.options.onEachFeature,
         popup: this.options.popup,
         popupOptions: this.options.popupOptions,
-        style: typeof this.options.style === "function"
+        style: usePaint ? (feature) => paintStyle(paintByFeature.get(feature)) : typeof this.options.style === "function"
           ? (feature) => (this.options.style as (feature: GeoJSONFeature, tile: VectorTileCoordinates) => Record<string, unknown>)(feature, coordinates)
           : this.options.style
       });
@@ -126,6 +163,12 @@ export class VectorTileLayer extends LayerGroup {
       this.tiles.delete(key);
     }
   }
+}
+
+function paintStyle(paint?: MVTPaintRule): PathOptions {
+  if (!paint) return {};
+  const { layer: _layer, type: _type, minZoom: _min, maxZoom: _max, radius: _radius, filter: _filter, ...style } = paint;
+  return style;
 }
 
 export function vectorTileLayer(options: VectorTileLayerOptions): VectorTileLayer {

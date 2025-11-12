@@ -7,7 +7,12 @@ const budgets = {
   "orihon.core.esm.js": 22 * kib,
   "orihon.standard.esm.js": 35 * kib,
   // Advanced includes WebGL tiles/points/heat/paths — heavier by design.
-  "orihon.esm.js": 70 * kib
+  // P1 keeps Advanced a true superset of Standard (including text + WMTS).
+  "orihon.esm.js": 75 * kib,
+  "orihon.draw.esm.js": 12 * kib,
+  "orihon.controls.esm.js": 8 * kib,
+  "orihon.geo.esm.js": 2 * kib,
+  "orihon.popup-content.esm.js": 5 * kib
 };
 
 for (const [file, budget] of Object.entries(budgets)) {

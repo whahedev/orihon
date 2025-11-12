@@ -5,8 +5,13 @@ on:
     branches: [master]
     paths:
       - "examples/bench-compare/**"
-      - "examples/lab/**"
+      - "examples/showcase/**"
       - "examples/site/**"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "scripts/build-browser.mjs"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -27,15 +32,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
       - name: Prepare site
         run: |
-          mkdir -p _site/lab _site/bench
+          mkdir -p _site/bench
           cp examples/site/index.html _site/index.html
-          cp -R examples/lab/. _site/lab/
           cp -R examples/bench-compare/. _site/bench/
-          # Lab local server helpers are not needed on Pages.
-          rm -f _site/lab/server.js
-          rm -rf _site/lab/examples
+          cp -R examples/showcase/. _site/showcase/
+          # Showcase + bench load Orihon from jsDelivr when /dist is absent (no build on Pages).
+          # Drop optional local vendor stubs if present.
+          rm -rf _site/showcase/vendor _site/bench/vendor
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

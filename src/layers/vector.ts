@@ -1,6 +1,8 @@
-import { listen } from "../dom.js";
+import { listen, listenTap } from "../dom.js";
 import {
   EARTH_RADIUS,
+  destination,
+  geodesicInterpolate,
   LatLng,
   LatLngBounds,
   latLng,
@@ -9,7 +11,9 @@ import {
   type LatLngBoundsLike,
   type LatLngLike
 } from "../geo.js";
+import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
+import type { OverlayContent, PopupOptions, TooltipOptions } from "../overlays/div-overlay.js";
 import { Renderer, type RendererOptions } from "../renderer.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -22,6 +26,11 @@ export interface PathOptions extends RendererOptions {
   fillOpacity?: number;
   lineCap?: CanvasLineCap;
   lineJoin?: CanvasLineJoin;
+  dashArray?: string | number[] | null;
+  dashOffset?: number;
+  geodesic?: boolean;
+  arrow?: boolean | "end" | "start" | "both";
+  arrowSize?: number;
   interactive?: boolean;
   smoothFactor?: number;
   noClip?: boolean;
@@ -69,6 +78,9 @@ export class SvgLayer<TOptions extends RendererOptions = RendererOptions> extend
 export class PathLayer extends SvgLayer<ResolvedPathOptions> {
   path: SVGPathElement | null = null;
   readonly _pathUnsub: Array<() => void> = [];
+  protected supportsArrows = false;
+  private arrowMarker: SVGMarkerElement | null = null;
+  private arrowMarkerId = "";
 
   constructor(options: PathOptions = {}) {
     super({
@@ -80,6 +92,11 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
       fillOpacity: 0.18,
       lineCap: "round",
       lineJoin: "round",
+      dashArray: null,
+      dashOffset: 0,
+      geodesic: false,
+      arrow: false,
+      arrowSize: 10,
       interactive: true,
       smoothFactor: 1,
       noClip: false,
@@ -94,33 +111,65 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
     this.path = document.createElementNS(SVG_NS, "path");
     this.group.appendChild(this.path);
     this.#style();
-    if (this.options.interactive) {
-      this.path.classList.add("oh-interactive");
-      this.path.style.pointerEvents = "visiblePainted";
-      this._pathUnsub.push(listen(this.path, "click", (event) => {
-        event.stopPropagation();
-        this.emit("click", { originalEvent: event, latlng: this.#eventLatLng(event) });
-      }));
-      this._pathUnsub.push(listen(this.path, "pointerenter", (event) => {
-        this.emit("mouseover", { originalEvent: event, latlng: this.#eventLatLng(event) });
-      }));
-      this._pathUnsub.push(listen(this.path, "pointerleave", (event) => {
-        this.emit("mouseout", { originalEvent: event, latlng: this.#eventLatLng(event) });
-      }));
-    }
+    this.#syncInteraction();
     this.render();
   }
 
   override onRemove(): void {
     for (const unsubscribe of this._pathUnsub.splice(0)) unsubscribe();
     this.path = null;
+    this.arrowMarker = null;
+    this.arrowMarkerId = "";
     super.onRemove();
   }
 
   setStyle(style: PathOptions): this {
     Object.assign(this.options, style);
     this.#style();
+    this.render();
     return this;
+  }
+
+  override bindPopup(content: OverlayContent, options?: PopupOptions): this {
+    this.setInteractive(true);
+    return super.bindPopup(content, options);
+  }
+
+  override bindTooltip(content: OverlayContent, options?: TooltipOptions): this {
+    this.setInteractive(true);
+    return super.bindTooltip(content, options);
+  }
+
+  setInteractive(interactive: boolean): this {
+    this.options.interactive = Boolean(interactive);
+    this.#syncInteraction();
+    return this;
+  }
+
+  protected interactionPointerEvents(): "all" | "visiblePainted" {
+    return "visiblePainted";
+  }
+
+  #syncInteraction(): void {
+    for (const unsubscribe of this._pathUnsub.splice(0)) unsubscribe();
+    if (!this.path) return;
+    if (!this.options.interactive) {
+      this.path.classList.remove("oh-interactive");
+      this.path.style.pointerEvents = "none";
+      return;
+    }
+    this.path.classList.add("oh-interactive");
+    this.path.style.pointerEvents = this.interactionPointerEvents();
+    this._pathUnsub.push(listenTap(this.path, (event) => {
+      event.stopPropagation();
+      this.emit("click", { originalEvent: event, latlng: this.#eventLatLng(event) });
+    }));
+    this._pathUnsub.push(listen(this.path, "pointerenter", (event) => {
+      this.emit("mouseover", { originalEvent: event, latlng: this.#eventLatLng(event) });
+    }));
+    this._pathUnsub.push(listen(this.path, "pointerleave", (event) => {
+      this.emit("mouseout", { originalEvent: event, latlng: this.#eventLatLng(event) });
+    }));
   }
 
   #style(): void {
@@ -132,6 +181,51 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
     this.path.setAttribute("fill-opacity", String(this.options.fillOpacity));
     this.path.setAttribute("stroke-linecap", this.options.lineCap);
     this.path.setAttribute("stroke-linejoin", this.options.lineJoin);
+    const dash = normalizeDashArray(this.options.dashArray);
+    if (dash.length) this.path.setAttribute("stroke-dasharray", dash.join(" "));
+    else this.path.removeAttribute("stroke-dasharray");
+    if (this.options.dashOffset) this.path.setAttribute("stroke-dashoffset", String(this.options.dashOffset));
+    else this.path.removeAttribute("stroke-dashoffset");
+    this.#styleArrows();
+  }
+
+  #styleArrows(): void {
+    if (!this.path) return;
+    const arrow = this.supportsArrows ? this.options.arrow : false;
+    if (!arrow) {
+      this.path.removeAttribute("marker-start");
+      this.path.removeAttribute("marker-end");
+      return;
+    }
+    if (!this.arrowMarker && this.svg) {
+      const defs = document.createElementNS(SVG_NS, "defs");
+      const marker = document.createElementNS(SVG_NS, "marker");
+      const tip = document.createElementNS(SVG_NS, "path");
+      this.arrowMarkerId = `oh-arrow-${++arrowMarkerSequence}`;
+      marker.id = this.arrowMarkerId;
+      marker.setAttribute("viewBox", "0 0 10 10");
+      marker.setAttribute("refX", "9");
+      marker.setAttribute("refY", "5");
+      marker.setAttribute("markerUnits", "userSpaceOnUse");
+      marker.setAttribute("orient", "auto-start-reverse");
+      tip.setAttribute("d", "M0 0L10 5L0 10Z");
+      marker.appendChild(tip);
+      defs.appendChild(marker);
+      this.svg.insertBefore(defs, this.svg.firstChild);
+      this.arrowMarker = marker;
+    }
+    if (!this.arrowMarker) return;
+    const size = Math.max(1, Number(this.options.arrowSize));
+    this.arrowMarker.setAttribute("markerWidth", String(size));
+    this.arrowMarker.setAttribute("markerHeight", String(size));
+    this.arrowMarker.firstElementChild?.setAttribute("fill", this.options.stroke);
+    const reference = `url(#${this.arrowMarkerId})`;
+    const start = arrow === "start" || arrow === "both";
+    const end = arrow === true || arrow === "end" || arrow === "both";
+    if (start) this.path.setAttribute("marker-start", reference);
+    else this.path.removeAttribute("marker-start");
+    if (end) this.path.setAttribute("marker-end", reference);
+    else this.path.removeAttribute("marker-end");
   }
 
   #eventLatLng(event: PointerEvent | MouseEvent): LatLng {
@@ -139,6 +233,24 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
     const rect = this.map.container.getBoundingClientRect();
     return this.map.containerPointToLatLng([event.clientX - rect.left, event.clientY - rect.top]);
   }
+}
+
+let arrowMarkerSequence = 0;
+
+export function normalizeDashArray(value: PathOptions["dashArray"]): number[] {
+  const parts = Array.isArray(value) ? value : typeof value === "string" ? value.trim().split(/[ ,]+/) : [];
+  return parts.map(Number).filter((entry) => Number.isFinite(entry) && entry >= 0);
+}
+
+export function densifyLatLngs(points: LatLng[], closed = false, maxSegmentMeters = 100_000): LatLng[] {
+  if (points.length < 2) return points.map((value) => value.clone());
+  const result: LatLng[] = [];
+  const segments = closed ? points.length : points.length - 1;
+  for (let index = 0; index < segments; index++) {
+    const segment = geodesicInterpolate(points[index], points[(index + 1) % points.length], maxSegmentMeters);
+    result.push(...(index === 0 ? segment : segment.slice(1)));
+  }
+  return result;
 }
 
 interface ProjectedBounds {
@@ -151,6 +263,25 @@ interface ProjectedBounds {
 interface PointLikeXY {
   x: number;
   y: number;
+}
+
+function segmentDistance(target: PointLikeXY, a: PointLikeXY, b: PointLikeXY): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (!dx && !dy) return Math.hypot(target.x - a.x, target.y - a.y);
+  const t = Math.max(0, Math.min(1, ((target.x - a.x) * dx + (target.y - a.y) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(target.x - (a.x + t * dx), target.y - (a.y + t * dy));
+}
+
+function ringContainsPoint(target: PointLikeXY, ring: PointLikeXY[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if ((a.y > target.y) !== (b.y > target.y)
+      && target.x < ((b.x - a.x) * (target.y - a.y)) / (b.y - a.y || Number.EPSILON) + a.x) inside = !inside;
+  }
+  return inside;
 }
 
 export function projectedBounds(points: PointLikeXY[]): ProjectedBounds {
@@ -225,14 +356,18 @@ export function projectedPointsToPath(points: PointLikeXY[], close = false): str
 
 export class Polyline extends PathLayer {
   points: LatLng[];
+  protected override supportsArrows = true;
+  private geodesicPoints: LatLng[] | null = null;
 
   constructor(points: LatLngLike[], options?: PathOptions) {
     super(options);
     this.points = points.map((value) => latLng(value));
+    this.geodesicPoints = null;
   }
 
   setLatLngs(points: LatLngLike[]): this {
     this.points = points.map((value) => latLng(value));
+    this.geodesicPoints = null;
     this.render();
     return this;
   }
@@ -243,19 +378,41 @@ export class Polyline extends PathLayer {
 
   getBounds(): LatLngBounds {
     const result = new LatLngBounds();
-    for (const value of this.points) result.extend(value);
+    const source = this.options.geodesic && this.map?.crs.code !== "Simple" ? this.#densifiedPoints() : this.points;
+    for (const value of source) result.extend(value);
     return result;
+  }
+
+  queryHit(target: PointLikeXY, options: ResolvedQueryOptions): QueryHit | null {
+    if (!this.map || !this.options.interactive) return null;
+    const source = this.options.geodesic && this.map.crs.code === "EPSG:3857" ? this.#densifiedPoints() : this.points;
+    const points = source.map((value) => this.map!.latLngToContainerPoint(value));
+    const tolerance = options.tolerance + this.options.strokeWidth / 2;
+    for (let index = 1; index < points.length; index++) {
+      if (segmentDistance(target, points[index - 1], points[index]) <= tolerance) {
+        return { layer: this, latlng: this.map.containerPointToLatLng(target), source: "svg" };
+      }
+    }
+    return null;
   }
 
   override render(): void {
     super.render();
     if (!this.map || !this.path) return;
-    const points = this.points.map((value) => this.map!.latLngToLayerPoint(value));
+    const source = this.options.geodesic && this.map.crs.code === "EPSG:3857" ? this.#densifiedPoints() : this.points;
+    const points = source.map((value) => this.map!.latLngToLayerPoint(value));
     if (!this.options.noClip && !projectedBoundsIntersectsViewport(this.map, projectedBounds(points), this.options.clipPadding)) {
       this.path.setAttribute("d", "");
       return;
     }
     this.path.setAttribute("d", projectedPointsToPath(simplifyProjectedPoints(points, this.options.smoothFactor)));
+  }
+
+  #densifiedPoints(): LatLng[] {
+    if (this.geodesicPoints) return this.geodesicPoints;
+    const result = densifyLatLngs(this.points);
+    this.geodesicPoints = result.length ? result : this.points;
+    return this.geodesicPoints;
   }
 }
 
@@ -274,6 +431,11 @@ export class Polygon extends Polyline {
     const rings = normalizeRings(points);
     super(rings[0] ?? [], { fill: options.fill ?? "#2563eb", ...options });
     this.rings = rings;
+    this.supportsArrows = false;
+  }
+
+  protected override interactionPointerEvents(): "all" {
+    return "all";
   }
 
   override setLatLngs(points: LatLngLike[] | LatLngLike[][]): this {
@@ -290,15 +452,35 @@ export class Polygon extends Polyline {
   override getBounds(): LatLngBounds {
     const result = new LatLngBounds();
     for (const ring of this.rings) {
-      for (const value of ring) result.extend(value);
+      const source = this.options.geodesic && this.map?.crs.code !== "Simple" ? densifyLatLngs(ring, true) : ring;
+      for (const value of source) result.extend(value);
     }
     return result;
+  }
+
+  override queryHit(target: PointLikeXY, options: ResolvedQueryOptions): QueryHit | null {
+    if (!this.map || !this.options.interactive) return null;
+    const rings = this.rings.map((ring) => ring.map((value) => this.map!.latLngToContainerPoint(value)));
+    let inside = false;
+    for (const ring of rings) if (ringContainsPoint(target, ring)) inside = !inside;
+    const tolerance = options.tolerance + this.options.strokeWidth / 2;
+    const onStroke = rings.some((ring) => ring.some((point, index) =>
+      segmentDistance(target, point, ring[(index + 1) % ring.length]) <= tolerance
+    ));
+    if (!inside && !onStroke) return null;
+    return { layer: this, latlng: this.map.containerPointToLatLng(target), source: "svg" };
   }
 
   override render(): void {
     PathLayer.prototype.render.call(this);
     if (!this.map || !this.path) return;
-    const projectedRings = this.rings.map((ring) => ring.map((value) => this.map!.latLngToLayerPoint(value)));
+    const projectedRings = this.rings.map((ring) => {
+      let source = ring;
+      if (this.options.geodesic && this.map!.crs.code === "EPSG:3857" && ring.length > 1) {
+        source = densifyLatLngs(ring, true);
+      }
+      return source.map((value) => this.map!.latLngToLayerPoint(value));
+    });
     const allPoints = projectedRings.flat();
     if (!this.options.noClip && !projectedBoundsIntersectsViewport(this.map, projectedBounds(allPoints), this.options.clipPadding)) {
       this.path.setAttribute("d", "");
@@ -339,7 +521,7 @@ export class Rectangle extends Polygon {
   }
 
   override getBounds(): LatLngBounds {
-    return new LatLngBounds(this.rectangleBounds);
+    return this.options.geodesic ? super.getBounds() : new LatLngBounds(this.rectangleBounds);
   }
 }
 
@@ -353,10 +535,25 @@ export class Circle extends PathLayer {
     this.radiusMeters = Number(radiusMeters);
   }
 
+  protected override interactionPointerEvents(): "all" {
+    return "all";
+  }
+
   getLatLng(): LatLng { return this.center.clone(); }
   getRadius(): number { return this.radiusMeters; }
 
   getBounds(): LatLngBounds {
+    if (this.map?.crs.code === "Simple") {
+      return new LatLngBounds(
+        [this.center.lat - this.radiusMeters, this.center.lng - this.radiusMeters],
+        [this.center.lat + this.radiusMeters, this.center.lng + this.radiusMeters]
+      );
+    }
+    if (this.options.geodesic) {
+      const result = new LatLngBounds();
+      for (const value of this.#geodesicRing(64)) result.extend(value);
+      return result;
+    }
     const latDelta = (this.radiusMeters / EARTH_RADIUS) * (180 / Math.PI);
     const lngScale = Math.max(1e-6, Math.cos((this.center.lat * Math.PI) / 180));
     const lngDelta = latDelta / lngScale;
@@ -364,6 +561,28 @@ export class Circle extends PathLayer {
       [this.center.lat - latDelta, this.center.lng - lngDelta],
       [this.center.lat + latDelta, this.center.lng + lngDelta]
     );
+  }
+
+  queryHit(target: PointLikeXY, options: ResolvedQueryOptions): QueryHit | null {
+    if (!this.map || !this.options.interactive) return null;
+    const center = this.map.latLngToContainerPoint(this.center);
+    if (this.options.geodesic && this.map.crs.code === "EPSG:3857") {
+      const ring = this.#geodesicRing(this.#geodesicVertexCount())
+        .map((value) => this.map!.latLngToContainerPoint(value));
+      const inside = ringContainsPoint(target, ring);
+      const tolerance = options.tolerance + this.options.strokeWidth / 2;
+      const onStroke = ring.some((point, index) =>
+        segmentDistance(target, point, ring[(index + 1) % ring.length]) <= tolerance
+      );
+      if (!inside && !onStroke) return null;
+    } else {
+      const radius = Math.max(1, this.map.crs.code === "Simple"
+        ? Math.abs(this.radiusMeters) * this.map.crs.scale(this.map.zoom)
+        : metersToPixels(this.radiusMeters, this.center.lat, this.map.zoom));
+      const distance = Math.hypot(target.x - center.x, target.y - center.y);
+      if (distance > radius + options.tolerance) return null;
+    }
+    return { layer: this, latlng: this.map.containerPointToLatLng(target), source: "svg" };
   }
 
   setLatLng(value: LatLngLike): this {
@@ -381,8 +600,20 @@ export class Circle extends PathLayer {
   override render(): void {
     super.render();
     if (!this.map || !this.path) return;
+    if (this.options.geodesic && this.map.crs.code === "EPSG:3857") {
+      const vertexCount = this.#geodesicVertexCount();
+      const points = this.#geodesicRing(vertexCount).map((value) => this.map!.latLngToLayerPoint(value));
+      if (!this.options.noClip && !projectedBoundsIntersectsViewport(this.map, projectedBounds(points), this.options.clipPadding)) {
+        this.path.setAttribute("d", "");
+        return;
+      }
+      this.path.setAttribute("d", projectedPointsToPath(points, true));
+      return;
+    }
     const center = this.map.latLngToLayerPoint(this.center);
-    const radius = Math.max(1, metersToPixels(this.radiusMeters, this.center.lat, this.map.zoom));
+    const radius = Math.max(1, this.map.crs.code === "Simple"
+      ? Math.abs(this.radiusMeters) * this.map.crs.scale(this.map.zoom)
+      : metersToPixels(this.radiusMeters, this.center.lat, this.map.zoom));
     if (!this.options.noClip && !projectedBoundsIntersectsViewport(this.map, {
       minX: center.x - radius,
       minY: center.y - radius,
@@ -396,6 +627,18 @@ export class Circle extends PathLayer {
       "d",
       `M${(center.x - radius).toFixed(1)} ${center.y.toFixed(1)}a${radius.toFixed(1)} ${radius.toFixed(1)} 0 1 0 ${(radius * 2).toFixed(1)} 0a${radius.toFixed(1)} ${radius.toFixed(1)} 0 1 0 ${(-radius * 2).toFixed(1)} 0`
     );
+  }
+
+  #geodesicRing(vertexCount: number): LatLng[] {
+    return Array.from({ length: vertexCount }, (_, index) => destination(
+      this.center,
+      this.radiusMeters,
+      index * 360 / vertexCount
+    ));
+  }
+
+  #geodesicVertexCount(): number {
+    return Math.max(32, Math.min(64, 32 + Math.ceil(Math.log2(Math.max(1, this.radiusMeters / 10_000))) * 4));
   }
 }
 
@@ -411,6 +654,10 @@ export class CircleMarker extends PathLayer {
     super({ fill: options.fill ?? "#2563eb", ...options });
     this.center = latLng(center);
     this.radiusPixels = Math.max(1, Number(options.radius ?? 10));
+  }
+
+  protected override interactionPointerEvents(): "all" {
+    return "all";
   }
 
   getLatLng(): LatLng { return this.center.clone(); }
@@ -435,6 +682,13 @@ export class CircleMarker extends PathLayer {
       this.map.containerPointToLatLng([center.x - this.radiusPixels, center.y + this.radiusPixels]),
       this.map.containerPointToLatLng([center.x + this.radiusPixels, center.y - this.radiusPixels])
     );
+  }
+
+  queryHit(target: PointLikeXY, options: ResolvedQueryOptions): QueryHit | null {
+    if (!this.map || !this.options.interactive) return null;
+    const center = this.map.latLngToContainerPoint(this.center);
+    if (Math.hypot(target.x - center.x, target.y - center.y) > this.radiusPixels + options.tolerance) return null;
+    return { layer: this, latlng: this.map.containerPointToLatLng(target), source: "svg" };
   }
 
   override render(): void {

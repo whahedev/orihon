@@ -17,6 +17,12 @@ export interface MarkerCollectionOptions extends LayerOptions {
   renderer?: MarkerCollectionRenderer;
   /** Default 2500. */
   webglThreshold?: number;
+  /**
+   * When zoom ≥ this value, force viewport-culled DOM markers (icons) even if
+   * the count would otherwise pick WebGL. Use for icon LOD: points far, icons near.
+   * Default `Infinity` (disabled).
+   */
+  iconMinZoom?: number;
   /** DOM path: only mount markers in padded viewport. Default true. */
   viewportCull?: boolean;
   marker?: MarkerOptions;
@@ -50,6 +56,7 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
       pane: "overlay",
       renderer: "auto",
       webglThreshold: 2500,
+      iconMinZoom: Number.POSITIVE_INFINITY,
       viewportCull: true,
       pointSize: 8,
       color: "#0f766e",
@@ -59,6 +66,8 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
       marker: markerOpts
     });
     this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
+    const iconMinZoom = Number(this.options.iconMinZoom);
+    this.options.iconMinZoom = Number.isFinite(iconMinZoom) ? iconMinZoom : Number.POSITIVE_INFINITY;
     this.index = new SpatialGridIndex(this.options.indexCellSize);
     this._schedule = rafThrottle(() => this.redraw());
     this.setLatLngs(points);
@@ -117,6 +126,10 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
     super.onRemove();
   }
 
+  override wantsFrameRender(): boolean {
+    return false;
+  }
+
   override render(): void {
     // DOM/WebGL sync is moveend-driven; avoid per-frame thrash.
   }
@@ -140,8 +153,10 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
 
   #shouldUseWebgl(): boolean {
     const mode = this.options.renderer;
-    if (mode === "webgl") return true;
     if (mode === "dom") return false;
+    // Icon LOD: near zoom prefers DivIcon / Marker DOM over GPU dots.
+    if (this.map && this.map.zoom >= this.options.iconMinZoom) return false;
+    if (mode === "webgl") return true;
     return this.index.size >= this.options.webglThreshold;
   }
 
@@ -173,7 +188,7 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
 
     const visible = new Set<number>();
     if (bounds) {
-      for (const record of this.index.search(bounds)) visible.add(record.id);
+      for (const id of this.index.searchIds(bounds)) visible.add(id);
     } else {
       for (const id of this.index.records.keys()) visible.add(id);
     }

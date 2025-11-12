@@ -125,7 +125,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
     this.brushRadius = 0;
     this.grad = null;
     this.palette = undefined;
-    this.latlngs = [];
+    // Keep `latlngs` so remove→add toggles still draw; use `clear()` to wipe points.
     super.onRemove();
   }
 
@@ -135,6 +135,10 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
   }
 
   /** Map calls this every view frame — do not full-repaint heat here. */
+  override wantsFrameRender(): boolean {
+    return false;
+  }
+
   override render(): void {
     /* intentional no-op: heat is moveend-driven like Leaflet.heat */
   }

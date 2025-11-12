@@ -1,6 +1,6 @@
 {
   "name": "orihon",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Unfold the world. A lightweight, high-performance mapping library — less weight, more space.",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,6 +19,31 @@
       "types": "./dist/standard.d.ts",
       "import": "./dist/standard.js"
     },
+    "./draw": {
+      "types": "./dist/draw/index.d.ts",
+      "import": "./dist/draw/index.js"
+    },
+    "./draw.css": "./dist/draw.css",
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
+    "./pmtiles": {
+      "types": "./dist/layers/pmtiles.d.ts",
+      "import": "./dist/layers/pmtiles.js"
+    },
+    "./controls": {
+      "types": "./dist/controls.d.ts",
+      "import": "./dist/controls.js"
+    },
+    "./geo": {
+      "types": "./dist/geo-entry.d.ts",
+      "import": "./dist/geo-entry.js"
+    },
+    "./popup-content": {
+      "types": "./dist/popup-content.d.ts",
+      "import": "./dist/popup-content.js"
+    },
     "./bundle": {
       "types": "./dist/index.d.ts",
       "import": "./dist/orihon.esm.js"
@@ -28,29 +53,29 @@
     "./package.json": "./package.json"
   },
   "sideEffects": [
-    "./dist/orihon.css"
+    "./dist/orihon.css",
+    "./dist/draw.css"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
     "pretest": "npm run build",
-    "test": "node --test test",
-    "test:browser": "node test/browser-smoke.mjs",
+    "test": "node scripts/run-unit-tests.mjs",
+    "test:browser": "node test/browser-smoke.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/studio-placement-browser.mjs && node test/p1-browser.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",
     "test:leaks": "node --expose-gc --test test/lifecycle-leak.test.js",
     "test:plugin": "tsc -p tsconfig.plugin-template.json",
+    "fixtures": "node scripts/generate-test-fixtures.mjs",
     "size": "node scripts/check-size.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check": "npm run typecheck && npm test && npm run size",
     "dist": "npm run build && node scripts/pack-dist.mjs",
     "prepack": "npm run build && node scripts/strip-publish-maps.mjs",
     "prepublishOnly": "npm run check",
-    "demo:locale": "npx --yes serve examples/locale-demo -p 4173",
+    "demo:bench": "npx --yes serve . -p 4176",
+    "demo:showcase": "npx --yes serve . -p 4177",
     "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
-    "demo:webgl": "npx --yes serve . -p 4175",
-    "demo:bench": "npx --yes serve examples/bench-compare -p 4176",
-    "demo:lab": "node examples/lab/server.js",
-    "demo:lab:static": "npx --yes serve examples/lab -p 4275"
+    "demo:studio": "node _local/studio/server.mjs"
   },
   "keywords": [
     "map",
@@ -71,8 +96,22 @@
   ],
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "esbuild": "^0.28.1",
+    "jsdom": "^24.1.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "terser": "^5.50.0",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
   },
   "publishConfig": {
     "access": "public"

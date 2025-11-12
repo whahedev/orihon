@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Orihon geometry popup acceptance</title>
+  <link rel="stylesheet" href="../dist/orihon.css">
+  <style>
+    html, body, #map { width: 900px; height: 620px; margin: 0; }
+    #result { position: fixed; left: 0; bottom: 0; z-index: 9999; background: white; }
+  </style>
+</head>
+<body data-state="running">
+  <div id="map"></div>
+  <pre id="result"></pre>
+  <script>
+    window.addEventListener("error", (event) => {
+      document.body.dataset.state = "failed";
+      document.getElementById("result").textContent = event.error?.stack || event.message;
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      document.body.dataset.state = "failed";
+      document.getElementById("result").textContent = event.reason?.stack || String(event.reason);
+    });
+  </script>
+  <script type="module">
+    import {
+      circle,
+      circleMarker,
+      createMap,
+      marker,
+      polygon,
+      polyline,
+      rectangle
+    } from "../dist/index.js";
+
+    const map = createMap("map", { center: [0, 0], zoom: 4, controls: false });
+    const cases = [
+      ["marker", marker([10, -20], { title: "Marker" }), "el"],
+      ["circleMarker", circleMarker([10, 0], { radius: 18, fill: "#7c3aed" }), "path"],
+      ["polyline", polyline([[15, 20], [5, 20]], { strokeWidth: 8 }), "path"],
+      ["polygon", polygon([[-5, -25], [-15, -25], [-15, -15], [-5, -15]], { fillOpacity: 0.3 }), "path"],
+      ["rectangle", rectangle([[-15, -5], [-5, 5]], { fillOpacity: 0.3 }), "path"],
+      ["circle", circle([-10, 20], 300_000, { geodesic: true }), "path"]
+    ];
+
+    for (const [name, layer, targetProperty] of cases) {
+      if (targetProperty === "path") layer.options.interactive = false;
+      layer.bindPopup(name, { autoPan: false }).addTo(map);
+      const target = layer[targetProperty];
+      target.dataset.popupCase = name;
+      if (targetProperty === "path" && !layer.options.interactive) {
+        throw new Error(`${name}: bindPopup did not enable interaction`);
+      }
+    }
+    globalThis.popupGeometryMap = map;
+    globalThis.popupGeometryTargets = {
+      marker: map.latLngToContainerPoint([10, -20]),
+      circleMarker: map.latLngToContainerPoint([10, 0]),
+      polyline: map.latLngToContainerPoint([10, 20]),
+      polygon: map.latLngToContainerPoint([-10, -20]),
+      rectangle: map.latLngToContainerPoint([-10, 0]),
+      circle: map.latLngToContainerPoint([-10, 20])
+    };
+    document.body.dataset.state = "ready";
+    document.getElementById("result").textContent = JSON.stringify(cases.map(([name]) => name));
+  </script>
+</body>
+</html>

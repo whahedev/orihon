@@ -22,10 +22,27 @@ import {
   latLngBounds,
   layersControl,
   marker,
+  polygon,
+  polyline,
   rectangle,
   svgOverlay,
   videoOverlay
 } from "../dist/index.js";
+import { svgAttributeIsDangerous, svgTagIsDangerous } from "../dist/overlays/svg-overlay.js";
+
+test("SVG sanitizer policy rejects scripts, style, external href and handlers", () => {
+  assert.equal(svgTagIsDangerous("script"), true);
+  assert.equal(svgTagIsDangerous("foreignObject"), true);
+  assert.equal(svgTagIsDangerous("style"), true);
+  assert.equal(svgTagIsDangerous("use"), true);
+  assert.equal(svgTagIsDangerous("path"), false);
+  assert.equal(svgAttributeIsDangerous("onclick", "alert(1)"), true);
+  assert.equal(svgAttributeIsDangerous("style", "color:red"), true);
+  assert.equal(svgAttributeIsDangerous("href", "https://evil.example/x"), true);
+  assert.equal(svgAttributeIsDangerous("xlink:href", "javascript:alert(1)"), true);
+  assert.equal(svgAttributeIsDangerous("href", "#icon"), false);
+  assert.equal(svgAttributeIsDangerous("fill", "red"), false);
+});
 
 test("layers expose popup and tooltip binding API", () => {
   const layer = marker([52.52, 13.405]);
@@ -39,6 +56,52 @@ test("layers expose popup and tooltip binding API", () => {
   layer.unbindPopup().unbindTooltip();
   assert.equal(layer.getPopup(), null);
   assert.equal(layer.getTooltip(), null);
+});
+
+test("all SVG geometry types accept popup click bindings", () => {
+  const layers = [
+    polyline([[0, 0], [1, 1]]),
+    polygon([[0, 0], [0, 1], [1, 1]]),
+    rectangle([[0, 0], [1, 1]]),
+    circle([0, 0], 100),
+    circleMarker([0, 0])
+  ];
+  for (const layer of layers) {
+    layer.bindPopup("Geometry popup");
+    assert.equal(layer.listens("click"), true, layer.constructor.name);
+    assert.ok(layer.getPopup(), layer.constructor.name);
+    layer.emit("click", { latlng: layer.getBounds?.().getCenter?.() ?? layer.getLatLng?.() });
+  }
+});
+
+test("DivIcon strings stay text even when they look like HTML", () => {
+  const assigned = { innerHTML: 0, textContent: "" };
+  const element = {
+    className: "",
+    style: {},
+    get textContent() { return assigned.textContent; },
+    set textContent(value) { assigned.textContent = String(value); },
+    get innerHTML() { return assigned.textContent; },
+    set innerHTML(_value) { assigned.innerHTML += 1; },
+    replaceChildren() {}
+  };
+  const previousDocument = globalThis.document;
+  const previousNode = globalThis.Node;
+  const previousHTMLDivElement = globalThis.HTMLDivElement;
+  globalThis.document = { createElement: () => element };
+  globalThis.Node = class FakeNode {};
+  globalThis.HTMLDivElement = class FakeHTMLDivElement {};
+  try {
+    const payload = "<img src=x onerror=alert(1)>";
+    const created = divIcon({ content: payload }).createIcon();
+    assert.equal(created, element);
+    assert.equal(assigned.innerHTML, 0);
+    assert.equal(assigned.textContent, payload);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.Node = previousNode;
+    globalThis.HTMLDivElement = previousHTMLDivElement;
+  }
 });
 
 test("Icon and DivIcon retain size and anchor semantics", () => {
@@ -55,6 +118,15 @@ test("Icon and DivIcon retain size and anchor semantics", () => {
   assert.equal(layer.getIcon(), div);
   layer.setIcon(image);
   assert.equal(layer.getIcon(), image);
+});
+
+test("Marker draggability can be changed without recreating the layer", () => {
+  const layer = marker([1, 2]);
+  assert.equal(layer.isDraggable(), false);
+  assert.equal(layer.setDraggable(true), layer);
+  assert.equal(layer.isDraggable(), true);
+  layer.setDraggable(false);
+  assert.equal(layer.isDraggable(), false);
 });
 
 test("Rectangle, Circle and CircleMarker expose mutable geometry", () => {
@@ -122,4 +194,3 @@ test("media overlays become interactive when a popup is bound", () => {
   assert.equal(video.options.interactive, true);
   assert.equal(svg.options.interactive, true);
 });
-

@@ -21,15 +21,25 @@ interface RawMVTFeature {
 export interface MVTDecodeOptions {
   layer?: string | string[];
   idProperty?: string;
+  /** Skip decode when the buffer is larger than this. Default 2 MiB. */
+  maxBytes?: number;
+  /** Stop after this many features. Default 16384. */
+  maxFeatures?: number;
+  /** Drop protobuf strings longer than this. Default 8192. */
+  maxStringLength?: number;
 }
 
 export function decodeMVT(data: ArrayBuffer | Uint8Array, tile: Pick<VectorTileCoordinates, "x" | "y" | "z">, options: MVTDecodeOptions = {}): GeoJSONFeature[] {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  const reader = new PbfReader(bytes);
+  const maxBytes = options.maxBytes ?? 2_097_152;
+  const maxFeatures = options.maxFeatures ?? 16_384;
+  const maxStringLength = options.maxStringLength ?? 8_192;
+  if (bytes.byteLength > maxBytes) return [];
+  const reader = new PbfReader(bytes, maxBytes, maxStringLength);
   const layers: MVTLayer[] = [];
   while (!reader.done) {
     const { field, wire } = reader.tag();
-    if (field === 3 && wire === 2) layers.push(readLayer(reader.readBytes()));
+    if (field === 3 && wire === 2) layers.push(readLayer(reader.fork(reader.readBytes())));
     else reader.skip(wire);
   }
   const allowed = options.layer ? new Set(Array.isArray(options.layer) ? options.layer : [options.layer]) : null;
@@ -37,7 +47,8 @@ export function decodeMVT(data: ArrayBuffer | Uint8Array, tile: Pick<VectorTileC
   for (const layer of layers) {
     if (allowed && !allowed.has(layer.name)) continue;
     for (const rawBytes of layer.features) {
-      const raw = readFeature(rawBytes);
+      if (features.length >= maxFeatures) return features;
+      const raw = readFeature(reader.fork(rawBytes));
       const geometry = decodeGeometry(raw.geometry, raw.type, layer.extent, tile);
       if (!geometry) continue;
       const properties = readProperties(raw.tags, layer);
@@ -65,23 +76,21 @@ export function createMVTProvider(urlTemplate: string | ((tile: VectorTileCoordi
   };
 }
 
-function readLayer(bytes: Uint8Array): MVTLayer {
-  const reader = new PbfReader(bytes);
+function readLayer(reader: PbfReader): MVTLayer {
   const layer: MVTLayer = { name: "", extent: 4096, keys: [], values: [], features: [] };
   while (!reader.done) {
     const { field, wire } = reader.tag();
     if (field === 1 && wire === 2) layer.name = reader.string();
     else if (field === 2 && wire === 2) layer.features.push(reader.readBytes());
     else if (field === 3 && wire === 2) layer.keys.push(reader.string());
-    else if (field === 4 && wire === 2) layer.values.push(readValue(reader.readBytes()));
+    else if (field === 4 && wire === 2) layer.values.push(readValue(reader.fork(reader.readBytes())));
     else if (field === 5 && wire === 0) layer.extent = reader.varint();
     else reader.skip(wire);
   }
   return layer;
 }
 
-function readValue(bytes: Uint8Array): PbfValue {
-  const reader = new PbfReader(bytes);
+function readValue(reader: PbfReader): PbfValue {
   let value: PbfValue = null;
   while (!reader.done) {
     const { field, wire } = reader.tag();
@@ -96,8 +105,7 @@ function readValue(bytes: Uint8Array): PbfValue {
   return value;
 }
 
-function readFeature(bytes: Uint8Array): RawMVTFeature {
-  const reader = new PbfReader(bytes);
+function readFeature(reader: PbfReader): RawMVTFeature {
   const feature: RawMVTFeature = { tags: [], type: 0, geometry: [] };
   while (!reader.done) {
     const { field, wire } = reader.tag();
@@ -180,8 +188,15 @@ function zigZag(value: number): number {
 
 class PbfReader {
   position = 0;
-  constructor(readonly bytes: Uint8Array) {}
+  constructor(
+    readonly bytes: Uint8Array,
+    readonly maxLength = 2_097_152,
+    readonly maxString = 8_192
+  ) {}
   get done(): boolean { return this.position >= this.bytes.length; }
+  fork(bytes: Uint8Array): PbfReader {
+    return new PbfReader(bytes, this.maxLength, this.maxString);
+  }
   tag(): { field: number; wire: number } {
     const value = this.varint();
     return { field: value >> 3, wire: value & 0x7 };
@@ -200,18 +215,24 @@ class PbfReader {
   svarint(): number { return zigZag(this.varint()); }
   readBytes(): Uint8Array {
     const length = this.varint();
+    if (length < 0 || length > this.maxLength || this.position + length > this.bytes.length) {
+      this.position = this.bytes.length;
+      return this.bytes.subarray(0, 0);
+    }
     const start = this.position;
     this.position += length;
     return this.bytes.slice(start, start + length);
   }
   packedVarints(): number[] {
-    const child = new PbfReader(this.readBytes());
+    const child = this.fork(this.readBytes());
     const result: number[] = [];
     while (!child.done) result.push(child.varint());
     return result;
   }
   string(): string {
-    return new TextDecoder().decode(this.readBytes());
+    const bytes = this.readBytes();
+    if (bytes.length > this.maxString) return "";
+    return new TextDecoder().decode(bytes);
   }
   float(): number {
     const view = new DataView(this.bytes.buffer, this.bytes.byteOffset + this.position, 4);

@@ -1,4 +1,4 @@
-import { TILE_SIZE, project, unproject } from "../geo.js";
+import { TILE_SIZE } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 
@@ -93,8 +93,8 @@ export class CanvasBaseLayer extends Layer<ResolvedCanvasOptions> {
   #drawTileGrid(context: CanvasRenderingContext2D, width: number, height: number): void {
     if (!this.map) return;
     const zoom = Math.round(this.map.zoom);
-    const northWest = project(this.map.containerPointToLatLng({ x: 0, y: 0 }), zoom);
-    const southEast = project(this.map.containerPointToLatLng({ x: width, y: height }), zoom);
+    const northWest = this.map.crs.project(this.map.containerPointToLatLng({ x: 0, y: 0 }), zoom);
+    const southEast = this.map.crs.project(this.map.containerPointToLatLng({ x: width, y: height }), zoom);
     const startX = Math.floor(northWest.x / TILE_SIZE) * TILE_SIZE;
     const startY = Math.floor(northWest.y / TILE_SIZE) * TILE_SIZE;
     const displayScale = 2 ** (this.map.zoom - zoom);
@@ -156,8 +156,8 @@ export class CanvasBaseLayer extends Layer<ResolvedCanvasOptions> {
     if (!this.map) return;
     const center = this.map.center;
     const corners = [
-      unproject({ x: this.map.pixelOrigin.x, y: this.map.pixelOrigin.y }, this.map.zoom),
-      unproject({ x: this.map.pixelOrigin.x + width, y: this.map.pixelOrigin.y + height }, this.map.zoom)
+      this.map.crs.unproject({ x: this.map.pixelOrigin.x, y: this.map.pixelOrigin.y }, this.map.zoom),
+      this.map.crs.unproject({ x: this.map.pixelOrigin.x + width, y: this.map.pixelOrigin.y + height }, this.map.zoom)
     ];
     context.save();
     context.fillStyle = this.options.text;

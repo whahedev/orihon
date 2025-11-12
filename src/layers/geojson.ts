@@ -23,7 +23,7 @@ import {
  * Standard keeps SVG/canvas only — register from `orihon` entry, not `orihon/standard`.
  */
 export type GeoJSONPathBatch = Layer & {
-  addPath(rings: LatLngLike[][], closed?: boolean, style?: PathOptions): unknown;
+  addPath(rings: LatLngLike[][], closed?: boolean, style?: PathOptions, feature?: GeoJSONFeature): unknown;
   clearPaths(): unknown;
   render(): void;
 };
@@ -132,6 +132,8 @@ export interface GeoJSONOptions extends PathOptions {
   renderer?: GeoJSONRendererMode;
   /** Path-feature count that triggers canvas/webgl in `auto` mode. Default 250. */
   canvasThreshold?: number;
+  /** Stop adding features once this many are stored. Unset = unlimited. */
+  maxFeatures?: number;
 }
 
 interface FeatureEntry {
@@ -156,7 +158,8 @@ const SPECIAL_OPTION_KEYS = new Set([
   "popup",
   "popupOptions",
   "renderer",
-  "canvasThreshold"
+  "canvasThreshold",
+  "maxFeatures"
 ]);
 
 const PATH_GEOMETRY_TYPES = new Set([
@@ -315,6 +318,8 @@ export class GeoJSONLayer extends FeatureGroup {
   }
 
   addData(data: GeoJSONData): this {
+    const cap = this.geoJSONOptions.maxFeatures;
+    if (cap != null && this.featureEntries.length >= cap) return this;
     if (Array.isArray(data)) {
       for (const item of data) this.addData(item);
       return this;
@@ -413,7 +418,7 @@ export class GeoJSONLayer extends FeatureGroup {
     }
     const style = this.#featureStyle(feature);
     if (this.rendererMode === "canvas" || this.rendererMode === "webgl") {
-      return this.#addBatchPath(geometry, style, convert);
+      return this.#addBatchPath(geometry, style, convert, feature);
     }
     const layer = new GeoJSONPathLayer(geometry, style, convert);
     this.defaultStyles.set(layer, style);
@@ -423,11 +428,12 @@ export class GeoJSONLayer extends FeatureGroup {
   #addBatchPath(
     geometry: PathGeometry,
     style: PathOptions,
-    convert: (coordinates: GeoJSONPosition) => LatLng
+    convert: (coordinates: GeoJSONPosition) => LatLng,
+    feature: GeoJSONFeature
   ): GeoJSONPathBatch {
     if (!this._pathBatch) {
       const common = {
-        interactive: false as const,
+        interactive: this.geoJSONOptions.interactive !== false,
         stroke: style.stroke,
         strokeWidth: style.strokeWidth,
         strokeOpacity: style.strokeOpacity,
@@ -441,25 +447,38 @@ export class GeoJSONLayer extends FeatureGroup {
         this.rendererMode === "webgl" && webglBatchFactory
           ? webglBatchFactory(common)
           : new CanvasPathBatch(common);
+      const configured = this.geoJSONOptions.popup;
+      if (configured !== undefined && this.rendererMode === "canvas") {
+        const batch = this._pathBatch;
+        const content: OverlayContent = typeof configured === "function"
+          ? (context) => {
+            const feature = (context.event as unknown as { feature?: GeoJSONFeature } | undefined)?.feature;
+            return feature ? (configured as GeoJSONPopupFactory)(feature, batch, context) : null;
+          }
+          : configured;
+        batch.bindPopup(content, this.geoJSONOptions.popupOptions);
+      }
     }
     if (geometry.type === "LineString") {
-      this._pathBatch.addPath([geometry.coordinates.map(convert)], false, style);
+      this._pathBatch.addPath([geometry.coordinates.map(convert)], false, style, feature);
     } else if (geometry.type === "MultiLineString") {
       for (const part of geometry.coordinates) {
-        this._pathBatch.addPath([part.map(convert)], false, style);
+        this._pathBatch.addPath([part.map(convert)], false, style, feature);
       }
     } else if (geometry.type === "Polygon") {
       this._pathBatch.addPath(
         geometry.coordinates.map((ring) => ring.map(convert)),
         true,
-        { fill: style.fill ?? "#2563eb", ...style }
+        { fill: style.fill ?? "#2563eb", ...style },
+        feature
       );
     } else {
       for (const polygon of geometry.coordinates) {
         this._pathBatch.addPath(
           polygon.map((ring) => ring.map(convert)),
           true,
-          { fill: style.fill ?? "#2563eb", ...style }
+          { fill: style.fill ?? "#2563eb", ...style },
+          feature
         );
       }
     }

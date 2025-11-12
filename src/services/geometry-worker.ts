@@ -2,9 +2,8 @@ import { latLng, type LatLngLike } from "../geo.js";
 import {
   buildClusterIndex,
   buildClusterLayout,
-  CLUSTER_LAYOUT_WORKER_SOURCE,
+  clusterLayoutWorkerSource,
   decodeClusterIndex,
-  encodeClusterIndex,
   type ClusterIndex,
   type ClusterLayoutRequest,
   type ClusterLayoutResult
@@ -201,70 +200,4 @@ function normalizePoint(value: GeometryPointInput): [number, number] | null {
   return [point.lat, point.lng];
 }
 
-const WORKER_SOURCE = `
-${CLUSTER_LAYOUT_WORKER_SOURCE}
-function normalizePoint(value) {
-  var source = Array.isArray(value) || (value && typeof value.lat === "number" && typeof value.lng === "number")
-    ? value
-    : value && (value.coordinates || value.latlng);
-  if (!source) return null;
-  var lat = Array.isArray(source) ? Number(source[0]) : Number(source.lat);
-  var lng = Array.isArray(source) ? Number(source[1]) : Number(source.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return [lat, lng];
-}
-self.onmessage = function(event) {
-  var data = event.data || {};
-  var id = data.id;
-  if (data.type === "clusterIndex") {
-    var coordsI = data.coords instanceof Float64Array
-      ? data.coords
-      : data.coords instanceof Float32Array
-        ? new Float64Array(data.coords)
-        : new Float64Array(data.coords);
-    var index = buildClusterIndex({
-      ids: data.ids,
-      coords: coordsI,
-      gridSize: data.gridSize,
-      minPoints: data.minPoints,
-      clusterize: data.clusterize,
-      clusterMaxZoom: data.clusterMaxZoom,
-      clusterMinZoom: data.clusterMinZoom
-    });
-    var encoded = encodeClusterIndex(index);
-    self.postMessage({ id: id, type: "clusterIndex", index: encoded.payload }, encoded.transfer);
-    return;
-  }
-  if (data.type === "clusterLayout") {
-    var coords = data.coords instanceof Float64Array
-      ? data.coords
-      : data.coords instanceof Float32Array
-        ? new Float64Array(data.coords)
-        : new Float64Array(data.coords);
-    var result = buildClusterLayout({
-      ids: data.ids,
-      coords: coords,
-      zoomBucket: data.zoomBucket,
-      gridSize: data.gridSize,
-      minPoints: data.minPoints,
-      clusterize: data.clusterize,
-      clusterMaxZoom: data.clusterMaxZoom,
-      clusterMinZoom: data.clusterMinZoom
-    });
-    self.postMessage({ id: id, type: "clusterLayout", clusters: result.clusters, singles: result.singles });
-    return;
-  }
-  var values = [];
-  var skipped = 0;
-  for (var i = 0; i < data.points.length; i++) {
-    var point = normalizePoint(data.points[i]);
-    if (!point) {
-      skipped++;
-      continue;
-    }
-    values.push(point[0], point[1]);
-  }
-  var output = new Float32Array(values);
-  self.postMessage({ id: id, type: "preparePoints", points: output.buffer, count: output.length / 2, skipped: skipped }, [output.buffer]);
-};
-`;
+const WORKER_SOURCE = clusterLayoutWorkerSource();

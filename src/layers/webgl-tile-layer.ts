@@ -12,7 +12,9 @@ import { createEl } from "../dom.js";
 import { TILE_SIZE, LatLngBounds, latLngBounds, unproject, type LatLngBoundsLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
-import type { TileTemplate } from "./tile-layer.js";
+import { assertMercator } from "../crs.js";
+import { compileShader } from "../webgl-utils.js";
+import { modulo, type TileTemplate } from "./tile-layer.js";
 
 export interface WebGLTileLayerOptions extends LayerOptions {
   minZoom?: number;
@@ -97,27 +99,11 @@ interface GLLocs {
   uTexture: WebGLUniformLocation | null;
 }
 
-function modulo(value: number, divisor: number): number {
-  return ((value % divisor) + divisor) % divisor;
-}
-
 function normalizeBounds(value: unknown): LatLngBounds | null {
   if (!value) return null;
   const bounds = latLngBounds(value as LatLngBoundsLike);
   if (!bounds.isValid()) throw new TypeError("WebGLTileLayer bounds must be a valid LatLngBounds");
   return bounds;
-}
-
-function compileShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
 }
 
 export class WebGLTileLayer extends Layer<ResolvedOptions> {
@@ -229,7 +215,24 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     return this;
   }
 
+  setUrl(template: TileTemplate, redraw = true): this {
+    this.template = template;
+    if (redraw) this.redraw();
+    return this;
+  }
+
+  setOpacity(opacity: number): this {
+    const next = Number(opacity);
+    this.options.opacity = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
+    if (this.canvas) this.canvas.style.opacity = String(this.options.opacity);
+    this._forceGpu = true;
+    this._dirty = true;
+    this.#scheduleRedraw();
+    return this;
+  }
+
   override onAdd(map: Orihon): void {
+    assertMercator(map.crs);
     super.onAdd(map);
     const pane = this.getPane();
     if (!pane) throw new Error(`Orihon pane not found: ${this.options.pane}`);
@@ -239,6 +242,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     this.canvas.style.top = "0";
     this.canvas.style.pointerEvents = "none";
     this.canvas.style.willChange = "transform";
+    this.canvas.style.opacity = String(this.options.opacity);
     this.gl = this.canvas.getContext("webgl", {
       antialias: false,
       alpha: true,
@@ -522,6 +526,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
       const c = candidates[i];
       this.#createTile(c.x, c.y, activeZoom, c.key);
     }
+    if (candidates.length > maxNew) this.#scheduleRedraw();
 
     this._needed = needed;
     this._neededCount = needed.size;
@@ -599,18 +604,25 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     this._loading += 1;
     if (this.options.crossOrigin) image.crossOrigin = this.options.crossOrigin;
     if (this.options.referrerPolicy) image.referrerPolicy = this.options.referrerPolicy;
-
     image.onload = () => {
-      if (!this.tiles.has(tile.key) || tile.generation !== this._generation) {
-        this.#finishLoad(tile, false);
+      const done = (source: TexImageSource & { width: number; height: number }, close?: () => void) => {
+        if (!this.tiles.has(tile.key) || tile.generation !== this._generation) {
+          close?.();
+          this.#finishLoad(tile, true);
+          return;
+        }
+        const uploaded = this.#uploadTexture(tile, source);
+        close?.();
+        tile.state = uploaded ? 2 : 3;
+        this.#finishLoad(tile, true);
+        if (uploaded) this.#scheduleRedraw();
+      };
+      if (typeof createImageBitmap === "function") {
+        createImageBitmap(image).then((bitmap) => done(bitmap, () => bitmap.close()), () => done(image));
         return;
       }
-      const uploaded = this.#uploadTexture(tile, image);
-      tile.state = uploaded ? 2 : 3;
-      this.#finishLoad(tile, true);
-      if (uploaded) this.#scheduleRedraw();
+      done(image);
     };
-
     image.onerror = () => {
       if (!this.tiles.has(tile.key)) {
         this.#finishLoad(tile, false);
@@ -627,7 +639,6 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
       tile.state = 3;
       this.#finishLoad(tile, true);
     };
-
     image.src = tile.url;
   }
 
@@ -643,7 +654,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     this.#pumpQueue();
   }
 
-  #uploadTexture(tile: GpuTile, image: HTMLImageElement): boolean {
+  #uploadTexture(tile: GpuTile, image: TexImageSource & { width: number; height: number }): boolean {
     const gl = this.gl;
     if (!gl) return false;
     const texture = gl.createTexture();
@@ -720,7 +731,9 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     gl.uniform2f(locs.uOrigin, originX, originY);
     gl.uniform2f(locs.uResolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(locs.uDpr, dpr);
-    gl.uniform1f(locs.uOpacity, this.options.opacity);
+    // Layer opacity is applied via canvas.style.opacity so live setOpacity is immediate
+    // even while the camera is CSS-warping a previous GPU frame.
+    gl.uniform1f(locs.uOpacity, 1);
     gl.uniform1i(locs.uTexture, 0);
     gl.activeTexture(gl.TEXTURE0);
 
@@ -791,5 +804,6 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
 }
 
 export function webglTileLayer(template: TileTemplate, options?: WebGLTileLayerOptions): WebGLTileLayer {
+  // Explicit GPU factory — always constructs WebGLTileLayer (does not go through tileLayer auto/fallback).
   return new WebGLTileLayer(template, options);
 }

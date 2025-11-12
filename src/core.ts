@@ -1,6 +1,7 @@
 export { Evented } from "./events.js";
 export { Layer } from "./layer.js";
 export { Orihon, createMap } from "./map.js";
+export { CRS, CRSCompatibilityError } from "./crs.js";
 export { GridLayer, gridLayer } from "./layers/grid-layer.js";
 export { TileLayer, tileLayer } from "./layers/tile-layer.js";
 export {
@@ -17,6 +18,8 @@ export {
   project,
   unproject,
   distance,
+  destination,
+  geodesicInterpolate,
   metersToPixels,
   clampLat,
   wrapLng,
@@ -28,8 +31,10 @@ export {
 } from "./geo.js";
 
 export type { OrihonEvent, EventHandler } from "./events.js";
-export type { LayerOptions } from "./layer.js";
+export type { LayerOptions, QueryHit, QueryOptions, QuerySource } from "./layer.js";
 export type { BehaviorOptions, MapBehaviorName, MapOptions, MapSize, ControlPosition } from "./map.js";
+export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
+export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
 export type { TileCoordinates, TileTemplate, TileLayerOptions } from "./layers/tile-layer.js";
 export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";

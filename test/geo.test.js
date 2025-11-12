@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { distance, metersToPixels, project, unproject, wrapLng } from "../dist/geo.js";
+import { destination, distance, geodesicInterpolate, metersToPixels, project, unproject, wrapLng } from "../dist/geo.js";
 
 test("project/unproject roundtrip stays close", () => {
   const source = { lat: 52.520008, lng: 13.404954 };
@@ -24,4 +24,13 @@ test("metersToPixels accounts for latitude", () => {
   const equator = metersToPixels(1000, 0, 10);
   const latitude60 = metersToPixels(1000, 60, 10);
   assert.ok(Math.abs(latitude60 / equator - 2) < 1e-9);
+});
+
+test("destination and geodesic interpolation follow a great circle", () => {
+  const east = destination([0, 0], 111_319.49, 90);
+  assert.ok(Math.abs(east.lat) < 1e-6);
+  assert.ok(Math.abs(east.lng - 1) < 1e-5);
+  const points = geodesicInterpolate([0, 0], [0, 3], 100_000);
+  assert.ok(points.length >= 5);
+  assert.ok(points.at(-1).equals([0, 3]));
 });

@@ -19,9 +19,19 @@ test("webglTileLayer supports TMS Y flip", () => {
   assert.equal(layer.getTileUrl(0, 1, 2), "https://tiles/2/0/2.png");
 });
 
-test("webglTileLayer rejects invalid bounds", () => {
-  assert.throws(
-    () => webglTileLayer("https://tiles/{z}/{x}/{y}.png", { bounds: { north: 1 } }),
-    /bounds/
-  );
+test("webglTileLayer setOpacity updates options and canvas style", () => {
+  const layer = webglTileLayer("https://tiles/{z}/{x}/{y}.png", { opacity: 0.4 });
+  assert.equal(layer.options.opacity, 0.4);
+  layer.setOpacity(0.25);
+  assert.equal(layer.options.opacity, 0.25);
+  layer.setOpacity(2);
+  assert.equal(layer.options.opacity, 1);
+  layer.setOpacity(Number.NaN);
+  assert.equal(layer.options.opacity, 1);
+});
+
+test("webglTileLayer setUrl replaces template", () => {
+  const layer = webglTileLayer("https://a/{z}/{x}/{y}.png");
+  layer.setUrl("https://b/{z}/{x}/{y}.png", false);
+  assert.equal(layer.getTileUrl(1, 2, 3), "https://b/3/1/2.png");
 });

@@ -183,10 +183,9 @@ export class LatLngBounds {
   constructor(a?: LatLngLike | LatLngLike[] | LatLngBoundsLike, b?: LatLngLike) {
     if (a instanceof LatLngBounds) {
       this.extend(a);
-    } else if (Array.isArray(a) && a.length > 0 && Array.isArray(a[0])) {
-      for (const value of a as LatLngLike[]) this.extend(value);
-    } else if (Array.isArray(a) && a.length === 2 && typeof a[0] === "number") {
-      this.extend(a as LatLngLike);
+    } else if (Array.isArray(a)) {
+      if (a.length === 2 && typeof a[0] === "number") this.extend(a as LatLngLike);
+      else for (const value of a as LatLngLike[]) this.extend(value);
     } else if (a && "south" in a) {
       this.extend([a.south, a.west]);
       this.extend([a.north, a.east]);
@@ -277,6 +276,15 @@ export function wrapLng(lng: number): number {
   return ((((lng + 180) % 360) + 360) % 360) - 180;
 }
 
+/** Normalized Web Mercator in 0..1 (zoom-independent). */
+export function projectMercator01(lat: number, lng: number): { x: number; y: number } {
+  const sin = Math.sin((clampLat(lat) * Math.PI) / 180);
+  return {
+    x: (wrapLng(lng) + 180) / 360,
+    y: 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)
+  };
+}
+
 export function scale(zoom: number): number {
   return TILE_SIZE * 2 ** zoom;
 }
@@ -309,6 +317,49 @@ export function distance(a: LatLngLike, b: LatLngLike): number {
   const lat2 = (p2.lat * Math.PI) / 180;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_RADIUS * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+/** Returns a geographic destination reached from `origin` along a bearing. */
+export function destination(origin: LatLngLike, distanceMeters: number, bearingDegrees: number): LatLng {
+  const start = latLng(origin);
+  const angularDistance = Number(distanceMeters) / EARTH_RADIUS;
+  const bearing = Number(bearingDegrees) * Math.PI / 180;
+  const latitude = start.lat * Math.PI / 180;
+  const longitude = start.lng * Math.PI / 180;
+  const targetLatitude = Math.asin(
+    Math.sin(latitude) * Math.cos(angularDistance)
+    + Math.cos(latitude) * Math.sin(angularDistance) * Math.cos(bearing)
+  );
+  const targetLongitude = longitude + Math.atan2(
+    Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latitude),
+    Math.cos(angularDistance) - Math.sin(latitude) * Math.sin(targetLatitude)
+  );
+  return new LatLng(targetLatitude * 180 / Math.PI, wrapLng(targetLongitude * 180 / Math.PI));
+}
+
+/** Densifies a great-circle segment so no output segment exceeds the requested length. */
+export function geodesicInterpolate(
+  a: LatLngLike,
+  b: LatLngLike,
+  maxSegmentMeters = 100_000
+): LatLng[] {
+  const start = latLng(a);
+  const end = latLng(b);
+  const length = distance(start, end);
+  const count = Math.max(1, Math.ceil(length / Math.max(1, Number(maxSegmentMeters))));
+  if (count === 1 || length === 0) return [start.clone(), end.clone()];
+  const lat1 = start.lat * Math.PI / 180;
+  const lat2 = end.lat * Math.PI / 180;
+  const deltaLng = (end.lng - start.lng) * Math.PI / 180;
+  const bearing = Math.atan2(
+    Math.sin(deltaLng) * Math.cos(lat2),
+    Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng)
+  ) * 180 / Math.PI;
+  const result = new Array<LatLng>(count + 1);
+  for (let index = 0; index <= count; index++) {
+    result[index] = index === count ? end.clone() : destination(start, length * index / count, bearing);
+  }
+  return result;
 }
 
 export function metersToPixels(meters: number, latitude: number, zoom: number): number {

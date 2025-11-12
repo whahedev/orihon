@@ -1,7 +1,9 @@
 import { createEl } from "../dom.js";
-import { MAX_LAT, TILE_SIZE, LatLngBounds, latLng, type LatLngLike } from "../geo.js";
+import { TILE_SIZE, LatLngBounds, latLng, projectMercator01, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
+import { assertMercator } from "../crs.js";
+import { compileShader, parseCssColor, type RgbColor } from "../webgl-utils.js";
 import type { PathOptions } from "./vector.js";
 
 export interface WebGLPathBatchOptions extends LayerOptions, PathOptions {
@@ -27,12 +29,6 @@ interface GLLocs {
   uDpr: WebGLUniformLocation | null;
   uHalfWidth: WebGLUniformLocation | null;
   uColor: WebGLUniformLocation | null;
-}
-
-interface RGB {
-  r: number;
-  g: number;
-  b: number;
 }
 
 type InstancedExt = {
@@ -64,7 +60,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
   private _drawnZoom = Number.NaN;
   private _drawnOriginX = 0;
   private _drawnOriginY = 0;
-  private color: RGB;
+  private color: RgbColor;
   private _minLat = Number.POSITIVE_INFINITY;
   private _maxLat = Number.NEGATIVE_INFINITY;
   private _minLng = Number.POSITIVE_INFINITY;
@@ -84,7 +80,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       interactive: false,
       ...options
     } as ResolvedOptions);
-    this.color = parseColor(String(this.options.stroke ?? "#0f766e"));
+    this.color = parseCssColor(String(this.options.stroke ?? "#0f766e"), { r: 15, g: 118, b: 110 });
   }
 
   get count(): number {
@@ -114,7 +110,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
   }
 
   addPath(rings: LatLngLike[][], _closed = false, style: PathOptions = {}): this {
-    if (style.stroke) this.color = parseColor(String(style.stroke));
+    if (style.stroke) this.color = parseCssColor(String(style.stroke), { r: 15, g: 118, b: 110 });
     if (style.strokeWidth != null) this.options.strokeWidth = style.strokeWidth;
     if (style.strokeOpacity != null) this.options.strokeOpacity = style.strokeOpacity;
 
@@ -132,7 +128,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
           lat[i] = p.lat;
           lng[i] = p.lng;
         }
-        const m = latLngToMercator(p.lat, p.lng);
+        const m = projectMercator01(p.lat, p.lng);
         mercX[i] = m.x;
         mercY[i] = m.y;
         if (p.lat < this._minLat) this._minLat = p.lat;
@@ -161,6 +157,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
   }
 
   override onAdd(map: Orihon): void {
+    assertMercator(map.crs);
     super.onAdd(map);
     const pane = this.getPane();
     if (!pane) throw new Error(`Orihon pane not found: ${this.options.pane}`);
@@ -463,52 +460,4 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
 
 export function webglPathBatch(options?: WebGLPathBatchOptions): WebGLPathBatch {
   return new WebGLPathBatch(options);
-}
-
-function latLngToMercator(lat: number, lng: number): { x: number; y: number } {
-  let clampedLat = lat;
-  if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
-  else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
-  const wrappedLng = ((lng + 180) % 360 + 360) % 360 - 180;
-  const sin = Math.sin((clampedLat * Math.PI) / 180);
-  return {
-    x: (wrappedLng + 180) / 360,
-    y: 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)
-  };
-}
-
-function parseColor(value: string): RGB {
-  const text = String(value || "").trim();
-  const hex = text.startsWith("#") ? text.slice(1) : "";
-  if (hex.length === 3) {
-    return {
-      r: Number.parseInt(hex[0] + hex[0], 16),
-      g: Number.parseInt(hex[1] + hex[1], 16),
-      b: Number.parseInt(hex[2] + hex[2], 16)
-    };
-  }
-  if (hex.length === 6) {
-    return {
-      r: Number.parseInt(hex.slice(0, 2), 16),
-      g: Number.parseInt(hex.slice(2, 4), 16),
-      b: Number.parseInt(hex.slice(4, 6), 16)
-    };
-  }
-  const rgb = text.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
-  if (rgb) {
-    return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]) };
-  }
-  return { r: 15, g: 118, b: 110 };
-}
-
-function compileShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
 }

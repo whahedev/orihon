@@ -5,6 +5,8 @@ test/
 e2e/
 scripts/
 src/
+_local/
+_publish_stage/
 plugin-template/
 orihon-dist/
 node_modules/
@@ -20,3 +22,5 @@ tsconfig.plugin-template.json
 dist/**/*.map
 dist/release-manifest.json
 *.tgz
+tmp-debug-*.mjs
+.codex-confluence-attachments-dom.txt

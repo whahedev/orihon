@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4
+
+- Fixed CDN Advanced bundle crash on `createMap`: Terser property mangling renamed `_unsub` while esbuild class-field helpers kept the quoted `"_unsub"` key.
+- Public HTML demos default CSS/JS pins to jsDelivr so `file://` opens without a `/dist` server.
+
 ## 1.0.3
 
 - Added lazily loaded `map.exportPng()` / `map.print()` with safe canvas/SVG/image compositing, no arbitrary HTML rasterization, and a real browser pixel-composition regression.

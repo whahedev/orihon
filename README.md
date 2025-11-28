@@ -333,7 +333,7 @@ map.behaviors.enable("dblClick");
 
 Orihon 1.0 keeps advanced modules opt-in for large datasets and production diagnostics without making the everyday map heavier.
 
-Scale showcase: [`examples/showcase`](examples/showcase) — Core → Standard → Advanced, then 100k+ stress scenes (`npm run demo:showcase`, live at [whahedev.github.io/orihon/showcase](https://whahedev.github.io/orihon/showcase/)). Comparative engine bench: [`examples/bench-compare`](examples/bench-compare) — same point workload across Orihon, Leaflet, OpenLayers and MapLibre (`npm run demo:bench`, live at [whahedev.github.io/orihon/bench](https://whahedev.github.io/orihon/bench/)).
+Scale showcase: [`examples/showcase`](examples/showcase) — Core → Standard → Advanced, then 100k+ stress scenes (open `index.html`, or [live](https://whahedev.github.io/orihon/showcase/)). Comparative engine bench: [`examples/bench-compare`](examples/bench-compare) — same point workload across Orihon, Leaflet, OpenLayers and MapLibre (open `index.html`, or [live](https://whahedev.github.io/orihon/bench/)).
 
 ```js
 const points = webglPointLayer(bigPointArray, {
@@ -419,8 +419,8 @@ Raw minified sizes are larger; production cost is the gzip figure. Prefer modula
 - [Enhancement roadmap](docs/ROADMAP.md)
 - [Recipes](docs/RECIPES.md)
 - [Plugin development](docs/PLUGINS.md)
-- [Scale showcase](examples/showcase) (`npm run demo:showcase` · [live](https://whahedev.github.io/orihon/showcase/))
-- [Engine benchmark](examples/bench-compare) (`npm run demo:bench` · [live](https://whahedev.github.io/orihon/bench/))
+- [Scale showcase](examples/showcase) (open `index.html` · [live](https://whahedev.github.io/orihon/showcase/))
+- [Engine benchmark](examples/bench-compare) (open `index.html` · [live](https://whahedev.github.io/orihon/bench/))
 - [Examples hub](https://whahedev.github.io/orihon/)
 
 ## Design Goals

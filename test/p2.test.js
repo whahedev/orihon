@@ -6,7 +6,6 @@ const dom = new JSDOM("<!doctype html><div id='map'></div>", { pretendToBeVisual
 Object.assign(globalThis, {
   window: dom.window,
   document: dom.window.document,
-  navigator: dom.window.navigator,
   HTMLElement: dom.window.HTMLElement,
   HTMLDivElement: dom.window.HTMLDivElement,
   HTMLImageElement: dom.window.HTMLImageElement,
@@ -18,6 +17,13 @@ Object.assign(globalThis, {
   getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
   requestAnimationFrame: (callback) => { callback(0); return 1; },
   cancelAnimationFrame: () => {}
+});
+// Node 22+ exposes `navigator` as a getter-only global — assign via defineProperty.
+Object.defineProperty(globalThis, "navigator", {
+  configurable: true,
+  enumerable: true,
+  value: dom.window.navigator,
+  writable: true
 });
 
 const context = {

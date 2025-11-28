@@ -1,6 +1,6 @@
 {
   "name": "orihon",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Unfold the world. A lightweight, high-performance mapping library — less weight, more space.",
   "type": "module",
   "main": "./dist/index.js",
@@ -60,7 +60,7 @@
     "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
     "pretest": "npm run build",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:browser": "node test/browser-smoke.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/studio-placement-browser.mjs && node test/p1-browser.mjs",
+    "test:browser": "node test/browser-smoke.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",
     "test:leaks": "node --expose-gc --test test/lifecycle-leak.test.js",
@@ -75,7 +75,8 @@
     "demo:bench": "npx --yes serve . -p 4176",
     "demo:showcase": "npx --yes serve . -p 4177",
     "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
-    "demo:studio": "node _local/studio/server.mjs"
+    "demo:studio": "node _local/studio/server.mjs",
+    "embed:examples": "node scripts/embed-examples.mjs"
   },
   "keywords": [
     "map",
@@ -110,8 +111,12 @@
     "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public"

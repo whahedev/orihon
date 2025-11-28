@@ -1,10 +1,6 @@
 # Orihon — planetary basemap demo
 
 - **OpenPlanetaryMap** — Web Mercator XYZ via `tileLayer`
-- **NASA Moon/Mars Trek** — OGC WMTS equirectangular tiles (see [Trek WMTS API](https://trek.nasa.gov/tiles/apidoc/trekAPI.html?body=moon)), placed with `imageOverlay` on lon/lat bounds
+- **NASA Moon/Mars Trek** — OGC WMTS equirectangular tiles via `imageOverlay`
 
-```bash
-npm run demo:planetary
-```
-
-Open http://localhost:4174
+Self-contained `index.html` — open the file directly (Orihon loads from jsDelivr). No build or local server required.

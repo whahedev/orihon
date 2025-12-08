@@ -37,6 +37,18 @@ test("SpatialGridIndex updates cells and searches only matching records", () => 
   assert.equal(index.size, 2);
 });
 
+test("SpatialGridIndex same-cell moves keep the record object", () => {
+  const index = spatialGridIndex(1);
+  index.set("berlin", [52.52, 13.4], { n: 1 });
+  const first = index.records.get("berlin");
+  index.set("berlin", [52.6, 13.5], { n: 2 });
+  const second = index.records.get("berlin");
+  assert.equal(first, second);
+  assert.equal(second?.value.n, 2);
+  assert.equal(index.cellCount, 1);
+  assert.deepEqual(index.searchIds([[52.4, 13.3], [52.8, 13.7]]), ["berlin"]);
+});
+
 test("SpatialGridIndex keeps a compact index for a large point set", () => {
   const index = new SpatialGridIndex(0.25);
   for (let i = 0; i < 5000; i++) {

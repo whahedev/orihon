@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Orihon camera sync — marker over geographic crosshair</title>
+    <link rel="stylesheet" href="../../dist/orihon.css" />
+    <style>
+      html, body, #map { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      #hud {
+        position: fixed; left: 12px; top: 12px; z-index: 10;
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: rgba(255,255,255,.92); border: 1px solid #cbd5e1; padding: 8px 10px;
+        color: #0f172a; pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">Wheel to zoom — marker tip must stay on the crosshair.</div>
+    <div id="map"></div>
+    <script src="../../dist/orihon.global.js"></script>
+    <script>
+      const TARGET = [52.52, 13.405];
+      const map = Orihon.createMap("map", {
+        center: TARGET,
+        zoom: 12,
+        zoomSnap: 0,
+        wheelZoomStep: 0.25,
+        controls: false,
+        inertia: false
+      });
+
+      // Geographic crosshair drawn every frame via SVG at the same LatLng as the marker.
+      const cross = Orihon.polyline([
+        [TARGET[0] - 0.01, TARGET[1]],
+        [TARGET[0] + 0.01, TARGET[1]]
+      ], { stroke: "#0f766e", strokeWidth: 2 }).addTo(map);
+      Orihon.polyline([
+        [TARGET[0], TARGET[1] - 0.015],
+        [TARGET[0], TARGET[1] + 0.015]
+      ], { stroke: "#0f766e", strokeWidth: 2 }).addTo(map);
+      Orihon.circleMarker(TARGET, {
+        radius: 4, stroke: "#0f766e", fill: "#99f6e4", fillOpacity: 1, strokeWidth: 2
+      }).addTo(map);
+
+      Orihon.tileLayer(
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+        { renderer: "dom", detectRetina: false, opacity: 0.15 }
+      ).addTo(map);
+      Orihon.canvasBaseLayer({ background: "#edf3f7" }).addTo(map);
+
+      const pin = Orihon.marker(TARGET, {
+        shape: "circle",
+        size: 18,
+        color: "#e11d48",
+        strokeColor: "#fff"
+      }).addTo(map);
+
+      async function autoWheel(steps = 24) {
+        const rect = map.container.getBoundingClientRect();
+        const x = rect.left + rect.width * 0.62;
+        const y = rect.top + rect.height * 0.38;
+        const errors = [];
+        for (let i = 0; i < steps; i++) {
+          map.container.dispatchEvent(new WheelEvent("wheel", {
+            clientX: x,
+            clientY: y,
+            deltaY: i % 5 === 4 ? 120 : -120,
+            bubbles: true,
+            cancelable: true
+          }));
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const expected = map.latLngToContainerPoint(TARGET);
+          const box = pin.el.getBoundingClientRect();
+          const mapBox = map.container.getBoundingClientRect();
+          const anchor = pin.options.anchor;
+          const tip = {
+            x: box.left - mapBox.left + anchor[0],
+            y: box.top - mapBox.top + anchor[1]
+          };
+          const err = Math.hypot(tip.x - expected.x, tip.y - expected.y);
+          errors.push(err);
+        }
+        return {
+          maxError: Math.max(...errors),
+          meanError: errors.reduce((a, b) => a + b, 0) / errors.length,
+          samples: errors.length,
+          zoom: map.getZoom()
+        };
+      }
+
+      window.__orihonCameraSync = {
+        map,
+        pin,
+        target: TARGET,
+        ready: true,
+        autoWheel
+      };
+    </script>
+  </body>
+</html>

@@ -4,7 +4,7 @@ export interface RgbColor {
   b: number;
 }
 
-export function compileShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
+export function compileShader(gl: WebGLRenderingContext | WebGL2RenderingContext, type: number, source: string): WebGLShader | null {
   const shader = gl.createShader(type);
   if (!shader) return null;
   gl.shaderSource(shader, source);

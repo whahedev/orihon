@@ -82,10 +82,9 @@ function projectCoordinate01(lat: number, lng: number, simple = false): { x: num
 class DistanceGrid {
   cellSize: number;
   radius2: number;
-  /** Nested maps avoid string alloc and hash collisions. */
-  private readonly cols = new Map<number, Map<number, number[]>>();
+  /** Packed cell key → ids. One hash lookup beats nested Maps at 100k–1M. */
+  private readonly cells = new Map<number, number[]>();
   private bucketPool: number[][] = [];
-  private rowPool: Map<number, number[]>[] = [];
 
   constructor(cellSize: number) {
     this.cellSize = Math.max(1e-12, cellSize);
@@ -93,35 +92,25 @@ class DistanceGrid {
   }
 
   reset(cellSize: number): void {
-    for (const row of this.cols.values()) {
-      for (const bucket of row.values()) {
-        bucket.length = 0;
-        this.bucketPool.push(bucket);
-      }
-      row.clear();
-      this.rowPool.push(row);
+    for (const bucket of this.cells.values()) {
+      bucket.length = 0;
+      this.bucketPool.push(bucket);
     }
-    this.cols.clear();
+    this.cells.clear();
     this.cellSize = Math.max(1e-12, cellSize);
     this.radius2 = this.cellSize * this.cellSize;
   }
 
   insert(x: number, y: number, id: number): void {
-    const cx = Math.floor(x / this.cellSize);
-    const cy = Math.floor(y / this.cellSize);
-    let row = this.cols.get(cx);
-    if (!row) {
-      row = this.rowPool.pop() || new Map();
-      this.cols.set(cx, row);
-    }
-    const bucket = row.get(cy);
+    const key = cellKey(Math.floor(x / this.cellSize), Math.floor(y / this.cellSize));
+    const bucket = this.cells.get(key);
     if (bucket) {
       bucket.push(id);
       return;
     }
     const fresh = this.bucketPool.pop() || [];
     fresh.push(id);
-    row.set(cy, fresh);
+    this.cells.set(key, fresh);
   }
 
   queryNearest(x: number, y: number, xs: Float64Array, ys: Float64Array): number {
@@ -130,10 +119,8 @@ class DistanceGrid {
     let best = -1;
     let bestDist = this.radius2;
     for (let dx = -1; dx <= 1; dx++) {
-      const row = this.cols.get(cx + dx);
-      if (!row) continue;
       for (let dy = -1; dy <= 1; dy++) {
-        const bucket = row.get(cy + dy);
+        const bucket = this.cells.get(cellKey(cx + dx, cy + dy));
         if (!bucket) continue;
         for (let i = 0; i < bucket.length; i++) {
           const id = bucket[i];
@@ -151,6 +138,10 @@ class DistanceGrid {
   }
 }
 
+function cellKey(cx: number, cy: number): number {
+  return (cx + 0x1000000) * 0x2000000 + (cy + 0x1000000);
+}
+
 function appendChild(
   firstChild: Int32Array,
   nextSibling: Int32Array,
@@ -165,12 +156,13 @@ function appendChild(
  * Build a full zoom hierarchy once (data change). Zoom changes only query this index.
  */
 function buildClusterIndex(input: Omit<ClusterLayoutRequest, "zoomBucket">): ClusterIndex {
-  const leafCount = Math.min(input.ids.length, Math.floor(input.coords.length / 2));
+  const coordCount = Math.floor(input.coords.length / 2);
+  const leafCount = input.ids.length > 0 ? Math.min(input.ids.length, coordCount) : coordCount;
   const maxZoom = Math.max(0, Math.floor(input.clusterMaxZoom));
   const minZoom = Math.max(0, Math.min(maxZoom, Math.floor(input.clusterMinZoom ?? 0)));
   const radius = Math.max(20, Number(input.gridSize) || 50);
   const minPoints = Math.max(2, Math.floor(input.minPoints));
-  const leafIds = input.ids.slice(0, leafCount);
+  const leafIds = input.ids;
   const coords = input.coords;
 
   let capacity = Math.max(leafCount * 2 + 64, 32);
@@ -383,15 +375,18 @@ function queryClusterLayout(
   index: ClusterIndex,
   zoomBucket: number,
   minPoints = index.minPoints,
-  options: { expandLeaves?: boolean } = {}
+  options: { expandLeaves?: boolean; leafMask?: Uint8Array | null } = {}
 ): ClusterLayoutResult {
   const expandLeaves = options.expandLeaves !== false;
+  const leafMask = options.leafMask && options.leafMask.length >= index.leafCount ? options.leafMask : null;
   const singles: ClusterLayoutSingle[] = [];
   const clusters: ClusterLayoutCluster[] = [];
   const z = Math.max(index.minZoom, Math.min(index.maxZoom, Math.floor(zoomBucket)));
+  const weights = leafMask ? filteredNodeWeights(index, leafMask) : index.weight;
 
   if (zoomBucket > index.maxZoom) {
     for (let i = 0; i < index.leafCount; i++) {
+      if (leafMask && !leafMask[i]) continue;
       singles.push({ id: index.ids[i], lat: index.lat[i], lng: index.lng[i] });
     }
     return { clusters, singles };
@@ -404,9 +399,24 @@ function queryClusterLayout(
     for (let i = 0; i < index.leafCount; i++) leafPos.set(index.ids[i], i);
   }
 
+  const pushFilteredLeaves = (nid: number) => {
+    if (nid < index.leafCount) {
+      if (!leafMask || leafMask[nid]) {
+        singles.push({ id: index.ids[nid], lat: index.lat[nid], lng: index.lng[nid] });
+      }
+      return;
+    }
+    let c = index.firstChild[nid];
+    while (c >= 0) {
+      if (!leafMask || weights[c] > 0) pushFilteredLeaves(c);
+      c = index.nextSibling[c];
+    }
+  };
+
   for (let i = 0; i < roots.length; i++) {
     const nodeId = roots[i];
-    const w = index.weight[nodeId];
+    const w = weights[nodeId];
+    if (leafMask && w === 0) continue;
     if (w < minP || nodeId < index.leafCount) {
       if (nodeId < index.leafCount) {
         singles.push({ id: index.ids[nodeId], lat: index.lat[nodeId], lng: index.lng[nodeId] });
@@ -415,35 +425,29 @@ function queryClusterLayout(
         collectClusterLeaves(index, nodeId, leaves);
         for (const id of leaves) {
           const leafIndex = leafPos.get(id);
-          if (leafIndex != null) {
-            singles.push({ id, lat: index.lat[leafIndex], lng: index.lng[leafIndex] });
-          }
+          if (leafIndex == null) continue;
+          if (leafMask && !leafMask[leafIndex]) continue;
+          singles.push({ id, lat: index.lat[leafIndex], lng: index.lng[leafIndex] });
         }
       } else {
-        // Small groups still need concrete singles for markers (cheap: group is < minPoints).
-        const pushLeaves = (nid: number) => {
-          if (nid < index.leafCount) {
-            singles.push({ id: index.ids[nid], lat: index.lat[nid], lng: index.lng[nid] });
-            return;
-          }
-          let c = index.firstChild[nid];
-          while (c >= 0) {
-            pushLeaves(c);
-            c = index.nextSibling[c];
-          }
-        };
-        pushLeaves(nodeId);
+        pushFilteredLeaves(nodeId);
       }
       continue;
     }
     if (expandLeaves) {
       const memberIds: ClusterLayoutId[] = [];
       collectClusterLeaves(index, nodeId, memberIds);
+      const ids = leafMask
+        ? memberIds.filter((id) => {
+          const leafIndex = leafPos?.get(id);
+          return leafIndex == null ? true : Boolean(leafMask[leafIndex]);
+        })
+        : memberIds;
       clusters.push({
         key: `z${z}:${nodeId}`,
         lat: index.lat[nodeId],
         lng: index.lng[nodeId],
-        ids: memberIds,
+        ids,
         count: w,
         nodeId
       });
@@ -460,6 +464,22 @@ function queryClusterLayout(
   }
 
   return { clusters, singles };
+}
+
+/** Parents have higher ids than children, so one forward pass sums a filter mask. */
+function filteredNodeWeights(index: ClusterIndex, mask: Uint8Array): Uint32Array {
+  const weights = new Uint32Array(index.nodeCount);
+  for (let i = 0; i < index.leafCount; i++) weights[i] = mask[i];
+  for (let i = index.leafCount; i < index.nodeCount; i++) {
+    let sum = 0;
+    let child = index.firstChild[i];
+    while (child >= 0) {
+      sum += weights[child];
+      child = index.nextSibling[child];
+    }
+    weights[i] = sum;
+  }
+  return weights;
 }
 
 /** Build index and query one zoom — drop-in for previous grid API. */
@@ -522,8 +542,10 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
   const ox = new Float64Array(count);
   const oy = new Float64Array(count);
   const assigned = new Uint8Array(count);
-  type Acc = { lat: number; lng: number; w: number; leaves: number[] };
+  type Acc = { lat: number; lng: number; w: number; leaves: number[] | null };
   const byOrigin = new Map<number, Acc>();
+  /** Keep leaf ids only for small clusters — 1M greedy must not allocate 1M id arrays. */
+  const expandLeavesUntil = 256;
 
   for (let i = 0; i < count; i++) {
     const px = xs[i];
@@ -543,7 +565,10 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
       acc.lat = (acc.lat * w + lats[i]) / nw;
       acc.lng = (acc.lng * w + lngs[i]) / nw;
       acc.w = nw;
-      acc.leaves.push(i);
+      if (acc.leaves) {
+        if (nw >= minPoints && acc.leaves.length >= expandLeavesUntil) acc.leaves = null;
+        else acc.leaves.push(i);
+      }
       assigned[i] = 1;
       continue;
     }
@@ -555,13 +580,14 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
   let clusterSeq = 0;
   for (const acc of byOrigin.values()) {
     if (acc.w < minPoints) {
-      for (const leaf of acc.leaves) {
+      for (const leaf of acc.leaves ?? []) {
         singles.push({ id: input.ids[leaf], lat: lats[leaf], lng: lngs[leaf] });
       }
       continue;
     }
-    const ids: ClusterLayoutId[] = new Array(acc.leaves.length);
-    for (let i = 0; i < acc.leaves.length; i++) ids[i] = input.ids[acc.leaves[i]];
+    const ids: ClusterLayoutId[] = acc.leaves
+      ? acc.leaves.map((leaf) => input.ids[leaf])
+      : [];
     clusters.push({
       key: `g${z}:${clusterSeq++}`,
       lat: acc.lat,
@@ -599,7 +625,6 @@ function encodeClusterIndex(index: ClusterIndex): {
     minZoom: index.minZoom,
     minPoints: index.minPoints,
     radius: index.radius,
-    ids: index.ids,
     x: copyBuf(index.x),
     y: copyBuf(index.y),
     lat: copyBuf(index.lat),
@@ -657,7 +682,7 @@ export function decodeClusterIndex(data: Record<string, unknown>): ClusterIndex 
     minZoom: Number(data.minZoom),
     minPoints: Number(data.minPoints),
     radius: Number(data.radius),
-    ids: data.ids as ClusterLayoutId[],
+    ids: (data.ids as ClusterLayoutId[]) || [],
     x: new Float64Array(data.x as ArrayBuffer),
     y: new Float64Array(data.y as ArrayBuffer),
     lat: new Float64Array(data.lat as ArrayBuffer),
@@ -710,7 +735,7 @@ function clusterWorkerMain(createRuntime: () => ReturnType<typeof createClusterL
     const id = data.id;
     if (data.type === "clusterIndex") {
       const index = api.buildClusterIndex({
-        ids: data.ids ?? [],
+        ids: [],
         coords: asCoords(data.coords),
         gridSize: data.gridSize ?? 50,
         minPoints: data.minPoints ?? 2,

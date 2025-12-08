@@ -1,4 +1,8 @@
 import { TILE_SIZE, latLng, projectMercator01, type LatLngBoundsLike, type LatLngLike, latLngBounds } from "../geo.js";
+import { heatKernelAtZoom } from "./heat-scale.js";
+
+export { heatIntensityScale, heatKernelAtZoom, heatRadiusScale } from "./heat-scale.js";
+export type { HeatKernelScale } from "./heat-scale.js";
 
 export type HeatIsolineInput = LatLngLike | [number, number, number?];
 
@@ -56,9 +60,10 @@ export function buildHeatIsolines(
   const rows = Math.max(8, Math.floor(options.rows ?? 72));
   const zoom = options.zoom ?? options.scaleZoom ?? 10;
   const scaleZoom = options.scaleZoom ?? zoom;
-  const radiusCss = Math.max(4, (options.radius ?? 28) + (options.blur ?? 16) * 0.35);
-  const radiusScale = heatRadiusScale(zoom, scaleZoom);
-  const kernelCss = radiusCss * radiusScale;
+  const baseRadiusCss = Math.max(4, (options.radius ?? 28) + (options.blur ?? 16) * 0.35);
+  const kernel = heatKernelAtZoom(zoom, scaleZoom, baseRadiusCss);
+  const kernelCss = kernel.radiusCss;
+  const intensityScale = kernel.intensityScale;
 
   const west = bounds.west;
   const east = bounds.east;
@@ -73,7 +78,9 @@ export function buildHeatIsolines(
   const mercH = Math.abs(projectMercator01(north, 0).y - projectMercator01(south, 0).y) * scale;
   const cssSpan = Math.max(mercW, mercH, 1);
   const cellCss = cssSpan / Math.max(cols, rows);
-  const radiusCells = Math.max(1.25, kernelCss / cellCss);
+  // Do not floor to 1.25 cells: on a coarse world grid that smears one point
+  // across a country. Sub-cell kernels become a per-cell histogram.
+  const radiusCells = Math.max(0.51, kernelCss / cellCss);
 
   const grid = new Float32Array(cols * rows);
   const rCeil = Math.ceil(radiusCells);
@@ -90,7 +97,7 @@ export function buildHeatIsolines(
     const x1 = Math.min(cols - 1, Math.ceil(fx) + rCeil);
     const y0 = Math.max(0, Math.floor(fy) - rCeil);
     const y1 = Math.min(rows - 1, Math.ceil(fy) + rCeil);
-    const w = next.weight;
+    const w = next.weight * intensityScale;
 
     for (let y = y0; y <= y1; y++) {
       const dy = y - fy;
@@ -336,10 +343,3 @@ function normalizeHeat(value: HeatIsolineInput): { lat: number; lng: number; wei
   return { lat: point.lat, lng: point.lng, weight: 1 };
 }
 
-/** Screen kernel scale: shrink when zoomed out; flat when zooming in. */
-export function heatRadiusScale(zoom: number, scaleZoom: number): number {
-  const dz = zoom - scaleZoom;
-  if (dz >= 0) return 1;
-  const geo = Math.pow(2, dz);
-  return Math.max(0.22, geo * 0.55 + 0.45 * Math.pow(geo, 0.35));
-}

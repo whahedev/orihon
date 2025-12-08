@@ -46,7 +46,17 @@ class FakeElement {
     this.tagName = String(tag).toUpperCase();
     this.children = [];
     this.classList = new FakeClassList();
-    this.style = {};
+    this.style = {
+      setProperty(name, value) {
+        this[name] = String(value);
+      },
+      getPropertyValue(name) {
+        return this[name] ?? "";
+      },
+      removeProperty(name) {
+        delete this[name];
+      }
+    };
     this.attributes = new Map();
     this.listeners = new Map();
     this.clientWidth = 800;

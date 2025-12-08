@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TileLayer } from "../dist/layers/tile-layer.js";
+import { TileLayer, nativeTileZoom } from "../dist/layers/tile-layer.js";
 
 test("TileLayer wraps X and replaces every URL token", () => {
   const layer = new TileLayer("https://{s}.tiles/{z}/{x}/{y}/{x}{r}.png", {
@@ -19,4 +19,11 @@ test("TileLayer validates source bounds", () => {
     () => new TileLayer("https://tiles/{z}/{x}/{y}.png", { bounds: { north: 1 } }),
     /bounds/
   );
+});
+
+test("nativeTileZoom accepts numbers and numeric strings", () => {
+  assert.equal(nativeTileZoom(12, 19), 12);
+  assert.equal(nativeTileZoom("8", 19), 8);
+  assert.equal(nativeTileZoom(undefined, 19), 19);
+  assert.equal(nativeTileZoom("", 19), 19);
 });

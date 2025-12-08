@@ -1,0 +1,17 @@
+{
+  "name": "orihon-air-sea-radar",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Orihon live aircraft ADS-B and vessel AIS visualization",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

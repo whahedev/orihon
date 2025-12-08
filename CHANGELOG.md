@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.5
+
+### License & positioning
+- Relicensed the map engine to **Apache License 2.0**. Commercial use no longer needs a separate paid engine license.
+- Positioning: Orihon is a free, open-source browser map engine. Apache 2.0. Use it anywhere. Orihon Studio is the visual editor.
+
+### Camera & continuous zoom
+- Shared camera helpers (`camera.ts`): `geoTransformCss`, `cameraWarpCss`, `tileLevelWarpCss`, `tileCornerLayerTransform`, plus `map.getCamera()`.
+- Geographic `translate3d` no longer integer-rounds, so tiles, markers, SVG and overlays stay glued during fractional wheel zoom.
+- TileLayer `#switchZoom` never CSS-warps with a NaN level origin (forces a heavy pass). WebGL/WebGPU tile warps use the same camera math.
+- Regression: `test/camera-sync.test.js`, `test/fixtures/camera-sync.html`, Playwright continuous-wheel glue check (≤ 0.75 px).
+
+### Markers & UI
+- Marker built-in glyphs: `shape` (`pin` | `circle` | `square` | `dot` | …), `color`, `strokeColor`, `size`, `strokeWidth`, and `setAppearance()`.
+- Locale packs split for smaller Core/Standard bundles (`locale-en`, `locale-packs`, lazy packs).
+
+### ObjectManager & heatmaps
+- ObjectManager scene pipeline: mixed geometry, trails, search/time indexes, icon atlas, label layout, cluster aggregations, styled path/polygon/symbol WebGL batches.
+- 1M clustering Load path: mass-point ingest skips scene Maps, greedy packed cells, worker avoids structured-cloning a million ids. Hierarchy builds after first paint. `setFilter` on clustered sets queries the existing tree (no per-toggle recluster).
+- Heatmaps encode geographic density (mass / kernel area) by default. `webglHeatLayer({ field: "value" })` uses a mean→peak blend from local alarm-mass share. ObjectManager heat keeps explicit zero weights; value kernels stay local; zoom rebuilds before CSS aureoles.
+
+### Tiles, MVT, MLT, WebGPU
+- Faster live tiles: incremental coverage (`tile-grid`), velocity-biased fetch, WebGL2 texture-array draws, W-TinyLFU GPU cache admission.
+- Raster fill continues after the first `maxNewPerFrame` batch until the viewport is complete.
+- Advanced `createMVTProvider` / `decodePackedMVT` sniff Orihon MLT and decode MVT geometry with WASM; `tileLayer({ renderer: "auto" })` prefers WebGPU when `navigator.gpu` exists.
+- Optional entries: `orihon/mlt`, `orihon/mvt-wasm`, `orihon/webgpu`. Advanced gzip budget is **100 KiB**.
+
+### Demos
+- `examples/object-manager-live`, `examples/object-manager-scene`, `examples/aircraft-radar-proxy` (`npm run demo:aircraft`), `examples/rzd-train-122-tracker` (`npm run demo:rzd`, port 8788).
+
 ## 1.0.4
 
 - Fixed CDN Advanced bundle crash on `createMap`: Terser property mangling renamed `_unsub` while esbuild class-field helpers kept the quoted `"_unsub"` key.

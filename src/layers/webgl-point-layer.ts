@@ -12,6 +12,13 @@ export type WebGLPointInput = LatLngLike | { coordinates?: LatLngLike; latlng?: 
 export interface WebGLPointDataOptions {
   /** Interleaved RGBA floats in 0..1, length = pointCount * 4. */
   colors?: ArrayLike<number> | null;
+  /** Per-point sizes in CSS pixels, length = pointCount. */
+  sizes?: ArrayLike<number> | null;
+  /**
+   * Take ownership of `latlng` / `merc64` typed arrays (no copy).
+   * Callers must not reuse those buffers after `setPackedData`.
+   */
+  adopt?: boolean;
 }
 
 export interface WebGLPointLayerOptions extends LayerOptions {
@@ -33,6 +40,7 @@ type ResolvedWebGLPointLayerOptions = Required<WebGLPointLayerOptions>;
 interface GLLocations {
   aMerc: number;
   aColor: number;
+  aSize: number;
   uScale: WebGLUniformLocation | null;
   uOrigin: WebGLUniformLocation | null;
   uResolution: WebGLUniformLocation | null;
@@ -40,9 +48,11 @@ interface GLLocations {
   uPointSize: WebGLUniformLocation | null;
   uColor: WebGLUniformLocation | null;
   uUseVertexColor: WebGLUniformLocation | null;
+  uUseVertexSize: WebGLUniformLocation | null;
   uCenter: WebGLUniformLocation | null;
   uRotate: WebGLUniformLocation | null;
   uPitch: WebGLUniformLocation | null;
+  uRound: WebGLUniformLocation | null;
 }
 
 export interface WebGLPointLayerStats {
@@ -51,6 +61,9 @@ export interface WebGLPointLayerStats {
   renderer: "webgl" | "canvas" | "none";
   bufferBytes: number;
   vertexColors: boolean;
+  vertexSizes: boolean;
+  /** Spatial pick-index size; 0 when `interactive` is false. */
+  pickIndex: number;
 }
 
 export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
@@ -59,6 +72,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   program: WebGLProgram | null = null;
   buffer: WebGLBuffer | null = null;
   colorBuffer: WebGLBuffer | null = null;
+  sizeBuffer: WebGLBuffer | null = null;
   /** Packed lat/lng pairs for hit-testing and canvas fallback. */
   points: Float32Array = new Float32Array();
   /**
@@ -66,8 +80,10 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
    * Absolute world mercator lives in `_merc64` (float64) to avoid high-zoom collapse.
    */
   mercator: Float32Array = new Float32Array();
-  /** Interleaved RGBA (0..1) when per-point colors are enabled. */
-  colors: Float32Array = new Float32Array();
+  /** Interleaved RGBA bytes (0..255) when per-point colors are enabled. */
+  colors: Uint8Array = new Uint8Array();
+  /** Per-point sizes in CSS pixels when vertex sizes are enabled. */
+  sizes: Float32Array = new Float32Array();
   pointData: WebGLPointInput[] = [];
   renderer: "webgl" | "canvas" | "none" = "none";
   readonly color: RgbColor;
@@ -76,21 +92,38 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   private _glLocations: GLLocations | null = null;
   private _bufferDirty = true;
   private _colorDirty = true;
+  private _sizeDirty = true;
   private _useVertexColor = false;
+  private _useVertexSize = false;
   private _scratch: Float32Array = new Float32Array(0);
   private _scratchColors: Float32Array = new Float32Array(0);
   private _latlngBuf = new Float32Array(0);
   private _merc64 = new Float64Array(0);
   private _drawMerc = new Float32Array(0);
-  private _colorBuf = new Float32Array(0);
+  private _colorBuf = new Uint8Array(0);
+  private _colorFloat = new Float32Array(0);
+  private _sizeBuf = new Float32Array(0);
   private _gpuMercBytes = 0;
   private _gpuColorBytes = 0;
+  private _gpuSizeBytes = 0;
   private _refMx = 0;
   private _refMy = 0;
   private _refZoom = Number.NaN;
   private _refOriginX = 0;
   private _refOriginY = 0;
   private _pickIndex = new SpatialGridIndex<number, number>(1);
+  private _maxVertexSize = 0;
+  /** True when `_latlngBuf` / `_merc64` were adopted from the caller (may be shared). */
+  private _packedAdopted = false;
+  private _hidden = false;
+  private _forceGpu = true;
+  private _hasPainted = false;
+  private _paintedZoom = Number.NaN;
+  private _paintedOriginX = 0;
+  private _paintedOriginY = 0;
+  private _paintedPad = 0;
+  private _lastGpuMs = 0;
+  private _settleTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(points: Iterable<WebGLPointInput> = [], options: WebGLPointLayerOptions = {}) {
     super({
@@ -120,6 +153,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     this.canvas = createEl("canvas", "oh-webgl-point-layer", pane);
     this.canvas.style.position = "absolute";
     this.canvas.style.pointerEvents = this.options.interactive ? "auto" : "none";
+    this.canvas.style.willChange = "transform";
     this.gl = this.canvas.getContext("webgl", {
       antialias: false,
       alpha: true,
@@ -141,10 +175,12 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   }
 
   override onRemove(): void {
+    this.#clearSettleTimer();
     if (this.gl) {
       try {
         if (this.buffer) this.gl.deleteBuffer(this.buffer);
         if (this.colorBuffer) this.gl.deleteBuffer(this.colorBuffer);
+        if (this.sizeBuffer) this.gl.deleteBuffer(this.sizeBuffer);
         if (this.program) this.gl.deleteProgram(this.program);
         this.gl.getExtension("WEBGL_lose_context")?.loseContext();
       } catch {
@@ -153,11 +189,13 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     }
     this.buffer = null;
     this.colorBuffer = null;
+    this.sizeBuffer = null;
     this.program = null;
     this.gl = null;
     this._glLocations = null;
     this._gpuMercBytes = 0;
     this._gpuColorBytes = 0;
+    this._gpuSizeBytes = 0;
     this.renderer = "none";
     this._interactionUnsub?.();
     this._interactionUnsub = null;
@@ -169,15 +207,20 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     this.canvas = null;
     this.points = new Float32Array();
     this.mercator = new Float32Array();
-    this.colors = new Float32Array();
+    this.colors = new Uint8Array();
+    this.sizes = new Float32Array();
     this._merc64 = new Float64Array(0);
     this._drawMerc = new Float32Array(0);
-    this._colorBuf = new Float32Array(0);
+    this._colorBuf = new Uint8Array(0);
+    this._colorFloat = new Float32Array(0);
+    this._sizeBuf = new Float32Array(0);
     this.pointData = [];
     this._latlngBuf = new Float32Array(0);
     this._scratch = new Float32Array(0);
     this._scratchColors = new Float32Array(0);
     this._useVertexColor = false;
+    this._useVertexSize = false;
+    this._maxVertexSize = 0;
     this._refZoom = Number.NaN;
     this._pickIndex.clear();
     super.onRemove();
@@ -234,9 +277,11 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     }
 
     this.#applyColors(options.colors, keptCount);
+    this.#applySizes(options.sizes, keptCount);
     this.#rebuildPickIndex();
     this._refZoom = Number.NaN;
     this._bufferDirty = true;
+    this._forceGpu = true;
     this.render();
     return this;
   }
@@ -244,6 +289,13 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   /** Replace per-point RGBA (0..1). Pass null to fall back to uniform `color`. */
   setColors(colors: ArrayLike<number> | null): this {
     this.#applyColors(colors, this.points.length / 2);
+    this.render();
+    return this;
+  }
+
+  /** Replace per-point sizes in CSS pixels. Pass null to fall back to uniform `pointSize`. */
+  setSizes(sizes: ArrayLike<number> | null): this {
+    this.#applySizes(sizes, this.points.length / 2);
     this.render();
     return this;
   }
@@ -259,7 +311,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     this._latlngBuf[i + 1] = lng;
     this._merc64[i] = m.x;
     this._merc64[i + 1] = m.y;
-    this._pickIndex.set(index, [lat, lng], index);
+    if (this.options.interactive) this._pickIndex.set(index, [lat, lng], index);
     if (this._drawMerc.length >= i + 2 && Number.isFinite(this._refMx)) {
       this._drawMerc[i] = m.x - this._refMx;
       this._drawMerc[i + 1] = m.y - this._refMy;
@@ -274,11 +326,24 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   patchColor(index: number, rgba: ArrayLike<number>): this {
     if (!this._useVertexColor || index < 0 || index * 4 + 3 >= this.colors.length) return this;
     const o = index * 4;
-    this._colorBuf[o] = Number(rgba[0]) || 0;
-    this._colorBuf[o + 1] = Number(rgba[1]) || 0;
-    this._colorBuf[o + 2] = Number(rgba[2]) || 0;
-    this._colorBuf[o + 3] = Number(rgba[3]) || this.options.opacity;
+    this._colorBuf[o] = floatToByte(Number(rgba[0]) || 0);
+    this._colorBuf[o + 1] = floatToByte(Number(rgba[1]) || 0);
+    this._colorBuf[o + 2] = floatToByte(Number(rgba[2]) || 0);
+    this._colorBuf[o + 3] = floatToByte(Number(rgba[3]) || this.options.opacity);
     this.#uploadColorRange(o, 4);
+    this.#requestGpuPaint();
+    return this;
+  }
+
+  /** Patch one vertex size without rebuilding coordinates or color buffers. */
+  patchSize(index: number, size: number): this {
+    if (!this._useVertexSize || index < 0 || index >= this.sizes.length) return this;
+    const next = normalizePointSize(size, this.options.pointSize);
+    this._sizeBuf[index] = next;
+    if (next > this._maxVertexSize) this._maxVertexSize = next;
+    else this.#recomputeMaxVertexSize();
+    this.#uploadSizeRange(index, 1);
+    this.#requestGpuPaint();
     return this;
   }
 
@@ -293,18 +358,37 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   ): this {
     const count = Math.min(latlng.length, merc64.length);
     const even = count - (count % 2);
-    if (this._latlngBuf.length < even) this._latlngBuf = new Float32Array(even);
-    if (this._merc64.length < even) this._merc64 = new Float64Array(even);
-    if (this._drawMerc.length < even) this._drawMerc = new Float32Array(even);
-    this._latlngBuf.set(latlng.subarray(0, even));
-    this._merc64.set(merc64.subarray(0, even));
+    if (options.adopt) {
+      if (even === latlng.length && even === merc64.length) {
+        this._latlngBuf = latlng as Float32Array<ArrayBuffer>;
+        this._merc64 = merc64 as Float64Array<ArrayBuffer>;
+      } else {
+        this._latlngBuf = new Float32Array(even);
+        this._merc64 = new Float64Array(even);
+        this._latlngBuf.set(latlng.subarray(0, even));
+        this._merc64.set(merc64.subarray(0, even));
+      }
+      if (this._drawMerc.length < even) this._drawMerc = new Float32Array(even);
+      this._packedAdopted = true;
+    } else {
+      if (this._packedAdopted || this._latlngBuf.length < even) {
+        this._latlngBuf = new Float32Array(even);
+        this._merc64 = new Float64Array(even);
+        this._packedAdopted = false;
+      }
+      if (this._drawMerc.length < even) this._drawMerc = new Float32Array(even);
+      this._latlngBuf.set(latlng.subarray(0, even));
+      this._merc64.set(merc64.subarray(0, even));
+    }
     this.points = this._latlngBuf.subarray(0, even);
     this.mercator = this._drawMerc.subarray(0, even);
     this.pointData = [];
     this.#applyColors(options.colors, even / 2);
+    this.#applySizes(options.sizes, even / 2);
     this.#rebuildPickIndex();
     this._refZoom = Number.NaN;
     this._bufferDirty = true;
+    this._forceGpu = true;
     this.render();
     return this;
   }
@@ -318,8 +402,18 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     return this._latlngBuf.subarray(0, this.points.length);
   }
 
+  /** Interleaved RGBA floats in 0..1 (converted from the packed GPU bytes). */
   getColorBuf(): Float32Array {
-    return this._colorBuf.subarray(0, this.colors.length);
+    const n = this.colors.length;
+    if (this._colorFloat.length < n) this._colorFloat = new Float32Array(n);
+    const src = this._colorBuf;
+    const dst = this._colorFloat;
+    for (let i = 0; i < n; i++) dst[i] = src[i] * (1 / 255);
+    return dst.subarray(0, n);
+  }
+
+  getSizeBuf(): Float32Array {
+    return this._sizeBuf.subarray(0, this.sizes.length);
   }
 
   addData(points: Iterable<WebGLPointInput>): this {
@@ -334,17 +428,27 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   clear(): this {
     this.points = new Float32Array();
     this.mercator = new Float32Array();
-    this.colors = new Float32Array();
+    this.colors = new Uint8Array();
+    this.sizes = new Float32Array();
     this._merc64 = new Float64Array(0);
     this._drawMerc = new Float32Array(0);
-    this._colorBuf = new Float32Array(0);
+    this._colorBuf = new Uint8Array(0);
+    this._colorFloat = new Float32Array(0);
+    this._sizeBuf = new Float32Array(0);
     this.pointData = [];
     this._gpuMercBytes = 0;
     this._gpuColorBytes = 0;
+    this._gpuSizeBytes = 0;
     this._useVertexColor = false;
+    this._useVertexSize = false;
+    this._maxVertexSize = 0;
     this._refZoom = Number.NaN;
     this._bufferDirty = true;
     this._colorDirty = true;
+    this._sizeDirty = true;
+    this._hasPainted = false;
+    this._forceGpu = true;
+    this.#clearSettleTimer();
     this.render();
     return this;
   }
@@ -355,8 +459,12 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   }
 
   setInteractive(enabled: boolean): this {
-    this.options.interactive = Boolean(enabled);
-    if (this.canvas) this.canvas.style.pointerEvents = this.options.interactive ? "auto" : "none";
+    const next = Boolean(enabled);
+    const was = this.options.interactive;
+    this.options.interactive = next;
+    if (this.canvas) this.canvas.style.pointerEvents = next ? "auto" : "none";
+    if (next && !was) this.#rebuildPickIndex();
+    else if (!next && was) this._pickIndex.clear();
     this.#syncInteraction();
     return this;
   }
@@ -397,44 +505,192 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
       points: this.points.length / 2,
       rendered: this._lastRendered,
       renderer: this.renderer,
-      bufferBytes: this.points.byteLength + merc64Bytes + this.mercator.byteLength + this.colors.byteLength,
-      vertexColors: this._useVertexColor
+      bufferBytes: this.points.byteLength + merc64Bytes + this.mercator.byteLength + this.colors.byteLength + this.sizes.byteLength,
+      vertexColors: this._useVertexColor,
+      vertexSizes: this._useVertexSize,
+      pickIndex: this._pickIndex.size
     };
   }
 
+  /** Hide the canvas without dropping GPU buffers (heatmap / cluster overlays). */
+  setHidden(hidden: boolean): this {
+    this._hidden = hidden;
+    if (hidden) this.#clearSettleTimer();
+    if (this.canvas) {
+      this.canvas.style.display = hidden ? "none" : "";
+      if (!hidden) {
+        this.canvas.style.transform = "none";
+        this._forceGpu = true;
+      }
+    }
+    return this;
+  }
+
+  override wantsFrameRender(): boolean {
+    return !this._hidden && this.points.length > 0;
+  }
+
   override render(): void {
-    if (!this.map || !this.canvas) return;
+    if (this._hidden || !this.map || !this.canvas) return;
     const dpr = Math.min(this.options.maxDpr, window.devicePixelRatio || 1);
-    const width = Math.max(1, Math.round(this.map.size.width * dpr));
-    const height = Math.max(1, Math.round(this.map.size.height * dpr));
+    const cssW = this.map.size.width;
+    const cssH = this.map.size.height;
+    const pad = this.#overscanPad(cssW, cssH);
+    const drawW = cssW + pad * 2;
+    const drawH = cssH + pad * 2;
+    const width = Math.max(1, Math.round(drawW * dpr));
+    const height = Math.max(1, Math.round(drawH * dpr));
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this._forceGpu = true;
+      this._hasPainted = false;
+    }
+
+    const zoom = this.map.zoom;
+    const ox = this.map.pixelOrigin.x;
+    const oy = this.map.pixelOrigin.y;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const canWarp =
+      this.renderer === "webgl" &&
+      this._hasPainted &&
+      Number.isFinite(this._paintedZoom) &&
+      !this._forceGpu &&
+      !this._bufferDirty &&
+      !this._colorDirty &&
+      !this._sizeDirty;
+
+    if (canWarp) {
+      const s = 2 ** (zoom - this._paintedZoom);
+      const tx = this._paintedOriginX * s - ox;
+      const ty = this._paintedOriginY * s - oy;
+      const cover = this._paintedPad * 0.68;
+      const uncovered = Math.abs(tx) > cover || Math.abs(ty) > cover || Math.abs(s - 1) > 0.04;
+      const minInterval = this.points.length / 2 >= 250_000 ? 150 : 80;
+      const throttled = uncovered && now - this._lastGpuMs < minInterval;
+      if (!uncovered || throttled) {
+        if (s === 1 && tx * tx + ty * ty < 1e-4) return;
+        this.canvas.style.left = `${-this._paintedPad}px`;
+        this.canvas.style.top = `${-this._paintedPad}px`;
+        this.canvas.style.transformOrigin = "0 0";
+        this.canvas.style.transform = `translate3d(${tx}px,${ty}px,0) scale(${s})`;
+        this.#scheduleSettledGpu(throttled ? Math.max(16, minInterval - (now - this._lastGpuMs)) : 120);
+        return;
+      }
+    }
+
+    this.canvas.style.left = `${-pad}px`;
+    this.canvas.style.top = `${-pad}px`;
+    this.canvas.style.width = `${drawW}px`;
+    this.canvas.style.height = `${drawH}px`;
+    this.canvas.style.transform = "none";
     if (this.canvas.width !== width) this.canvas.width = width;
     if (this.canvas.height !== height) this.canvas.height = height;
-    this.canvas.style.left = "0px";
-    this.canvas.style.top = "0px";
-    this.canvas.style.width = `${this.map.size.width}px`;
-    this.canvas.style.height = `${this.map.size.height}px`;
-    if (this.renderer === "webgl") this.#renderWebGL(dpr);
+    if (this.renderer === "webgl") this.#renderWebGL(dpr, pad);
     else if (this.renderer === "canvas") this.#renderCanvas(dpr);
+    this._paintedZoom = zoom;
+    this._paintedOriginX = ox;
+    this._paintedOriginY = oy;
+    this._paintedPad = pad;
+    this._hasPainted = true;
+    this._forceGpu = false;
+    this._lastGpuMs = now;
+    this.#clearSettleTimer();
+  }
+
+  #overscanPad(cssW: number, cssH: number): number {
+    if (this.renderer !== "webgl") return 0;
+    const count = this.points.length / 2;
+    if (count < 8_000) return 0;
+    return Math.round(Math.min(280, Math.max(120, Math.min(cssW, cssH) * 0.24)));
+  }
+
+  #cameraMovedFromPaint(): boolean {
+    if (!this.map || !this._hasPainted) return false;
+    return (
+      this.map.zoom !== this._paintedZoom ||
+      this.map.pixelOrigin.x !== this._paintedOriginX ||
+      this.map.pixelOrigin.y !== this._paintedOriginY
+    );
+  }
+
+  /** Color/size patches: draw now when idle, wait for CSS-warp settle while gesturing. */
+  #requestGpuPaint(): void {
+    if (this.#cameraMovedFromPaint()) this.#scheduleSettledGpu();
+    else this._forceGpu = true;
+  }
+
+  #scheduleSettledGpu(delay = 120): void {
+    this.#clearSettleTimer();
+    this._settleTimer = setTimeout(() => {
+      this._settleTimer = null;
+      this._forceGpu = true;
+      this.render();
+    }, delay);
+  }
+
+  #clearSettleTimer(): void {
+    if (this._settleTimer == null) return;
+    clearTimeout(this._settleTimer);
+    this._settleTimer = null;
   }
 
   #applyColors(colors: ArrayLike<number> | null | undefined, pointCount: number): void {
     if (!colors || pointCount <= 0) {
       this._useVertexColor = false;
-      this.colors = new Float32Array();
-      this._colorBuf = new Float32Array(0);
+      this.colors = new Uint8Array();
+      this._colorBuf = new Uint8Array(0);
       this._colorDirty = true;
       this._gpuColorBytes = 0;
       return;
     }
     const need = pointCount * 4;
-    if (this._colorBuf.length < need) this._colorBuf = new Float32Array(need);
+    if (this._colorBuf.length < need) this._colorBuf = new Uint8Array(need);
     const dst = this._colorBuf;
     const n = Math.min(need, colors.length);
-    for (let i = 0; i < n; i++) dst[i] = Number(colors[i]) || 0;
-    for (let i = n; i < need; i++) dst[i] = i % 4 === 3 ? this.options.opacity : 0;
+    for (let i = 0; i < n; i++) dst[i] = floatToByte(Number(colors[i]) || 0);
+    const alphaByte = floatToByte(this.options.opacity);
+    for (let i = n; i < need; i++) dst[i] = i % 4 === 3 ? alphaByte : 0;
     this.colors = dst.subarray(0, need);
     this._useVertexColor = true;
     this._colorDirty = true;
+  }
+
+  #applySizes(sizes: ArrayLike<number> | null | undefined, pointCount: number): void {
+    if (!sizes || pointCount <= 0) {
+      this._useVertexSize = false;
+      this.sizes = new Float32Array();
+      this._sizeBuf = new Float32Array(0);
+      this._sizeDirty = true;
+      this._gpuSizeBytes = 0;
+      this._maxVertexSize = 0;
+      return;
+    }
+    if (this._sizeBuf.length < pointCount) this._sizeBuf = new Float32Array(pointCount);
+    const dst = this._sizeBuf;
+    const fallback = this.options.pointSize;
+    let maxSize = 0;
+    const n = Math.min(pointCount, sizes.length);
+    for (let i = 0; i < n; i++) {
+      const size = normalizePointSize(sizes[i], fallback);
+      dst[i] = size;
+      if (size > maxSize) maxSize = size;
+    }
+    for (let i = n; i < pointCount; i++) {
+      dst[i] = fallback;
+      if (fallback > maxSize) maxSize = fallback;
+    }
+    this.sizes = dst.subarray(0, pointCount);
+    this._useVertexSize = true;
+    this._maxVertexSize = maxSize;
+    this._sizeDirty = true;
+  }
+
+  #recomputeMaxVertexSize(): void {
+    let maxSize = 0;
+    const sizes = this.sizes;
+    for (let i = 0; i < sizes.length; i++) {
+      if (sizes[i] > maxSize) maxSize = sizes[i];
+    }
+    this._maxVertexSize = maxSize;
   }
 
   #initWebGL(): void {
@@ -443,6 +699,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     const vertex = compileShader(gl, gl.VERTEX_SHADER, `
       attribute vec2 a_merc;
       attribute vec4 a_color;
+      attribute float a_size;
       uniform float u_scale;
       uniform vec2 u_origin;
       uniform vec2 u_resolution;
@@ -452,6 +709,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
       uniform float u_rotate;
       uniform float u_pitch;
       uniform float u_useVertexColor;
+      uniform float u_useVertexSize;
       uniform vec4 u_color;
       varying vec4 v_color;
       void main() {
@@ -464,17 +722,28 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
           pixel = u_center + vec2(d.x * c - d.y * s, d.x * s + d.y * c);
         }
         vec2 clip = ((pixel * u_dpr) / u_resolution) * 2.0 - 1.0;
+        float pointSize = (u_useVertexSize > 0.5 ? a_size : u_pointSize);
+        vec2 cssRes = u_resolution / max(u_dpr, 0.0001);
+        if (pixel.x < -pointSize || pixel.y < -pointSize || pixel.x > cssRes.x + pointSize || pixel.y > cssRes.y + pointSize) {
+          gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
+          gl_PointSize = 0.0;
+          v_color = vec4(0.0);
+          return;
+        }
         gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        gl_PointSize = u_pointSize;
+        gl_PointSize = pointSize * u_dpr;
         v_color = u_useVertexColor > 0.5 ? a_color : u_color;
       }
     `);
     const fragment = compileShader(gl, gl.FRAGMENT_SHADER, `
       precision mediump float;
       varying vec4 v_color;
+      uniform float u_round;
       void main() {
-        vec2 offset = gl_PointCoord - vec2(0.5);
-        if (dot(offset, offset) > 0.25) discard;
+        if (u_round > 0.5) {
+          vec2 offset = gl_PointCoord - vec2(0.5);
+          if (dot(offset, offset) > 0.25) discard;
+        }
         gl_FragColor = v_color;
       }
     `);
@@ -495,9 +764,11 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     }
     this.buffer = gl.createBuffer();
     this.colorBuffer = gl.createBuffer();
+    this.sizeBuffer = gl.createBuffer();
     this._glLocations = {
       aMerc: gl.getAttribLocation(this.program, "a_merc"),
       aColor: gl.getAttribLocation(this.program, "a_color"),
+      aSize: gl.getAttribLocation(this.program, "a_size"),
       uScale: gl.getUniformLocation(this.program, "u_scale"),
       uOrigin: gl.getUniformLocation(this.program, "u_origin"),
       uResolution: gl.getUniformLocation(this.program, "u_resolution"),
@@ -505,12 +776,15 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
       uPointSize: gl.getUniformLocation(this.program, "u_pointSize"),
       uColor: gl.getUniformLocation(this.program, "u_color"),
       uUseVertexColor: gl.getUniformLocation(this.program, "u_useVertexColor"),
+      uUseVertexSize: gl.getUniformLocation(this.program, "u_useVertexSize"),
       uCenter: gl.getUniformLocation(this.program, "u_center"),
       uRotate: gl.getUniformLocation(this.program, "u_rotate"),
-      uPitch: gl.getUniformLocation(this.program, "u_pitch")
+      uPitch: gl.getUniformLocation(this.program, "u_pitch"),
+      uRound: gl.getUniformLocation(this.program, "u_round")
     };
     this._bufferDirty = true;
     this._colorDirty = true;
+    this._sizeDirty = true;
   }
 
   #uploadMercatorIfNeeded(): void {
@@ -548,6 +822,26 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     this._colorDirty = false;
   }
 
+  #uploadSizesIfNeeded(): void {
+    const gl = this.gl;
+    if (!gl || !this.sizeBuffer || !this._sizeDirty) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.sizeBuffer);
+    if (!this._useVertexSize || !this.sizes.length) {
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(0), gl.DYNAMIC_DRAW);
+      this._gpuSizeBytes = 0;
+      this._sizeDirty = false;
+      return;
+    }
+    const bytes = this.sizes.byteLength;
+    if (bytes > 0 && bytes === this._gpuSizeBytes) {
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.sizes);
+    } else {
+      gl.bufferData(gl.ARRAY_BUFFER, this.sizes, gl.DYNAMIC_DRAW);
+      this._gpuSizeBytes = bytes;
+    }
+    this._sizeDirty = false;
+  }
+
   #uploadMercatorRange(floatOffset: number, floatCount: number): void {
     const gl = this.gl;
     if (!gl || !this.buffer || floatCount <= 0) return;
@@ -563,9 +857,9 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     );
   }
 
-  #uploadColorRange(floatOffset: number, floatCount: number): void {
+  #uploadColorRange(byteOffset: number, byteCount: number): void {
     const gl = this.gl;
-    if (!gl || !this.colorBuffer || floatCount <= 0 || !this._useVertexColor) return;
+    if (!gl || !this.colorBuffer || byteCount <= 0 || !this._useVertexColor) return;
     if (this._gpuColorBytes !== this.colors.byteLength) {
       this._colorDirty = true;
       return;
@@ -573,8 +867,23 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
     gl.bufferSubData(
       gl.ARRAY_BUFFER,
+      byteOffset,
+      this._colorBuf.subarray(byteOffset, byteOffset + byteCount)
+    );
+  }
+
+  #uploadSizeRange(floatOffset: number, floatCount: number): void {
+    const gl = this.gl;
+    if (!gl || !this.sizeBuffer || floatCount <= 0 || !this._useVertexSize) return;
+    if (this._gpuSizeBytes !== this.sizes.byteLength) {
+      this._sizeDirty = true;
+      return;
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.sizeBuffer);
+    gl.bufferSubData(
+      gl.ARRAY_BUFFER,
       floatOffset * 4,
-      this._colorBuf.subarray(floatOffset, floatOffset + floatCount)
+      this._sizeBuf.subarray(floatOffset, floatOffset + floatCount)
     );
   }
 
@@ -647,7 +956,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     const originY = map.pixelOrigin.y;
     const width = map.size.width;
     const height = map.size.height;
-    const padding = this.options.pointSize + 2;
+    const padding = (this._useVertexSize ? Math.max(this.options.pointSize, this._maxVertexSize) : this.options.pointSize) + 2;
     const source = this._merc64;
     const needed = this.points.length;
     if (this._scratch.length < needed) this._scratch = new Float32Array(needed);
@@ -737,6 +1046,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
 
   #rebuildPickIndex(): void {
     this._pickIndex.clear();
+    if (!this.options.interactive) return;
     const pts = this.points;
     const n = pts.length;
     for (let i = 0; i < n; i += 2) this._pickIndex.set(i / 2, [pts[i], pts[i + 1]], i / 2);
@@ -751,8 +1061,12 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     const rect = this.map.container.getBoundingClientRect();
     const targetX = clientX - rect.left;
     const targetY = clientY - rect.top;
-    const tolerance = Math.max(0, hitTolerance) + this.options.pointSize / 2;
-    const maxDistance = tolerance * tolerance;
+    const useVertexSize = this._useVertexSize && this.sizes.length > 0;
+    const defaultRadius = Math.max(0, hitTolerance) + this.options.pointSize / 2;
+    const maxRadius = useVertexSize
+      ? Math.max(0, hitTolerance) + Math.max(this.options.pointSize, this._maxVertexSize) / 2
+      : defaultRadius;
+    const maxDistance = maxRadius * maxRadius;
     const scale = TILE_SIZE * 2 ** this.map.zoom;
     const originX = this.map.pixelOrigin.x;
     const originY = this.map.pixelOrigin.y;
@@ -763,25 +1077,28 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     const count = this.points.length;
     const pointCount = count / 2;
     const rotated = this.options.rotation !== 0 || this.options.pitch !== 0;
+    const consider = (index: number, point: { x: number; y: number }): void => {
+      const radius = useVertexSize
+        ? Math.max(0, hitTolerance) + (this.sizes[index] || this.options.pointSize) / 2
+        : defaultRadius;
+      const limit = radius * radius;
+      const distance = (point.x - targetX) ** 2 + (point.y - targetY) ** 2;
+      if (distance > limit || distance > nearestDistance) return;
+      nearest = index;
+      nearestDistance = distance;
+      nearestPoint = point;
+    };
     if (rotated || pointCount <= 256) {
       for (let index = 0; index < count; index += 2) {
         const point = this.#mercatorToScreen(merc[index], merc[index + 1], scale, originX, originY);
-        const distance = (point.x - targetX) ** 2 + (point.y - targetY) ** 2;
-        if (distance > nearestDistance) continue;
-        nearest = index / 2;
-        nearestDistance = distance;
-        nearestPoint = point;
+        consider(index / 2, point);
       }
     } else {
       const ll = this.map.containerPointToLatLng({ x: targetX, y: targetY });
-      const pad = Math.max(0.002, (tolerance / scale) * 360);
+      const pad = Math.max(0.002, (maxRadius / scale) * 360);
       for (const i of this._pickIndex.searchIds([[ll.lat - pad, ll.lng - pad], [ll.lat + pad, ll.lng + pad]])) {
         const point = this.#mercatorToScreen(merc[i * 2], merc[i * 2 + 1], scale, originX, originY);
-        const distance = (point.x - targetX) ** 2 + (point.y - targetY) ** 2;
-        if (distance > nearestDistance) continue;
-        nearest = i;
-        nearestDistance = distance;
-        nearestPoint = point;
+        consider(i, point);
       }
     }
     if (nearest < 0) return null;
@@ -792,7 +1109,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     };
   }
 
-  #renderWebGL(dpr: number): void {
+  #renderWebGL(dpr: number, pad = 0): void {
     const gl = this.gl;
     const locs = this._glLocations;
     if (!gl || !this.program || !this.buffer || !this.canvas || !locs || !this.map) return;
@@ -808,13 +1125,14 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     this.#ensureRelativeEncoding();
     this.#uploadMercatorIfNeeded();
     this.#uploadColorsIfNeeded();
+    this.#uploadSizesIfNeeded();
 
     const scale = TILE_SIZE * 2 ** this.map.zoom;
     const rotation = (this.options.rotation * Math.PI) / 180;
     const pitch = Math.cos((this.options.pitch * Math.PI) / 180);
     // Residual origin after relative encoding — stays small between re-encodes.
-    const originX = this.map.pixelOrigin.x - this._refMx * scale;
-    const originY = this.map.pixelOrigin.y - this._refMy * scale;
+    const originX = this.map.pixelOrigin.x - this._refMx * scale - pad;
+    const originY = this.map.pixelOrigin.y - this._refMy * scale - pad;
 
     gl.useProgram(this.program);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
@@ -824,17 +1142,26 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     if (this._useVertexColor && this.colorBuffer && locs.aColor >= 0) {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
       gl.enableVertexAttribArray(locs.aColor);
-      gl.vertexAttribPointer(locs.aColor, 4, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribPointer(locs.aColor, 4, gl.UNSIGNED_BYTE, true, 0, 0);
     } else if (locs.aColor >= 0) {
       gl.disableVertexAttribArray(locs.aColor);
       gl.vertexAttrib4f(locs.aColor, this.color.r / 255, this.color.g / 255, this.color.b / 255, this.options.opacity);
+    }
+
+    if (this._useVertexSize && this.sizeBuffer && locs.aSize >= 0) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.sizeBuffer);
+      gl.enableVertexAttribArray(locs.aSize);
+      gl.vertexAttribPointer(locs.aSize, 1, gl.FLOAT, false, 0, 0);
+    } else if (locs.aSize >= 0) {
+      gl.disableVertexAttribArray(locs.aSize);
+      gl.vertexAttrib1f(locs.aSize, this.options.pointSize);
     }
 
     gl.uniform1f(locs.uScale, scale);
     gl.uniform2f(locs.uOrigin, originX, originY);
     gl.uniform2f(locs.uResolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(locs.uDpr, dpr);
-    gl.uniform1f(locs.uPointSize, this.options.pointSize * dpr);
+    gl.uniform1f(locs.uPointSize, this.options.pointSize);
     gl.uniform4f(
       locs.uColor,
       this.color.r / 255,
@@ -843,10 +1170,14 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
       this.options.opacity
     );
     gl.uniform1f(locs.uUseVertexColor, this._useVertexColor ? 1 : 0);
-    gl.uniform2f(locs.uCenter, this.map.size.width / 2, this.map.size.height / 2);
+    gl.uniform1f(locs.uUseVertexSize, this._useVertexSize ? 1 : 0);
+    gl.uniform2f(locs.uCenter, this.map.size.width / 2 + pad, this.map.size.height / 2 + pad);
     gl.uniform1f(locs.uRotate, rotation);
     gl.uniform1f(locs.uPitch, pitch);
+    // Circles cost a discard per fragment; squares are cheaper at mass scale.
+    gl.uniform1f(locs.uRound, count < 80_000 ? 1 : 0);
 
+    gl.disable(gl.DITHER);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     // Chunk large POINTS draws — some ANGLE/D3D drivers stall or drop a single 1M call.
@@ -866,18 +1197,22 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     if (!context) return;
     const { xy, indices } = this.#projectVisibleCanvas(dpr);
     context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    const radius = Math.max(1, (this.options.pointSize * dpr) / 2);
-    const useVertex = this._useVertexColor && this.colors.length >= indices.length * 4;
+    const useVertexColor = this._useVertexColor && this.colors.length >= indices.length * 4;
+    const useVertexSize = this._useVertexSize && this.sizes.length > 0;
+    const defaultRadius = Math.max(1, (this.options.pointSize * dpr) / 2);
     for (let i = 0; i < indices.length; i++) {
       const pointIndex = indices[i];
-      if (useVertex) {
+      if (useVertexColor) {
         const c = pointIndex * 4;
-        context.globalAlpha = this.colors[c + 3];
-        context.fillStyle = `rgb(${Math.round(this.colors[c] * 255)},${Math.round(this.colors[c + 1] * 255)},${Math.round(this.colors[c + 2] * 255)})`;
+        context.globalAlpha = this.colors[c + 3] / 255;
+        context.fillStyle = `rgb(${this.colors[c]},${this.colors[c + 1]},${this.colors[c + 2]})`;
       } else {
         context.globalAlpha = this.options.opacity;
         context.fillStyle = `rgb(${this.color.r},${this.color.g},${this.color.b})`;
       }
+      const radius = useVertexSize
+        ? Math.max(1, ((this.sizes[pointIndex] || this.options.pointSize) * dpr) / 2)
+        : defaultRadius;
       context.beginPath();
       context.arc(xy[i * 2], xy[i * 2 + 1], radius, 0, Math.PI * 2);
       context.fill();
@@ -898,4 +1233,14 @@ function normalizePoint(value: WebGLPointInput): { lat: number; lng: number } | 
   const point = latLng(source);
   if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
   return point;
+}
+
+function normalizePointSize(value: unknown, fallback: number): number {
+  const size = Number(value);
+  if (!Number.isFinite(size)) return fallback;
+  return Math.max(1, Math.min(256, size));
+}
+
+function floatToByte(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value * 255)));
 }

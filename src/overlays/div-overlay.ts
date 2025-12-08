@@ -255,6 +255,7 @@ const activePopups = new WeakMap<Orihon, Popup>();
 
 export class Popup extends DivOverlay<ResolvedPopupOptions> {
   private _mapClick: (() => void) | null = null;
+  private _closeOnClickTimer: ReturnType<typeof setTimeout> | null = null;
   private _autoPanFrame = 0;
 
   constructor(content: OverlayContent, options: PopupOptions = {}) {
@@ -305,8 +306,13 @@ export class Popup extends DivOverlay<ResolvedPopupOptions> {
     }
     if (this.options.closeOnClick) {
       const close = (): void => { this.close(); };
-      map.on("click", close);
-      this._mapClick = () => map.off("click", close);
+      // Attach after the opening gesture so the same click cannot immediately dismiss.
+      this._closeOnClickTimer = setTimeout(() => {
+        this._closeOnClickTimer = null;
+        if (!this.map) return;
+        this.map.on("click", close);
+        this._mapClick = () => this.map?.off("click", close);
+      }, 0);
     }
     if (this.options.keepInView) {
       const adjust = (): void => this.#scheduleAutoPan();
@@ -324,6 +330,10 @@ export class Popup extends DivOverlay<ResolvedPopupOptions> {
     const map = this.map;
     if (this._autoPanFrame) cancelAnimationFrame(this._autoPanFrame);
     this._autoPanFrame = 0;
+    if (this._closeOnClickTimer != null) {
+      clearTimeout(this._closeOnClickTimer);
+      this._closeOnClickTimer = null;
+    }
     this._mapClick?.();
     this._mapClick = null;
     if (map && activePopups.get(map) === this) activePopups.delete(map);

@@ -9,12 +9,15 @@
  */
 
 import { createEl } from "../dom.js";
+import { cameraWarpCss } from "../camera.js";
 import { TILE_SIZE, LatLngBounds, latLngBounds, unproject, type LatLngBoundsLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { compileShader } from "../webgl-utils.js";
-import { modulo, type TileTemplate } from "./tile-layer.js";
+import { modulo, nativeTileZoom, type TileTemplate } from "./tile-layer.js";
+import { forEachTileInRect, forEachTileRectDelta, forEachMissingNeeded, MinHeap, tilePriority, type TileRect } from "./tile-grid.js";
+import { WTinyLfu } from "../services/tiny-lfu.js";
 
 export interface WebGLTileLayerOptions extends LayerOptions {
   minZoom?: number;
@@ -86,6 +89,8 @@ interface GpuTile {
   lastUsed: number;
   byteSize: number;
   generation: number;
+  slot: number;
+  priority: number;
 }
 
 interface GLLocs {
@@ -95,6 +100,18 @@ interface GLLocs {
   uDpr: WebGLUniformLocation | null;
   uTileXY: WebGLUniformLocation | null;
   uTilePixelSize: WebGLUniformLocation | null;
+  uOpacity: WebGLUniformLocation | null;
+  uTexture: WebGLUniformLocation | null;
+}
+
+interface GL2Locs {
+  aUv: number;
+  aTileXY: number;
+  aTilePixelSize: number;
+  aSlot: number;
+  uOrigin: WebGLUniformLocation | null;
+  uResolution: WebGLUniformLocation | null;
+  uDpr: WebGLUniformLocation | null;
   uOpacity: WebGLUniformLocation | null;
   uTexture: WebGLUniformLocation | null;
 }
@@ -110,13 +127,23 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
   template: TileTemplate;
   canvas: HTMLCanvasElement | null = null;
   gl: WebGLRenderingContext | null = null;
+  gl2: WebGL2RenderingContext | null = null;
   renderer: "webgl" | "none" = "none";
 
   readonly tiles = new Map<string, GpuTile>();
 
   private program: WebGLProgram | null = null;
+  private program2: WebGLProgram | null = null;
   private quadBuffer: WebGLBuffer | null = null;
+  private instanceBuffer: WebGLBuffer | null = null;
   private locs: GLLocs | null = null;
+  private locs2: GL2Locs | null = null;
+  private _useArray = false;
+  private _arrayTex: WebGLTexture | null = null;
+  private _arrayDim = 0;
+  private _arrayLayers = 0;
+  private _freeSlots: number[] = [];
+  private _instanceData = new Float32Array(0);
   private _tileZoom: number | null = null;
   private _needed = new Set<string>();
   private _neededCount = 0;
@@ -127,8 +154,9 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
   private _cssW = 0;
   private _cssH = 0;
   private _gpuBytes = 0;
-  private _queue: GpuTile[] = [];
+  private _queue = new MinHeap<GpuTile>((tile) => tile.priority);
   private _queuedKeys = new Set<string>();
+  private _rect: TileRect | null = null;
   private _dirty = true;
   private _forceGpu = false;
   private _hasDrawn = false;
@@ -142,6 +170,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
   private _zoomSwitchTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly _retina: boolean;
   private readonly _bounds: LatLngBounds | null;
+  private readonly _lfu: WTinyLfu;
 
   constructor(template: TileTemplate, options: WebGLTileLayerOptions = {}) {
     super({
@@ -173,6 +202,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     this._retina = Boolean(
       this.options.detectRetina && typeof devicePixelRatio !== "undefined" && devicePixelRatio > 1
     );
+    this._lfu = new WTinyLfu(Math.max(16, this.options.cacheSize));
   }
 
   getStats(): WebGLTileLayerStats {
@@ -184,7 +214,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
       ready,
       loading: this._loading,
       cached: this.tiles.size,
-      gpuBytesApprox: this._gpuBytes
+      gpuBytesApprox: this._gpuBytes + (this._useArray ? this._arrayDim * this._arrayDim * 4 * this._arrayLayers : 0)
     };
   }
 
@@ -243,7 +273,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     this.canvas.style.pointerEvents = "none";
     this.canvas.style.willChange = "transform";
     this.canvas.style.opacity = String(this.options.opacity);
-    this.gl = this.canvas.getContext("webgl", {
+    const glAttrs: WebGLContextAttributes = {
       antialias: false,
       alpha: true,
       depth: false,
@@ -251,12 +281,16 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
       premultipliedAlpha: true,
       powerPreference: "high-performance",
       preserveDrawingBuffer: false
-    });
+    };
+    this.gl2 = this.canvas.getContext("webgl2", glAttrs) as WebGL2RenderingContext | null;
+    this.gl = this.gl2 || this.canvas.getContext("webgl", glAttrs);
     if (this.gl && this.#initPipeline()) {
       this.renderer = "webgl";
+      if (this.gl2) this.#initPipelineGL2();
     } else {
       this.renderer = "none";
       this.gl = null;
+      this.gl2 = null;
     }
     this._dirty = true;
     this.render();
@@ -282,6 +316,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     this._tileZoom = null;
     this._neededCount = 0;
     this._needed.clear();
+    this._rect = null;
     this._retained.clear();
     this._drawList = [];
     this._hasDrawn = false;
@@ -326,10 +361,13 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     const gpuDue = this._forceGpu || !canWarp || (this._dirty && now - this._lastGpuMs > 80);
 
     if (!gpuDue) {
-      const s = 2 ** (zoom - this._drawnZoom);
       this.canvas.style.transformOrigin = "0 0";
-      this.canvas.style.transform =
-        `translate3d(${this._drawnOriginX * s - ox}px,${this._drawnOriginY * s - oy}px,0) scale(${s})`;
+      this.canvas.style.transform = cameraWarpCss(
+        { x: this._drawnOriginX, y: this._drawnOriginY },
+        this._drawnZoom,
+        { x: ox, y: oy },
+        zoom
+      );
       this.#scheduleSettledGpu();
       return;
     }
@@ -437,11 +475,99 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     return true;
   }
 
+  #initPipelineGL2(): boolean {
+    const gl = this.gl2;
+    if (!gl) return false;
+    const vertex = compileShader(gl, gl.VERTEX_SHADER, `#version 300 es
+      in vec2 a_uv;
+      in vec2 a_tileXY;
+      in float a_tilePixelSize;
+      in float a_slot;
+      uniform vec2 u_origin;
+      uniform vec2 u_resolution;
+      uniform float u_dpr;
+      out vec2 v_uv;
+      out float v_slot;
+      void main() {
+        v_uv = a_uv;
+        v_slot = a_slot;
+        vec2 pixel = (a_tileXY + a_uv) * a_tilePixelSize - u_origin;
+        vec2 clip = ((pixel * u_dpr) / u_resolution) * 2.0 - 1.0;
+        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+      }
+    `);
+    const fragment = compileShader(gl, gl.FRAGMENT_SHADER, `#version 300 es
+      precision mediump float;
+      precision highp sampler2DArray;
+      in vec2 v_uv;
+      in float v_slot;
+      uniform sampler2DArray u_texture;
+      uniform float u_opacity;
+      out vec4 fragColor;
+      void main() {
+        fragColor = texture(u_texture, vec3(v_uv, v_slot)) * u_opacity;
+      }
+    `);
+    if (!vertex || !fragment) return false;
+    const program = gl.createProgram();
+    if (!program) return false;
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      gl.deleteProgram(program);
+      return false;
+    }
+    const dim = this._retina ? this.options.tileSize * 2 : this.options.tileSize;
+    const maxLayers = Math.min(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) || 64, Math.max(32, this.options.cacheSize));
+    const texture = gl.createTexture();
+    if (!texture) {
+      gl.deleteProgram(program);
+      return false;
+    }
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture);
+    try {
+      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, dim, dim, maxLayers);
+    } catch {
+      gl.deleteTexture(texture);
+      gl.deleteProgram(program);
+      return false;
+    }
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    this.program2 = program;
+    this._arrayTex = texture;
+    this._arrayDim = dim;
+    this._arrayLayers = maxLayers;
+    this._freeSlots = Array.from({ length: maxLayers }, (_, i) => i);
+    this.instanceBuffer = gl.createBuffer();
+    this.locs2 = {
+      aUv: gl.getAttribLocation(program, "a_uv"),
+      aTileXY: gl.getAttribLocation(program, "a_tileXY"),
+      aTilePixelSize: gl.getAttribLocation(program, "a_tilePixelSize"),
+      aSlot: gl.getAttribLocation(program, "a_slot"),
+      uOrigin: gl.getUniformLocation(program, "u_origin"),
+      uResolution: gl.getUniformLocation(program, "u_resolution"),
+      uDpr: gl.getUniformLocation(program, "u_dpr"),
+      uOpacity: gl.getUniformLocation(program, "u_opacity"),
+      uTexture: gl.getUniformLocation(program, "u_texture")
+    };
+    this._useArray = true;
+    return true;
+  }
+
   #disposePipeline(): void {
     const gl = this.gl;
     if (gl) {
       try {
         if (this.quadBuffer) gl.deleteBuffer(this.quadBuffer);
+        if (this.instanceBuffer) gl.deleteBuffer(this.instanceBuffer);
+        if (this._arrayTex) gl.deleteTexture(this._arrayTex);
+        if (this.program2) gl.deleteProgram(this.program2);
         if (this.program) gl.deleteProgram(this.program);
         gl.getExtension("WEBGL_lose_context")?.loseContext();
       } catch {
@@ -449,9 +575,16 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
       }
     }
     this.quadBuffer = null;
+    this.instanceBuffer = null;
+    this._arrayTex = null;
+    this.program2 = null;
     this.program = null;
     this.locs = null;
+    this.locs2 = null;
     this.gl = null;
+    this.gl2 = null;
+    this._useArray = false;
+    this._freeSlots = [];
     this.renderer = "none";
   }
 
@@ -465,8 +598,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
 
   #syncTileGrid(): void {
     if (!this.map) return;
-    const nativeLimit =
-      typeof this.options.maxNativeZoom === "number" ? this.options.maxNativeZoom : this.options.maxZoom;
+    const nativeLimit = nativeTileZoom(this.options.maxNativeZoom, this.options.maxZoom);
     const displayZoom = Math.round(this.map.zoom);
     const sourceZoom = Math.max(0, Math.min(nativeLimit, displayZoom + (this._retina ? 1 : 0)));
 
@@ -497,39 +629,53 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     const bottom = Math.floor((tileOriginY + this.map.size.height / displayScale) / size) + this.options.buffer;
     const worldMax = 2 ** activeZoom - 1;
 
-    const needed = new Set<string>();
+    const nextRect: TileRect = { z: activeZoom, left, top, right, bottom };
     const candidates: Array<{ x: number; y: number; key: string; distance: number }> = [];
     const centerX = tileOriginX / size + this.map.size.width / displayScale / size / 2;
     const centerY = tileOriginY / size + this.map.size.height / displayScale / size / 2;
     const now = performance.now();
+    const vx = this.map.panVelocity.x;
+    const vy = this.map.panVelocity.y;
 
-    for (let y = top; y <= bottom; y++) {
-      if (y < 0 || y > worldMax) continue;
-      for (let x = left; x <= right; x++) {
-        if (this.options.noWrap && (x < 0 || x > worldMax)) continue;
-        if (!this.#tileIntersectsBounds(x, y, activeZoom)) continue;
-        const key = `${activeZoom}:${x}:${y}`;
-        needed.add(key);
-        const existing = this.tiles.get(key);
-        if (existing) {
-          existing.lastUsed = now;
-          if (existing.state === 0) this.#enqueue(existing);
-        } else {
-          candidates.push({ x, y, key, distance: Math.hypot(x + 0.5 - centerX, y + 0.5 - centerY) });
-        }
+    const consider = (x: number, y: number): void => {
+      if (y < 0 || y > worldMax) return;
+      if (this.options.noWrap && (x < 0 || x > worldMax)) return;
+      if (!this.#tileIntersectsBounds(x, y, activeZoom)) return;
+      const key = `${activeZoom}:${x}:${y}`;
+      this._needed.add(key);
+      const existing = this.tiles.get(key);
+      const distance = tilePriority(x, y, centerX, centerY, vx, vy, size);
+      if (existing) {
+        existing.lastUsed = now;
+        existing.priority = distance;
+        this._lfu.hit(key);
+        if (existing.state === 0) this.#enqueue(existing);
       }
+    };
+
+    if (!this._rect || this._rect.z !== nextRect.z) {
+      this._needed.clear();
+      forEachTileInRect(nextRect, consider);
+    } else {
+      forEachTileRectDelta(this._rect, nextRect, consider, (x, y) => {
+        this._needed.delete(`${activeZoom}:${x}:${y}`);
+      });
     }
+    this._rect = nextRect;
+
+    forEachMissingNeeded(this._needed, (key) => this.tiles.has(key), (x, y, key) => {
+      candidates.push({ x, y, key, distance: tilePriority(x, y, centerX, centerY, vx, vy, size) });
+    });
 
     if (candidates.length > 1) candidates.sort((a, b) => a.distance - b.distance);
     const maxNew = Math.max(1, this.options.maxNewPerFrame);
     for (let i = 0; i < candidates.length && i < maxNew; i++) {
       const c = candidates[i];
-      this.#createTile(c.x, c.y, activeZoom, c.key);
+      this.#createTile(c.x, c.y, activeZoom, c.key, c.distance);
     }
     if (candidates.length > maxNew) this.#scheduleRedraw();
 
-    this._needed = needed;
-    this._neededCount = needed.size;
+    this._neededCount = this._needed.size;
     this.#pumpQueue();
     this.#evictLru();
   }
@@ -539,6 +685,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     this._tileZoom = sourceZoom;
     this._dirty = true;
     this._drawnZoom = Number.NaN;
+    this._rect = null;
   }
 
   #scheduleZoomSwitch(sourceZoom: number): void {
@@ -562,7 +709,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     this._pendingSourceZoom = null;
   }
 
-  #createTile(x: number, y: number, z: number, key: string): void {
+  #createTile(x: number, y: number, z: number, key: string, priority = 0): void {
     if (this.tiles.has(key)) return;
     const tile: GpuTile = {
       key,
@@ -575,9 +722,16 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
       state: 0,
       lastUsed: performance.now(),
       byteSize: 0,
-      generation: this._generation
+      generation: this._generation,
+      slot: -1,
+      priority
     };
     this.tiles.set(key, tile);
+    const evicted = this._lfu.add(key);
+    if (evicted && evicted !== key) {
+      const old = this.tiles.get(evicted);
+      if (old && !this._needed.has(evicted) && !this._retained.has(evicted)) this.#disposeTile(old);
+    }
     this.#enqueue(tile);
   }
 
@@ -590,7 +744,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
   #pumpQueue(): void {
     const maxRequests = Math.max(1, this.options.maxRequests);
     while (this._loading < maxRequests && this._queue.length) {
-      const tile = this._queue.shift()!;
+      const tile = this._queue.pop()!;
       this._queuedKeys.delete(tile.key);
       if (!this.tiles.has(tile.key) || tile.state !== 0) continue;
       this.#startLoad(tile);
@@ -655,6 +809,48 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
   }
 
   #uploadTexture(tile: GpuTile, image: TexImageSource & { width: number; height: number }): boolean {
+    const gl2 = this.gl2;
+    if (
+      this._useArray
+      && gl2
+      && this._arrayTex
+      && image.width === this._arrayDim
+      && image.height === this._arrayDim
+    ) {
+      let slot = tile.slot;
+      if (slot < 0) slot = this._freeSlots.pop() ?? -1;
+      if (slot >= 0) {
+        gl2.bindTexture(gl2.TEXTURE_2D_ARRAY, this._arrayTex);
+        gl2.pixelStorei(gl2.UNPACK_FLIP_Y_WEBGL, 0);
+        gl2.pixelStorei(gl2.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
+        try {
+          gl2.texSubImage3D(
+            gl2.TEXTURE_2D_ARRAY,
+            0,
+            0,
+            0,
+            slot,
+            this._arrayDim,
+            this._arrayDim,
+            1,
+            gl2.RGBA,
+            gl2.UNSIGNED_BYTE,
+            image
+          );
+        } catch {
+          this._freeSlots.push(slot);
+          return false;
+        }
+        if (tile.texture && this.gl) {
+          this.gl.deleteTexture(tile.texture);
+          this._gpuBytes = Math.max(0, this._gpuBytes - tile.byteSize);
+          tile.texture = null;
+        }
+        tile.slot = slot;
+        tile.byteSize = 0;
+        return true;
+      }
+    }
     const gl = this.gl;
     if (!gl) return false;
     const texture = gl.createTexture();
@@ -685,14 +881,13 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
   #evictLru(): void {
     const limit = Math.max(16, this.options.cacheSize);
     if (this.tiles.size <= limit) return;
-    const victims: GpuTile[] = [];
-    for (const tile of this.tiles.values()) {
-      if (!this._needed.has(tile.key) && !this._retained.has(tile.key)) victims.push(tile);
-    }
-    victims.sort((a, b) => a.lastUsed - b.lastUsed);
-    for (const tile of victims) {
-      if (this.tiles.size <= limit) break;
-      this.#disposeTile(tile);
+    const pinned = new Set<string>(this._needed);
+    for (const key of this._retained) pinned.add(key);
+    while (this.tiles.size > limit) {
+      const key = this._lfu.evictExcept(pinned);
+      if (!key) break;
+      const tile = this.tiles.get(key);
+      if (tile) this.#disposeTile(tile);
     }
   }
 
@@ -701,11 +896,11 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     for (const key of this._retained) {
       if (this._needed.has(key)) continue;
       const tile = this.tiles.get(key);
-      if (tile && tile.state === 2 && tile.texture) list.push(tile);
+      if (tile && tile.state === 2 && (tile.texture || tile.slot >= 0)) list.push(tile);
     }
     for (const key of this._needed) {
       const tile = this.tiles.get(key);
-      if (tile && tile.state === 2 && tile.texture) list.push(tile);
+      if (tile && tile.state === 2 && (tile.texture || tile.slot >= 0)) list.push(tile);
     }
     this._drawList = list;
   }
@@ -722,41 +917,117 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    gl.useProgram(this.program);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
-    gl.enableVertexAttribArray(locs.aUv);
-    gl.vertexAttribPointer(locs.aUv, 2, gl.FLOAT, false, 0, 0);
-
-    gl.uniform2f(locs.uOrigin, originX, originY);
-    gl.uniform2f(locs.uResolution, this.canvas.width, this.canvas.height);
-    gl.uniform1f(locs.uDpr, dpr);
-    // Layer opacity is applied via canvas.style.opacity so live setOpacity is immediate
-    // even while the camera is CSS-warping a previous GPU frame.
-    gl.uniform1f(locs.uOpacity, 1);
-    gl.uniform1i(locs.uTexture, 0);
-    gl.activeTexture(gl.TEXTURE0);
 
     const pad = this.options.tileSize;
     const viewW = map.size.width;
     const viewH = map.size.height;
     const zoom = map.zoom;
     const tileSize = this.options.tileSize;
-
+    const visible: GpuTile[] = [];
     for (let i = 0; i < this._drawList.length; i++) {
       const tile = this._drawList[i];
-      if (!tile.texture) continue;
       const tilePixelSize = tileSize * 2 ** (zoom - tile.z);
       const left = tile.x * tilePixelSize - originX;
       const top = tile.y * tilePixelSize - originY;
       if (left > viewW + pad || top > viewH + pad || left + tilePixelSize < -pad || top + tilePixelSize < -pad) {
         continue;
       }
+      visible.push(tile);
+    }
+
+    const arrayTiles: GpuTile[] = [];
+    const classic: GpuTile[] = [];
+    if (this._useArray && this.gl2 && this.program2 && this.locs2 && this._arrayTex) {
+      for (const tile of visible) {
+        if (tile.slot >= 0) arrayTiles.push(tile);
+        else classic.push(tile);
+      }
+    } else {
+      classic.push(...visible);
+    }
+
+    if (arrayTiles.length) this.#drawArrayTiles(arrayTiles, dpr, originX, originY, zoom, tileSize);
+    if (!classic.length) return;
+
+    gl.useProgram(this.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+    gl.enableVertexAttribArray(locs.aUv);
+    gl.vertexAttribPointer(locs.aUv, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform2f(locs.uOrigin, originX, originY);
+    gl.uniform2f(locs.uResolution, this.canvas.width, this.canvas.height);
+    gl.uniform1f(locs.uDpr, dpr);
+    gl.uniform1f(locs.uOpacity, 1);
+    gl.uniform1i(locs.uTexture, 0);
+    gl.activeTexture(gl.TEXTURE0);
+
+    for (let i = 0; i < classic.length; i++) {
+      const tile = classic[i];
+      if (!tile.texture) continue;
       gl.bindTexture(gl.TEXTURE_2D, tile.texture);
       gl.uniform2f(locs.uTileXY, tile.x, tile.y);
-      gl.uniform1f(locs.uTilePixelSize, tilePixelSize);
+      gl.uniform1f(locs.uTilePixelSize, tileSize * 2 ** (zoom - tile.z));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
+  }
+
+  #drawArrayTiles(
+    tiles: GpuTile[],
+    dpr: number,
+    originX: number,
+    originY: number,
+    zoom: number,
+    tileSize: number
+  ): void {
+    const gl = this.gl2;
+    const locs = this.locs2;
+    if (!gl || !locs || !this.program2 || !this.quadBuffer || !this.instanceBuffer || !this._arrayTex || !this.canvas) {
+      return;
+    }
+    const count = tiles.length;
+    const floats = count * 4;
+    if (this._instanceData.length < floats) this._instanceData = new Float32Array(Math.max(floats, 64));
+    const data = this._instanceData;
+    for (let i = 0; i < count; i++) {
+      const tile = tiles[i];
+      const o = i * 4;
+      data[o] = tile.x;
+      data[o + 1] = tile.y;
+      data[o + 2] = tileSize * 2 ** (zoom - tile.z);
+      data[o + 3] = tile.slot;
+    }
+    gl.useProgram(this.program2);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+    gl.enableVertexAttribArray(locs.aUv);
+    gl.vertexAttribPointer(locs.aUv, 2, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribDivisor(locs.aUv, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, floats), gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(locs.aTileXY);
+    gl.vertexAttribPointer(locs.aTileXY, 2, gl.FLOAT, false, 16, 0);
+    gl.vertexAttribDivisor(locs.aTileXY, 1);
+    gl.enableVertexAttribArray(locs.aTilePixelSize);
+    gl.vertexAttribPointer(locs.aTilePixelSize, 1, gl.FLOAT, false, 16, 8);
+    gl.vertexAttribDivisor(locs.aTilePixelSize, 1);
+    gl.enableVertexAttribArray(locs.aSlot);
+    gl.vertexAttribPointer(locs.aSlot, 1, gl.FLOAT, false, 16, 12);
+    gl.vertexAttribDivisor(locs.aSlot, 1);
+
+    gl.uniform2f(locs.uOrigin, originX, originY);
+    gl.uniform2f(locs.uResolution, this.canvas.width, this.canvas.height);
+    gl.uniform1f(locs.uDpr, dpr);
+    gl.uniform1f(locs.uOpacity, 1);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._arrayTex);
+    gl.uniform1i(locs.uTexture, 0);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
+
+    gl.vertexAttribDivisor(locs.aTileXY, 0);
+    gl.vertexAttribDivisor(locs.aTilePixelSize, 0);
+    gl.vertexAttribDivisor(locs.aSlot, 0);
+    gl.disableVertexAttribArray(locs.aTileXY);
+    gl.disableVertexAttribArray(locs.aTilePixelSize);
+    gl.disableVertexAttribArray(locs.aSlot);
   }
 
   #tileIntersectsBounds(x: number, y: number, z: number): boolean {
@@ -785,21 +1056,27 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
       this.gl.deleteTexture(tile.texture);
       this._gpuBytes = Math.max(0, this._gpuBytes - tile.byteSize);
     }
+    if (tile.slot >= 0) {
+      this._freeSlots.push(tile.slot);
+      tile.slot = -1;
+    }
     tile.texture = null;
     this.tiles.delete(tile.key);
+    this._lfu.delete(tile.key);
     this._queuedKeys.delete(tile.key);
     this._retained.delete(tile.key);
-    this._queue = this._queue.filter((item) => item !== tile);
+    this._queue.removeWhere((item) => item === tile);
   }
 
   #disposeAllTiles(): void {
     for (const tile of [...this.tiles.values()]) this.#disposeTile(tile);
     this.tiles.clear();
-    this._queue = [];
+    this._queue.clear();
     this._queuedKeys.clear();
     this._loading = 0;
     this._gpuBytes = 0;
     this._drawList = [];
+    this._rect = null;
   }
 }
 

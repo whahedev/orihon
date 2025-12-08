@@ -1,4 +1,5 @@
 import { createEl, getContainer, listen, rafThrottle } from "./dom.js";
+import type { CameraState } from "./camera.js";
 import { CRS, resolveCRS, type CoordinateReferenceSystem, type CRSInput } from "./crs.js";
 import { Evented } from "./events.js";
 import {
@@ -16,7 +17,7 @@ import {
 } from "./geo.js";
 import type { Layer, QueryHit, QueryOptions, ResolvedQueryOptions } from "./layer.js";
 import { AttributionControl, ScaleControl, ZoomControl, type Control } from "./ui/control.js";
-import { resolveLocale, type OrihonLocale, type LocaleInput } from "./ui/locale.js";
+import { ensureLocalePacks, resolveLocale, type OrihonLocale, type LocaleInput } from "./ui/locale.js";
 import type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 
 export interface MapOptions {
@@ -39,6 +40,14 @@ export interface MapOptions {
   keyboardPanDelta?: number;
   behaviors?: BehaviorOptions;
   crs?: CRSInput;
+}
+
+export interface SetViewOptions {
+  /**
+   * When false, pan without `moveend` so tiles keep CSS-translating (follow-cam / rAF).
+   * Call `setView` again with the default to settle. Default true.
+   */
+  settle?: boolean;
 }
 
 export interface MapSize {
@@ -159,6 +168,8 @@ export class Orihon extends Evented {
   zoom: number;
   size: MapSize = { width: 0, height: 0 };
   pixelOrigin = new Point(0, 0);
+  /** Screen-space pan velocity in px/s. Updated during drag / inertia; zero when idle. */
+  panVelocity = new Point(0, 0);
   readonly layers = new Set<Layer>();
   readonly controls = new Set<Control>();
   readonly locale: OrihonLocale;
@@ -348,6 +359,8 @@ export class Orihon extends Evented {
         const current = new Point(event.clientX, event.clientY);
         const elapsed = Math.max(1, now - gesture.lastTime);
         gesture.velocity = current.subtract(gesture.last).divideBy(elapsed / 1000);
+        this.panVelocity.x = gesture.velocity.x;
+        this.panVelocity.y = gesture.velocity.y;
         gesture.last = current;
         gesture.lastTime = now;
         const dx = event.clientX - gesture.start.x;
@@ -481,6 +494,19 @@ export class Orihon extends Evented {
     return new Point(centerPoint.x - this.size.width / 2, centerPoint.y - this.size.height / 2);
   }
 
+  /**
+   * Immutable snapshot of the live camera used by geographic renderers.
+   * All panes must project through this state within a single paint frame.
+   */
+  getCamera(): CameraState {
+    return {
+      center: this.center,
+      zoom: this.zoom,
+      pixelOrigin: this.pixelOrigin.clone(),
+      size: { width: this.size.width, height: this.size.height }
+    };
+  }
+
   #limitCenter(center: LatLng, zoom: number): LatLng {
     const maxBounds = this.options.maxBounds;
     if (!maxBounds || this.options.maxBoundsViscosity <= 0 || !maxBounds.isValid()) return center;
@@ -561,11 +587,16 @@ export class Orihon extends Evented {
       if (!this._animationActive || this._destroyed) return;
       const progress = Math.min(1, (now - startTime) / (duration * 1000));
       const eased = 1 - (1 - progress) ** 2;
+      const remain = 1 - progress;
+      this.panVelocity.x = direction.x * speed * remain;
+      this.panVelocity.y = direction.y * speed * remain;
       this.#applyView(this.crs.unproject(origin.subtract(travel.multiplyBy(eased)), this.zoom), this.zoom);
       if (progress < 1) {
         this.#scheduleAnimation(frame);
         return;
       }
+      this.panVelocity.x = 0;
+      this.panVelocity.y = 0;
       this._animationFrame = null;
       this._animationActive = false;
       this.#endViewSession(false, true);
@@ -601,6 +632,10 @@ export class Orihon extends Evented {
     }
     if (withMove && this._viewSession.move) {
       this._viewSession.move = false;
+      if (!this._animationActive) {
+        this.panVelocity.x = 0;
+        this.panVelocity.y = 0;
+      }
       this.emit("moveend", { center: this.center });
     }
   }
@@ -637,6 +672,7 @@ export class Orihon extends Evented {
 
   #render(): void {
     if (this._destroyed) return;
+    // Single camera snapshot for this frame — every wantsFrameRender layer reads these fields.
     this.pixelOrigin = this.#pixelOriginFor();
     for (const layer of this.layers) {
       if (layer.wantsFrameRender()) layer.render();
@@ -701,15 +737,22 @@ export class Orihon extends Evented {
   }
 
   setLocale(input: LocaleInput): this {
-    Object.assign(this.locale, resolveLocale(input));
-    if (!this.options.ariaLabel) {
-      this.container.setAttribute("aria-label", this.locale.mapLabel);
+    const apply = (): void => {
+      Object.assign(this.locale, resolveLocale(input));
+      if (!this.options.ariaLabel) {
+        this.container.setAttribute("aria-label", this.locale.mapLabel);
+      }
+      for (const control of this.controls) {
+        Object.assign(control.locale, this.locale);
+        control.render();
+      }
+      this.emit("localechange", { locale: this.locale });
+    };
+    apply();
+    // Non-English built-ins may still be loading in slim bundles; re-apply when ready.
+    if (typeof input === "string" && input !== "en") {
+      void ensureLocalePacks().then(() => apply());
     }
-    for (const control of this.controls) {
-      Object.assign(control.locale, this.locale);
-      control.render();
-    }
-    this.emit("localechange", { locale: this.locale });
     return this;
   }
 
@@ -841,18 +884,22 @@ export class Orihon extends Evented {
     return options.animate ? this.flyTo(nextCenter, this.zoom, options) : this.setView(nextCenter, this.zoom);
   }
 
-  setView(center: LatLngLike, zoom = this.zoom): this {
+  setView(center: LatLngLike, zoom = this.zoom, options?: SetViewOptions): this {
     if (this._destroyed) return this;
-    this.stop();
+    const settle = options?.settle !== false;
+    if (settle) this.stop();
     const nextCenter = latLng(center);
     const nextZoom = this.#clampZoom(zoom);
     const zoomChanged = nextZoom !== this.zoom;
     const centerChanged = !nextCenter.equals(this.center, 0);
-    if (!zoomChanged && !centerChanged) return this;
+    if (!zoomChanged && !centerChanged) {
+      if (settle) this.#endViewSession(false, true);
+      return this;
+    }
     this.#beginViewSession(zoomChanged);
-    // Sync render: programmatic jumps (bench / API) should paint this frame, not the next rAF.
-    this.#applyView(nextCenter, nextZoom, true);
-    this.#endViewSession(zoomChanged, true);
+    // Settled jumps paint this frame; live follow pans coalesce on rAF.
+    this.#applyView(nextCenter, nextZoom, settle);
+    if (settle) this.#endViewSession(zoomChanged, true);
     return this;
   }
 

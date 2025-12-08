@@ -68,6 +68,8 @@ heatLayer(points, {
 }).addTo(map);
 ```
 
+`scaleZoom` is the zoom where `radius` is the geographic bandwidth. The kernel grows and shrinks with mercator zoom; `max` is how many overlapping unit kernels map to red. A uniform field stays the same color at every zoom instead of turning red when you zoom out.
+
 ## Binary Vector Tiles
 
 ```js

@@ -5,8 +5,14 @@ export function createEl<K extends keyof HTMLElementTagNameMap>(tag: K, classNam
   return el;
 }
 
+/**
+ * Geographic / camera transforms — keep sub-pixel precision so tiles, markers,
+ * and overlays stay glued during fractional zoom. Do not round here.
+ */
 export function setTransform(el: HTMLElement | SVGElement, x: number, y: number, scale = 1): void {
-  el.style.transform = `translate3d(${Math.round(x)}px,${Math.round(y)}px,0) scale(${scale})`;
+  el.style.transform = scale === 1
+    ? `translate3d(${x}px,${y}px,0)`
+    : `translate3d(${x}px,${y}px,0) scale(${scale})`;
 }
 
 export function empty(el: Element): void {

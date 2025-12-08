@@ -1,7 +1,7 @@
 {
   "name": "orihon",
-  "version": "1.0.4",
-  "description": "Unfold the world. A lightweight, high-performance mapping library — less weight, more space.",
+  "version": "1.0.5",
+  "description": "A free, open-source browser map engine. Apache 2.0. Use it anywhere.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -32,6 +32,18 @@
       "types": "./dist/layers/pmtiles.d.ts",
       "import": "./dist/layers/pmtiles.js"
     },
+    "./mlt": {
+      "types": "./dist/layers/mlt.d.ts",
+      "import": "./dist/layers/mlt.js"
+    },
+    "./mvt-wasm": {
+      "types": "./dist/layers/mvt-wasm.d.ts",
+      "import": "./dist/layers/mvt-wasm.js"
+    },
+    "./webgpu": {
+      "types": "./dist/webgpu-entry.d.ts",
+      "import": "./dist/webgpu-entry.js"
+    },
     "./controls": {
       "types": "./dist/controls.d.ts",
       "import": "./dist/controls.js"
@@ -54,13 +66,20 @@
   },
   "sideEffects": [
     "./dist/orihon.css",
-    "./dist/draw.css"
+    "./dist/draw.css",
+    "./dist/webgpu-entry.js",
+    "./dist/layers/mlt.js",
+    "./dist/layers/mvt-wasm.js",
+    "./src/webgpu-entry.ts",
+    "./src/layers/mlt.ts",
+    "./src/layers/mvt-wasm.ts"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
     "pretest": "npm run build",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:browser": "node test/browser-smoke.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs",
+    "test:browser": "node test/browser-smoke.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs",
+    "test:server": "node scripts/browser-test-server.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",
     "test:leaks": "node --expose-gc --test test/lifecycle-leak.test.js",
@@ -75,6 +94,8 @@
     "demo:bench": "npx --yes serve . -p 4176",
     "demo:showcase": "npx --yes serve . -p 4177",
     "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
+    "demo:aircraft": "node examples/aircraft-radar-proxy/server.mjs",
+    "demo:rzd": "node examples/rzd-train-122-tracker/server.mjs",
     "demo:studio": "node _local/studio/server.mjs",
     "embed:examples": "node scripts/embed-examples.mjs"
   },
@@ -83,10 +104,12 @@
     "gis",
     "tiles",
     "web-mercator",
+    "open-source",
+    "apache",
     "orihon"
   ],
   "author": "whahe",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "Apache-2.0",
   "files": [
     "dist",
     "docs",

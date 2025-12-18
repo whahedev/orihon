@@ -2,13 +2,14 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
   <title>РЖД — поезд 121В/122В Санкт-Петербург → Новороссийск</title>
 
   <link
+    id="orihon-css"
     rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css"
+    href="https://cdn.jsdelivr.net/npm/orihon@1.0.5/dist/orihon.css"
   />
 
   <style>
@@ -41,6 +42,12 @@
 
     button {
       cursor: pointer;
+    }
+
+    /* Markers are <button class="oh-marker"> — never ease camera transforms. */
+    button.oh-marker,
+    .oh-marker {
+      transition: none !important;
     }
 
     #app {
@@ -88,6 +95,21 @@
       color: #94a3b8;
       font-size: 11px;
       line-height: 1.45;
+    }
+
+    .rail-vector-status {
+      margin-top: 5px;
+      color: #fbbf24;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .rail-vector-status.ready {
+      color: #86efac;
+    }
+
+    .rail-vector-status.error {
+      color: #fca5a5;
     }
 
     .badge {
@@ -245,6 +267,12 @@
       border-color: rgba(251, 113, 133, .55);
       background: rgba(225, 29, 72, .17);
       color: #fecdd3;
+    }
+
+    .button-row button.rail-active {
+      border-color: rgba(250, 204, 21, .6);
+      background: rgba(161, 98, 7, .22);
+      color: #fef08a;
     }
 
     details {
@@ -420,6 +448,31 @@
       line-height: 1;
       user-select: none;
       pointer-events: none;
+      transition: box-shadow 160ms ease, background 160ms ease;
+    }
+
+    .train-icon.stopped {
+      background: #b45309;
+      box-shadow:
+        0 3px 12px rgba(0,0,0,.46),
+        0 0 0 6px rgba(245, 158, 11, .28),
+        0 0 0 12px rgba(245, 158, 11, .12);
+      animation: dwell-pulse 1.6s ease-in-out infinite;
+    }
+
+    @keyframes dwell-pulse {
+      0%, 100% {
+        box-shadow:
+          0 3px 12px rgba(0,0,0,.46),
+          0 0 0 6px rgba(245, 158, 11, .28),
+          0 0 0 12px rgba(245, 158, 11, .12);
+      }
+      50% {
+        box-shadow:
+          0 3px 12px rgba(0,0,0,.46),
+          0 0 0 9px rgba(245, 158, 11, .34),
+          0 0 0 18px rgba(245, 158, 11, .08);
+      }
     }
 
     .station-icon {
@@ -488,49 +541,237 @@
       color: #fff7ed;
     }
 
-    @media (max-width: 900px) {
-      .timeline {
-        top: auto;
-        right: 10px;
-        bottom: 10px;
-        width: min(350px, calc(100vw - 20px));
-        max-height: 36vh;
+    .mobile-status {
+      display: none;
+    }
+
+    .panel-more,
+    .timeline-drawer {
+      margin: 0;
+      border: 0;
+      padding: 0;
+    }
+
+    .panel-more > summary,
+    .timeline-drawer > summary {
+      list-style: none;
+    }
+
+    .panel-more > summary::-webkit-details-marker,
+    .timeline-drawer > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .panel-more-summary {
+      display: none;
+    }
+
+    .mobile-fab {
+      display: none;
+    }
+
+    @media (min-width: 901px) {
+      .panel-more-summary {
+        display: none !important;
       }
 
-      .top-panel {
-        top: 10px;
-        left: 10px;
-        width: calc(100vw - 20px);
+      .timeline-drawer > summary.timeline-head {
+        cursor: default;
       }
 
-      .legend {
+      .timeline-drawer > summary.timeline-head::after {
         display: none;
       }
     }
 
-    @media (max-width: 560px) {
+    @media (max-width: 900px) {
+      .legend {
+        display: none;
+      }
+
+      .top-panel {
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: min(34vh, 280px);
+        overflow: auto;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+        border-radius: 18px 18px 0 0;
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+      }
+
+      .top-panel h1 {
+        font-size: 14px;
+      }
+
+      .route-subtitle,
+      .rail-vector-status,
+      .badge,
       .stats {
-        grid-template-columns: repeat(2, 1fr);
+        display: none;
+      }
+
+      .mobile-status {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+        color: #94a3b8;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .mobile-status span {
+        padding: 4px 8px;
+        border: 1px solid rgba(148, 163, 184, .14);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, .46);
+        color: #e2e8f0;
+      }
+
+      .progress {
+        margin-top: 8px;
+      }
+
+      .position-line {
+        margin-top: 7px;
+        font-size: 12px;
+      }
+
+      .next-line {
+        font-size: 10px;
+      }
+
+      .button-row {
+        margin-top: 8px;
+      }
+
+      .panel-more {
+        margin-top: 8px;
+        border-top: 1px solid rgba(148, 163, 184, .12);
+        padding-top: 8px;
+      }
+
+      .panel-more-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        cursor: pointer;
+        color: #cbd5e1;
+        font-size: 11px;
+        font-weight: 680;
+        user-select: none;
+      }
+
+      .panel-more-summary::after {
+        content: "▾";
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      .panel-more[open] > .panel-more-summary::after {
+        content: "▴";
+      }
+
+      .panel-more-body {
+        margin-top: 8px;
+      }
+
+      .timeline {
+        top: calc(10px + env(safe-area-inset-top, 0px));
+        right: 10px;
+        bottom: auto;
+        left: auto;
+        width: min(280px, calc(100vw - 20px));
+        max-height: none;
+        overflow: visible;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+
+      .timeline-drawer {
+        border: 1px solid rgba(148, 163, 184, .18);
+        border-radius: 14px;
+        background: rgba(6, 15, 22, .94);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, .35);
+        backdrop-filter: blur(14px);
+        overflow: hidden;
+      }
+
+      .timeline-drawer > summary.timeline-head {
+        cursor: pointer;
+        padding: 10px 12px;
+      }
+
+      .timeline-drawer > summary.timeline-head::after {
+        content: "▾";
+        float: right;
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      .timeline-drawer[open] > summary.timeline-head::after {
+        content: "▴";
+      }
+
+      .timeline-drawer:not([open]) .timeline-subtitle {
+        display: none;
+      }
+
+      .timeline-drawer[open] {
+        max-height: min(38vh, 320px);
+        overflow: auto;
+      }
+
+      .timeline-subtitle {
+        clear: both;
+      }
+
+      #map .oh-bottom-right,
+      #map .oh-bottom-left {
+        bottom: calc(min(34vh, 280px) + 10px);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .top-panel {
+        max-height: min(32vh, 260px);
       }
 
       .controls {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .controls > button {
-        grid-column: 1 / -1;
-      }
-
-      .actual-grid {
         grid-template-columns: 1fr;
       }
 
+      .controls > button {
+        width: 100%;
+      }
+
+      .button-row button {
+        flex: 1 1 calc(50% - 4px);
+        height: 34px;
+      }
+
+      .actual-grid,
       .delay-row {
         grid-template-columns: 1fr;
       }
 
       .timeline {
-        max-height: 30vh;
+        width: auto;
+        max-width: calc(100vw - 20px);
+        right: 10px;
+        left: auto;
+      }
+
+      #map .oh-bottom-right,
+      #map .oh-bottom-left {
+        bottom: calc(min(32vh, 260px) + 10px);
       }
     }
   </style>
@@ -541,7 +782,7 @@
     <strong>Страница открыта через file://.</strong>
     Для стабильной работы Orihon откройте её через локальный сервер:
     запустите <code>start.cmd</code> и перейдите на
-    <code>http://127.0.0.1:8787</code>.
+    <code>http://127.0.0.1:8788</code>.
   </div>
 
   <div id="app">
@@ -550,9 +791,12 @@
     <section class="top-panel">
       <div class="head">
         <div>
-          <h1>Поезд 121В/122В · Санкт-Петербург → Новороссийск</h1>
+          <h1>Поезд 121В/122В · СПб → Новороссийск</h1>
           <div class="route-subtitle">
             Оценочное положение по расписанию РЖД/ФПК · текущее время берётся из системных часов · МСК (UTC+3)
+          </div>
+          <div class="rail-vector-status" id="railVectorStatus">
+            OSM-вектор: ожидает построения маршрута по railway=rail…
           </div>
         </div>
         <div class="badge">
@@ -580,6 +824,12 @@
         </div>
       </div>
 
+      <div class="mobile-status">
+        <span id="mobileProgressText">0%</span>
+        <span id="mobileRemainingText">—</span>
+        <span id="mobileDelayText">0 мин</span>
+      </div>
+
       <div class="progress">
         <div id="progressBar"></div>
       </div>
@@ -589,99 +839,146 @@
       </div>
       <div class="next-line" id="nextLine"></div>
 
-      <div class="controls">
-        <div class="field">
-          <label>Системное время, МСК</label>
-          <div id="systemTimeBox" style="
-            height:36px;
-            display:flex;
-            align-items:center;
-            padding:0 9px;
-            border:1px solid rgba(148,163,184,.18);
-            border-radius:10px;
-            background:#0d1a25;
-            color:#eaf1f7;
-            font-variant-numeric:tabular-nums;
-          ">—</div>
-        </div>
-
-        <div class="field">
-          <label>Расчётный рейс</label>
-          <div id="serviceDateBox" style="
-            height:36px;
-            display:flex;
-            align-items:center;
-            padding:0 9px;
-            border:1px solid rgba(148,163,184,.18);
-            border-radius:10px;
-            background:#0d1a25;
-            color:#eaf1f7;
-            font-variant-numeric:tabular-nums;
-          ">—</div>
-        </div>
-
-        <button id="fitButton" type="button">Весь маршрут</button>
-      </div>
-
       <div class="button-row">
         <button id="liveButton" class="active" type="button">LIVE</button>
-        <button id="x60Button" type="button">Демо ×60</button>
-        <button id="x600Button" type="button">Демо ×600</button>
         <button id="trainButton" type="button">К поезду</button>
+        <button id="x60Button" type="button">×60</button>
+        <button id="x600Button" type="button">×600</button>
       </div>
 
-      <details>
-        <summary>Фактическая корректировка по данным РЖД</summary>
+      <details class="panel-more" open>
+        <summary class="panel-more-summary">Управление и корректировка</summary>
+        <div class="panel-more-body">
+          <div class="controls">
+            <div class="field">
+              <label>Системное время, МСК</label>
+              <div id="systemTimeBox" style="
+                height:36px;
+                display:flex;
+                align-items:center;
+                padding:0 9px;
+                border:1px solid rgba(148,163,184,.18);
+                border-radius:10px;
+                background:#0d1a25;
+                color:#eaf1f7;
+                font-variant-numeric:tabular-nums;
+              ">—</div>
+            </div>
 
-        <div class="actual-grid">
-          <div class="field">
-            <label for="actualStation">Контрольная станция</label>
-            <select id="actualStation"></select>
+            <div class="field">
+              <label>Расчётный рейс</label>
+              <div id="serviceDateBox" style="
+                height:36px;
+                display:flex;
+                align-items:center;
+                padding:0 9px;
+                border:1px solid rgba(148,163,184,.18);
+                border-radius:10px;
+                background:#0d1a25;
+                color:#eaf1f7;
+                font-variant-numeric:tabular-nums;
+              ">—</div>
+            </div>
+
+            <button id="fitButton" type="button">Весь маршрут</button>
           </div>
 
-          <div class="field">
-            <label for="actualTime">Фактическое прибытие</label>
-            <input id="actualTime" type="datetime-local" />
+          <div class="button-row">
+            <button id="railwayButton" type="button">ЖД пути: ВЫКЛ</button>
+            <button id="rebuildRailButton" type="button">Перестроить OSM-маршрут</button>
           </div>
 
-          <button id="applyActualButton" type="button">Применить</button>
-        </div>
+          <details>
+            <summary>Фактическая корректировка по данным РЖД</summary>
 
-        <div class="delay-row">
-          <div class="field">
-            <label for="manualDelay">Или задержка вручную, минут</label>
-            <input id="manualDelay" type="number" step="1" value="0" />
-          </div>
-          <button id="applyDelayButton" type="button">Задать задержку</button>
-        </div>
+            <div class="actual-grid">
+              <div class="field">
+                <label for="actualStation">Контрольная станция</label>
+                <select id="actualStation"></select>
+              </div>
 
-        <div class="mode-note">
-          Это не GPS/ГЛОНАСС. Текущее время берётся через Date.now() из системных часов браузера. Прототип оценивает положение между соседними
-          станциями по расписанию. Если ввести фактическое время проследования
-          станции из сервиса «Фактическое движение поездов» РЖД, расчёт
-          сдвигается на реальную задержку.
+              <div class="field">
+                <label for="actualTime">Фактическое прибытие</label>
+                <input id="actualTime" type="datetime-local" />
+              </div>
+
+              <button id="applyActualButton" type="button">Применить</button>
+            </div>
+
+            <div class="delay-row">
+              <div class="field">
+                <label for="manualDelay">Или задержка вручную, минут</label>
+                <input id="manualDelay" type="number" step="1" value="0" />
+              </div>
+              <button id="applyDelayButton" type="button">Задать задержку</button>
+            </div>
+
+            <div class="mode-note">
+              Это не GPS/ГЛОНАСС. Текущее время берётся через Date.now() из системных часов браузера. Прототип оценивает положение между соседними
+              станциями по расписанию. Если ввести фактическое время проследования
+              станции из сервиса «Фактическое движение поездов» РЖД, расчёт
+              сдвигается на реальную задержку.
+            </div>
+          </details>
         </div>
       </details>
     </section>
 
     <aside class="timeline">
-      <div class="timeline-head">
-        <div class="timeline-title">Остановки · 121В/122В · <span id="stopCountLabel"></span></div>
-        <div class="timeline-subtitle">
-          Прибытие · отправление · стоянка · клик — перейти на карту
-        </div>
-      </div>
-      <div id="timelineList"></div>
+      <details class="timeline-drawer" open>
+        <summary class="timeline-head">
+          <div class="timeline-title">Остановки · <span id="stopCountLabel"></span></div>
+          <div class="timeline-subtitle">
+            Прибытие · отправление · стоянка · клик — на карту
+          </div>
+        </summary>
+        <div id="timelineList"></div>
+      </details>
     </aside>
 
     <div class="legend">
-      Красная линия — оценочно пройденный путь · серая — оставшийся маршрут. Справа показаны все остановки с прибытием, отправлением и временем стоянки.
+      OpenRailwayMap показывает инфраструктуру. Серая/красная линия строится из векторных OSM railway=rail через Overpass; поезд движется непосредственно вдоль этой полилинии. Справа показаны все остановки с прибытием, отправлением и временем стоянки.
       Источник расписания в прототипе: актуальное расписание поезда 121В/122В на 16 августа 2026.
       LIVE использует системные часы браузера; для фактического движения используйте контрольные времена РЖД.
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.global.js"></script>
+  <script>
+    (function () {
+      const local =
+        /^(localhost|127\.0\.0\.1)$/.test(
+          location.hostname
+        );
+      const base = local
+        ? "/dist/"
+        : "https://cdn.jsdelivr.net/npm/orihon@1.0.5/dist/";
+
+      const css =
+        document.getElementById("orihon-css");
+
+      if (css) {
+        css.href = base + "orihon.css";
+      }
+
+      window.__ORIHON_READY__ =
+        new Promise((resolve, reject) => {
+          const script =
+            document.createElement("script");
+
+          script.src =
+            base + "orihon.global.js";
+          script.onload = () => resolve();
+          script.onerror = () =>
+            reject(
+              new Error(
+                "Не удалось загрузить Orihon"
+              )
+            );
+
+          document.head.appendChild(script);
+        });
+    })();
+  </script>
 
   <script>
     (() => {
@@ -694,46 +991,51 @@
 
       const stops = [
         { name: "Санкт-Петербург (Московский вокзал)", lat: 59.9296, lon: 30.3626, arr: null, dep: 0, major: true },
-        { name: "Большая Вишера", lat: 58.9147, lon: 32.1167, arr: 120, dep: 138 },
-        { name: "Малая Вишера", lat: 58.8462, lon: 32.2220, arr: 149, dep: 150 },
-        { name: "Окуловка", lat: 58.3917, lon: 33.2907, arr: 201, dep: 224 },
+        { name: "Большая Вишера", lat: 58.9098909, lon: 32.0903823, arr: 120, dep: 138 },
+        { name: "Малая Вишера", lat: 58.8462, lon: 32.222, arr: 149, dep: 150 },
+        { name: "Окуловка", lat: 58.3718363, lon: 33.3006415, arr: 201, dep: 224 },
         { name: "Бологое-Московское", lat: 57.8799, lon: 34.0539, arr: 268, dep: 280 },
         { name: "Вышний Волочёк", lat: 57.5913, lon: 34.5603, arr: 312, dep: 313 },
-        { name: "Тверь", lat: 56.8587, lon: 35.9176, arr: 402, dep: 404, major: true },
+        { name: "Тверь", lat: 56.8351256, lon: 35.8925742, arr: 402, dep: 404, major: true },
         { name: "Решетниково", lat: 56.4508, lon: 36.5667, arr: 443, dep: 456 },
         { name: "Поварово-1", lat: 56.0747, lon: 37.0517, arr: 493, dep: 513 },
-        { name: "Лихоборы (техническая)", lat: 55.8458, lon: 37.5650, arr: 552, dep: 664 },
+        { name: "Лихоборы (техническая)", lat: 55.8458, lon: 37.565, arr: 552, dep: 664 },
         { name: "Москва (Восточный вокзал)", lat: 55.8002, lon: 37.7465, arr: 680, dep: 695, major: true },
-        { name: "Тарусская", lat: 54.7250, lon: 37.1760, arr: 810, dep: 812 },
-        { name: "Тула (Московский вокзал)", lat: 54.1990, lon: 37.5773, arr: 864, dep: 894, major: true },
-        { name: "Узловая-1", lat: 53.9798, lon: 38.1607, arr: 977, dep: 981 },
-        { name: "Ефремов", lat: 53.1490, lon: 38.1168, arr: 1081, dep: 1083 },
-        { name: "Елец", lat: 52.6237, lon: 38.5017, arr: 1170, dep: 1201 },
-        { name: "Липецк", lat: 52.6102, lon: 39.5946, arr: 1284, dep: 1303, major: true },
-        { name: "Отрожка", lat: 51.6940, lon: 39.2650, arr: 1459, dep: 1475 },
-        { name: "Придача (Воронеж-Южный)", lat: 51.6253, lon: 39.3022, arr: 1491, dep: 1496, major: true },
+        { name: "Тарусская", lat: 54.7350904, lon: 37.4006319, arr: 810, dep: 812 },
+        { name: "Тула (Московский вокзал)", lat: 54.199, lon: 37.5773, arr: 864, dep: 894, major: true },
+        { name: "Узловая-1", lat: 53.9751378, lon: 38.1740009, arr: 977, dep: 981 },
+        { name: "Ефремов", lat: 53.149, lon: 38.1168, arr: 1081, dep: 1083 },
+        { name: "Елец", lat: 52.6057335, lon: 38.5257324, arr: 1170, dep: 1201 },
+        { name: "Липецк", lat: 52.6237439, lon: 39.5680112, arr: 1284, dep: 1303, major: true },
+        { name: "Отрожка", lat: 51.694, lon: 39.265, arr: 1459, dep: 1475 },
+        { name: "Придача (Воронеж-Южный)", lat: 51.6401693, lon: 39.2588102, arr: 1491, dep: 1496, major: true },
         { name: "Лиски", lat: 50.9822, lon: 39.4995, arr: 1578, dep: 1583 },
-        { name: "Россошь", lat: 50.1986, lon: 39.5760, arr: 1684, dep: 1699, major: true },
-        { name: "Митрофановка", lat: 49.9700, lon: 39.6900, arr: 1727, dep: 1752 },
-        { name: "Кутейниково", lat: 49.1350, lon: 39.7870, arr: 1835, dep: 1837 },
+        { name: "Россошь", lat: 50.1838143, lon: 39.6025441, arr: 1684, dep: 1699, major: true },
+        { name: "Митрофановка", lat: 49.97, lon: 39.69, arr: 1727, dep: 1752 },
+        { name: "Кутейниково", lat: 49.4230617, lon: 40.4162241, arr: 1835, dep: 1837 },
         { name: "Миллерово", lat: 48.9226, lon: 40.3986, arr: 1886, dep: 1888 },
-        { name: "Каменская", lat: 48.3204, lon: 40.2687, arr: 1940, dep: 1942 },
+        { name: "Каменская", lat: 48.3292201, lon: 40.2586171, arr: 1940, dep: 1942 },
         { name: "Лихая", lat: 48.1524, lon: 40.1886, arr: 1965, dep: 1982 },
-        { name: "Зверево", lat: 48.0210, lon: 40.1220, arr: 2007, dep: 2009 },
-        { name: "Шахтная", lat: 47.7088, lon: 40.2156, arr: 2062, dep: 2064 },
-        { name: "Каменоломни", lat: 47.6685, lon: 40.2074, arr: 2076, dep: 2106 },
+        { name: "Зверево", lat: 48.021, lon: 40.122, arr: 2007, dep: 2009 },
+        { name: "Шахтная", lat: 47.7271732, lon: 40.1981405, arr: 2062, dep: 2064 },
+        { name: "Каменоломни", lat: 47.6647878, lon: 40.1941149, arr: 2076, dep: 2106 },
         { name: "Ростов-Главный", lat: 47.2221, lon: 39.6914, arr: 2181, dep: 2202, major: true },
-        { name: "Староминская-Тимашевская", lat: 46.5311, lon: 39.0497, arr: 2287, dep: 2289 },
-        { name: "Каневская", lat: 46.0848, lon: 38.9596, arr: 2328, dep: 2330 },
-        { name: "Брюховецкая", lat: 45.8061, lon: 38.9992, arr: 2359, dep: 2361 },
-        { name: "Тимашевская-1", lat: 45.6155, lon: 38.9440, arr: 2387, dep: 2397 },
-        { name: "Протока", lat: 45.2558, lon: 38.1198, arr: 2481, dep: 2483 },
-        { name: "Крымская", lat: 44.9292, lon: 37.9912, arr: 2531, dep: 2535 },
-        { name: "Тоннельная", lat: 44.8584, lon: 37.6684, arr: 2568, dep: 2583 },
-        { name: "Новороссийск", lat: 44.7244, lon: 37.7687, arr: 2613, dep: null, major: true }
+        { name: "Староминская-Тимашевская", lat: 46.5048852, lon: 39.0812671, arr: 2287, dep: 2289 },
+        { name: "Каневская", lat: 46.0868809, lon: 38.9415534, arr: 2328, dep: 2330 },
+        { name: "Брюховецкая", lat: 45.7978036, lon: 38.987661, arr: 2359, dep: 2361 },
+        { name: "Тимашевская-1", lat: 45.6296612, lon: 38.9401494, arr: 2387, dep: 2397 },
+        { name: "Протока", lat: 45.2334961, lon: 38.1452966, arr: 2481, dep: 2483 },
+        { name: "Крымская", lat: 44.9124533, lon: 38.0039441, arr: 2531, dep: 2535 },
+        { name: "Тоннельная", lat: 44.8374415, lon: 37.6545856, arr: 2568, dep: 2583 },
+        { name: "Новороссийск", lat: 44.735788, lon: 37.772521, arr: 2613, dep: null, major: true },
       ];
 
-      const routeCoords = stops.map((s) => [s.lat, s.lon]);
+      let routeCoords = stops.map((s) => [s.lat, s.lon]);
+
+      let railSegments = null;
+      let railAnchors = null;
+      let railRouteLoaded = false;
+      let railRouteMeta = null;
 
       const progressText = document.getElementById("progressText");
       const remainingText = document.getElementById("remainingText");
@@ -750,6 +1052,9 @@
       const x60Button = document.getElementById("x60Button");
       const x600Button = document.getElementById("x600Button");
       const trainButton = document.getElementById("trainButton");
+      const railwayButton = document.getElementById("railwayButton");
+      const rebuildRailButton = document.getElementById("rebuildRailButton");
+      const railVectorStatus = document.getElementById("railVectorStatus");
 
       const actualStation = document.getElementById("actualStation");
       const actualTime = document.getElementById("actualTime");
@@ -763,6 +1068,9 @@
       let trainMarker;
       let routeLine;
       let progressLine;
+      let remainingLine;
+      let railwayLayer;
+      let railwayLayerVisible = false;
       let stationMarkers = [];
 
       let delayMinutes = 0;
@@ -772,7 +1080,8 @@
       let demoBaseTrainMs = null;
       let lastFrameAt = 0;
       let latestState = null;
-      let lastTimelineIndex = -999;
+      let lastTimelineIndex = "";
+      let didFocusTrain = false;
 
       function pad2(value) {
         return String(value).padStart(2, "0");
@@ -813,23 +1122,39 @@
       }
 
       function parseDepartureMs(referenceMs = currentClockMs()) {
-        const todayDeparture =
-          moscowDayDepartureMs(referenceMs);
+        const dayMs = 24 * 60 * 60 * 1000;
+        const tripMs = TOTAL_MINUTES * 60_000;
+        const todayDeparture = moscowDayDepartureMs(referenceMs);
 
         /*
-         * Для LIVE выбираем последний уже отправившийся рейс.
-         * Если московское время ещё раньше 15:57, активным считаем
-         * вчерашний рейс — он всё ещё находится в пути, поскольку
-         * продолжительность маршрута около 43 ч 33 мин.
-         *
-         * В демо parseDepartureMs() получает виртуальное время,
-         * поэтому тот же алгоритм продолжает работать автоматически.
+         * Рейс идёт ~43.5 ч, поэтому после сегодняшних 15:57 в пути
+         * одновременно вчерашний и сегодняшний поезда.
+         * LIVE следит за самым ранним ещё не прибывшим рейсом
+         * (обычно вчерашний) — он уже глубоко на маршруте.
          */
-        if (referenceMs >= todayDeparture) {
+        let chosen = null;
+
+        for (let daysAgo = 0; daysAgo <= 2; daysAgo += 1) {
+          const departureMs = todayDeparture - daysAgo * dayMs;
+          const arrivalMs = departureMs + tripMs;
+
+          if (
+            referenceMs >= departureMs &&
+            referenceMs < arrivalMs
+          ) {
+            chosen = departureMs;
+          }
+        }
+
+        if (chosen != null) {
+          return chosen;
+        }
+
+        if (referenceMs < todayDeparture) {
           return todayDeparture;
         }
 
-        return todayDeparture - 24 * 60 * 60 * 1000;
+        return todayDeparture + dayMs;
       }
 
       function offsetMs(minutes) {
@@ -872,11 +1197,6 @@
         return a + (b - a) * t;
       }
 
-      function smoothstep(t) {
-        const x = Math.max(0, Math.min(1, t));
-        return x * x * (3 - 2 * x);
-      }
-
       function bearingDeg(lat1, lon1, lat2, lon2) {
         const toRad = Math.PI / 180;
         const toDeg = 180 / Math.PI;
@@ -891,6 +1211,414 @@
           Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
 
         return (Math.atan2(y, x) * toDeg + 360) % 360;
+      }
+
+      function haversineKm(lat1, lon1, lat2, lon2) {
+        const R = 6371.0088;
+        const toRad = Math.PI / 180;
+        const phi1 = lat1 * toRad;
+        const phi2 = lat2 * toRad;
+        const dPhi = (lat2 - lat1) * toRad;
+        const dLambda = (lon2 - lon1) * toRad;
+
+        const a =
+          Math.sin(dPhi / 2) ** 2 +
+          Math.cos(phi1) *
+          Math.cos(phi2) *
+          Math.sin(dLambda / 2) ** 2;
+
+        return 2 * R * Math.atan2(
+          Math.sqrt(a),
+          Math.sqrt(1 - a)
+        );
+      }
+
+      function prepareRailSegment(segment) {
+        const latLngs =
+          segment.coordinates.map(
+            ([lon, lat]) => [lat, lon]
+          );
+
+        const cumulativeKm = [0];
+        let totalKm = 0;
+
+        for (let i = 1; i < latLngs.length; i++) {
+          const a = latLngs[i - 1];
+          const b = latLngs[i];
+
+          totalKm += haversineKm(
+            a[0],
+            a[1],
+            b[0],
+            b[1]
+          );
+
+          cumulativeKm.push(totalKm);
+        }
+
+        return {
+          ...segment,
+          latLngs,
+          cumulativeKm,
+          totalKm
+        };
+      }
+
+      function railPointAt(segmentIndex, t) {
+        const segment =
+          railSegments?.[segmentIndex];
+
+        if (
+          !segment ||
+          !Array.isArray(segment.latLngs) ||
+          segment.latLngs.length < 2
+        ) {
+          const from = stops[segmentIndex];
+          const to = stops[segmentIndex + 1];
+
+          const x = Math.max(0, Math.min(1, t));
+
+          return {
+            lat: lerp(from.lat, to.lat, x),
+            lon: lerp(from.lon, to.lon, x),
+            heading: bearingDeg(
+              from.lat,
+              from.lon,
+              to.lat,
+              to.lon
+            )
+          };
+        }
+
+        const x =
+          Math.max(0, Math.min(1, t));
+
+        const targetKm =
+          segment.totalKm * x;
+
+        const cum =
+          segment.cumulativeKm;
+
+        let lo = 0;
+        let hi = cum.length - 1;
+
+        while (lo + 1 < hi) {
+          const mid =
+            Math.floor((lo + hi) / 2);
+
+          if (cum[mid] <= targetKm) {
+            lo = mid;
+          } else {
+            hi = mid;
+          }
+        }
+
+        const a =
+          segment.latLngs[lo];
+
+        const b =
+          segment.latLngs[
+            Math.min(lo + 1, segment.latLngs.length - 1)
+          ];
+
+        const span =
+          Math.max(
+            1e-9,
+            cum[Math.min(lo + 1, cum.length - 1)] -
+            cum[lo]
+          );
+
+        const localT =
+          Math.max(
+            0,
+            Math.min(
+              1,
+              (targetKm - cum[lo]) / span
+            )
+          );
+
+        return {
+          lat: lerp(a[0], b[0], localT),
+          lon: lerp(a[1], b[1], localT),
+          heading: bearingDeg(
+            a[0],
+            a[1],
+            b[0],
+            b[1]
+          ),
+          vertexIndex: lo,
+          localT
+        };
+      }
+
+      function railAnchor(index) {
+        const anchor =
+          railAnchors?.[index];
+
+        if (
+          anchor &&
+          Number.isFinite(anchor.lat) &&
+          Number.isFinite(anchor.lon)
+        ) {
+          return {
+            lat: anchor.lat,
+            lon: anchor.lon
+          };
+        }
+
+        return {
+          lat: stops[index].lat,
+          lon: stops[index].lon
+        };
+      }
+
+      function railSegmentPrefix(segmentIndex, t) {
+        const segment =
+          railSegments?.[segmentIndex];
+
+        if (
+          !segment ||
+          !segment.latLngs?.length
+        ) {
+          const p =
+            railPointAt(segmentIndex, t);
+
+          return [
+            [stops[segmentIndex].lat, stops[segmentIndex].lon],
+            [p.lat, p.lon]
+          ];
+        }
+
+        const point =
+          railPointAt(segmentIndex, t);
+
+        const endIndex =
+          Math.max(
+            0,
+            Math.min(
+              segment.latLngs.length - 2,
+              point.vertexIndex ?? 0
+            )
+          );
+
+        const result =
+          segment.latLngs.slice(
+            0,
+            endIndex + 1
+          );
+
+        result.push(
+          [point.lat, point.lon]
+        );
+
+        return result;
+      }
+
+      function railSegmentSuffix(segmentIndex, t) {
+        const segment =
+          railSegments?.[segmentIndex];
+
+        if (
+          !segment ||
+          !segment.latLngs?.length
+        ) {
+          const p =
+            railPointAt(segmentIndex, t);
+          const end =
+            railPointAt(segmentIndex, 1);
+
+          return [
+            [p.lat, p.lon],
+            [end.lat, end.lon]
+          ];
+        }
+
+        const point =
+          railPointAt(segmentIndex, t);
+
+        const startIndex =
+          Number.isInteger(point.vertexIndex)
+            ? point.vertexIndex
+            : 0;
+
+        const result = [
+          [point.lat, point.lon]
+        ];
+
+        appendLatLngs(
+          result,
+          segment.latLngs.slice(startIndex + 1)
+        );
+
+        return result;
+      }
+
+      function appendLatLngs(target, source) {
+        for (const point of source) {
+          const last =
+            target[target.length - 1];
+
+          if (
+            last &&
+            Math.abs(last[0] - point[0]) < 1e-9 &&
+            Math.abs(last[1] - point[1]) < 1e-9
+          ) {
+            continue;
+          }
+
+          target.push(point);
+        }
+      }
+
+      async function loadRailRoute(force = false) {
+        railVectorStatus.className =
+          "rail-vector-status";
+
+        railVectorStatus.textContent =
+          force
+            ? "OSM-вектор: перестраиваю маршрут по relation 121В…"
+            : "OSM-вектор: загружаю/строю маршрут по ж/д путям…";
+
+        rebuildRailButton.disabled = true;
+
+        try {
+          let response = null;
+          let payload = null;
+
+          try {
+            response = await fetch(
+              `/api/rail-route${force ? "?force=1" : ""}`,
+              {
+                cache: "no-store",
+                headers: {
+                  Accept: "application/json"
+                }
+              }
+            );
+
+            if (response.ok) {
+              payload = await response.json();
+            }
+          } catch {
+            // Static GitHub Pages has no /api — fall through to cache file.
+          }
+
+          if (!payload) {
+            const staticResponse =
+              await fetch(
+                "./rail-route-cache.json",
+                {
+                  cache: force
+                    ? "no-store"
+                    : "default",
+                  headers: {
+                    Accept: "application/json"
+                  }
+                }
+              );
+
+            payload =
+              await staticResponse.json();
+
+            if (!staticResponse.ok) {
+              throw new Error(
+                payload?.details ||
+                payload?.error ||
+                `HTTP ${staticResponse.status}`
+              );
+            }
+
+            payload = {
+              ...payload,
+              cache: true
+            };
+          }
+
+          if (
+            !Array.isArray(payload.segments) ||
+            payload.segments.length !== stops.length - 1 ||
+            !Array.isArray(payload.anchors) ||
+            payload.anchors.length !== stops.length
+          ) {
+            throw new Error(
+              "Backend вернул неполный OSM-маршрут"
+            );
+          }
+
+          railSegments =
+            payload.segments.map(
+              prepareRailSegment
+            );
+
+          railAnchors =
+            payload.anchors;
+
+          railRouteMeta =
+            payload;
+
+          railRouteLoaded = true;
+
+          routeCoords = [];
+
+          for (const segment of railSegments) {
+            appendLatLngs(
+              routeCoords,
+              segment.latLngs
+            );
+          }
+
+          if (
+            routeLine &&
+            typeof routeLine.setLatLngs === "function"
+          ) {
+            routeLine.setLatLngs(
+              routeCoords
+            );
+          }
+
+          stationMarkers.forEach(
+            (marker, index) => {
+              const anchor =
+                railAnchor(index);
+
+              marker.setLatLng(
+                [anchor.lat, anchor.lon]
+              );
+            }
+          );
+
+          railVectorStatus.className =
+            "rail-vector-status ready";
+
+          railVectorStatus.textContent =
+            `OSM-вектор готов: ${payload.stats?.totalDistanceKm?.toFixed?.(0) ?? "—"} км по рельсам · ` +
+            `${payload.stats?.routePoints ?? routeCoords.length} точек · ` +
+            `${payload.cache === true ? "из кэша" : "построен сейчас"}`;
+
+          const state =
+            computeState(
+              currentClockMs()
+            );
+
+          latestState = state;
+          updateTrainMarker(state);
+          updateProgressLine(state);
+        } catch (error) {
+          console.error(
+            "Rail route load failed:",
+            error
+          );
+
+          railRouteLoaded = false;
+
+          railVectorStatus.className =
+            "rail-vector-status error";
+
+          railVectorStatus.textContent =
+            `OSM-вектор недоступен: ${error.message}. Используется временная линия между станциями.`;
+        } finally {
+          rebuildRailButton.disabled = false;
+        }
       }
 
       function currentClockMs() {
@@ -956,16 +1684,17 @@
         const arrivalMs = departureMs + offsetMs(TOTAL_MINUTES);
 
         if (nowMs < departureMs + delayMinutes * 60_000) {
+          const start =
+            railAnchor(0);
+
+          const initial =
+            railPointAt(0, 0);
+
           return {
             phase: "waiting",
-            lat: stops[0].lat,
-            lon: stops[0].lon,
-            heading: bearingDeg(
-              stops[0].lat,
-              stops[0].lon,
-              stops[1].lat,
-              stops[1].lon
-            ),
+            lat: start.lat,
+            lon: start.lon,
+            heading: initial.heading,
             progress: 0,
             currentIndex: 0,
             nextIndex: 1,
@@ -978,11 +1707,14 @@
         if (nowMs >= arrivalMs) {
           const last = stops.length - 1;
 
+          const finish =
+            railAnchor(last);
+
           return {
             phase: "arrived",
-            lat: stops[last].lat,
-            lon: stops[last].lon,
-            heading: 180,
+            lat: finish.lat,
+            lon: finish.lon,
+            heading: railPointAt(last - 1, 1).heading,
             progress: 1,
             currentIndex: last,
             nextIndex: null,
@@ -1005,19 +1737,20 @@
             if (nowMs >= arrMs && nowMs <= depMs) {
               const nextIndex = i < stops.length - 1 ? i + 1 : null;
 
+              const anchor =
+                railAnchor(i);
+
+              // На стоянке смотрим сюда, откуда прибыли — не «вперёд по перегону».
+              const arrivalHeading =
+                i > 0
+                  ? railPointAt(i - 1, 1).heading
+                  : railPointAt(0, 0).heading;
+
               return {
                 phase: "stopped",
-                lat: stop.lat,
-                lon: stop.lon,
-                heading:
-                  nextIndex !== null
-                    ? bearingDeg(
-                        stop.lat,
-                        stop.lon,
-                        stops[nextIndex].lat,
-                        stops[nextIndex].lon
-                      )
-                    : 180,
+                lat: anchor.lat,
+                lon: anchor.lon,
+                heading: arrivalHeading,
                 progress:
                   (stop.arr + delayMinutes) /
                   (TOTAL_MINUTES + delayMinutes),
@@ -1052,22 +1785,24 @@
             departureMs + offsetMs(toArr);
 
           if (nowMs >= startMs && nowMs < endMs) {
-            const rawT =
-              (nowMs - startMs) /
-              Math.max(1, endMs - startMs);
+            const t =
+              Math.max(
+                0,
+                Math.min(
+                  1,
+                  (nowMs - startMs) /
+                  Math.max(1, endMs - startMs)
+                )
+              );
 
-            const t = smoothstep(rawT);
+            const railPosition =
+              railPointAt(i, t);
 
             return {
               phase: "moving",
-              lat: lerp(from.lat, to.lat, t),
-              lon: lerp(from.lon, to.lon, t),
-              heading: bearingDeg(
-                from.lat,
-                from.lon,
-                to.lat,
-                to.lon
-              ),
+              lat: railPosition.lat,
+              lon: railPosition.lon,
+              heading: railPosition.heading,
               progress:
                 Math.max(
                   0,
@@ -1091,11 +1826,14 @@
           }
         }
 
+        const fallback =
+          railAnchor(0);
+
         return {
           phase: "unknown",
-          lat: stops[0].lat,
-          lon: stops[0].lon,
-          heading: 0,
+          lat: fallback.lat,
+          lon: fallback.lon,
+          heading: railPointAt(0, 0).heading,
           progress: 0,
           currentIndex: 0,
           nextIndex: 1,
@@ -1119,10 +1857,19 @@
 
         if (state.phase === "stopped") {
           const stop = stops[state.stationIndex];
+          const leftMs =
+            state.departureMs +
+            offsetMs(stop.dep) -
+            nowMs;
 
           return (
             `<strong>${stop.name}</strong>` +
-            ` · стоянка`
+            ` · стоянка` +
+            (
+              leftMs > 0
+                ? ` ещё ${formatDuration(leftMs)}`
+                : ""
+            )
           );
         }
 
@@ -1150,15 +1897,46 @@
         const remaining =
           state.arrivalMs - nowMs;
 
-        remainingText.textContent =
+        const remainingLabel =
           state.phase === "arrived"
             ? "0 мин"
             : formatDuration(remaining);
+
+        remainingText.textContent =
+          remainingLabel;
 
         delayText.textContent =
           delayMinutes === 0
             ? "0 мин"
             : `${delayMinutes > 0 ? "+" : ""}${delayMinutes} мин`;
+
+        const mobileProgress =
+          document.getElementById(
+            "mobileProgressText"
+          );
+        const mobileRemaining =
+          document.getElementById(
+            "mobileRemainingText"
+          );
+        const mobileDelay =
+          document.getElementById(
+            "mobileDelayText"
+          );
+
+        if (mobileProgress) {
+          mobileProgress.textContent =
+            `${pct.toFixed(0)}%`;
+        }
+
+        if (mobileRemaining) {
+          mobileRemaining.textContent =
+            remainingLabel;
+        }
+
+        if (mobileDelay) {
+          mobileDelay.textContent =
+            delayText.textContent;
+        }
 
         positionLine.innerHTML =
           positionText(state, nowMs);
@@ -1166,32 +1944,49 @@
         if (state.nextIndex !== null) {
           const next = stops[state.nextIndex];
 
-          const nextArrivalMs =
-            state.departureMs +
-            offsetMs(
-              next.arr !== null
-                ? next.arr
-                : next.dep
-            );
+          if (state.phase === "stopped") {
+            const stop =
+              stops[state.stationIndex];
+            const depAt =
+              state.departureMs +
+              offsetMs(stop.dep);
+            const leftMs =
+              Math.max(0, depAt - nowMs);
 
-          const toNext =
-            Math.max(0, nextArrivalMs - nowMs);
+            nextLine.textContent =
+              `Стоянка до ${formatMsk(depAt)} МСК` +
+              ` · ещё ${formatDuration(leftMs)}` +
+              ` · далее ${next.name}`;
+          } else {
+            const nextArrivalMs =
+              state.departureMs +
+              offsetMs(
+                next.arr !== null
+                  ? next.arr
+                  : next.dep
+              );
 
-          nextLine.textContent =
-            `Следующая: ${next.name} · ` +
-            `${formatMsk(nextArrivalMs)} МСК · ` +
-            `через ${formatDuration(toNext)}`;
+            const toNext =
+              Math.max(0, nextArrivalMs - nowMs);
+
+            nextLine.textContent =
+              `Следующая: ${next.name} · ` +
+              `${formatMsk(nextArrivalMs)} МСК · ` +
+              `через ${formatDuration(toNext)}`;
+          }
         } else {
           nextLine.textContent =
             `Расчётное прибытие: ${formatMsk(state.arrivalMs, true)} МСК`;
         }
       }
 
+      let trainIconNode = null;
+
       function makeTrainNode() {
-        const node = document.createElement("div");
-        node.className = "train-icon";
-        node.textContent = "🚆";
-        return node;
+        trainIconNode = document.createElement("div");
+        trainIconNode.className = "train-icon";
+        trainIconNode.textContent = "🚆";
+        return trainIconNode;
       }
 
       function makeStationNode(major) {
@@ -1255,6 +2050,7 @@
           center: [52.2, 38.5],
           zoom: 5,
           locale: "ru",
+          controls: false,
           ariaLabel:
             "Маршрут поезда Санкт-Петербург — Новороссийск"
         });
@@ -1262,18 +2058,39 @@
         Orihon.tileLayer(
           "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
           {
-            attribution:
-              "© OpenStreetMap contributors",
+            attribution: "",
             maxZoom: 19
           }
         ).addTo(map);
 
+        railwayLayer = Orihon.tileLayer(
+          "https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",
+          {
+            attribution: "",
+            minZoom: 2,
+            maxZoom: 19,
+            opacity: 0.88
+          }
+        );
+
         routeLine = Orihon.polyline(
           routeCoords,
           {
-            weight: 4,
-            opacity: 0.62,
-            color: "#64748b",
+            strokeWidth: 3,
+            strokeOpacity: 0.18,
+            stroke: "#94a3b8",
+            lineCap: "round",
+            lineJoin: "round"
+          }
+        ).addTo(map);
+
+        remainingLine = Orihon.polyline(
+          [routeCoords[0]],
+          {
+            strokeWidth: 4,
+            strokeOpacity: 0.55,
+            stroke: "#64748b",
+            dashArray: "10 10",
             lineCap: "round",
             lineJoin: "round"
           }
@@ -1282,9 +2099,9 @@
         progressLine = Orihon.polyline(
           [routeCoords[0]],
           {
-            weight: 5,
-            opacity: 0.95,
-            color: "#e11d48",
+            strokeWidth: 5,
+            strokeOpacity: 0.95,
+            stroke: "#e11d48",
             lineCap: "round",
             lineJoin: "round"
           }
@@ -1340,7 +2157,7 @@
 
         if (typeof Orihon.zoomControl === "function") {
           Orihon.zoomControl({
-            position: "bottom-right"
+            position: "top-right"
           }).addTo(map);
         }
 
@@ -1366,51 +2183,209 @@
           trainMarker.options &&
           typeof trainMarker.render === "function"
         ) {
+          // На стоянке не крутим нос «вперёд по маршруту».
           trainMarker.options.rotation =
-            state.heading;
+            state.phase === "stopped"
+              ? 0
+              : state.heading;
           trainMarker.options.rotationOrigin =
             "center center";
           trainMarker.render();
+        }
+
+        // DivIcon клонирует content — класс ставим на живой DOM-узел.
+        if (trainIconNode?.classList) {
+          trainIconNode.classList.toggle(
+            "stopped",
+            state.phase === "stopped"
+          );
+        }
+
+        const liveIcon =
+          document.querySelector(
+            ".oh-div-icon .train-icon"
+          );
+
+        if (liveIcon?.classList) {
+          liveIcon.classList.toggle(
+            "stopped",
+            state.phase === "stopped"
+          );
         }
       }
 
       function updateProgressLine(state) {
         const points = [];
 
-        const endIndex =
-          Math.max(
-            0,
-            Math.min(
-              stops.length - 1,
-              state.currentIndex
-            )
-          );
-
-        for (let i = 0; i <= endIndex; i++) {
-          points.push(
-            [stops[i].lat, stops[i].lon]
-          );
-        }
-
         if (
-          state.phase === "moving" &&
-          state.nextIndex !== null
+          railRouteLoaded &&
+          Array.isArray(railSegments)
         ) {
-          points.push(
-            [state.lat, state.lon]
-          );
-        }
+          if (state.phase === "arrived") {
+            appendLatLngs(
+              points,
+              routeCoords
+            );
+          } else {
+            const completedSegments =
+              Math.max(
+                0,
+                Math.min(
+                  railSegments.length,
+                  state.phase === "stopped"
+                    ? state.stationIndex
+                    : state.currentIndex
+                )
+              );
 
-        if (state.phase === "arrived") {
-          points.length = 0;
-          points.push(...routeCoords);
+            for (
+              let i = 0;
+              i < completedSegments;
+              i++
+            ) {
+              appendLatLngs(
+                points,
+                railSegments[i].latLngs
+              );
+            }
+
+            if (state.phase === "moving") {
+              appendLatLngs(
+                points,
+                railSegmentPrefix(
+                  state.currentIndex,
+                  state.segmentT
+                )
+              );
+            }
+
+            if (state.phase === "stopped") {
+              const anchor =
+                railAnchor(
+                  state.stationIndex
+                );
+
+              const last =
+                points[points.length - 1];
+
+              if (
+                !last ||
+                Math.abs(last[0] - anchor.lat) > 1e-8 ||
+                Math.abs(last[1] - anchor.lon) > 1e-8
+              ) {
+                points.push(
+                  [anchor.lat, anchor.lon]
+                );
+              }
+            }
+
+            if (
+              points.length === 0
+            ) {
+              const start =
+                railAnchor(0);
+
+              points.push(
+                [start.lat, start.lon]
+              );
+            }
+          }
+        } else {
+          const endIndex =
+            Math.max(
+              0,
+              Math.min(
+                stops.length - 1,
+                state.currentIndex
+              )
+            );
+
+          for (
+            let i = 0;
+            i <= endIndex;
+            i++
+          ) {
+            points.push(
+              [stops[i].lat, stops[i].lon]
+            );
+          }
+
+          if (
+            state.phase === "moving" &&
+            state.nextIndex !== null
+          ) {
+            points.push(
+              [state.lat, state.lon]
+            );
+          }
+
+          if (state.phase === "arrived") {
+            points.length = 0;
+            points.push(
+              ...routeCoords
+            );
+          }
         }
 
         if (
           typeof progressLine.setLatLngs ===
           "function"
         ) {
-          progressLine.setLatLngs(points);
+          progressLine.setLatLngs(
+            points
+          );
+        }
+
+        const remaining = [];
+
+        if (
+          railRouteLoaded &&
+          Array.isArray(railSegments) &&
+          state.phase === "moving"
+        ) {
+          appendLatLngs(
+            remaining,
+            railSegmentSuffix(
+              state.currentIndex,
+              state.segmentT
+            )
+          );
+
+          for (
+            let i = state.currentIndex + 1;
+            i < railSegments.length;
+            i++
+          ) {
+            appendLatLngs(
+              remaining,
+              railSegments[i].latLngs
+            );
+          }
+        }
+
+        // На стоянке/ожидании/прибытии впереди пути не рисуем —
+        // иначе выглядит как будто поезд уже ушёл дальше.
+        if (
+          remainingLine &&
+          typeof remainingLine.setLatLngs === "function"
+        ) {
+          remainingLine.setLatLngs(
+            remaining.length >= 2
+              ? remaining
+              : [[state.lat, state.lon]]
+          );
+        }
+
+        if (
+          routeLine &&
+          typeof routeLine.setStyle === "function"
+        ) {
+          routeLine.setStyle({
+            strokeOpacity:
+              state.phase === "stopped"
+                ? 0.08
+                : 0.18
+          });
         }
       }
 
@@ -1569,6 +2544,20 @@
           item.addEventListener(
             "click",
             () => {
+              const drawer =
+                document.querySelector(
+                  ".timeline-drawer"
+                );
+
+              if (
+                drawer &&
+                window.matchMedia(
+                  "(max-width: 900px)"
+                ).matches
+              ) {
+                drawer.open = false;
+              }
+
               map.flyTo(
                 [stop.lat, stop.lon],
                 9
@@ -1613,18 +2602,25 @@
       }
 
       function updateTimeline(state) {
+        /*
+         * На стоянке подсвечиваем текущую станцию.
+         * В движении — станцию отправления текущего перегона,
+         * а не следующую (иначе кажется, что стоянка уже идёт,
+         * хотя поезд ещё на перегоне).
+         */
         const activeIndex =
-          state.phase === "moving"
-            ? state.nextIndex
+          state.phase === "stopped"
+            ? state.stationIndex
             : state.currentIndex;
 
-        if (
-          activeIndex === lastTimelineIndex
-        ) {
+        const timelineKey =
+          `${state.phase}:${activeIndex}`;
+
+        if (timelineKey === lastTimelineIndex) {
           return;
         }
 
-        lastTimelineIndex = activeIndex;
+        lastTimelineIndex = timelineKey;
 
         const children =
           timelineList.children;
@@ -1636,16 +2632,25 @@
         ) {
           const item = children[i];
 
+          const passed =
+            state.phase === "arrived" ||
+            (
+              state.phase === "stopped"
+                ? i < state.stationIndex
+                : i <= state.currentIndex &&
+                  i !== activeIndex
+            );
+
           item.classList.toggle(
             "passed",
-            i < state.currentIndex ||
-            state.phase === "arrived"
+            Boolean(passed)
           );
 
           item.classList.toggle(
             "active",
             i === activeIndex &&
-            state.phase !== "arrived"
+            state.phase !== "arrived" &&
+            state.phase !== "waiting"
           );
         }
 
@@ -1707,7 +2712,7 @@
 
         // В демо лучше остаться на текущем виртуальном времени,
         // но с новым расчётом задержки.
-        lastTimelineIndex = -999;
+        lastTimelineIndex = "";
       }
 
       function fillActualTimeForStation() {
@@ -1769,7 +2774,68 @@
         );
       }
 
+      function toggleRailwayLayer() {
+        if (!railwayLayer || !map) return;
+
+        if (railwayLayerVisible) {
+          railwayLayer.remove();
+          railwayLayerVisible = false;
+          railwayButton.textContent = "ЖД пути: ВЫКЛ";
+          railwayButton.classList.remove("rail-active");
+        } else {
+          railwayLayer.addTo(map);
+          railwayLayerVisible = true;
+          railwayButton.textContent = "ЖД пути: ВКЛ";
+          railwayButton.classList.add("rail-active");
+
+          // Поднимаем маршрут и маркеры поверх инфраструктурного слоя.
+          if (routeLine && typeof routeLine.bringToFront === "function") {
+            routeLine.bringToFront();
+          }
+          if (remainingLine && typeof remainingLine.bringToFront === "function") {
+            remainingLine.bringToFront();
+          }
+          if (progressLine && typeof progressLine.bringToFront === "function") {
+            progressLine.bringToFront();
+          }
+        }
+      }
+
+      function syncMobileLayout() {
+        const mobile =
+          window.matchMedia(
+            "(max-width: 900px)"
+          ).matches;
+
+        const panelMore =
+          document.querySelector(
+            ".panel-more"
+          );
+
+        const timelineDrawer =
+          document.querySelector(
+            ".timeline-drawer"
+          );
+
+        if (panelMore) {
+          panelMore.open = !mobile;
+        }
+
+        if (timelineDrawer) {
+          timelineDrawer.open = !mobile;
+        }
+      }
+
       function bindControls() {
+        syncMobileLayout();
+
+        window
+          .matchMedia("(max-width: 900px)")
+          .addEventListener(
+            "change",
+            syncMobileLayout
+          );
+
         fitButton.addEventListener(
           "click",
           () => {
@@ -1783,6 +2849,16 @@
         trainButton.addEventListener(
           "click",
           focusTrain
+        );
+
+        railwayButton.addEventListener(
+          "click",
+          toggleRailwayLayer
+        );
+
+        rebuildRailButton.addEventListener(
+          "click",
+          () => loadRailRoute(true)
         );
 
         liveButton.addEventListener(
@@ -1816,7 +2892,7 @@
                 ? Math.round(value)
                 : 0;
 
-            lastTimelineIndex = -999;
+            lastTimelineIndex = "";
           }
         );
 
@@ -1826,6 +2902,9 @@
         );
 
       }
+
+      let lastProgressPhase = "";
+      let lastProgressIndex = -1;
 
       function frame(timestamp) {
         requestAnimationFrame(frame);
@@ -1851,17 +2930,34 @@
         updateTopPanel(state, nowMs);
         updateTimeline(state);
 
-        // Маршрут обновляем реже визуальной иконки,
-        // чтобы не делать лишнюю работу.
+        if (!didFocusTrain && Number.isFinite(state.lat) && Number.isFinite(state.lon)) {
+          didFocusTrain = true;
+          map.setView([state.lat, state.lon], 7);
+        }
+
+        const progressKeyIndex =
+          state.phase === "stopped"
+            ? state.stationIndex
+            : state.currentIndex;
+
+        const phaseChanged =
+          state.phase !== lastProgressPhase ||
+          progressKeyIndex !== lastProgressIndex;
+
+        // На стоянке/смене фазы — сразу; иначе раз в секунду.
         if (
+          phaseChanged ||
+          state.phase === "stopped" ||
           Math.floor(timestamp / 1000) !==
           Math.floor((timestamp - FRAME_MS) / 1000)
         ) {
+          lastProgressPhase = state.phase;
+          lastProgressIndex = progressKeyIndex;
           updateProgressLine(state);
         }
       }
 
-      function init() {
+      async function init() {
         const fileWarning =
           document.getElementById("fileWarning");
 
@@ -1872,18 +2968,35 @@
           fileWarning.hidden = false;
         }
 
+        try {
+          await (
+            window.__ORIHON_READY__ ||
+            Promise.resolve()
+          );
+        } catch (error) {
+          alert(
+            error instanceof Error
+              ? error.message
+              : "Orihon не загрузился"
+          );
+          return;
+        }
+
         populateActualStationSelect();
         renderTimeline();
         createMap();
         bindControls();
         fillActualTimeForStation();
 
+        loadRailRoute(false);
         requestAnimationFrame(frame);
       }
 
       window.addEventListener(
         "load",
-        init
+        () => {
+          void init();
+        }
       );
     })();
   </script>

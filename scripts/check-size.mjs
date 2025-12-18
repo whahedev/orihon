@@ -7,8 +7,8 @@ const budgets = {
   "orihon.core.esm.js": 22 * kib,
   "orihon.standard.esm.js": 35 * kib,
   // Advanced includes WebGL tiles/points/heat/paths, ObjectManager scene,
-  // MLT sniff, WASM MVT geometry, and WebGPU raster tiles behind existing APIs.
-  "orihon.esm.js": 100 * kib,
+  // MLT sniff, WASM MVT geometry, WebGPU raster tiles, and shared camera warps.
+  "orihon.esm.js": 102 * kib,
   "orihon.draw.esm.js": 12 * kib,
   "orihon.controls.esm.js": 8 * kib,
   "orihon.geo.esm.js": 2 * kib,

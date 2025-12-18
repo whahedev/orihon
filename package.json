@@ -96,6 +96,7 @@
     "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
     "demo:aircraft": "node examples/aircraft-radar-proxy/server.mjs",
     "demo:rzd": "node examples/rzd-train-122-tracker/server.mjs",
+    "demo:navigation": "npx --yes serve . -p 8791",
     "demo:studio": "node _local/studio/server.mjs",
     "embed:examples": "node scripts/embed-examples.mjs"
   },

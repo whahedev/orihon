@@ -1,0 +1,7 @@
+# Local Overpass dumps / helper scripts — not published
+_rel*.json
+_build-from-relation.mjs
+_fix-stop-coords.mjs
+_debug-snaps.mjs
+_sync-stops.mjs
+_client_check.js

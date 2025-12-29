@@ -72,6 +72,8 @@ export type { CanvasBaseLayerOptions } from "./layers/canvas-base-layer.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";
 export type { PathOptions, CircleMarkerOptions } from "./layers/vector.js";
 export type {
+  GeoJSONAsyncInput,
+  GeoJSONAsyncOptions,
   GeoJSONData,
   GeoJSONFeature,
   GeoJSONFeatureCollection,

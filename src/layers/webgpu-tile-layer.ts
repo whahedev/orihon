@@ -4,13 +4,23 @@
  */
 
 import { createEl } from "../dom.js";
-import { cameraWarpCss } from "../camera.js";
+import { cameraWarpCoversViewport, cameraWarpCss } from "../camera.js";
 import { TILE_SIZE, LatLngBounds, latLngBounds, unproject, type LatLngBoundsLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { modulo, nativeTileZoom, type TileTemplate } from "./tile-layer.js";
-import { forEachTileInRect, forEachTileRectDelta, forEachMissingNeeded, MinHeap, tilePriority, type TileRect } from "./tile-grid.js";
+import {
+  forEachTileInRect,
+  forEachTileRectDelta,
+  forEachMissingNeeded,
+  MinHeap,
+  nearestReadyAncestorKey,
+  tileLookaheadPadding,
+  tilePriority,
+  tileSetCoverage,
+  type TileRect
+} from "./tile-grid.js";
 import { WTinyLfu } from "../services/tiny-lfu.js";
 
 export interface WebGPUTileLayerOptions extends LayerOptions {
@@ -64,6 +74,10 @@ type ResolvedOptions = Required<
 export interface WebGPUTileLayerStats {
   renderer: "webgpu" | "none";
   needed: number;
+  visibleReady: number;
+  preloadNeeded: number;
+  preloadReady: number;
+  coveragePct: number;
   ready: number;
   loading: number;
   cached: number;
@@ -192,6 +206,13 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
   private _needed = new Set<string>();
   private _neededCount = 0;
   private _retained = new Set<string>();
+  /** Next coarser viewport, loaded at low priority for seamless zoom-out. */
+  private _preload = new Set<string>();
+  /** Coarsest level at the start of a zoom-in round-trip, pinned for instant zoom-back. */
+  private _zoomBackstop = new Set<string>();
+  private _zoomBackstopZoom: number | null = null;
+  /** View tiles visited during the active zoom round-trip; released at its floor. */
+  private _zoomHistory = new Set<string>();
   private _drawList: GpuTile[] = [];
   private _queue = new MinHeap<GpuTile>((tile) => tile.priority);
   private _queuedKeys = new Set<string>();
@@ -224,10 +245,10 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
       maxZoom: 19,
       maxNativeZoom: undefined,
       tileSize: TILE_SIZE,
-      buffer: 1,
-      cacheSize: 96,
-      maxRequests: 8,
-      maxNewPerFrame: 4,
+      buffer: 0,
+      cacheSize: 256,
+      maxRequests: 16,
+      maxNewPerFrame: 12,
       subdomains: "abc",
       attribution: "",
       crossOrigin: "anonymous",
@@ -253,9 +274,18 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
   getStats(): WebGPUTileLayerStats {
     let ready = 0;
     for (const tile of this.tiles.values()) if (tile.state === 2) ready += 1;
+    let visibleReady = 0;
+    for (const key of this._needed) if (this.tiles.get(key)?.state === 2) visibleReady += 1;
+    let preloadReady = 0;
+    for (const key of this._preload) if (this.tiles.get(key)?.state === 2) preloadReady += 1;
+    const isReady = (key: string) => this.tiles.get(key)?.state === 2;
     return {
       renderer: this.renderer,
       needed: this._neededCount,
+      visibleReady,
+      preloadNeeded: this._preload.size,
+      preloadReady,
+      coveragePct: tileSetCoverage(this._needed, isReady) * 100,
       ready,
       loading: this._loading,
       cached: this.tiles.size,
@@ -347,6 +377,10 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     this._needed.clear();
     this._rect = null;
     this._retained.clear();
+    this._preload.clear();
+    this._zoomBackstop.clear();
+    this._zoomBackstopZoom = null;
+    this._zoomHistory.clear();
     this._drawList = [];
     this._hasDrawn = false;
     super.onRemove();
@@ -394,7 +428,14 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     const oy = this.map.pixelOrigin.y;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     const canWarp = this._hasDrawn && Number.isFinite(this._drawnZoom);
-    const gpuDue = this._forceGpu || !canWarp || (this._dirty && now - this._lastGpuMs > 80);
+    const warpCoversViewport = canWarp && cameraWarpCoversViewport(
+      { x: this._drawnOriginX, y: this._drawnOriginY },
+      this._drawnZoom,
+      { x: ox, y: oy },
+      zoom,
+      { width, height }
+    );
+    const gpuDue = this._forceGpu || !warpCoversViewport || (this._dirty && now - this._lastGpuMs > 80);
 
     if (!gpuDue) {
       this.canvas.style.transformOrigin = "0 0";
@@ -521,19 +562,20 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     const origin = this.map.pixelOrigin;
     const tileOriginX = origin.x / displayScale;
     const tileOriginY = origin.y / displayScale;
-    const left = Math.floor(tileOriginX / size) - this.options.buffer;
-    const top = Math.floor(tileOriginY / size) - this.options.buffer;
-    const right = Math.floor((tileOriginX + this.map.size.width / displayScale) / size) + this.options.buffer;
-    const bottom = Math.floor((tileOriginY + this.map.size.height / displayScale) / size) + this.options.buffer;
+    const vx = this.map.panVelocity.x;
+    const vy = this.map.panVelocity.y;
+    const lead = tileLookaheadPadding(vx, vy, size);
+    const left = Math.floor(tileOriginX / size) - this.options.buffer - lead.left;
+    const top = Math.floor(tileOriginY / size) - this.options.buffer - lead.top;
+    const right = Math.floor((tileOriginX + this.map.size.width / displayScale) / size) + this.options.buffer + lead.right;
+    const bottom = Math.floor((tileOriginY + this.map.size.height / displayScale) / size) + this.options.buffer + lead.bottom;
     const worldMax = 2 ** activeZoom - 1;
 
     const nextRect: TileRect = { z: activeZoom, left, top, right, bottom };
-    const candidates: Array<{ x: number; y: number; key: string; distance: number }> = [];
+    const candidates: Array<{ x: number; y: number; z: number; key: string; distance: number }> = [];
     const centerX = tileOriginX / size + this.map.size.width / displayScale / size / 2;
     const centerY = tileOriginY / size + this.map.size.height / displayScale / size / 2;
     const now = performance.now();
-    const vx = this.map.panVelocity.x;
-    const vy = this.map.panVelocity.y;
 
     const consider = (x: number, y: number): void => {
       if (y < 0 || y > worldMax) return;
@@ -547,7 +589,7 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
         existing.lastUsed = now;
         existing.priority = distance;
         this._lfu.hit(key);
-        if (existing.state === 0) this.#enqueue(existing);
+        if (existing.state === 0) this.#reprioritize(existing);
       }
     };
 
@@ -562,14 +604,50 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     this._rect = nextRect;
 
     forEachMissingNeeded(this._needed, (key) => this.tiles.has(key), (x, y, key) => {
-      candidates.push({ x, y, key, distance: tilePriority(x, y, centerX, centerY, vx, vy, size) });
+      candidates.push({ x, y, z: activeZoom, key, distance: tilePriority(x, y, centerX, centerY, vx, vy, size) });
     });
+
+    const preload = new Set<string>();
+    const preloadDepth = Math.min(1, activeZoom);
+    for (let depth = 1; depth <= preloadDepth; depth++) {
+      const z = activeZoom - depth;
+      const scaleAtZ = 2 ** (this.map.zoom - activeZoom);
+      const centerAtZ = this.map.crs.project(this.map.center, z);
+      const viewWidth = this.map.size.width / scaleAtZ;
+      const viewHeight = this.map.size.height / scaleAtZ;
+      const preloadLeft = Math.floor((centerAtZ.x - viewWidth / 2) / size);
+      const preloadTop = Math.floor((centerAtZ.y - viewHeight / 2) / size);
+      const preloadRight = Math.floor((centerAtZ.x + viewWidth / 2) / size);
+      const preloadBottom = Math.floor((centerAtZ.y + viewHeight / 2) / size);
+      const preloadWorldMax = 2 ** z - 1;
+      forEachTileInRect(
+        { z, left: preloadLeft, top: preloadTop, right: preloadRight, bottom: preloadBottom },
+        (x, y) => {
+          if (y < 0 || y > preloadWorldMax) return;
+          if (this.options.noWrap && (x < 0 || x > preloadWorldMax)) return;
+          if (!this.#tileIntersectsBounds(x, y, z)) return;
+          const key = `${z}:${x}:${y}`;
+          preload.add(key);
+          const distance = 100 + depth * 16 + Math.hypot(x + 0.5 - centerAtZ.x / size, y + 0.5 - centerAtZ.y / size);
+          const existing = this.tiles.get(key);
+          if (existing) {
+            existing.lastUsed = now;
+            existing.priority = distance;
+            this._lfu.hit(key);
+            if (existing.state === 0) this.#reprioritize(existing);
+          } else {
+            candidates.push({ x, y, z, key, distance });
+          }
+        }
+      );
+    }
+    this._preload = preload;
 
     if (candidates.length > 1) candidates.sort((a, b) => a.distance - b.distance);
     const maxNew = Math.max(1, this.options.maxNewPerFrame);
     for (let i = 0; i < candidates.length && i < maxNew; i++) {
       const c = candidates[i];
-      this.#createTile(c.x, c.y, activeZoom, c.key, c.distance);
+      this.#createTile(c.x, c.y, c.z, c.key, c.distance);
     }
     if (candidates.length > maxNew) this.#scheduleRedraw();
 
@@ -579,6 +657,22 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
   }
 
   #switchZoom(sourceZoom: number): void {
+    const previousZoom = this._tileZoom;
+    if (previousZoom != null && sourceZoom > previousZoom) {
+      if (this._zoomBackstopZoom == null || previousZoom <= this._zoomBackstopZoom) {
+        this._zoomBackstop = new Set(this._needed);
+        this._zoomBackstopZoom = previousZoom;
+      }
+      for (const key of this._needed) this._zoomHistory.add(key);
+      for (const key of this._preload) this._zoomHistory.add(key);
+    } else if (this._zoomBackstopZoom != null) {
+      for (const key of this._needed) this._zoomHistory.add(key);
+      if (sourceZoom <= this._zoomBackstopZoom) {
+        this._zoomBackstop.clear();
+        this._zoomBackstopZoom = null;
+        this._zoomHistory.clear();
+      }
+    }
     this._retained = new Set(this._needed);
     this._tileZoom = sourceZoom;
     this._dirty = true;
@@ -629,7 +723,14 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     const evicted = this._lfu.add(key);
     if (evicted && evicted !== key) {
       const old = this.tiles.get(evicted);
-      if (old && !this._needed.has(evicted) && !this._retained.has(evicted)) this.#disposeTile(old);
+      if (
+        old
+        && !this._needed.has(evicted)
+        && !this._retained.has(evicted)
+        && !this._preload.has(evicted)
+        && !this._zoomBackstop.has(evicted)
+        && !this._zoomHistory.has(evicted)
+      ) this.#disposeTile(old);
     }
     this.#enqueue(tile);
   }
@@ -638,6 +739,15 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     if (tile.state !== 0 || this._queuedKeys.has(tile.key)) return;
     this._queuedKeys.add(tile.key);
     this._queue.push(tile);
+  }
+
+  #reprioritize(tile: GpuTile): void {
+    if (tile.state !== 0) return;
+    if (this._queuedKeys.has(tile.key)) {
+      this._queue.removeWhere((queued) => queued === tile);
+      this._queuedKeys.delete(tile.key);
+    }
+    this.#enqueue(tile);
   }
 
   #pumpQueue(): void {
@@ -655,6 +765,7 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     tile.image = image;
     tile.state = 1;
     this._loading += 1;
+    this.emit("tileloadstart", { x: tile.x, y: tile.y, z: tile.z, url: tile.url });
     if (this.options.crossOrigin) image.crossOrigin = this.options.crossOrigin;
     if (this.options.referrerPolicy) image.referrerPolicy = this.options.referrerPolicy;
     image.onload = () => {
@@ -668,7 +779,12 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
         close?.();
         tile.state = uploaded ? 2 : 3;
         this.#finishLoad(tile, true);
-        if (uploaded) this.#scheduleRedraw();
+        if (uploaded) {
+          this.emit("tileload", { x: tile.x, y: tile.y, z: tile.z, url: tile.url });
+          this.#scheduleRedraw();
+        } else {
+          this.emit("tileerror", { x: tile.x, y: tile.y, z: tile.z, url: tile.url });
+        }
       };
       if (typeof createImageBitmap === "function") {
         createImageBitmap(image).then((bitmap) => done(bitmap, () => bitmap.close()), () => done(image));
@@ -690,6 +806,7 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
         return;
       }
       tile.state = 3;
+      this.emit("tileerror", { x: tile.x, y: tile.y, z: tile.z, url: tile.url });
       this.#finishLoad(tile, true);
     };
     image.src = tile.url;
@@ -754,26 +871,47 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     if (this.tiles.size <= limit) return;
     const pinned = new Set<string>(this._needed);
     for (const key of this._retained) pinned.add(key);
+    for (const key of this._preload) pinned.add(key);
+    for (const key of this._zoomBackstop) pinned.add(key);
+    for (const key of this._zoomHistory) pinned.add(key);
     while (this.tiles.size > limit) {
-      const key = this._lfu.evictExcept(pinned);
+      const key = this._lfu.evictExcept(pinned) ?? this.#oldestUnpinnedTile(pinned);
       if (!key) break;
       const tile = this.tiles.get(key);
       if (tile) this.#disposeTile(tile);
     }
   }
 
+  #oldestUnpinnedTile(pinned: ReadonlySet<string>): string | undefined {
+    let oldest: GpuTile | undefined;
+    for (const tile of this.tiles.values()) {
+      if (pinned.has(tile.key)) continue;
+      if (!oldest || tile.lastUsed < oldest.lastUsed) oldest = tile;
+    }
+    return oldest?.key;
+  }
+
   #rebuildDrawList(): void {
-    const list: GpuTile[] = [];
-    for (const key of this._retained) {
-      if (this._needed.has(key)) continue;
+    const selected = new Set<string>();
+    const isReady = (key: string): boolean => {
       const tile = this.tiles.get(key);
-      if (tile && tile.state === 2 && tile.texture) list.push(tile);
-    }
+      return Boolean(tile && tile.state === 2 && tile.texture);
+    };
+    const select = (key: string): void => {
+      if (isReady(key)) selected.add(key);
+    };
+    for (const key of this._preload) select(key);
+    for (const key of this._zoomBackstop) select(key);
     for (const key of this._needed) {
-      const tile = this.tiles.get(key);
-      if (tile && tile.state === 2 && tile.texture) list.push(tile);
+      const ancestor = nearestReadyAncestorKey(key, isReady);
+      if (ancestor) selected.add(ancestor);
     }
-    this._drawList = list;
+    for (const key of this._retained) select(key);
+    for (const key of this._needed) select(key);
+    this._drawList = [...selected]
+      .map((key) => this.tiles.get(key))
+      .filter((tile): tile is GpuTile => Boolean(tile))
+      .sort((a, b) => a.z - b.z);
   }
 
   #drawFrame(dpr: number, originX: number, originY: number): void {
@@ -841,6 +979,9 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
 
   #disposeTile(tile: GpuTile): void {
     if (tile.image) {
+      if (tile.state === 1) {
+        this.emit("tileabort", { x: tile.x, y: tile.y, z: tile.z, url: tile.url });
+      }
       tile.image.onload = null;
       tile.image.onerror = null;
       tile.image.src = "";
@@ -859,6 +1000,9 @@ export class WebGPUTileLayer extends Layer<ResolvedOptions> {
     this._lfu.delete(tile.key);
     this._queuedKeys.delete(tile.key);
     this._retained.delete(tile.key);
+    this._preload.delete(tile.key);
+    this._zoomBackstop.delete(tile.key);
+    this._zoomHistory.delete(tile.key);
     this._queue.removeWhere((item) => item === tile);
   }
 

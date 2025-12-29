@@ -120,17 +120,53 @@ export function popupContent(spec: PopupContentSpec, options: PopupContentOption
 export function sanitizePopupHtml(value: unknown): DocumentFragment {
   const template = document.createElement("template");
   template.innerHTML = String(value ?? "");
-  template.content.querySelectorAll("script,style,iframe,object,embed,link,meta").forEach((node) => node.remove());
+  template.content
+    .querySelectorAll("script,style,iframe,object,embed,link,meta,base,form,input,button,textarea,select,option,svg,math")
+    .forEach((node) => node.remove());
   template.content.querySelectorAll("*").forEach((element) => {
     for (const attribute of [...element.attributes]) {
       const name = attribute.name.toLowerCase();
-      const content = attribute.value.trim().toLowerCase();
-      if (name.startsWith("on") || ((name === "href" || name === "src" || name === "xlink:href") && content.startsWith("javascript:"))) {
+      if (
+        name.startsWith("on") ||
+        name === "style" ||
+        name === "srcdoc" ||
+        name === "formaction" ||
+        name === "srcset" ||
+        name === "ping" ||
+        (POPUP_URL_ATTRIBUTES.has(name) && popupUrlIsDangerous(attribute.value))
+      ) {
         element.removeAttribute(attribute.name);
       }
     }
+    if (element.getAttribute("target")?.toLowerCase() === "_blank") {
+      const rel = new Set((element.getAttribute("rel") ?? "").split(/\s+/).filter(Boolean));
+      rel.add("noopener");
+      rel.add("noreferrer");
+      element.setAttribute("rel", [...rel].join(" "));
+    }
   });
   return template.content.cloneNode(true) as DocumentFragment;
+}
+
+const POPUP_URL_ATTRIBUTES = new Set([
+  "href",
+  "src",
+  "poster",
+  "xlink:href",
+  "action",
+  "cite",
+  "background"
+]);
+
+function popupUrlIsDangerous(value: string): boolean {
+  // Browsers ignore ASCII controls/whitespace inside scheme names; normalize
+  // them before checking so `java\nscript:` cannot bypass the policy.
+  const normalized = value.trim().replace(/[\u0000-\u0020\u007f]+/g, "").toLowerCase();
+  if (!normalized || normalized.startsWith("#") || normalized.startsWith("/") || normalized.startsWith("./") || normalized.startsWith("../")) {
+    return false;
+  }
+  const scheme = normalized.match(/^([a-z][a-z0-9+.-]*):/i)?.[1];
+  return scheme != null && !["http", "https", "mailto", "tel"].includes(scheme);
 }
 
 export function popupConditionMatches(

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
+  <title id="title">Orihon horizontal logo with editable text</title>
+  <desc id="desc">Orihon cartographic library identity: an accordion-folded map crossed by a route.</desc>
+
+  <g transform="translate(8 0)"><g aria-label="orihon accordion map symbol">
+      <path d="M24 35 L144 55 L144 225 L24 245 Z" fill="#D9E0CE" stroke="#0E4E44" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M164 60 L272 42 L272 238 L164 220 Z" fill="#EEE9D2" stroke="#0E4E44" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M272 42 L378 62 L378 218 L272 238 Z" fill="#EEE9D2" stroke="#0E4E44" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M398 60 L500 40 L500 240 L398 220 Z" fill="#D9E0CE" stroke="#0E4E44" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+          <path d="M25 105 L144 118 M25 172 L144 181 M91 46 L91 234" fill="none" stroke="#4A775B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M165 118 L272 105 M220 51 C222 81 204 80 205 108 C205 134 233 145 224 168 C217 188 229 201 229 226" fill="none" stroke="#2D7285" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M272 103 L378 119 M272 164 L378 164 M319 51 L319 229" fill="none" stroke="#4A775B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M399 129 L500 112 M446 51 C447 75 429 76 430 105 C431 126 420 145 426 166 C432 186 423 203 423 225" fill="none" stroke="#2D7285" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M47 160 C112 163 139 179 164 181 C207 185 218 119 270 119 C322 119 335 148 378 150 C416 151 457 148 478 148" fill="none" stroke="#D39D1A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="47" cy="160" r="12" fill="#FBF4ED" stroke="#D05D2D" stroke-width="7"/>
+          <circle cx="478" cy="148" r="12" fill="#FBF4ED" stroke="#D05D2D" stroke-width="7"/>
+        </g></g><text x="585" y="205" fill="#0B463C" font-family="DejaVu Sans, Arial, sans-serif" font-size="132" font-weight="700" letter-spacing="-5">orihon</text>
+</svg>

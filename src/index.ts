@@ -3,7 +3,13 @@ export { Layer } from "./layer.js";
 export { LayerGroup, FeatureGroup, featureGroup } from "./layer-group.js";
 export { Renderer } from "./renderer.js";
 export { Orihon, createMap } from "./map.js";
-export { geoTransformCss, cameraWarpCss, tileCornerLayerTransform, tileLevelWarpCss } from "./camera.js";
+export {
+  geoTransformCss,
+  cameraWarpCss,
+  cameraWarpCoversViewport,
+  tileCornerLayerTransform,
+  tileLevelWarpCss
+} from "./camera.js";
 export { CRS, CRSCompatibilityError } from "./crs.js";
 export { GridLayer, gridLayer } from "./layers/grid-layer.js";
 export { TileLayer, tileLayer, registerWebGLTileFactory, registerGpuTileFactory } from "./layers/tile-layer.js";
@@ -105,7 +111,7 @@ export { WebGLHeatLayer, webglHeatLayer } from "./layers/webgl-heat-layer.js";
 export { WebGLPathBatch, webglPathBatch } from "./layers/webgl-path-batch.js";
 export { HeatIsolineLayer, heatIsolineLayer } from "./layers/heat-isoline-layer.js";
 export { buildHeatIsolines, heatRadiusScale, heatIntensityScale, heatKernelAtZoom } from "./services/heat-isolines.js";
-export { GeometryWorkerPool, geometryWorkerPool, preparePointBatch } from "./services/geometry-worker.js";
+export { GeometryWorkerPool, geometryWorkerPool, preparePointBatch, preparePointBatchAsync } from "./services/geometry-worker.js";
 export { OfflineTileCache, offlineTileCache } from "./services/offline-cache.js";
 export { PerformanceInspector, performanceInspector } from "./services/performance.js";
 export { createMapAdapter, defineOrihonElement } from "./services/framework-adapters.js";
@@ -157,6 +163,8 @@ export type { CanvasBaseLayerOptions } from "./layers/canvas-base-layer.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";
 export type { PathOptions, CircleMarkerOptions } from "./layers/vector.js";
 export type {
+  GeoJSONAsyncInput,
+  GeoJSONAsyncOptions,
   GeoJSONData,
   GeoJSONFeature,
   GeoJSONFeatureCollection,
@@ -204,6 +212,7 @@ export type {
   ManagedPolygonGeometry,
   ObjectId,
   ObjectFilter,
+  ObjectManagerAsyncOptions,
   ObjectManagerOptions,
   ObjectManagerStats,
   ObjectPopupContent,
@@ -234,13 +243,14 @@ export type { TrafficLayerOptions, TrafficState } from "./services/traffic-layer
 export type { SearchAdapter, SearchContext, SearchResult } from "./services/search.js";
 export type { RouteResult, RouteWaypoint, RoutingContext, RoutingLayerOptions, RoutingProvider } from "./services/routing.js";
 export type { SuggestOptions, SuggestContext, SuggestFetcher, SuggestWidgetOptions } from "./services/suggest.js";
-export type { WebGLPointInput, WebGLPointDataOptions, WebGLPointLayerOptions, WebGLPointLayerStats } from "./layers/webgl-point-layer.js";
+export type { WebGLPointInput, WebGLPointDataOptions, WebGLPointAsyncDataOptions, WebGLPointLayerOptions, WebGLPointLayerStats } from "./layers/webgl-point-layer.js";
 export type { WebGLSymbolInstance, WebGLSymbolLayerOptions } from "./layers/webgl-symbol-layer.js";
 export type { StyledPathInput, StyledPathStyle, WebGLStyledPathBatchOptions } from "./layers/webgl-styled-path-batch.js";
 export type { PolygonBatchInput, PolygonBatchStyle, WebGLPolygonBatchOptions } from "./layers/webgl-polygon-batch.js";
 export type { HeatPoint, HeatLayerOptions } from "./layers/heat-layer.js";
 export type {
   WebGLHeatInput,
+  WebGLHeatAsyncDataOptions,
   WebGLHeatLayerOptions,
   WebGLHeatLayerStats
 } from "./layers/webgl-heat-layer.js";
@@ -266,7 +276,7 @@ export type {
   ClusterLayoutResult,
   ClusterLayoutSingle
 } from "./services/cluster-layout.js";
-export type { GeometryPointInput, GeometryWorkerOptions, PreparedPointBatch } from "./services/geometry-worker.js";
+export type { GeometryPointInput, GeometryPrepareOptions, GeometryWorkerOptions, PreparedPointBatch } from "./services/geometry-worker.js";
 export type { OfflineServiceWorkerOptions, OfflineTileCacheOptions, OfflineTileCacheStats } from "./services/offline-cache.js";
 export type { PerformanceInspectorOptions, PerformanceSnapshot } from "./services/performance.js";
 export type { OrihonElementOptions, MapAdapter } from "./services/framework-adapters.js";

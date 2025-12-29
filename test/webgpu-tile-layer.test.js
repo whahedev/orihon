@@ -11,6 +11,7 @@ test("webgpuTileLayer builds wrapped OSM-style URLs", () => {
   assert.match(url, /^https:\/\/[abc]\.tile\.example\/2\/3\/1\.png$/);
   assert.equal(layer.getStats().renderer, "none");
   assert.equal(layer.getStats().cached, 0);
+  assert.equal(layer.getStats().coveragePct, 100);
 });
 
 test("webgpuTileLayer supports TMS Y flip", () => {

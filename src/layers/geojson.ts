@@ -1,6 +1,15 @@
 import { LatLng, LatLngBounds, latLng, type LatLngLike } from "../geo.js";
 import { FeatureGroup } from "../layer-group.js";
 import { Layer, type LayerOptions } from "../layer.js";
+import {
+  asyncAbortError,
+  isAsyncIterable,
+  resolveAsyncBatchOptions,
+  throwIfAsyncAborted,
+  yieldAsyncBatch,
+  type AsyncBatchOptions,
+  type ResolvedAsyncBatchOptions
+} from "../services/async-batch.js";
 import type {
   OverlayContent,
   OverlayContentContext,
@@ -105,6 +114,7 @@ export interface GeoJSONFeatureCollection {
 }
 
 export type GeoJSONData = GeoJSONGeometry | GeoJSONFeature | GeoJSONFeatureCollection | GeoJSONData[];
+export type GeoJSONAsyncInput = GeoJSONData | string | Blob | AsyncIterable<GeoJSONData>;
 export type GeoJSONStyleFunction = (feature: GeoJSONFeature) => PathOptions;
 export type GeoJSONPointToLayer = (feature: GeoJSONFeature, latlng: LatLng) => Layer;
 export type GeoJSONPopupFactory = (
@@ -115,6 +125,18 @@ export type GeoJSONPopupFactory = (
 export type GeoJSONPopupContent = OverlayContent | GeoJSONPopupFactory;
 /** svg = DOM per feature; canvas = CPU batch; webgl = GPU lines (Advanced, after register). */
 export type GeoJSONRendererMode = "svg" | "canvas" | "webgl" | "auto";
+
+export interface GeoJSONAsyncOptions extends AsyncBatchOptions {
+  /** Parse string/Blob input in a dedicated worker when available. Default true. */
+  useWorker?: boolean;
+  /** Maximum UTF-8 bytes accepted from string/Blob input. Default 256 MiB. */
+  maxBytes?: number;
+}
+
+interface ResolvedGeoJSONAsyncOptions extends ResolvedAsyncBatchOptions {
+  useWorker: boolean;
+  maxBytes: number;
+}
 
 export interface GeoJSONOptions extends PathOptions {
   style?: PathOptions | GeoJSONStyleFunction;
@@ -134,6 +156,13 @@ export interface GeoJSONOptions extends PathOptions {
   canvasThreshold?: number;
   /** Stop adding features once this many are stored. Unset = unlimited. */
   maxFeatures?: number;
+  /**
+   * Keep source features for `toGeoJSON()`, later feature-style updates and
+   * inspection. Set `false` for write-once canvas/WebGL path batches when the
+   * source collection is very large. Point layers are always retained.
+   * Default `true`.
+   */
+  retainFeatures?: boolean;
 }
 
 interface FeatureEntry {
@@ -159,7 +188,8 @@ const SPECIAL_OPTION_KEYS = new Set([
   "popupOptions",
   "renderer",
   "canvasThreshold",
-  "maxFeatures"
+  "maxFeatures",
+  "retainFeatures"
 ]);
 
 const PATH_GEOMETRY_TYPES = new Set([
@@ -168,6 +198,38 @@ const PATH_GEOMETRY_TYPES = new Set([
   "Polygon",
   "MultiPolygon"
 ]);
+
+const DEFAULT_ASYNC_GEOJSON_BYTES = 256 * 1024 * 1024;
+
+function isBlob(value: unknown): value is Blob {
+  return typeof Blob !== "undefined" && value instanceof Blob;
+}
+
+function* iterateGeoJSONItems(data: GeoJSONData): Generator<GeoJSONData> {
+  if (Array.isArray(data)) {
+    for (const item of data) yield* iterateGeoJSONItems(item);
+    return;
+  }
+  if (data.type === "FeatureCollection") {
+    for (const feature of data.features) yield feature;
+    return;
+  }
+  yield data;
+}
+
+function topLevelGeoJSONCount(data: GeoJSONData): number | null {
+  if (Array.isArray(data)) {
+    let total = 0;
+    for (const item of data) total += topLevelGeoJSONCount(item) ?? 0;
+    return total;
+  }
+  if (data.type === "FeatureCollection") return data.features.length;
+  return 1;
+}
+
+// Compact because this literal ships in the Standard bundle. Array messages
+// also keep the million-feature backpressure protocol small and allocation-light.
+const GEOJSON_PARSE_WORKER_SOURCE = `let a=null,i=0,n=0,t=0;function s(){if(!a)return;let e=Math.min(t,i+n),c=a.slice(i,e);for(;i<e;)a[i++]=null;postMessage([c,i,t,i>=t]);if(i>=t)a=null}onmessage=async e=>{let d=e.data;if(d===0)return s();try{let p=JSON.parse(await d[0].text());a=Array.isArray(p)?p:p&&p.type==="FeatureCollection"?p.features:[p];i=0;t=a.length;n=Math.max(1,d[1]|0);s()}catch(e){postMessage([null,String(e&&e.message||e)])}}`;
 
 function geoJSONCoordsToLatLng(coordinates: GeoJSONPosition): LatLng {
   return latLng([Number(coordinates[1]), Number(coordinates[0])]);
@@ -285,6 +347,8 @@ export class GeoJSONLayer extends FeatureGroup {
   readonly defaultStyles = new Map<Layer, PathOptions>();
   readonly rendererMode: "svg" | "canvas" | "webgl";
   private _pathBatch: GeoJSONPathBatch | null = null;
+  private _featureCount = 0;
+  private _pathBatchFeatureCount = 0;
 
   constructor(data?: GeoJSONData | null, options: GeoJSONOptions = {}) {
     super();
@@ -319,7 +383,7 @@ export class GeoJSONLayer extends FeatureGroup {
 
   addData(data: GeoJSONData): this {
     const cap = this.geoJSONOptions.maxFeatures;
-    if (cap != null && this.featureEntries.length >= cap) return this;
+    if (cap != null && this._featureCount >= cap) return this;
     if (Array.isArray(data)) {
       for (const item of data) this.addData(item);
       return this;
@@ -332,8 +396,14 @@ export class GeoJSONLayer extends FeatureGroup {
     if (!feature.geometry || (this.geoJSONOptions.filter && !this.geoJSONOptions.filter(feature))) return this;
     const layer = this.#geometryToLayer(feature.geometry, feature);
     if (!layer) return this;
-    (layer as FeatureLayer).feature = feature;
-    this.featureEntries.push({ feature, layer });
+    const batch = isPathBatch(layer);
+    if (batch) this._pathBatchFeatureCount++;
+    const retain = !batch || this.geoJSONOptions.retainFeatures !== false;
+    if (retain) {
+      (layer as FeatureLayer).feature = feature;
+      this.featureEntries.push({ feature, layer });
+    }
+    this._featureCount++;
     if (this.geoJSONOptions.popup !== undefined && !isPathBatch(layer)) {
       const configured = this.geoJSONOptions.popup;
       const content: OverlayContent = typeof configured === "function"
@@ -342,15 +412,72 @@ export class GeoJSONLayer extends FeatureGroup {
       layer.bindPopup(content, this.geoJSONOptions.popupOptions);
     }
     this.geoJSONOptions.onEachFeature?.(feature, layer);
-    if (!isPathBatch(layer) || !this.hasLayer(layer)) {
+    if (!batch || !this.hasLayer(layer)) {
       this.addLayer(layer);
     }
     return this;
   }
 
+  /**
+   * Responsively ingest parsed GeoJSON, an async stream of GeoJSON chunks, or
+   * raw JSON text/Blob. Raw input is parsed in a worker when available; parsed
+   * object graphs stay on the main thread and yield cooperatively to avoid a
+   * second full structured clone.
+   */
+  async addDataAsync(input: GeoJSONAsyncInput, options: GeoJSONAsyncOptions = {}): Promise<this> {
+    const batch = resolveAsyncBatchOptions(options, 5_000);
+    const resolved: ResolvedGeoJSONAsyncOptions = {
+      ...batch,
+      useWorker: options.useWorker !== false,
+      maxBytes: Math.max(0, Number(options.maxBytes) || DEFAULT_ASYNC_GEOJSON_BYTES)
+    };
+    throwIfAsyncAborted(resolved.signal);
+
+    if (isAsyncIterable<GeoJSONData>(input)) {
+      let processed = 0;
+      for await (const chunk of input) {
+        throwIfAsyncAborted(resolved.signal);
+        processed += await this.#addDataCooperatively(chunk, resolved, processed, null);
+      }
+      return this;
+    }
+
+    if (typeof input === "string" || isBlob(input)) {
+      const blob = typeof input === "string"
+        ? new Blob([input], { type: "application/geo+json" })
+        : input;
+      if (blob.size > resolved.maxBytes) {
+        throw new RangeError(`GeoJSON input exceeds maxBytes (${blob.size} > ${resolved.maxBytes})`);
+      }
+      const workerTask = resolved.useWorker ? this.#addRawDataInWorker(blob, resolved) : null;
+      if (workerTask) {
+        try {
+          return await workerTask;
+        } catch (error) {
+          if ((error as Error)?.name !== "NotSupportedError") throw error;
+        }
+      }
+      const text = await blob.text();
+      throwIfAsyncAborted(resolved.signal);
+      const parsed = JSON.parse(text) as GeoJSONData;
+      await this.#addDataCooperatively(parsed, resolved, 0, topLevelGeoJSONCount(parsed));
+      return this;
+    }
+
+    await this.#addDataCooperatively(input, resolved, 0, topLevelGeoJSONCount(input));
+    return this;
+  }
+
   override removeLayer(layer: Layer): this {
-    const index = this.featureEntries.findIndex((entry) => entry.layer === layer);
-    if (index >= 0) this.featureEntries.splice(index, 1);
+    let removed = 0;
+    for (let i = this.featureEntries.length - 1; i >= 0; i--) {
+      if (this.featureEntries[i].layer !== layer) continue;
+      this.featureEntries.splice(i, 1);
+      removed++;
+    }
+    const removedCount = layer === this._pathBatch ? this._pathBatchFeatureCount : removed;
+    this._featureCount = Math.max(0, this._featureCount - removedCount);
+    if (layer === this._pathBatch) this._pathBatchFeatureCount = 0;
     this.defaultStyles.delete(layer);
     if (layer === this._pathBatch) this._pathBatch = null;
     return super.removeLayer(layer);
@@ -358,6 +485,8 @@ export class GeoJSONLayer extends FeatureGroup {
 
   override clearLayers(): this {
     this.featureEntries.length = 0;
+    this._featureCount = 0;
+    this._pathBatchFeatureCount = 0;
     this.defaultStyles.clear();
     this._pathBatch?.clearPaths();
     this._pathBatch = null;
@@ -506,6 +635,93 @@ export class GeoJSONLayer extends FeatureGroup {
   #cloneFeature(feature: GeoJSONFeature): GeoJSONFeature {
     if (typeof structuredClone === "function") return structuredClone(feature);
     return JSON.parse(JSON.stringify(feature)) as GeoJSONFeature;
+  }
+
+  async #addDataCooperatively(
+    data: GeoJSONData,
+    options: ResolvedGeoJSONAsyncOptions,
+    progressOffset: number,
+    total: number | null
+  ): Promise<number> {
+    let processed = 0;
+    for (const item of iterateGeoJSONItems(data)) {
+      throwIfAsyncAborted(options.signal);
+      this.addData(item);
+      processed++;
+      if (processed % options.chunkSize !== 0) continue;
+      options.onProgress?.(progressOffset + processed, total == null ? null : progressOffset + total);
+      if (total == null || processed < total) await yieldAsyncBatch(options.yieldMode);
+    }
+    options.onProgress?.(progressOffset + processed, total == null ? null : progressOffset + total);
+    if (total == null && processed > 0 && processed % options.chunkSize !== 0) {
+      await yieldAsyncBatch(options.yieldMode);
+    }
+    throwIfAsyncAborted(options.signal);
+    return processed;
+  }
+
+  #addRawDataInWorker(
+    blob: Blob,
+    options: ResolvedGeoJSONAsyncOptions
+  ): Promise<this> | null {
+    if (typeof Worker === "undefined" || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+      return null;
+    }
+    let workerUrl = "";
+    let worker: Worker;
+    try {
+      workerUrl = URL.createObjectURL(new Blob([GEOJSON_PARSE_WORKER_SOURCE], { type: "text/javascript" }));
+      worker = new Worker(workerUrl);
+    } catch {
+      if (workerUrl) URL.revokeObjectURL(workerUrl);
+      return null;
+    }
+
+    return new Promise<this>((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        worker.terminate();
+        URL.revokeObjectURL(workerUrl);
+        options.signal?.removeEventListener("abort", onAbort);
+      };
+      const finish = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        callback();
+      };
+      const onAbort = () => finish(() => reject(asyncAbortError()));
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+      worker.onerror = (event) => {
+        event.preventDefault();
+        const error = new Error(event.message || "GeoJSON worker failed");
+        error.name = "NotSupportedError";
+        finish(() => reject(error));
+      };
+      worker.onmessage = async (event) => {
+        if (settled) return;
+        const message = event.data as [GeoJSONData[] | null, number | string, number, boolean];
+        if (!Array.isArray(message) || message[0] === null) {
+          finish(() => reject(new SyntaxError(String(message?.[1] || "Invalid GeoJSON"))));
+          return;
+        }
+        try {
+          throwIfAsyncAborted(options.signal);
+          for (const item of message[0]) this.addData(item);
+          options.onProgress?.(Number(message[1]) || 0, Number(message[2]) || 0);
+          if (message[3]) {
+            finish(() => resolve(this));
+          } else {
+            await yieldAsyncBatch(options.yieldMode);
+            throwIfAsyncAborted(options.signal);
+            worker.postMessage(0);
+          }
+        } catch (error) {
+          finish(() => reject(error));
+        }
+      };
+      worker.postMessage([blob, options.chunkSize]);
+    });
   }
 }
 

@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orihon — Scale showcase</title>
+    <link rel="icon" href="../../assets/brand/svg/orihon-favicon.svg" type="image/svg+xml" />
     <meta
       name="description"
       content="Use only the surface you need. Core → Standard → Advanced, then 100k+ vehicles, IoT, fleets, clusters, aircraft and incident heat."
@@ -14,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css" id="orihon-css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.css" id="orihon-css" />
     <style>
       :root {
         --ink: #172026;
@@ -72,12 +73,9 @@
       }
 
       .brand {
-        margin: 0;
-        font-family: "Space Grotesk", sans-serif;
-        font-size: clamp(2rem, 5vw, 2.55rem);
-        font-weight: 700;
-        letter-spacing: -0.045em;
-        line-height: 0.92;
+        display: block;
+        width: min(13rem, 62vw);
+        height: auto;
       }
 
       .tagline {
@@ -349,7 +347,7 @@
 
     <div class="chrome">
       <aside class="brand-panel" aria-label="Orihon tiers">
-        <p class="brand">Orihon</p>
+        <img class="brand" src="../../assets/brand/svg/orihon-logo-horizontal.svg" alt="Orihon" width="1200" height="280" />
         <p class="tagline">Unfold the world.</p>
 
         <div class="tier-ladder" role="group" aria-label="Library surface">
@@ -541,8 +539,8 @@ function setStatus(text, tone = "ok") {
 }
 
 async function loadOrihon() {
-  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.esm.js";
-  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css";
+  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.esm.js";
+  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.css";
   const link =
     document.getElementById("orihon-css") ||
     document.querySelector("link[data-orihon-css]");
@@ -555,11 +553,17 @@ async function loadOrihon() {
   const http = location.protocol === "http:" || location.protocol === "https:";
   if (http) {
     try {
-      const mod = await import("/dist/orihon.esm.js");
+      const mod = await import("/dist/index.js");
       if (link) link.href = "/dist/orihon.css";
       return mod;
     } catch {
-      /* fall through to CDN */
+      try {
+        const mod = await import("/dist/orihon.esm.js");
+        if (link) link.href = "/dist/orihon.css";
+        return mod;
+      } catch {
+        /* fall through to CDN */
+      }
     }
   }
   if (link) link.href = ORIHON_CDN_CSS;

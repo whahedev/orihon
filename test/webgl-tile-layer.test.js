@@ -11,6 +11,9 @@ test("webglTileLayer builds wrapped OSM-style URLs", () => {
   assert.match(url, /^https:\/\/[abc]\.tile\.example\/2\/3\/1\.png$/);
   assert.equal(layer.getStats().renderer, "none");
   assert.equal(layer.getStats().cached, 0);
+  assert.equal(layer.getStats().visibleReady, 0);
+  assert.equal(layer.getStats().preloadNeeded, 0);
+  assert.equal(layer.getStats().coveragePct, 100);
 });
 
 test("webglTileLayer supports TMS Y flip", () => {

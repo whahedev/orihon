@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orihon</title>
+    <link rel="icon" href="../../assets/brand/svg/orihon-favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="../../assets/brand/png/orihon-favicon-180.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -36,11 +38,9 @@
         padding: 4.5rem 0 3rem;
       }
       .brand {
-        margin: 0;
-        font-family: "Space Grotesk", sans-serif;
-        font-size: clamp(2.6rem, 7vw, 4.2rem);
-        letter-spacing: -0.04em;
-        line-height: 0.95;
+        display: block;
+        width: min(32rem, 86vw);
+        height: auto;
       }
       .tag {
         margin: 0.85rem 0 0;
@@ -91,7 +91,7 @@
   </head>
   <body>
     <main>
-      <p class="brand">Orihon</p>
+      <img class="brand" src="../../assets/brand/svg/orihon-logo-horizontal.svg" alt="Orihon" width="1200" height="280" />
       <p class="tag">
         Orihon is a free, open-source browser map engine. Apache 2.0. Use it anywhere.
         Full Advanced build stays under <strong>75&nbsp;KiB gzip</strong>.
@@ -116,9 +116,9 @@
         </a>
       </div>
       <p class="meta">
-        Package <a href="https://www.npmjs.com/package/orihon">orihon@1.0.5</a>
+        Package <a href="https://www.npmjs.com/package/orihon">orihon@1.0.6</a>
         · Source <a href="https://github.com/whahedev/orihon">GitHub</a>
-        · CDN <a href="https://cdn.jsdelivr.net/npm/orihon@1.0.5/">jsDelivr</a>
+        · CDN <a href="https://cdn.jsdelivr.net/npm/orihon@1.0.6/">jsDelivr</a>
       </p>
     </main>
   </body>

@@ -5,6 +5,13 @@ import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import type { OverlayContent, PopupOptions } from "../overlays/div-overlay.js";
 import { SpatialGridIndex } from "../services/spatial-grid-index.js";
+import {
+  isAsyncIterable,
+  resolveAsyncBatchOptions,
+  throwIfAsyncAborted,
+  yieldAsyncBatch,
+  type AsyncBatchOptions
+} from "../services/async-batch.js";
 import { compileShader, parseCssColor, type RgbColor } from "../webgl-utils.js";
 
 export type WebGLPointInput = LatLngLike | { coordinates?: LatLngLike; latlng?: LatLngLike; lat?: number; lng?: number };
@@ -20,6 +27,8 @@ export interface WebGLPointDataOptions {
    */
   adopt?: boolean;
 }
+
+export interface WebGLPointAsyncDataOptions extends WebGLPointDataOptions, AsyncBatchOptions {}
 
 export interface WebGLPointLayerOptions extends LayerOptions {
   pointSize?: number;
@@ -283,6 +292,88 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     this._bufferDirty = true;
     this._forceGpu = true;
     this.render();
+    return this;
+  }
+
+  /**
+   * Project and pack a large point iterable across bounded main-thread tasks,
+   * then replace the live GPU dataset atomically.
+   */
+  async setDataAsync(
+    points: Iterable<WebGLPointInput> | AsyncIterable<WebGLPointInput>,
+    options: WebGLPointAsyncDataOptions = {}
+  ): Promise<this> {
+    const resolved = resolveAsyncBatchOptions(options, 50_000);
+    const total = Array.isArray(points) ? points.length : null;
+    throwIfAsyncAborted(resolved.signal);
+
+    // Preserve source objects for the small interactive path just like setData().
+    if (Array.isArray(points) && this.options.interactive && points.length <= 40_000) {
+      this.setData(points, options);
+      resolved.onProgress?.(points.length, points.length);
+      return this;
+    }
+
+    let latlngBuffer = total == null ? null : new Float32Array(total * 2);
+    let mercatorBuffer = total == null ? null : new Float64Array(total * 2);
+    const latlngValues: number[] = [];
+    const mercatorValues: number[] = [];
+    let processed = 0;
+    let write = 0;
+    const append = (item: WebGLPointInput): void => {
+      const next = normalizePoint(item);
+      if (!next) return;
+      const mercator = projectMercator01(next.lat, next.lng);
+      if (latlngBuffer && mercatorBuffer) {
+        latlngBuffer[write] = next.lat;
+        latlngBuffer[write + 1] = next.lng;
+        mercatorBuffer[write] = mercator.x;
+        mercatorBuffer[write + 1] = mercator.y;
+      } else {
+        latlngValues.push(next.lat, next.lng);
+        mercatorValues.push(mercator.x, mercator.y);
+      }
+      write += 2;
+    };
+    const checkpoint = async (final: boolean): Promise<void> => {
+      resolved.onProgress?.(processed, total);
+      if (!final) await yieldAsyncBatch(resolved.yieldMode);
+      throwIfAsyncAborted(resolved.signal);
+    };
+
+    if (Array.isArray(points)) {
+      for (let index = 0; index < points.length; index++) {
+        append(points[index]);
+        processed++;
+        if (processed % resolved.chunkSize === 0) await checkpoint(index === points.length - 1);
+      }
+    } else if (isAsyncIterable<WebGLPointInput>(points)) {
+      for await (const item of points) {
+        append(item);
+        processed++;
+        if (processed % resolved.chunkSize === 0) await checkpoint(false);
+      }
+    } else {
+      for (const item of points) {
+        append(item);
+        processed++;
+        if (processed % resolved.chunkSize === 0) await checkpoint(false);
+      }
+    }
+    if (processed % resolved.chunkSize !== 0) await checkpoint(true);
+
+    if (!latlngBuffer || !mercatorBuffer) {
+      latlngBuffer = new Float32Array(latlngValues);
+      mercatorBuffer = new Float64Array(mercatorValues);
+    } else if (write !== latlngBuffer.length) {
+      latlngBuffer = latlngBuffer.slice(0, write);
+      mercatorBuffer = mercatorBuffer.slice(0, write);
+    }
+    this.setPackedData(latlngBuffer, mercatorBuffer, {
+      colors: options.colors,
+      sizes: options.sizes,
+      adopt: true
+    });
     return this;
   }
 

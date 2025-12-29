@@ -26,6 +26,7 @@ export class ObjectTimeIndex {
   private readonly config: ObjectTimeConfig;
   private records: TimeRecord[] = [];
   private byId = new Map<ObjectId, TimeRecord>();
+  private indexById = new Map<ObjectId, number>();
   private sorted = false;
   private fromFilter: number | null = null;
   private toFilter: number | null = null;
@@ -47,6 +48,7 @@ export class ObjectTimeIndex {
   clear(): void {
     this.records = [];
     this.byId.clear();
+    this.indexById.clear();
     this.sorted = true;
     this.cacheValid = false;
     this.cachedActive = null;
@@ -63,10 +65,14 @@ export class ObjectTimeIndex {
     const existing = this.byId.get(id);
     if (!existing) return;
     this.byId.delete(id);
-    const index = this.records.indexOf(existing);
-    if (index >= 0) {
+    const index = this.indexById.get(id);
+    this.indexById.delete(id);
+    if (index !== undefined) {
       const last = this.records.pop();
-      if (last && index < this.records.length) this.records[index] = last;
+      if (last && index < this.records.length) {
+        this.records[index] = last;
+        this.indexById.set(last.id, index);
+      }
     }
     this.sorted = false;
     this.cacheValid = false;
@@ -92,6 +98,7 @@ export class ObjectTimeIndex {
       to = tmp;
     }
     const record = { id, from, to };
+    this.indexById.set(id, this.records.length);
     this.records.push(record);
     this.byId.set(id, record);
     this.sorted = false;
@@ -130,6 +137,7 @@ export class ObjectTimeIndex {
   #ensureSorted(): void {
     if (this.sorted) return;
     this.records.sort((a, b) => a.from - b.from || a.to - b.to || String(a.id).localeCompare(String(b.id)));
+    for (let i = 0; i < this.records.length; i++) this.indexById.set(this.records[i].id, i);
     this.sorted = true;
   }
 }

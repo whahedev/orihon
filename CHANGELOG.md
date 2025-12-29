@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+## 1.0.6
+
+- Brand assets: production SVG/PNG logos, favicons, avatar and design tokens are published through `orihon/brand/*`; README and primary examples now use the packaged artwork.
+- Raster tiles: WebGL/WebGPU zoom-out and pan repaint whenever a CSS-warped framebuffer would fail to cover the viewport. The renderer now preloads the next coarser viewport, composites ready parent/backstop/exact textures coarse-to-fine, reprioritizes queued work when it becomes visible, and temporarily pins the zoom round-trip route. Directional prefetch follows the actually revealed edge. The comparison benchmark adds a tile-scroll/zoom-out scenario with minimum geometric coverage, settle, request and reload metrics.
+
+- Security: popup HTML sanitization now rejects active controls, inline CSS, SVG/MathML and obfuscated unsafe URL schemes; `_blank` links receive `noopener noreferrer`.
+- Security/performance: offline prefetch validates URL origins, accepts only HTTP(S), awaits Service Worker cache writes and limits network concurrency (default 8).
+- Performance: existing temporal-index records update/remove in O(1) instead of scanning the full record array.
+- Performance: clustered collections above 250k points no longer build an unused all-zoom hierarchy during camera stress; requested zoom layouts are coalesced and built in a worker, and `getStats().clusterStrategy` exposes the active path.
+- Performance/memory: WebGL GeoJSON lines no longer retain a second pair of typed coordinate arrays for canvas fallback. `retainFeatures:false` supports write-once packed path ingestion, and the browser benchmark now reports active heap delta plus retained baseline growth across repeated runs. Continuous path pan/zoom now camera-warps between throttled exact GPU frames (with an adaptive cadence for large batches), then redraws exactly on settle; clearing an empty batch also clears the previous framebuffer.
+- Performance/API: `GeoJSONLayer.addDataAsync()` parses raw JSON strings/Blobs in a Worker and applies backpressured chunks; parsed GeoJSON and `AsyncIterable` sources yield cooperatively without cloning the full object graph. Imports support progress, cancellation, raw byte limits and a CSP-compatible fallback. The browser line benchmark now uses this asynchronous ingestion path.
+- Performance: cooperative GeoJSON task ingestion prefers `scheduler.yield()`, falls back to `MessageChannel`, and does not yield after the final chunk, avoiding the browser's nested `setTimeout(0)` clamp on million-line imports.
+- Performance/API: `ObjectManager.addAsync()`, `WebGLPointLayer.setDataAsync()` and `WebGLHeatLayer.setDataAsync()` cooperatively ingest large iterable/async-iterable inputs with progress and cancellation. Point/heat layers prepare private packed buffers and swap the live GPU dataset only after a successful import.
+- Performance: `GeometryWorkerPool.preparePoints()` no longer performs a blocking `Array.from()` before posting to its worker; both worker serialization and the no-worker fallback now consume sync/async iterables cooperatively with progress and cancellation.
+- Performance/API: `MarkerCollection` DOM mode now renders its configured point size/color, keeps internal markers out of the map-wide frame loop, and recycles viewport markers instead of repeatedly destroying/recreating them. New `renderer:"svg"` keeps every point in DOM as lightweight SVG circles under one shared style/camera transform and can promote a bounded visible subset to full HTML Marker buttons through `htmlButtonLimit`; `renderer:"hybrid"` remains available for HTML over a WebGL remainder.
+- Fix/Performance: SVG and HTML-button markers now live under one camera-warped HTML root, preventing coordinate drift. The nested SVG is clipped to its viewport instead of using unbounded `overflow:visible`, allowing Chrome to cache a finite raster surface (restoring ≈60 FPS / 0% drop at 5k DOM points).
+- Performance/API: SVG `MarkerCollection` now chooses automatic HTML buttons by viewport screen cells instead of insertion order. `buttonCellSize` defaults from point size and controls density, while `setSelected()` / `setPointSelected()` keep user-selected visible objects as buttons even above the soft `htmlButtonLimit` budget.
+- Size policy: responsive mass-ingestion and adaptive DOM/SVG marker selection bring Standard to 35.87 KiB and Advanced to 106.44 KiB gzip; enforced ceilings are 36 KiB and 107 KiB.
+- Tooling: Node ≥22 is required, Node 24.19.0 LTS is pinned, and dependency/benchmark version policy is documented.
+- Tooling: GitHub Actions use current Node 24 runtimes; CI keeps a Node 22 compatibility job and runs the full release/browser matrix on Node 24.
+- Benchmarks: the Node ObjectManager benchmark uses the public package entry only; the browser comparison uses current pinned Orihon/OpenLayers/MapLibre versions and rebuilds local `dist` before serving. Leaflet/OpenLayers per-feature GeoJSON-line rows are capped at 50k; larger MapLibre rows use a valid compact `MultiLineString` Blob URL instead of cloning one million main-thread `Feature` objects. MapLibre load timing now waits for the GeoJSON source to finish.
+
 ## 1.0.5
 
 ### License & positioning

@@ -2,11 +2,14 @@ import { LatLngBounds, latLngBounds, project, TILE_SIZE, type LatLngBoundsLike }
 import { TileLayer } from "../layers/tile-layer.js";
 
 const DEFAULT_MAX_TILES = 4096;
+const DEFAULT_PREFETCH_CONCURRENCY = 8;
 
 export interface OfflineTileCacheOptions {
   cacheName?: string;
   fetcher?: typeof fetch;
   maxTiles?: number;
+  /** Maximum simultaneous network requests. Clamped to 1..32; default 8. */
+  concurrency?: number;
   /** Same allowlist as the Service Worker. Empty = app-owned explicit URLs, still rejects javascript/data/blob/file. */
   urlPrefixes?: string[];
 }
@@ -39,6 +42,7 @@ export class OfflineTileCache {
   readonly cacheName: string;
   readonly fetcher: typeof fetch;
   readonly maxTiles: number;
+  readonly concurrency: number;
   readonly urlPrefixes: string[];
   queued = 0;
   cached = 0;
@@ -47,7 +51,8 @@ export class OfflineTileCache {
   constructor(options: OfflineTileCacheOptions = {}) {
     this.cacheName = options.cacheName ?? "Orihon-tiles-v1";
     this.fetcher = options.fetcher ?? fetch;
-    this.maxTiles = Math.max(1, Math.floor(options.maxTiles ?? DEFAULT_MAX_TILES));
+    this.maxTiles = positiveInteger(options.maxTiles, DEFAULT_MAX_TILES);
+    this.concurrency = Math.min(32, positiveInteger(options.concurrency, DEFAULT_PREFETCH_CONCURRENCY));
     this.urlPrefixes = (options.urlPrefixes ?? []).map(String);
   }
 
@@ -66,27 +71,39 @@ export class OfflineTileCache {
   }
 
   async prefetch(urls: Iterable<string>): Promise<OfflineTileCacheStats> {
-    const unique = [...new Set(urls)].filter((url) => {
-      if (prefetchUrlAllowed(url, this.urlPrefixes)) return true;
-      this.failed++;
-      return false;
-    });
-    if (unique.length > this.maxTiles) {
-      throw new RangeError(`OfflineTileCache prefetch exceeds maxTiles (${unique.length} > ${this.maxTiles})`);
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const input of urls) {
+      const url = String(input);
+      if (seen.has(url)) continue;
+      seen.add(url);
+      if (!prefetchUrlAllowed(url, this.urlPrefixes)) {
+        this.failed++;
+        continue;
+      }
+      unique.push(url);
+      if (unique.length > this.maxTiles) {
+        throw new RangeError(`OfflineTileCache prefetch exceeds maxTiles (${unique.length} > ${this.maxTiles})`);
+      }
     }
     this.queued += unique.length;
     if (!this.supported) return this.getStats();
     const cache = await caches.open(this.cacheName);
-    await Promise.all(unique.map(async (url) => {
-      try {
-        // Prefetch targets are explicit tile URLs; no-cors yields opaque responses that Cache Storage can still serve.
-        const response = await this.fetcher(url, { mode: "no-cors" });
-        await cache.put(url, response.clone());
-        this.cached++;
-      } catch {
-        this.failed++;
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < unique.length) {
+        const url = unique[cursor++];
+        try {
+          // Prefetch targets are explicit tile URLs; no-cors yields opaque responses that Cache Storage can still serve.
+          const response = await this.fetcher(url, { mode: "no-cors" });
+          await cache.put(url, response.clone());
+          this.cached++;
+        } catch {
+          this.failed++;
+        }
       }
-    }));
+    };
+    await Promise.all(Array.from({ length: Math.min(this.concurrency, unique.length) }, worker));
     return this.getStats();
   }
 
@@ -144,7 +161,15 @@ const ORIHON_CACHE = ${cacheName};
 const ORIHON_URL_PREFIXES = ${prefixes};
 function orihonAllowed(url) {
   if (!ORIHON_URL_PREFIXES.length) return false;
-  return ORIHON_URL_PREFIXES.some((prefix) => url.startsWith(prefix));
+  let candidate;
+  try { candidate = new URL(url, self.location.href); } catch { return false; }
+  if (candidate.protocol !== "http:" && candidate.protocol !== "https:") return false;
+  return ORIHON_URL_PREFIXES.some((prefix) => {
+    try {
+      const allowed = new URL(prefix, self.location.href);
+      return candidate.origin === allowed.origin && candidate.href.startsWith(allowed.href);
+    } catch { return false; }
+  });
 }
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -163,7 +188,7 @@ self.addEventListener("fetch", (event) => {
     if (cached) return cached;
     const response = await fetch(request);
     if (allowed && response.ok && response.type !== "opaque") {
-      cache.put(request, response.clone());
+      await cache.put(request, response.clone());
     }
     return response;
   })());
@@ -189,12 +214,31 @@ export function offlineTileCache(options?: OfflineTileCacheOptions): OfflineTile
   return new OfflineTileCache(options);
 }
 
-const BLOCKED_PREFETCH = /^(?:javascript|data|vbscript|blob|file):/i;
-
 export function prefetchUrlAllowed(url: string, prefixes: readonly string[] = []): boolean {
-  if (BLOCKED_PREFETCH.test(url)) return false;
+  const base = typeof document !== "undefined" && document.baseURI
+    ? document.baseURI
+    : "https://orihon.invalid/";
+  let candidate: URL;
+  try {
+    candidate = new URL(String(url), base);
+  } catch {
+    return false;
+  }
+  if (candidate.protocol !== "http:" && candidate.protocol !== "https:") return false;
   if (!prefixes.length) return true;
-  return prefixes.some((prefix) => url.startsWith(prefix));
+  return prefixes.some((prefix) => {
+    try {
+      const allowed = new URL(String(prefix), base);
+      return candidate.origin === allowed.origin && candidate.href.startsWith(allowed.href);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function positiveInteger(value: number | undefined, fallback: number): number {
+  const numeric = Number(value ?? fallback);
+  return Number.isFinite(numeric) ? Math.max(1, Math.floor(numeric)) : fallback;
 }
 
 export function tileRangeForBounds(

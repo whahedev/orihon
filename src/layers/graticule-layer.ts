@@ -1,8 +1,8 @@
+import { createSvgEl } from "../dom.js";
 import { EARTH_RADIUS } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 
-const SVG_NS = "http://www.w3.org/2000/svg";
 const METERS_PER_MILE = 1609.344;
 
 export type GraticuleUnits = "degrees" | "map" | "kilometers" | "miles";
@@ -39,14 +39,13 @@ export class GraticuleLayer extends Layer<Required<GraticuleLayerOptions>> {
     super.onAdd(map);
     const pane = this.getPane();
     if (!pane) throw new Error(`Orihon pane not found: ${this.options.pane}`);
-    this.svg = document.createElementNS(SVG_NS, "svg");
+    this.svg = createSvgEl("svg");
     this.svg.classList.add("oh-graticule-layer");
     this.svg.style.position = "absolute";
     this.svg.style.inset = "0";
     this.svg.style.pointerEvents = "none";
-    this.path = document.createElementNS(SVG_NS, "path");
+    this.path = createSvgEl("path", this.svg);
     this.path.setAttribute("fill", "none");
-    this.svg.appendChild(this.path);
     pane.appendChild(this.svg);
     map.on("move", this.update);
     map.on("zoom", this.update);

@@ -28,7 +28,14 @@ if (Array.isArray(manifest.chunks)) {
     assert.equal(typeof manifest.sizes?.[chunk]?.gzipBytes, "number", `missing size for ${chunk}`);
   }
 }
-const context = { Promise };
+const context = {
+  Promise,
+  TextEncoder,
+  TextDecoder,
+  Uint8Array,
+  ArrayBuffer,
+  DataView
+};
 context.globalThis = context;
 vm.runInNewContext(globalLoader, context);
 assert.equal(typeof context.Orihon.createMap, "function");

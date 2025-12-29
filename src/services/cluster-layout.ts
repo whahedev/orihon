@@ -501,12 +501,18 @@ function buildClusterLayout(input: ClusterLayoutRequest): ClusterLayoutResult {
  * Full hierarchy is built separately via `buildClusterIndex`.
  */
 function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutResult {
-  const count = Math.min(input.ids.length, Math.floor(input.coords.length / 2));
+  const coordCount = Math.floor(input.coords.length / 2);
+  // Workers intentionally omit arbitrary user ids to avoid cloning a 1M-element
+  // JS array. In that mode layout ids are leaf indices and the caller remaps only
+  // the small result set that crosses the worker boundary.
+  const hasIds = input.ids.length > 0;
+  const count = hasIds ? Math.min(input.ids.length, coordCount) : coordCount;
+  const idAt = (index: number): ClusterLayoutId => hasIds ? input.ids[index] : index;
   const singles: ClusterLayoutSingle[] = [];
   const clusters: ClusterLayoutCluster[] = [];
   if (!input.clusterize || count === 0) {
     for (let i = 0; i < count; i++) {
-      singles.push({ id: input.ids[i], lat: input.coords[i * 2], lng: input.coords[i * 2 + 1] });
+      singles.push({ id: idAt(i), lat: input.coords[i * 2], lng: input.coords[i * 2 + 1] });
     }
     return { clusters, singles };
   }
@@ -515,7 +521,7 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
   const maxZoom = Math.max(0, Math.floor(input.clusterMaxZoom));
   if (zoomBucket > maxZoom) {
     for (let i = 0; i < count; i++) {
-      singles.push({ id: input.ids[i], lat: input.coords[i * 2], lng: input.coords[i * 2 + 1] });
+      singles.push({ id: idAt(i), lat: input.coords[i * 2], lng: input.coords[i * 2 + 1] });
     }
     return { clusters, singles };
   }
@@ -525,20 +531,7 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
   const minPoints = Math.max(2, Math.floor(input.minPoints));
   const grid = new DistanceGrid(radius / (TILE_SIZE * 2 ** z));
 
-  const xs = new Float64Array(count);
-  const ys = new Float64Array(count);
-  const lats = new Float64Array(count);
-  const lngs = new Float64Array(count);
-  for (let i = 0; i < count; i++) {
-    const la = input.coords[i * 2];
-    const ln = input.coords[i * 2 + 1];
-    const p = projectCoordinate01(la, ln, input.simple);
-    xs[i] = p.x;
-    ys[i] = p.y;
-    lats[i] = la;
-    lngs[i] = ln;
-  }
-
+  const coords = input.coords;
   const ox = new Float64Array(count);
   const oy = new Float64Array(count);
   const assigned = new Uint8Array(count);
@@ -548,13 +541,27 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
   const expandLeavesUntil = 256;
 
   for (let i = 0; i < count; i++) {
-    const px = xs[i];
-    const py = ys[i];
+    const la = coords[i * 2];
+    const ln = coords[i * 2 + 1];
+    let px: number;
+    let py: number;
+    if (input.simple) {
+      px = ln / TILE_SIZE;
+      py = la / TILE_SIZE;
+    } else {
+      let clampedLat = la;
+      if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
+      else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
+      const wrappedLng = ((ln + 180) % 360 + 360) % 360 - 180;
+      const sin = Math.sin((clampedLat * Math.PI) / 180);
+      px = (wrappedLng + 180) / 360;
+      py = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+    }
     const origin = grid.queryNearest(px, py, ox, oy);
     if (origin >= 0) {
       let acc = byOrigin.get(origin);
       if (!acc) {
-        acc = { lat: lats[origin], lng: lngs[origin], w: 1, leaves: [origin] };
+        acc = { lat: coords[origin * 2], lng: coords[origin * 2 + 1], w: 1, leaves: [origin] };
         byOrigin.set(origin, acc);
         assigned[origin] = 1;
       }
@@ -562,8 +569,8 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
       const nw = w + 1;
       ox[origin] = (ox[origin] * w + px) / nw;
       oy[origin] = (oy[origin] * w + py) / nw;
-      acc.lat = (acc.lat * w + lats[i]) / nw;
-      acc.lng = (acc.lng * w + lngs[i]) / nw;
+      acc.lat = (acc.lat * w + la) / nw;
+      acc.lng = (acc.lng * w + ln) / nw;
       acc.w = nw;
       if (acc.leaves) {
         if (nw >= minPoints && acc.leaves.length >= expandLeavesUntil) acc.leaves = null;
@@ -581,12 +588,12 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
   for (const acc of byOrigin.values()) {
     if (acc.w < minPoints) {
       for (const leaf of acc.leaves ?? []) {
-        singles.push({ id: input.ids[leaf], lat: lats[leaf], lng: lngs[leaf] });
+        singles.push({ id: idAt(leaf), lat: coords[leaf * 2], lng: coords[leaf * 2 + 1] });
       }
       continue;
     }
     const ids: ClusterLayoutId[] = acc.leaves
-      ? acc.leaves.map((leaf) => input.ids[leaf])
+      ? acc.leaves.map((leaf) => idAt(leaf))
       : [];
     clusters.push({
       key: `g${z}:${clusterSeq++}`,
@@ -600,7 +607,7 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
 
   for (let i = 0; i < count; i++) {
     if (assigned[i]) continue;
-    singles.push({ id: input.ids[i], lat: lats[i], lng: lngs[i] });
+    singles.push({ id: idAt(i), lat: coords[i * 2], lng: coords[i * 2 + 1] });
   }
 
   return { clusters, singles };
@@ -730,6 +737,7 @@ function clusterWorkerMain(createRuntime: () => ReturnType<typeof createClusterL
       clusterMaxZoom?: number;
       clusterMinZoom?: number;
       zoomBucket?: number;
+      simple?: boolean;
       points?: unknown[];
     };
     const id = data.id;
@@ -759,6 +767,21 @@ function clusterWorkerMain(createRuntime: () => ReturnType<typeof createClusterL
         clusterMinZoom: data.clusterMinZoom
       });
       scope.postMessage({ id, type: "clusterLayout", clusters: result.clusters, singles: result.singles });
+      return;
+    }
+    if (data.type === "greedyClusterLayout") {
+      const result = api.buildGreedyClusterLayout({
+        ids: [],
+        coords: asCoords(data.coords),
+        zoomBucket: data.zoomBucket ?? 0,
+        gridSize: data.gridSize ?? 50,
+        minPoints: data.minPoints ?? 2,
+        clusterize: Boolean(data.clusterize),
+        clusterMaxZoom: data.clusterMaxZoom ?? 0,
+        clusterMinZoom: data.clusterMinZoom,
+        simple: Boolean(data.simple)
+      });
+      scope.postMessage({ id, type: "greedyClusterLayout", clusters: result.clusters, singles: result.singles });
       return;
     }
     const values: number[] = [];

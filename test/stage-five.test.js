@@ -38,6 +38,126 @@ test("GeoJSON auto renderer batches large path sets on one WebGL layer (Advanced
   assert.equal(layer.toGeoJSON().features.length, 300);
 });
 
+test("GeoJSON mass path can discard source features after packing", () => {
+  const features = Array.from({ length: 300 }, (_, index) => ({
+    type: "Feature",
+    id: index,
+    properties: { index },
+    geometry: {
+      type: "LineString",
+      coordinates: [[13, 52 + index * 0.0001], [13.1, 52.1 + index * 0.0001]]
+    }
+  }));
+  const layer = geoJSON(
+    { type: "FeatureCollection", features },
+    { renderer: "webgl", interactive: false, retainFeatures: false, maxFeatures: 200 }
+  );
+  const batch = layer.getLayers()[0];
+  assert.ok(batch instanceof WebGLPathBatch);
+  assert.equal(batch.count, 200);
+  assert.equal(layer.featureEntries.length, 0);
+  assert.equal(layer.toGeoJSON().features.length, 0);
+  layer.clearLayers();
+  assert.equal(batch.count, 0);
+});
+
+test("GeoJSON async ingestion cooperatively processes parsed and raw input", async () => {
+  const features = Array.from({ length: 5 }, (_, index) => ({
+    type: "Feature",
+    id: index,
+    properties: {},
+    geometry: {
+      type: "LineString",
+      coordinates: [[13, 52 + index * 0.001], [13.1, 52.1 + index * 0.001]]
+    }
+  }));
+  const collection = { type: "FeatureCollection", features };
+  const progress = [];
+  const layer = geoJSON(null, { renderer: "webgl", interactive: false, retainFeatures: false });
+
+  const returned = await layer.addDataAsync(collection, {
+    chunkSize: 2,
+    yieldMode: "task",
+    onProgress: (processed, total) => progress.push([processed, total])
+  });
+  assert.equal(returned, layer);
+  assert.equal(layer.getLayers()[0].count, 5);
+  assert.deepEqual(progress, [[2, 5], [4, 5], [5, 5]]);
+
+  layer.clearLayers();
+  await layer.addDataAsync(JSON.stringify(collection), {
+    chunkSize: 3,
+    useWorker: false,
+    yieldMode: "task"
+  });
+  assert.equal(layer.getLayers()[0].count, 5);
+});
+
+test("GeoJSON task ingestion uses scheduler.yield and skips the final yield", async () => {
+  const previousScheduler = globalThis.scheduler;
+  let yields = 0;
+  globalThis.scheduler = { yield: async () => { yields++; } };
+  try {
+    await geoJSON().addDataAsync({
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [13, 52] } },
+        { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [14, 53] } }
+      ]
+    }, { chunkSize: 1, yieldMode: "task" });
+    assert.equal(yields, 1);
+  } finally {
+    if (previousScheduler === undefined) delete globalThis.scheduler;
+    else globalThis.scheduler = previousScheduler;
+  }
+});
+
+test("GeoJSON async ingestion supports streams, byte limits and cancellation", async () => {
+  const feature = (index) => ({
+    type: "Feature",
+    id: index,
+    properties: {},
+    geometry: { type: "Point", coordinates: [13 + index, 52] }
+  });
+  async function* chunks() {
+    yield { type: "FeatureCollection", features: [feature(0), feature(1)] };
+    yield feature(2);
+  }
+
+  const streamed = geoJSON();
+  await streamed.addDataAsync(chunks(), { chunkSize: 1, yieldMode: "task" });
+  assert.equal(streamed.featureEntries.length, 3);
+
+  await assert.rejects(
+    geoJSON().addDataAsync(JSON.stringify(feature(0)), { maxBytes: 1, useWorker: false }),
+    RangeError
+  );
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    geoJSON().addDataAsync(feature(0), { signal: controller.signal }),
+    (error) => error?.name === "AbortError"
+  );
+});
+
+test("removing a shared GeoJSON batch drops all associated feature entries", () => {
+  const features = Array.from({ length: 12 }, (_, index) => ({
+    type: "Feature",
+    id: index,
+    properties: {},
+    geometry: {
+      type: "LineString",
+      coordinates: [[13, 52 + index * 0.001], [13.1, 52.1 + index * 0.001]]
+    }
+  }));
+  const layer = geoJSON({ type: "FeatureCollection", features }, { renderer: "webgl" });
+  const batch = layer.getLayers()[0];
+  assert.equal(layer.featureEntries.length, 12);
+  layer.removeLayer(batch);
+  assert.equal(layer.featureEntries.length, 0);
+  assert.equal(layer.getLayers().length, 0);
+});
+
 test("GeoJSON auto falls back to canvas when WebGL backend is unregistered", () => {
   const features = Array.from({ length: 300 }, (_, index) => ({
     type: "Feature",
@@ -86,6 +206,8 @@ test("GeoJSON canvas renderer still batches when requested", () => {
 
 test("WebGLPathBatch keeps vertex buffer large enough for many segments", () => {
   const batch = webglPathBatch({ stroke: "#0f766e", strokeWidth: 2 });
+  assert.equal(batch.options.cameraRedrawInterval, 250);
+  assert.equal(batch.options.cameraSettleDelay, 120);
   for (let i = 0; i < 200; i++) {
     batch.addPath(
       [
@@ -102,6 +224,12 @@ test("WebGLPathBatch keeps vertex buffer large enough for many segments", () => 
   // 200 lines × 3 segments × 6 verts
   assert.equal(batch.count, 200 * 3);
   assert.ok(batch.getBounds().isValid());
+});
+
+test("WebGLPathBatch camera redraw throttling can be disabled", () => {
+  const batch = webglPathBatch({ cameraRedrawInterval: 0, cameraSettleDelay: 0 });
+  assert.equal(batch.options.cameraRedrawInterval, 0);
+  assert.equal(batch.options.cameraSettleDelay, 0);
 });
 
 test("GeoJSON creates point, multi-point and path feature layers", () => {
@@ -206,4 +334,3 @@ test("WMSTileLayer builds projected and axis-ordered requests", () => {
   geographic.setParams({ layers: "temperature" }, true);
   assert.equal(geographic.getParams().layers, "temperature");
 });
-

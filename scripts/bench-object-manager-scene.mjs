@@ -1,14 +1,16 @@
 /**
  * ObjectManager ingest / update stress (Node, no WebGL paint).
- * Run: node scripts/bench-object-manager-scene.mjs
- * Optional: COUNT=1000000 node scripts/bench-object-manager-scene.mjs
+ * Run: npm run bench:object-manager
+ * Optional PowerShell: $env:COUNT=1000000; $env:CLUSTERS=1; npm run bench:object-manager
  *
  * Answers the “does 1M fit?” question for CPU/RAM of the manager store + indexes.
- * Browser paint of 1M is WebGL flat points (clusters OFF) — use the scene lab Stress buttons.
+ * `CLUSTERS=0` measures the flat WebGL layout instead of the mass-cluster path.
  */
 import { performance } from "node:perf_hooks";
-import { objectManager } from "../dist/services/object-manager.js";
-import { ObjectSceneController } from "../dist/services/object-scene.js";
+import { readFile } from "node:fs/promises";
+import { objectManager } from "../dist/index.js";
+
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 function ms(label, fn) {
   const t0 = performance.now();
@@ -33,9 +35,11 @@ function heapMb() {
 
 const N = Math.max(1_000, Number(process.env.COUNT) || 100_000);
 const CHUNK = N >= 1_000_000 ? 25_000 : 10_000;
-const useClusters = N <= 250_000;
+const clusterFlag = String(process.env.CLUSTERS ?? "1").trim().toLowerCase();
+const useClusters = !["0", "false", "off", "no"].includes(clusterFlag);
 
 console.log(`\nObjectManager stress · N=${N.toLocaleString("en-US")} · clusters=${useClusters ? "on" : "off"}`);
+console.log(`Orihon ${packageJson.version} · Node ${process.version} · ${process.platform}/${process.arch}`);
 console.log("(no WebGL — ingest / layout / updates only)\n");
 
 const manager = objectManager({
@@ -124,28 +128,24 @@ ms(`search-index ingest ${searchN.toLocaleString("en-US")}`, () => {
   if (batch.length) searchManager.add(batch);
 });
 ms("search prefix", () => searchManager.search("obj-42", { limit: 20 }).length);
-ms("temporal range query (scene index)", () => {
-  const scene = new ObjectSceneController();
-  scene.configure({
-    time: { value: (o) => Number(o.properties?.timestamp ?? 0) }
-  });
-  for (let i = 0; i < searchN; i++) scene.timeIndex.upsert(i, { properties: { timestamp: i } });
-  scene.setTimeRange(10_000, 20_000);
-  return scene.activeTimeIds()?.size ?? 0;
-});
-
-ms("10k motion starts", () => {
-  const scene = new ObjectSceneController();
-  for (let i = 0; i < 10_000; i++) {
-    scene.startMotion(i, 0, 0, 1, 1, 800);
+ms("5k search/time property updates (public API)", () => {
+  const updates = [];
+  const limit = Math.min(5000, searchN);
+  for (let i = 0; i < limit; i++) {
+    updates.push({
+      id: i,
+      coordinates: [55 + (i % 1000) * 0.001, 37 + ((i / 1000) | 0) * 0.001],
+      properties: { name: `updated-${i}`, timestamp: searchN + i }
+    });
   }
-  return scene.motions.size;
+  searchManager.updateObjects(updates);
 });
+ms("set temporal window (public API)", () => searchManager.setTimeRange(10_000, 20_000));
 
 console.log("\nVerdict:");
 console.log(
   N >= 1_000_000
-    ? "  1M store+layout: OK in Node if heap stays reasonable; browser paint needs clusters OFF + bare WebGL points (no icons/labels/trails)."
+    ? `  1M ${useClusters ? "mass clustering" : "flat points"}: OK if heap stays reasonable. Full all-zoom hierarchy is capped by default.`
     : "  Scale further with COUNT=1000000. Browser: examples/object-manager-scene Stress 1M."
 );
 console.log(`  objects: ${manager.getStats().objects} · heap ${heapMb()} MB\n`);

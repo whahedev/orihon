@@ -29,6 +29,76 @@ export function parseTileKey(key: string): { z: number; x: number; y: number } |
   return { z, x, y };
 }
 
+/** Key of the tile covering `key` at a coarser zoom. */
+export function tileAncestorKey(key: string, targetZoom: number): string | null {
+  const tile = parseTileKey(key);
+  const z = Math.floor(targetZoom);
+  if (!tile || z < 0 || z > tile.z) return null;
+  const scale = 2 ** (tile.z - z);
+  return `${z}:${Math.floor(tile.x / scale)}:${Math.floor(tile.y / scale)}`;
+}
+
+/** Nearest ready parent, used as an opaque raster backstop while a level loads. */
+export function nearestReadyAncestorKey(
+  key: string,
+  isReady: (candidate: string) => boolean,
+  minZoom = 0
+): string | null {
+  const tile = parseTileKey(key);
+  if (!tile) return null;
+  for (let z = tile.z - 1; z >= Math.max(0, minZoom); z--) {
+    const parent = tileAncestorKey(key, z);
+    if (parent && isReady(parent)) return parent;
+  }
+  return null;
+}
+
+/**
+ * Fraction of a target tile covered by ready exact, parent or child imagery.
+ * Parents count as full coverage; children are accumulated without overlap.
+ */
+function readyTileCoverage(
+  key: string,
+  isReady: (candidate: string) => boolean,
+  descendantDepth: number
+): number {
+  if (isReady(key)) return 1;
+  const tile = parseTileKey(key);
+  if (!tile || descendantDepth <= 0) return 0;
+  let covered = 0;
+  const childZ = tile.z + 1;
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) {
+      covered += readyTileCoverage(
+        `${childZ}:${tile.x * 2 + dx}:${tile.y * 2 + dy}`,
+        isReady,
+        descendantDepth - 1
+      ) / 4;
+    }
+  }
+  return covered;
+}
+
+/** Visual coverage of a target tile set, including pyramid fallbacks. */
+export function tileSetCoverage(
+  needed: Iterable<string>,
+  isReady: (candidate: string) => boolean,
+  minZoom = 0,
+  descendantDepth = 3
+): number {
+  let total = 0;
+  let covered = 0;
+  for (const key of needed) {
+    total += 1;
+    if (isReady(key) || nearestReadyAncestorKey(key, isReady, minZoom)) {
+      covered += 1;
+    } else {
+      covered += readyTileCoverage(key, isReady, Math.max(0, descendantDepth));
+    }
+  }
+  return total ? covered / total : 1;
+}
+
 /**
  * Tiles in `needed` that were never instantiated — leftover after maxNew-per-frame
  * or after an incremental coverage pass that committed `_rect` too early.
@@ -91,9 +161,38 @@ export function tilePriority(
   tileSize: number,
   lookaheadSec = 0.28
 ): number {
-  const predX = centerX + (vx / Math.max(1, tileSize)) * lookaheadSec;
-  const predY = centerY + (vy / Math.max(1, tileSize)) * lookaheadSec;
+  // panVelocity is the screen/finger motion. The geographic surface and the
+  // newly exposed edge move in the opposite direction.
+  const predX = centerX - (vx / Math.max(1, tileSize)) * lookaheadSec;
+  const predY = centerY - (vy / Math.max(1, tileSize)) * lookaheadSec;
   return Math.hypot(x + 0.5 - predX, y + 0.5 - predY);
+}
+
+export interface TileLookaheadPadding {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** Extra prefetch strips on the edge a drag/inertia gesture is revealing. */
+export function tileLookaheadPadding(
+  vx: number,
+  vy: number,
+  tileSize: number,
+  lookaheadSec = 0.35,
+  maxTiles = 2
+): TileLookaheadPadding {
+  const size = Math.max(1, tileSize);
+  const limit = Math.max(0, Math.floor(maxTiles));
+  const dx = Math.max(-limit, Math.min(limit, (-vx / size) * lookaheadSec));
+  const dy = Math.max(-limit, Math.min(limit, (-vy / size) * lookaheadSec));
+  return {
+    left: Math.max(0, Math.ceil(-dx)),
+    right: Math.max(0, Math.ceil(dx)),
+    top: Math.max(0, Math.ceil(-dy)),
+    bottom: Math.max(0, Math.ceil(dy))
+  };
 }
 
 /** Binary min-heap. Replaces Array#shift on tile download queues. */

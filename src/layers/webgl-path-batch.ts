@@ -1,4 +1,5 @@
 import { createEl } from "../dom.js";
+import { cameraWarpCss } from "../camera.js";
 import { TILE_SIZE, LatLngBounds, latLng, projectMercator01, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
@@ -11,10 +12,25 @@ export interface WebGLPathBatchOptions extends LayerOptions, PathOptions {
   maxDpr?: number;
   /** Fall back to Canvas 2D if WebGL init fails. Default true. */
   fallbackCanvas?: boolean;
+  /** Minimum time between exact GPU camera redraws while moving. Default 250 ms; 0 redraws every frame. */
+  cameraRedrawInterval?: number;
+  /** Idle time before the final exact GPU camera redraw. Default 120 ms. */
+  cameraSettleDelay?: number;
 }
 
 type ResolvedOptions = Required<
-  Pick<WebGLPathBatchOptions, "pane" | "stroke" | "strokeWidth" | "strokeOpacity" | "maxDpr" | "fallbackCanvas" | "className">
+  Pick<
+    WebGLPathBatchOptions,
+    | "pane"
+    | "stroke"
+    | "strokeWidth"
+    | "strokeOpacity"
+    | "maxDpr"
+    | "fallbackCanvas"
+    | "className"
+    | "cameraRedrawInterval"
+    | "cameraSettleDelay"
+  >
 > &
   WebGLPathBatchOptions;
 
@@ -60,13 +76,16 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
   private _drawnZoom = Number.NaN;
   private _drawnOriginX = 0;
   private _drawnOriginY = 0;
+  private _hasDrawn = false;
+  private _forceGpu = false;
+  private _lastGpuMs = 0;
+  private _redrawFrame = 0;
+  private _settleTimer: ReturnType<typeof setTimeout> | null = null;
   private color: RgbColor;
   private _minLat = Number.POSITIVE_INFINITY;
   private _maxLat = Number.NEGATIVE_INFINITY;
   private _minLng = Number.POSITIVE_INFINITY;
   private _maxLng = Number.NEGATIVE_INFINITY;
-  /** Canvas fallback path storage (only filled when renderer === "canvas"). */
-  private _canvasRings: Array<{ lat: Float64Array; lng: Float64Array }> = [];
 
   constructor(options: WebGLPathBatchOptions = {}) {
     super({
@@ -77,6 +96,8 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       strokeOpacity: 0.7,
       maxDpr: 1,
       fallbackCanvas: true,
+      cameraRedrawInterval: 250,
+      cameraSettleDelay: 120,
       interactive: false,
       ...options
     } as ResolvedOptions);
@@ -99,12 +120,12 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
     this._segBuf = new Float32Array(0);
     this._segmentCount = 0;
     this._bufferDirty = true;
-    this._canvasRings = [];
     this._minLat = Number.POSITIVE_INFINITY;
     this._maxLat = Number.NEGATIVE_INFINITY;
     this._minLng = Number.POSITIVE_INFINITY;
     this._maxLng = Number.NEGATIVE_INFINITY;
     this._drawnZoom = Number.NaN;
+    this._forceGpu = true;
     this.render();
     return this;
   }
@@ -114,12 +135,8 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
     if (style.strokeWidth != null) this.options.strokeWidth = style.strokeWidth;
     if (style.strokeOpacity != null) this.options.strokeOpacity = style.strokeOpacity;
 
-    const keepCanvas = this.renderer === "canvas" || this.renderer === "none";
-
     for (const ring of rings) {
       if (ring.length < 2) continue;
-      const lat = keepCanvas ? new Float64Array(ring.length) : null;
-      const lng = keepCanvas ? new Float64Array(ring.length) : null;
       const segments = ring.length - 1;
       this.#ensureCapacity((this._segmentCount + segments) * 4);
       let write = this._segmentCount * 4;
@@ -128,10 +145,6 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       let prevY = 0;
       for (let i = 0; i < ring.length; i++) {
         const p = latLng(ring[i]);
-        if (lat && lng) {
-          lat[i] = p.lat;
-          lng[i] = p.lng;
-        }
         const m = projectMercator01(p.lat, p.lng);
         if (p.lat < this._minLat) this._minLat = p.lat;
         if (p.lat > this._maxLat) this._maxLat = p.lat;
@@ -146,12 +159,12 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
         prevX = m.x;
         prevY = m.y;
       }
-      if (lat && lng) this._canvasRings.push({ lat, lng });
       this._segmentCount = write / 4;
     }
     this._bufferDirty = true;
     this._drawnZoom = Number.NaN;
-    if (this.map) this.render();
+    this._forceGpu = true;
+    if (this.map) this.#scheduleRedraw();
     return this;
   }
 
@@ -165,6 +178,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
     this.canvas.style.left = "0";
     this.canvas.style.top = "0";
     this.canvas.style.pointerEvents = "none";
+    this.canvas.style.willChange = "transform";
     this.gl =
       this.canvas.getContext("webgl", {
         antialias: false,
@@ -196,12 +210,9 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       this.canvas.style.left = "0";
       this.canvas.style.top = "0";
       this.canvas.style.pointerEvents = "none";
+      this.canvas.style.willChange = "transform";
       this.renderer = "canvas";
       this.gl = null;
-      if (!this._canvasRings.length && this._segmentCount) {
-        // Segments were recorded without lat/lng rings — canvas needs a rebuild path.
-        // Caller typically adds paths before onAdd; rings are kept when renderer was "none".
-      }
     } else {
       this.renderer = "none";
     }
@@ -209,6 +220,11 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
   }
 
   override onRemove(): void {
+    if (this._redrawFrame && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this._redrawFrame);
+      this._redrawFrame = 0;
+    }
+    this.#clearSettleTimer();
     this.#disposeGL();
     if (this.canvas) {
       this.canvas.width = 0;
@@ -220,6 +236,8 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
     this._cssH = 0;
     this._attribsBound = false;
     this._drawnZoom = Number.NaN;
+    this._hasDrawn = false;
+    this._forceGpu = false;
     super.onRemove();
   }
 
@@ -236,14 +254,41 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       this.canvas.height = Math.max(1, Math.round(height * dpr));
       this._attribsBound = false;
       this._drawnZoom = Number.NaN;
+      this._hasDrawn = false;
+      this._forceGpu = true;
     }
     if (this.renderer === "webgl") {
       const zoom = this.map.zoom;
       const ox = this.map.pixelOrigin.x;
       const oy = this.map.pixelOrigin.y;
-      // Same zoom: move the already-rasterized layer with the map (MapLibre-style cheap pan).
-      if (zoom === this._drawnZoom && this._segmentCount > 0) {
-        this.canvas.style.transform = `translate3d(${this._drawnOriginX - ox}px,${this._drawnOriginY - oy}px,0)`;
+      const cameraChanged = zoom !== this._drawnZoom || ox !== this._drawnOriginX || oy !== this._drawnOriginY;
+      if (!cameraChanged && this._hasDrawn && !this._bufferDirty && !this._forceGpu) {
+        this.canvas.style.transform = "";
+        return;
+      }
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const baseInterval = Math.max(0, Number(this.options.cameraRedrawInterval) || 0);
+      // A long submit can itself delay the next rAF beyond the base interval.
+      // Scale the cadence with batch size so a heavy layer gets cheap camera
+      // warps between exact frames instead of immediately submitting again.
+      const interval = baseInterval === 0
+        ? 0
+        : baseInterval * Math.max(1, this._segmentCount / 15_000);
+      const canWarp = this._hasDrawn && Number.isFinite(this._drawnZoom) && !this._bufferDirty;
+      const gpuDue =
+        this._forceGpu ||
+        !canWarp ||
+        interval === 0 ||
+        now - this._lastGpuMs >= interval;
+      if (!gpuDue) {
+        this.canvas.style.transformOrigin = "0 0";
+        this.canvas.style.transform = cameraWarpCss(
+          { x: this._drawnOriginX, y: this._drawnOriginY },
+          this._drawnZoom,
+          { x: ox, y: oy },
+          zoom
+        );
+        this.#scheduleSettledGpu();
         return;
       }
       this.canvas.style.transform = "";
@@ -251,9 +296,42 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       this._drawnZoom = zoom;
       this._drawnOriginX = ox;
       this._drawnOriginY = oy;
+      this._hasDrawn = true;
+      this._forceGpu = false;
+      this._lastGpuMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+      this.#clearSettleTimer();
     } else {
       this.canvas.style.transform = "";
       this.#renderCanvas(dpr);
+    }
+  }
+
+  #scheduleRedraw(): void {
+    if (this._redrawFrame) return;
+    if (typeof requestAnimationFrame !== "function") {
+      this.render();
+      return;
+    }
+    this._redrawFrame = requestAnimationFrame(() => {
+      this._redrawFrame = 0;
+      this.render();
+    });
+  }
+
+  #scheduleSettledGpu(): void {
+    this.#clearSettleTimer();
+    const delay = Math.max(0, Number(this.options.cameraSettleDelay) || 0);
+    this._settleTimer = setTimeout(() => {
+      this._settleTimer = null;
+      this._forceGpu = true;
+      this.#scheduleRedraw();
+    }, delay);
+  }
+
+  #clearSettleTimer(): void {
+    if (this._settleTimer != null) {
+      clearTimeout(this._settleTimer);
+      this._settleTimer = null;
     }
   }
 
@@ -386,7 +464,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
     const locs = this.locs;
     const ext = this.ext;
     const map = this.map;
-    if (!gl || !locs || !ext || !this.program || !map || !this._segmentCount) return;
+    if (!gl || !locs || !ext || !this.program || !map) return;
 
     this.#uploadIfNeeded();
     gl.viewport(0, 0, this.canvas!.width, this.canvas!.height);
@@ -395,6 +473,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    if (!this._segmentCount) return;
     gl.useProgram(this.program);
     this.#bindAttribs();
 
@@ -421,16 +500,16 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
     ctx.lineWidth = this.options.strokeWidth ?? 1.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    for (const ring of this._canvasRings) {
-      if (ring.lat.length < 2) continue;
-      ctx.beginPath();
-      for (let i = 0; i < ring.lat.length; i++) {
-        const pt = this.map.latLngToContainerPoint([ring.lat[i], ring.lng[i]]);
-        if (i === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
-      }
-      ctx.stroke();
+    const scale = TILE_SIZE * 2 ** this.map.zoom;
+    const ox = this.map.pixelOrigin.x;
+    const oy = this.map.pixelOrigin.y;
+    const data = this._segBuf;
+    ctx.beginPath();
+    for (let i = 0; i < this._segmentCount * 4; i += 4) {
+      ctx.moveTo(data[i] * scale - ox, data[i + 1] * scale - oy);
+      ctx.lineTo(data[i + 2] * scale - ox, data[i + 3] * scale - oy);
     }
+    ctx.stroke();
     ctx.globalAlpha = 1;
   }
 

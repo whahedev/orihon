@@ -96,6 +96,12 @@ const artifacts = [
 
 const chunkFiles = [];
 
+function alternateChunkName(name, attempt) {
+  const suffix = attempt === 1 ? "-copy" : `-copy${attempt}`;
+  if (name.endsWith(".js.map")) return name.replace(/\.js\.map$/, `${suffix}.js.map`);
+  return name.replace(/(\.[^.]+)$/, `${suffix}$1`);
+}
+
 for (const artifact of artifacts) {
   if (artifact.split) {
     const outdir = resolve(dist, "bundle-tmp");
@@ -126,8 +132,18 @@ for (const artifact of artifacts) {
         await copyFile(from, to);
       } catch (err) {
         if (!err || (err.code !== "EPERM" && err.code !== "EACCES")) throw err;
-        destName = name.replace(/(\.[^.]+)$/, `-copy$1`);
-        await copyFile(from, join(dist, destName));
+        let copied = false;
+        for (let attempt = 1; attempt <= 32; attempt++) {
+          destName = alternateChunkName(name, attempt);
+          try {
+            await copyFile(from, join(dist, destName));
+            copied = true;
+            break;
+          } catch (copyErr) {
+            if (!copyErr || (copyErr.code !== "EPERM" && copyErr.code !== "EACCES")) throw copyErr;
+          }
+        }
+        if (!copied) throw new Error(`Unable to replace locked browser chunk: ${name}`);
         if (name.endsWith(".js")) renamed.push([name, destName]);
       }
       if (destName.startsWith("orihon-") && destName.endsWith(".js") && destName !== "orihon.esm.js") {

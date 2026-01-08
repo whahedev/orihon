@@ -7,9 +7,9 @@ const budgets = {
   "orihon.core.esm.js": 22 * kib,
   // Includes bounded async GeoJSON ingestion and its backpressured parse worker.
   "orihon.standard.esm.js": 36 * kib,
-  // Advanced includes WebGL tiles/points/heat/paths, ObjectManager scene,
-  // async mass ingestion, MLT/WASM decoding, WebGPU tiles and camera warps.
-  "orihon.esm.js": 107 * kib,
+  // Advanced includes whole-index clustering/MVT WASM, unified WASM heat fields,
+  // WebGL scene renderers, async mass ingestion and lazy WebGPU compute/tiles.
+  "orihon.esm.js": 141 * kib,
   "orihon.draw.esm.js": 12 * kib,
   "orihon.controls.esm.js": 8 * kib,
   "orihon.geo.esm.js": 2 * kib,

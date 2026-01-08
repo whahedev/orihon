@@ -1,38 +1,108 @@
-import { TILE_SIZE, latLng, projectMercator01, type LatLngBoundsLike, type LatLngLike, latLngBounds } from "../geo.js";
-import { heatKernelAtZoom } from "./heat-scale.js";
+import {
+  TILE_SIZE,
+  unproject,
+  type LatLngBoundsLike,
+} from "../geo.js";
+import {
+  buildHeatContoursWasm,
+  type HeatContoursWasmProfile,
+  type PackedHeatContours
+} from "./heat-isolines-wasm.js";
+import {
+  buildHeatFieldCpu,
+  createHeatFieldRequest,
+  packHeatPoints,
+  type HeatFieldCpuResult,
+  type HeatFieldGrid,
+  type HeatFieldInput
+} from "./heat-field.js";
+import type { AdaptiveIsolineLevelSelection } from "./adaptive-isoline-levels.js";
 
-export { heatIntensityScale, heatKernelAtZoom, heatRadiusScale } from "./heat-scale.js";
-export type { HeatKernelScale } from "./heat-scale.js";
+export {
+  buildHeatContoursWasm,
+  buildHeatContoursWasmUnsafe,
+  decodeHeatContoursWasmBlob,
+  heatContoursWasmError,
+  heatContoursWasmSupported,
+  type HeatContoursWasmProfile,
+  type PackedHeatContours
+} from "./heat-isolines-wasm.js";
 
-export type HeatIsolineInput = LatLngLike | [number, number, number?];
+export type HeatIsolineInput = HeatFieldInput;
+export type { HeatFieldGrid } from "./heat-field.js";
 
 export interface HeatIsolineBuildOptions {
   /** Grid columns (default 96). */
   cols?: number;
   /** Grid rows (default 72). */
   rows?: number;
-  /** Kernel radius in CSS px at `scaleZoom` (mapped into grid cells). Default 28. */
+  /** Geographic kernel radius expressed as CSS px at `scaleZoom`. Default 28. */
   radius?: number;
   blur?: number;
+  /** Fixed reference zoom that defines the world-space kernel. */
   scaleZoom?: number;
-  /** Map zoom used to size the kernel. */
+  /** Current map zoom. It changes sampling density, never the world-space kernel. */
   zoom?: number;
   /**
-   * Contour levels in 0..1 of max density, or a count of evenly spaced levels.
-   * Default 5 → [0.2, 0.35, 0.5, 0.65, 0.8].
+   * Contour levels. Values <=1 are fractions of `referenceMax` when supplied,
+   * otherwise fractions of the current grid peak for backwards compatibility.
+   * Values >1 are absolute field values.
    */
   levels?: number | number[];
+  /** Absolute difference between adjacent contour values. Default `"auto"`. */
+  isolineStep?: "auto" | number;
+  /** Safety cap for automatically/manual-step generated levels. Default 32. */
+  maxIsolineLevels?: number;
+  /** Spatially optimize automatic levels. Unified async pipeline default: true. */
+  adaptiveLevels?: boolean;
+  /** Valid cells; zero cells and NoData are excluded from selection and marching. */
+  validMask?: ArrayLike<number> | null;
+  /** Robust automatic value range. Default `[0.02, 0.98]`. */
+  outlierQuantiles?: [number, number];
+  /** Automatic candidate count multiplier, constrained to 5..20. Default 10. */
+  candidateMultiplier?: number;
+  /** Spatial coverage influence radius in evaluation-zone cells. */
+  coverageRadius?: number;
+  /** Candidate preview must cross at least this many field cells. */
+  minCandidateCells?: number;
+  /** Remove final lines shorter than this many grid-cell units. */
+  minIsolineLength?: number;
+  /** Remove final closed rings smaller than this many grid-cell² units. */
+  minIsolineArea?: number;
+  coverageWeight?: number;
+  rangeWeight?: number;
+  redundancyWeight?: number;
+  fragmentWeight?: number;
+  /**
+   * Fixed field maximum used for color/level normalization across zooms.
+   * Set this for zoom-invariant value semantics (for normalized sensor values use 1).
+   */
+  referenceMax?: number;
   /** Skip rebuilding if max density is below this. Default 1e-6. */
   minPeak?: number;
+  /** Whole-grid WASM marching+stitching. Default true; falls back to JS on failure. */
+  useWasm?: boolean;
+  /** Internal A/B hook. */
+  __forceJsContours?: boolean;
+  /** Internal benchmark/profile hook. */
+  __heatContoursWasmProfile?: HeatContoursWasmProfile;
 }
 
 export interface HeatIsolineRing {
-  /** Contour threshold in absolute density units. */
+  /** Stable index within the selected level array. */
+  levelId?: number;
+  /** Contour threshold in absolute field units. */
   value: number;
-  /** Normalized 0..1 vs grid peak. */
+  /** Normalized 0..1 vs `referenceMax` (or local peak when not supplied). */
   t: number;
   /** Closed or open rings as [lat, lng][]. */
   coordinates: Array<[number, number]>;
+  /** Length in scalar-grid cell units. */
+  gridLength?: number;
+  /** Closed area in scalar-grid cell² units; zero for open lines. */
+  gridArea?: number;
+  /** Marginal spatial coverage contributed by this adaptive level. */
+  gain?: number;
 }
 
 export interface HeatIsolineResult {
@@ -40,128 +110,175 @@ export interface HeatIsolineResult {
   rows: number;
   peak: number;
   rings: HeatIsolineRing[];
+  /** Actual absolute contour thresholds used for this field. */
+  thresholds?: number[];
+  /** Uniform threshold step, when the selected levels are evenly spaced. */
+  isolineStep?: number;
+  /** True when marching+stitching was produced by the whole-grid WASM kernel. */
+  wasm?: boolean;
+  /** Scalar-field backend. Contours still use WASM whenever available. */
+  fieldBackend?: "js" | "wasm" | "webgpu";
+  /** Spatial level-selection diagnostics when adaptive auto mode was used. */
+  levelSelection?: AdaptiveIsolineLevelSelection;
 }
 
 /**
- * Build a heat-density grid from points and extract isoline rings (marching squares).
- * Dynamic: call again when the view / zoom / data changes.
+ * Build a zoom-invariant world-space heat field and extract isolines.
+ * The kernel is fixed in normalized Web Mercator by `radius@scaleZoom`; zoom only
+ * changes how densely that same mathematical field is sampled on screen.
  */
 export function buildHeatIsolines(
   points: Iterable<HeatIsolineInput>,
   boundsLike: LatLngBoundsLike,
   options: HeatIsolineBuildOptions = {}
 ): HeatIsolineResult {
-  const bounds = latLngBounds(boundsLike);
-  if (!bounds.isValid()) {
-    return { cols: 0, rows: 0, peak: 0, rings: [] };
+  const field = buildHeatFieldGrid(points, boundsLike, options);
+  if (!field) return { cols: 0, rows: 0, peak: 0, rings: [] };
+
+  return buildHeatIsolinesFromField(field, options);
+}
+
+/** Extract contours from an already-built field. `both` mode uses this path. */
+export function buildHeatIsolinesFromField(
+  field: HeatFieldGrid,
+  options: HeatIsolineBuildOptions = {}
+): HeatIsolineResult {
+
+  const { grid, cols, rows, peak } = field;
+  const fieldBackend = (field as HeatFieldCpuResult).backend;
+  const minPeak = options.minPeak ?? 1e-6;
+  if (peak < minPeak) return { cols, rows, peak, rings: [], fieldBackend };
+
+  const referenceMax = finitePositive(options.referenceMax) ? Number(options.referenceMax) : peak;
+  const resolved = resolveLevels(options.levels, options.isolineStep, peak, referenceMax, options.maxIsolineLevels);
+  const thresholds = resolved.thresholds;
+  if (!thresholds.length) {
+    return { cols, rows, peak, rings: [], thresholds, isolineStep: resolved.step, fieldBackend };
   }
 
-  const cols = Math.max(8, Math.floor(options.cols ?? 96));
-  const rows = Math.max(8, Math.floor(options.rows ?? 72));
-  const zoom = options.zoom ?? options.scaleZoom ?? 10;
-  const scaleZoom = options.scaleZoom ?? zoom;
-  const baseRadiusCss = Math.max(4, (options.radius ?? 28) + (options.blur ?? 16) * 0.35);
-  const kernel = heatKernelAtZoom(zoom, scaleZoom, baseRadiusCss);
-  const kernelCss = kernel.radiusCss;
-  const intensityScale = kernel.intensityScale;
-
-  const west = bounds.west;
-  const east = bounds.east;
-  const south = bounds.south;
-  const north = bounds.north;
-  const widthLng = Math.max(1e-9, east - west);
-  const heightLat = Math.max(1e-9, north - south);
-
-  // Approximate CSS px across the bounds at this zoom (Web Mercator).
-  const scale = TILE_SIZE * 2 ** zoom;
-  const mercW = Math.abs(projectMercator01(0, east).x - projectMercator01(0, west).x) * scale;
-  const mercH = Math.abs(projectMercator01(north, 0).y - projectMercator01(south, 0).y) * scale;
-  const cssSpan = Math.max(mercW, mercH, 1);
-  const cellCss = cssSpan / Math.max(cols, rows);
-  // Do not floor to 1.25 cells: on a coarse world grid that smears one point
-  // across a country. Sub-cell kernels become a per-cell histogram.
-  const radiusCells = Math.max(0.51, kernelCss / cellCss);
-
-  const grid = new Float32Array(cols * rows);
-  const rCeil = Math.ceil(radiusCells);
-  const r2 = radiusCells * radiusCells;
-
-  for (const raw of points) {
-    const next = normalizeHeat(raw);
-    if (!next) continue;
-    if (next.lat < south || next.lat > north || next.lng < west || next.lng > east) continue;
-
-    const fx = ((next.lng - west) / widthLng) * (cols - 1);
-    const fy = ((north - next.lat) / heightLat) * (rows - 1);
-    const x0 = Math.max(0, Math.floor(fx) - rCeil);
-    const x1 = Math.min(cols - 1, Math.ceil(fx) + rCeil);
-    const y0 = Math.max(0, Math.floor(fy) - rCeil);
-    const y1 = Math.min(rows - 1, Math.ceil(fy) + rCeil);
-    const w = next.weight * intensityScale;
-
-    for (let y = y0; y <= y1; y++) {
-      const dy = y - fy;
-      for (let x = x0; x <= x1; x++) {
-        const dx = x - fx;
-        const d2 = dx * dx + dy * dy;
-        if (d2 > r2) continue;
-        const falloff = 1 - Math.sqrt(d2) / radiusCells;
-        grid[y * cols + x] += w * falloff * falloff;
-      }
+  if (options.useWasm !== false && !options.__forceJsContours && !options.validMask) {
+    const packed = buildHeatContoursWasm(
+      grid,
+      cols,
+      rows,
+      Float32Array.from(thresholds),
+      options.__heatContoursWasmProfile
+    );
+    if (packed) {
+      return {
+        cols,
+        rows,
+        peak,
+        rings: materializePackedContours(packed, field, referenceMax),
+        thresholds,
+        isolineStep: resolved.step,
+        wasm: true,
+        fieldBackend
+      };
     }
   }
 
-  let peak = 0;
-  for (let i = 0; i < grid.length; i++) if (grid[i] > peak) peak = grid[i];
-  const minPeak = options.minPeak ?? 1e-6;
-  if (peak < minPeak) {
-    return { cols, rows, peak, rings: [] };
-  }
-
-  const thresholds = resolveLevels(options.levels, peak);
   const rings: HeatIsolineRing[] = [];
-
   for (const value of thresholds) {
-    const segments = marchingSquaresSegments(grid, cols, rows, value);
+    const segments = marchingSquaresSegments(grid, cols, rows, value, options.validMask);
     const chains = connectSegments(segments);
     for (const chain of chains) {
       if (chain.length < 2) continue;
-      const coordinates: Array<[number, number]> = chain.map(([gx, gy]) => [
-        north - (gy / (rows - 1)) * heightLat,
-        west + (gx / (cols - 1)) * widthLng
-      ]);
       rings.push({
         value,
-        t: value / peak,
-        coordinates
+        t: clamp01(value / referenceMax),
+        coordinates: chain.map(([gx, gy]) => gridPointToLatLng(gx, gy, field))
       });
     }
   }
-
-  return { cols, rows, peak, rings };
+  return { cols, rows, peak, rings, thresholds, isolineStep: resolved.step, wasm: false, fieldBackend };
 }
 
-function resolveLevels(levels: number | number[] | undefined, peak: number): number[] {
-  if (Array.isArray(levels) && levels.length) {
-    return levels
-      .map((v) => (v > 1 ? v : v * peak))
-      .filter((v) => v > 0 && v < peak * 0.999)
-      .sort((a, b) => a - b);
+/**
+ * Scalar field only. Exported so benchmarks/tools can separate field construction
+ * from marching/stitching. No viewport-local normalization is applied.
+ */
+export function buildHeatFieldGrid(
+  points: Iterable<HeatIsolineInput>,
+  boundsLike: LatLngBoundsLike,
+  options: HeatIsolineBuildOptions = {}
+): HeatFieldGrid | null {
+  const packed = packHeatPoints(points);
+  const request = createHeatFieldRequest(packed, boundsLike, options);
+  if (!request) return null;
+  return buildHeatFieldCpu(request, options.useWasm === false ? "js" : "wasm");
+}
+
+function materializePackedContours(
+  packed: PackedHeatContours,
+  field: HeatFieldGrid,
+  referenceMax: number
+): HeatIsolineRing[] {
+  const rings = new Array<HeatIsolineRing>(packed.lineCount);
+  for (let line = 0; line < packed.lineCount; line++) {
+    const start = packed.lineOffsets[line];
+    const end = packed.lineOffsets[line + 1];
+    const levelIndex = packed.lineLevels[line];
+    const value = packed.levels[levelIndex] ?? 0;
+    const coordinates = new Array<[number, number]>(Math.max(0, end - start));
+    for (let i = start, w = 0; i < end; i++, w++) {
+      coordinates[w] = gridPointToLatLng(packed.xy[i * 2], packed.xy[i * 2 + 1], field);
+    }
+    rings[line] = { value, t: clamp01(value / referenceMax), coordinates };
   }
-  const count = Math.max(1, Math.min(24, Math.floor(typeof levels === "number" ? levels : 5)));
-  const defaults = count === 5 ? [0.2, 0.35, 0.5, 0.65, 0.8] : null;
-  const fracs =
-    defaults ??
-    Array.from({ length: count }, (_, i) => (i + 1) / (count + 1));
-  return fracs.map((f) => f * peak);
+  return rings;
 }
 
-/** Marching-squares edge segments in grid coordinates. */
+function gridPointToLatLng(gx: number, gy: number, field: HeatFieldGrid): [number, number] {
+  const mx = field.westMerc + (gx / Math.max(field.cols - 1, 1)) * field.widthMerc;
+  const my = field.northMerc + (gy / Math.max(field.rows - 1, 1)) * field.heightMerc;
+  const ll = unproject([mx * TILE_SIZE, my * TILE_SIZE], 0);
+  return [ll.lat, ll.lng];
+}
+
+function resolveLevels(
+  levels: number | number[] | undefined,
+  requestedStep: "auto" | number | undefined,
+  peak: number,
+  referenceMax: number,
+  maxLevels: number | undefined
+): { thresholds: number[]; step?: number } {
+  const cap = Math.max(referenceMax, 1e-12);
+  if (Array.isArray(levels) && levels.length) {
+    return { thresholds: levels
+      .map((v) => (v > 1 ? v : v * cap))
+      .filter((v) => Number.isFinite(v) && v > 0 && v < peak * 0.999999)
+      .sort((a, b) => a - b) };
+  }
+  const limit = Math.max(1, Math.min(128, Math.floor(maxLevels ?? 32)));
+  const count = Math.max(1, Math.min(limit, Math.floor(typeof levels === "number" ? levels : 5)));
+  const numericStep = Number(requestedStep);
+  const step = Number.isFinite(numericStep) && numericStep > 0
+    ? numericStep
+    : niceIsolineStep(cap / (count + 1));
+  const thresholds: number[] = [];
+  for (let value = step; value < peak * 0.999999 && thresholds.length < limit; value += step) {
+    thresholds.push(value);
+  }
+  return { thresholds, step };
+}
+
+/** 1–2–2.5–5 engineering steps keep automatic legends stable and readable. */
+function niceIsolineStep(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  const power = 10 ** Math.floor(Math.log10(value));
+  const fraction = value / power;
+  const nice = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 5 ? 5 : 10;
+  return nice * power;
+}
+
+/** Marching-squares edge segments in grid coordinates (JS fallback/reference). */
 function marchingSquaresSegments(
   grid: Float32Array,
   cols: number,
   rows: number,
-  threshold: number
+  threshold: number,
+  validMask?: ArrayLike<number> | null
 ): Array<[[number, number], [number, number]]> {
   const out: Array<[[number, number], [number, number]]> = [];
   const lerp = (a: number, b: number, va: number, vb: number): number => {
@@ -173,6 +290,8 @@ function marchingSquaresSegments(
   for (let y = 0; y < rows - 1; y++) {
     for (let x = 0; x < cols - 1; x++) {
       const i = y * cols + x;
+      if (validMask && (!(Number(validMask[i]) > 0) || !(Number(validMask[i + 1]) > 0) ||
+        !(Number(validMask[i + cols]) > 0) || !(Number(validMask[i + cols + 1]) > 0))) continue;
       const tl = grid[i];
       const tr = grid[i + 1];
       const br = grid[i + cols + 1];
@@ -207,13 +326,9 @@ function marchingSquaresSegments(
           out.push([top, right]);
           break;
         case 5: {
-          // Saddle — pick consistent pairing via average
           const avg = (tl + tr + br + bl) * 0.25;
-          if (avg >= threshold) {
-            out.push([left, top], [bottom, right]);
-          } else {
-            out.push([left, bottom], [top, right]);
-          }
+          if (avg >= threshold) out.push([left, top], [bottom, right]);
+          else out.push([left, bottom], [top, right]);
           break;
         }
         case 6:
@@ -226,11 +341,8 @@ function marchingSquaresSegments(
           break;
         case 10: {
           const avg = (tl + tr + br + bl) * 0.25;
-          if (avg >= threshold) {
-            out.push([left, bottom], [top, right]);
-          } else {
-            out.push([left, top], [bottom, right]);
-          }
+          if (avg >= threshold) out.push([left, bottom], [top, right]);
+          else out.push([left, top], [bottom, right]);
           break;
         }
         default:
@@ -241,32 +353,24 @@ function marchingSquaresSegments(
   return out;
 }
 
+
 function connectSegments(
   segments: Array<[[number, number], [number, number]]>
 ): Array<Array<[number, number]>> {
   if (!segments.length) return [];
-
   const key = (p: [number, number]): string => `${p[0].toFixed(4)},${p[1].toFixed(4)}`;
   const used = new Uint8Array(segments.length);
   const chains: Array<Array<[number, number]>> = [];
-
-  // Adjacency by endpoint key
   const ends = new Map<string, number[]>();
   for (let i = 0; i < segments.length; i++) {
     const [a, b] = segments[i];
     const ka = key(a);
     const kb = key(b);
     let la = ends.get(ka);
-    if (!la) {
-      la = [];
-      ends.set(ka, la);
-    }
+    if (!la) { la = []; ends.set(ka, la); }
     la.push(i);
     let lb = ends.get(kb);
-    if (!lb) {
-      lb = [];
-      ends.set(kb, lb);
-    }
+    if (!lb) { lb = []; ends.set(kb, lb); }
     lb.push(i);
   }
 
@@ -275,71 +379,40 @@ function connectSegments(
     used[start] = 1;
     const [a0, b0] = segments[start];
     const chain: Array<[number, number]> = [a0, b0];
-
-    // Extend forward from b0
     let head = b0;
     for (;;) {
       const candidates = ends.get(key(head));
       if (!candidates) break;
       let nextIdx = -1;
-      for (const idx of candidates) {
-        if (!used[idx]) {
-          nextIdx = idx;
-          break;
-        }
-      }
+      for (const idx of candidates) if (!used[idx]) { nextIdx = idx; break; }
       if (nextIdx < 0) break;
       used[nextIdx] = 1;
       const [a, b] = segments[nextIdx];
-      if (key(a) === key(head)) {
-        chain.push(b);
-        head = b;
-      } else {
-        chain.push(a);
-        head = a;
-      }
+      if (key(a) === key(head)) { chain.push(b); head = b; }
+      else { chain.push(a); head = a; }
     }
-
-    // Extend backward from a0
     let tail = a0;
     for (;;) {
       const candidates = ends.get(key(tail));
       if (!candidates) break;
       let nextIdx = -1;
-      for (const idx of candidates) {
-        if (!used[idx]) {
-          nextIdx = idx;
-          break;
-        }
-      }
+      for (const idx of candidates) if (!used[idx]) { nextIdx = idx; break; }
       if (nextIdx < 0) break;
       used[nextIdx] = 1;
       const [a, b] = segments[nextIdx];
-      if (key(a) === key(tail)) {
-        chain.unshift(b);
-        tail = b;
-      } else {
-        chain.unshift(a);
-        tail = a;
-      }
+      if (key(a) === key(tail)) { chain.unshift(b); tail = b; }
+      else { chain.unshift(a); tail = a; }
     }
-
     chains.push(chain);
   }
-
   return chains;
 }
 
-function normalizeHeat(value: HeatIsolineInput): { lat: number; lng: number; weight: number } | null {
-  if (Array.isArray(value)) {
-    const lat = Number(value[0]);
-    const lng = Number(value[1]);
-    const weight = value[2] == null ? 1 : Number(value[2]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng, weight: Number.isFinite(weight) ? weight : 1 };
-  }
-  const point = latLng(value);
-  if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
-  return { lat: point.lat, lng: point.lng, weight: 1 };
+function finitePositive(value: unknown): boolean {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0;
 }
 
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+}

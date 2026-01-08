@@ -135,10 +135,15 @@ export class Layer<TOptions extends LayerOptions = LayerOptions> extends Evented
     if (!createTooltip) throw new Error("Tooltip module is not registered");
     this.unbindTooltip();
     this._tooltip = createTooltip(content, options);
-    const open: EventHandler = (event) => this.openTooltip(this._eventLatLng(event));
+    const open: EventHandler = (event) => {
+      this._tooltip?.setContentContext({ source: this, event, data: event.data });
+      this.openTooltip(this._eventLatLng(event));
+    };
     const move: EventHandler = (event) => {
       const value = this._eventLatLng(event, false);
-      if (value && this._tooltip?.isOpen()) this._tooltip.setLatLng(value);
+      if (!value || !this._tooltip?.isOpen()) return;
+      this._tooltip.setContentContext({ source: this, event, data: event.data });
+      this._tooltip.setLatLng(value);
     };
     const close: EventHandler = () => {
       if (!this._tooltip?.options.permanent) this.closeTooltip();
@@ -149,6 +154,7 @@ export class Layer<TOptions extends LayerOptions = LayerOptions> extends Evented
     };
     this._tooltipHandlers = [
       ["mouseover", open],
+      ["mousemove", move],
       ["mouseout", close],
       ["drag", move],
       ["add", add],

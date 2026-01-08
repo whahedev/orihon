@@ -36,7 +36,7 @@ dom.window.HTMLCanvasElement.prototype.toBlob = function(callback) {
   callback(new Blob(["png"], { type: "image/png" }));
 };
 
-const [{ Orihon, CRS, divIcon, marker }, controls, geo] = await Promise.all([
+const [{ Orihon, CRS, icon, marker }, controls, geo] = await Promise.all([
   import("../dist/index.js"),
   import("orihon/controls"),
   import("orihon/geo")
@@ -66,7 +66,7 @@ test("orihon/geo bufferPoint creates a closed geodesic polygon", () => {
 test("marker rotation composes with positioning for DivIcon markers", () => {
   const map = new Orihon(createContainer(), { controls: false });
   const layer = marker([10, 20], {
-    icon: divIcon({ content: "A" }),
+    icon: icon({ content: "A" }),
     rotation: 45,
     rotationOrigin: "center bottom",
     draggable: true

@@ -1,6 +1,6 @@
 import { geoTransformCss, tileCornerLayerTransform, tileLevelWarpCss } from "../camera.js";
 import { createEl } from "../dom.js";
-import { TILE_SIZE, LatLngBounds, latLngBounds, type LatLngBoundsLike } from "../geo.js";
+import { TILE_SIZE, LatLngBounds, bounds, type LatLngBoundsLike } from "../geo.js";
 import type { Layer } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { GridLayer, type GridLayerOptions, type ResolvedGridLayerOptions } from "./grid-layer.js";
@@ -53,6 +53,10 @@ export interface TileLayerOptions extends GridLayerOptions {
    * Standard/Core stay on DOM unless the app also imports `orihon/webgpu`.
    */
   renderer?: "auto" | "dom" | "webgl" | "webgpu";
+  /** GPU path: maximum new tile textures uploaded in one frame. */
+  maxNewPerFrame?: number;
+  /** GPU path: upper device-pixel-ratio used by the framebuffer. */
+  maxDpr?: number;
 }
 
 interface ResolvedTileOptions extends ResolvedGridLayerOptions {
@@ -93,15 +97,16 @@ interface TileRecord {
   priority: number;
 }
 
-function normalizeBounds(value: unknown): LatLngBounds | null {
+/** Internal normalization shared by DOM and GPU raster tile implementations. */
+export function normalizeTileBounds(value: unknown, errorMessage: string): LatLngBounds | null {
   if (!value) return null;
   try {
-    const normalized = latLngBounds(value as LatLngBoundsLike);
+    const normalized = bounds(value as LatLngBoundsLike);
     if (normalized.isValid()) return normalized;
   } catch {
-    // Normalize all malformed forms to the same public error.
+    // Normalize malformed coordinate forms to the caller's public error.
   }
-  throw new TypeError("TileLayer bounds must contain south, west, north and east");
+  throw new TypeError(errorMessage);
 }
 
 export class TileLayer extends GridLayer<ResolvedTileOptions> {
@@ -154,7 +159,10 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
       bounds: null,
       ...options
     } as ResolvedTileOptions;
-    resolved.bounds = normalizeBounds(resolved.bounds);
+    resolved.bounds = normalizeTileBounds(
+      resolved.bounds,
+      "TileLayer bounds must contain south, west, north and east"
+    );
     super(resolved);
     this.template = template;
     this._retina = Boolean(
@@ -210,13 +218,6 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   setUrl(template: TileTemplate, redraw = true): this {
     this.template = template;
     if (redraw) this.redraw();
-    return this;
-  }
-
-  setOpacity(opacity: number): this {
-    const next = Number(opacity);
-    this.options.opacity = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
-    if (this.container) this.container.style.opacity = String(this.options.opacity);
     return this;
   }
 
@@ -649,11 +650,11 @@ export function nativeTileZoom(maxNativeZoom: unknown, maxZoom: number): number 
 export function tileLayer(template: TileTemplate, options?: TileLayerOptions): TileLayer {
   const requested = options?.renderer ?? "auto";
   if (requested === "dom") return new TileLayer(template, options);
-  if ((requested === "webgpu" || requested === "auto") && gpuTileFactory && gpuContextAvailable()) {
+  const available = requested === "webgpu" ? gpuContextAvailable()
+    : requested === "webgl" ? webglContextAvailable()
+      : gpuContextAvailable() || webglContextAvailable();
+  if (gpuTileFactory && available) {
     return gpuTileFactory(template, options) as TileLayer;
-  }
-  if ((requested === "webgl" || requested === "auto") && webglTileFactory && webglContextAvailable()) {
-    return webglTileFactory(template, options) as TileLayer;
   }
   return new TileLayer(template, options);
 }
@@ -662,18 +663,12 @@ export function tileLayer(template: TileTemplate, options?: TileLayerOptions): T
  * Optional GPU raster basemap (Advanced tier).
  * Standard/Core keep DOM `<img>` tiles — register from `orihon` entry, not `orihon/core`.
  */
-export type WebGLTileFactory = (template: TileTemplate, options?: TileLayerOptions) => Layer;
+export type GPUTileFactory = (template: TileTemplate, options?: TileLayerOptions) => Layer;
 
-let webglTileFactory: WebGLTileFactory | null = null;
-let gpuTileFactory: WebGLTileFactory | null = null;
+let gpuTileFactory: GPUTileFactory | null = null;
 
-/** Advanced entry calls this so `renderer: "webgl" | "auto"` can use GPU tiles. */
-export function registerWebGLTileFactory(factory: WebGLTileFactory | null): void {
-  webglTileFactory = factory;
-}
-
-/** Advanced entry and optional `orihon/webgpu` call this so `renderer: "webgpu" | "auto"` can use WebGPU tiles. */
-export function registerGpuTileFactory(factory: WebGLTileFactory | null): void {
+/** Advanced entry registers the unified WebGPU/WebGL raster implementation. */
+export function registerGpuTileFactory(factory: GPUTileFactory | null): void {
   gpuTileFactory = factory;
 }
 

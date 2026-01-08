@@ -1,16 +1,5 @@
 import { createSvgEl, listen, listenTap } from "../dom.js";
-import {
-  EARTH_RADIUS,
-  destination,
-  geodesicInterpolate,
-  LatLng,
-  LatLngBounds,
-  latLng,
-  latLngBounds,
-  metersToPixels,
-  type LatLngBoundsLike,
-  type LatLngLike
-} from "../geo.js";
+import { EARTH_RADIUS, destination, geodesicInterpolate, LatLng, LatLngBounds, latLng, bounds, metersToPixels, type LatLngBoundsLike, type LatLngLike } from "../geo.js";
 import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions, TooltipOptions } from "../overlays/div-overlay.js";
@@ -504,7 +493,7 @@ export class Rectangle extends Polygon {
   rectangleBounds: LatLngBounds;
 
   constructor(value: LatLngBoundsLike, options: PathOptions = {}) {
-    const target = latLngBounds(value);
+    const target = bounds(value);
     super([
       target.getNorthWest(),
       target.getNorthEast(),
@@ -515,7 +504,7 @@ export class Rectangle extends Polygon {
   }
 
   setBounds(value: LatLngBoundsLike): this {
-    const target = latLngBounds(value);
+    const target = bounds(value);
     this.rectangleBounds = new LatLngBounds(target);
     this.setLatLngs([
       target.getNorthWest(),

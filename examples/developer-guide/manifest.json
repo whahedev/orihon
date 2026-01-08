@@ -1,0 +1,512 @@
+{
+  "version": "1.0.6",
+  "generatedAt": "2026-08-26T04:35:05.511Z",
+  "source": "src/index.ts",
+  "confluenceSource": "http://confluence.home",
+  "functions": [
+    {
+      "name": "createMap",
+      "group": "Карта и камера",
+      "entry": "orihon/core",
+      "summary": "Создаёт карту Orihon внутри указанного HTML-контейнера и настраивает начальный центр, масштаб и элементы управления.",
+      "url": "./functions/createMap/"
+    },
+    {
+      "name": "featureGroup",
+      "group": "Карта и камера",
+      "entry": "orihon/standard",
+      "summary": "Объединяет несколько интерактивных слоёв: события, добавление на карту и вычисление общей области выполняются как для одного объекта.",
+      "url": "./functions/featureGroup/"
+    },
+    {
+      "name": "bounds",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Создаёт расширяемую географическую область по двум углам, массиву координат или существующему объекту границ.",
+      "url": "./functions/bounds/"
+    },
+    {
+      "name": "buildHeat",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon",
+      "summary": "Строит scalar field и, при необходимости, изолинии без создания слоя карты.",
+      "url": "./functions/buildHeat/"
+    },
+    {
+      "name": "clampLat",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Ограничивает широту диапазоном, который корректно отображается проекцией Web Mercator.",
+      "url": "./functions/clampLat/"
+    },
+    {
+      "name": "createWMTSFromCapabilities",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/standard",
+      "summary": "Разбирает XML WMTS GetCapabilities в конфигурацию, пригодную для wmtsTileLayer.",
+      "url": "./functions/createWMTSFromCapabilities/"
+    },
+    {
+      "name": "decodeMVT",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon",
+      "summary": "Декодирует бинарный MVT-тайл в набор геометрий и свойств, доступных JavaScript-коду.",
+      "url": "./functions/decodeMVT/"
+    },
+    {
+      "name": "destination",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Находит координату, расположенную на заданном расстоянии и азимуте от исходной точки по поверхности Земли.",
+      "url": "./functions/destination/"
+    },
+    {
+      "name": "distance",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Вычисляет кратчайшее геодезическое расстояние между двумя координатами в метрах.",
+      "url": "./functions/distance/"
+    },
+    {
+      "name": "geodesicInterpolate",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Добавляет промежуточные точки вдоль дуги большого круга, чтобы длинная линия корректно следовала кривизне Земли.",
+      "url": "./functions/geodesicInterpolate/"
+    },
+    {
+      "name": "latLng",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Нормализует поддерживаемый формат координаты в объект LatLng с широтой и долготой.",
+      "url": "./functions/latLng/"
+    },
+    {
+      "name": "lngLat",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Создаёт LatLng из longitude-first координат MapLibre, GeoJSON и совместимых API.",
+      "url": "./functions/lngLat/"
+    },
+    {
+      "name": "markerShapeMetrics",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/standard",
+      "summary": "Возвращает размеры и точки привязки встроенной формы маркера для собственного layout или renderer.",
+      "url": "./functions/markerShapeMetrics/"
+    },
+    {
+      "name": "metersToPixels",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Переводит реальное расстояние в экранные пиксели для заданной широты и масштаба Web Mercator.",
+      "url": "./functions/metersToPixels/"
+    },
+    {
+      "name": "point",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Создаёт двумерную точку в экранных или мировых пиксельных координатах; это не широта и долгота.",
+      "url": "./functions/point/"
+    },
+    {
+      "name": "pointBounds",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Создаёт прямоугольную область в пиксельной системе координат по двум точкам или набору точек.",
+      "url": "./functions/pointBounds/"
+    },
+    {
+      "name": "preparePointBatch",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon",
+      "summary": "Синхронно упаковывает точки в типизированные массивы, пригодные для массовой GPU-отрисовки.",
+      "url": "./functions/preparePointBatch/"
+    },
+    {
+      "name": "preparePointBatchAsync",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon",
+      "summary": "Кооперативно подготавливает большой iterable или async iterable точек без длительной блокировки main thread.",
+      "url": "./functions/preparePointBatchAsync/"
+    },
+    {
+      "name": "project",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Переводит географическую координату в мировые пиксели Web Mercator на указанном zoom.",
+      "url": "./functions/project/"
+    },
+    {
+      "name": "scale",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Возвращает ширину мира Web Mercator в пикселях на заданном уровне масштаба.",
+      "url": "./functions/scale/"
+    },
+    {
+      "name": "unproject",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Преобразует мировую пиксельную точку Web Mercator обратно в широту и долготу.",
+      "url": "./functions/unproject/"
+    },
+    {
+      "name": "wrapLng",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Переносит долготу в стандартный диапазон от −180° включительно до 180°.",
+      "url": "./functions/wrapLng/"
+    },
+    {
+      "name": "zoomForBounds",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon/core",
+      "summary": "Подбирает максимальный zoom, при котором заданная географическая область целиком помещается в viewport.",
+      "url": "./functions/zoomForBounds/"
+    },
+    {
+      "name": "tileLayer",
+      "group": "Растровые тайлы",
+      "entry": "orihon/core",
+      "summary": "Создаёт растровую подложку и выбирает DOM, WebGL или WebGPU без отдельной GPU-фабрики.",
+      "url": "./functions/tileLayer/"
+    },
+    {
+      "name": "vectorTileLayer",
+      "group": "Растровые тайлы",
+      "entry": "orihon",
+      "summary": "Запрашивает векторные тайлы через provider и отображает их геометрию по правилам paint.",
+      "url": "./functions/vectorTileLayer/"
+    },
+    {
+      "name": "wmsTileLayer",
+      "group": "Растровые тайлы",
+      "entry": "orihon/standard",
+      "summary": "Формирует WMS GetMap-запросы и показывает ответ сервера как растровую подложку.",
+      "url": "./functions/wmsTileLayer/"
+    },
+    {
+      "name": "wmtsTileLayer",
+      "group": "Растровые тайлы",
+      "entry": "orihon/standard",
+      "summary": "Создаёт WMTS raster layer с матрицей тайлов и параметрами выбранного TileMatrixSet.",
+      "url": "./functions/wmtsTileLayer/"
+    },
+    {
+      "name": "wTinyLfu",
+      "group": "Растровые тайлы",
+      "entry": "orihon",
+      "summary": "Создаёт ограниченный кэш с политикой W-TinyLFU, устойчивой к вытеснению часто используемых записей случайным потоком.",
+      "url": "./functions/wTinyLfu/"
+    },
+    {
+      "name": "circle",
+      "group": "Векторные данные",
+      "entry": "orihon/standard",
+      "summary": "Рисует географический круг с радиусом в метрах; его экранный размер меняется вместе с масштабом карты.",
+      "url": "./functions/circle/"
+    },
+    {
+      "name": "circleMarker",
+      "group": "Векторные данные",
+      "entry": "orihon/standard",
+      "summary": "Рисует точечный круг фиксированного размера в пикселях — удобно для станций, событий и небольших выборок.",
+      "url": "./functions/circleMarker/"
+    },
+    {
+      "name": "createMVTProvider",
+      "group": "Векторные данные",
+      "entry": "orihon",
+      "summary": "Создаёт загрузчик бинарных MVT-тайлов, который можно передать в vectorTileLayer.",
+      "url": "./functions/createMVTProvider/"
+    },
+    {
+      "name": "geoJSON",
+      "group": "Векторные данные",
+      "entry": "orihon/standard",
+      "summary": "Создаёт отображаемый слой из GeoJSON Geometry, Feature или FeatureCollection.",
+      "url": "./functions/geoJSON/"
+    },
+    {
+      "name": "polygon",
+      "group": "Векторные данные",
+      "entry": "orihon/standard",
+      "summary": "Рисует замкнутую географическую область с заливкой, обводкой и интерактивными событиями.",
+      "url": "./functions/polygon/"
+    },
+    {
+      "name": "polyline",
+      "group": "Векторные данные",
+      "entry": "orihon/standard",
+      "summary": "Рисует географическую ломаную по упорядоченному массиву координат.",
+      "url": "./functions/polyline/"
+    },
+    {
+      "name": "rectangle",
+      "group": "Векторные данные",
+      "entry": "orihon/standard",
+      "summary": "Создаёт полигон прямоугольной формы по географическим границам.",
+      "url": "./functions/rectangle/"
+    },
+    {
+      "name": "textLayer",
+      "group": "Векторные данные",
+      "entry": "orihon/standard",
+      "summary": "Размещает текст в географической точке как лёгкий слой с управлением стилем и видимостью.",
+      "url": "./functions/textLayer/"
+    },
+    {
+      "name": "icon",
+      "group": "Маркеры и оверлеи",
+      "entry": "orihon/standard",
+      "summary": "Описывает растровую иконку маркера: изображение, размер, anchor и дополнительные CSS-настройки.",
+      "url": "./functions/icon/"
+    },
+    {
+      "name": "imageOverlay",
+      "group": "Маркеры и оверлеи",
+      "entry": "orihon/standard",
+      "summary": "Растягивает изображение по заданной географической области и синхронизирует его с картой.",
+      "url": "./functions/imageOverlay/"
+    },
+    {
+      "name": "marker",
+      "group": "Маркеры и оверлеи",
+      "entry": "orihon/standard",
+      "summary": "Создаёт интерактивный DOM-маркер в географической точке с popup, tooltip и обработчиками событий.",
+      "url": "./functions/marker/"
+    },
+    {
+      "name": "popup",
+      "group": "Маркеры и оверлеи",
+      "entry": "orihon/standard",
+      "summary": "Создаёт информационное окно, которое можно открыть в координате или привязать к слою.",
+      "url": "./functions/popup/"
+    },
+    {
+      "name": "sanitizeSvgElement",
+      "group": "Маркеры и оверлеи",
+      "entry": "orihon/standard",
+      "summary": "Удаляет из SVG скрипты, обработчики событий и опасные внешние URL перед вставкой в DOM.",
+      "url": "./functions/sanitizeSvgElement/"
+    },
+    {
+      "name": "svgOverlay",
+      "group": "Маркеры и оверлеи",
+      "entry": "orihon/standard",
+      "summary": "Размещает безопасное SVG-изображение внутри заданных географических границ.",
+      "url": "./functions/svgOverlay/"
+    },
+    {
+      "name": "tooltip",
+      "group": "Маркеры и оверлеи",
+      "entry": "orihon/standard",
+      "summary": "Создаёт компактную подсказку для наведения или постоянного отображения рядом с объектом.",
+      "url": "./functions/tooltip/"
+    },
+    {
+      "name": "videoOverlay",
+      "group": "Маркеры и оверлеи",
+      "entry": "orihon/standard",
+      "summary": "Размещает видео внутри географической области и синхронизирует его положение с картой.",
+      "url": "./functions/videoOverlay/"
+    },
+    {
+      "name": "attributionControl",
+      "group": "Элементы управления",
+      "entry": "orihon/standard",
+      "summary": "Показывает на карте авторство и лицензии активных источников данных.",
+      "url": "./functions/attributionControl/"
+    },
+    {
+      "name": "customControl",
+      "group": "Элементы управления",
+      "entry": "orihon/standard",
+      "summary": "Размещает пользовательский HTML-элемент в одной из стандартных областей управления карты.",
+      "url": "./functions/customControl/"
+    },
+    {
+      "name": "geolocationControl",
+      "group": "Элементы управления",
+      "entry": "orihon/standard",
+      "summary": "Добавляет кнопку определения текущего положения пользователя и перемещения карты к найденной координате.",
+      "url": "./functions/geolocationControl/"
+    },
+    {
+      "name": "layersControl",
+      "group": "Элементы управления",
+      "entry": "orihon/standard",
+      "summary": "Добавляет панель выбора одной базовой подложки и включения независимых overlay-слоёв.",
+      "url": "./functions/layersControl/"
+    },
+    {
+      "name": "scaleControl",
+      "group": "Элементы управления",
+      "entry": "orihon/standard",
+      "summary": "Показывает линейку, связывающую экранную длину с реальным расстоянием на текущей широте.",
+      "url": "./functions/scaleControl/"
+    },
+    {
+      "name": "zoomControl",
+      "group": "Элементы управления",
+      "entry": "orihon/standard",
+      "summary": "Добавляет стандартные кнопки увеличения и уменьшения масштаба карты.",
+      "url": "./functions/zoomControl/"
+    },
+    {
+      "name": "createStraightLineRoutingProvider",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Создаёт демонстрационный routing provider, соединяющий путевые точки прямыми отрезками без дорожного графа.",
+      "url": "./functions/createStraightLineRoutingProvider/"
+    },
+    {
+      "name": "createSuggestProvider",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Добавляет задержку, отмену устаревших запросов и нормализацию результатов к пользовательской функции подсказок.",
+      "url": "./functions/createSuggestProvider/"
+    },
+    {
+      "name": "createSuggestWidget",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Создаёт готовое поле ввода с выпадающими подсказками и обработкой выбора результата.",
+      "url": "./functions/createSuggestWidget/"
+    },
+    {
+      "name": "objectManager",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Хранит, индексирует, фильтрует, кластеризует и отображает большие наборы разнородных объектов карты.",
+      "url": "./functions/objectManager/"
+    },
+    {
+      "name": "routingLayer",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Запрашивает маршруты у provider и отображает основной и альтернативные варианты на карте.",
+      "url": "./functions/routingLayer/"
+    },
+    {
+      "name": "searchProvider",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Создаёт единый поисковый provider из локального массива или пользовательского адаптера search/geocode/reverse.",
+      "url": "./functions/searchProvider/"
+    },
+    {
+      "name": "spatialGridIndex",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Индексирует объекты по ячейкам, чтобы быстро находить элементы в прямоугольной области.",
+      "url": "./functions/spatialGridIndex/"
+    },
+    {
+      "name": "trafficLayer",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Отображает пробки или другую дорожную обстановку из переданного тайлового источника.",
+      "url": "./functions/trafficLayer/"
+    },
+    {
+      "name": "webglPointLayer",
+      "group": "WebGL",
+      "entry": "orihon",
+      "summary": "Рисует десятки тысяч и миллионы точек через WebGL с компактным хранением данных.",
+      "url": "./functions/webglPointLayer/"
+    },
+    {
+      "name": "webglPolygonBatch",
+      "group": "WebGL",
+      "entry": "orihon",
+      "summary": "Триангулирует и рисует пакет полигонов через WebGL.",
+      "url": "./functions/webglPolygonBatch/"
+    },
+    {
+      "name": "webglSymbolLayer",
+      "group": "WebGL",
+      "entry": "orihon",
+      "summary": "Рисует большой набор GPU-символов с atlas-текстурами, поворотом и масштабированием.",
+      "url": "./functions/webglSymbolLayer/"
+    },
+    {
+      "name": "heatLayer",
+      "group": "Тепловые карты и изолинии",
+      "entry": "orihon",
+      "summary": "Создаёт единый интерактивный слой тепловой поверхности, изолиний или их комбинации.",
+      "url": "./functions/heatLayer/"
+    },
+    {
+      "name": "heatSupport",
+      "group": "Тепловые карты и изолинии",
+      "entry": "orihon",
+      "summary": "Асинхронно сообщает, доступны ли ускоренные WASM и WebGPU backend’ы в текущей среде.",
+      "url": "./functions/heatSupport/"
+    },
+    {
+      "name": "createMapAdapter",
+      "group": "Производительность и инфраструктура",
+      "entry": "orihon",
+      "summary": "Оборачивает жизненный цикл карты в небольшой adapter для интеграции с UI-фреймворками.",
+      "url": "./functions/createMapAdapter/"
+    },
+    {
+      "name": "defineOrihonElement",
+      "group": "Производительность и инфраструктура",
+      "entry": "orihon",
+      "summary": "Регистрирует Web Component, позволяющий создавать карту декларативным HTML-тегом.",
+      "url": "./functions/defineOrihonElement/"
+    },
+    {
+      "name": "geometryWorkerPool",
+      "group": "Производительность и инфраструктура",
+      "entry": "orihon",
+      "summary": "Создаёт переиспользуемый пул Web Workers для подготовки больших массивов геометрии вне main thread.",
+      "url": "./functions/geometryWorkerPool/"
+    },
+    {
+      "name": "offlineTileCache",
+      "group": "Производительность и инфраструктура",
+      "entry": "orihon",
+      "summary": "Управляет предварительной загрузкой тайлов в Cache Storage для последующей работы без сети.",
+      "url": "./functions/offlineTileCache/"
+    },
+    {
+      "name": "pathBatch",
+      "group": "Производительность и инфраструктура",
+      "entry": "orihon",
+      "summary": "Создаёт единый пакетный слой линий с выбором реализации по требуемому стилю.",
+      "url": "./functions/pathBatch/"
+    },
+    {
+      "name": "performanceInspector",
+      "group": "Производительность и инфраструктура",
+      "entry": "orihon",
+      "summary": "Собирает и показывает FPS, задержки кадров, количество слоёв и другие показатели работающей карты.",
+      "url": "./functions/performanceInspector/"
+    },
+    {
+      "name": "ensureLocalePacks",
+      "group": "Локализация",
+      "entry": "orihon/standard",
+      "summary": "Асинхронно загружает дополнительные встроенные переводы перед использованием языка, отличного от английского.",
+      "url": "./functions/ensureLocalePacks/"
+    },
+    {
+      "name": "registerLocalePacks",
+      "group": "Локализация",
+      "entry": "orihon/standard",
+      "summary": "Регистрирует встроенные или пользовательские таблицы переводов, доступные всем новым картам.",
+      "url": "./functions/registerLocalePacks/"
+    },
+    {
+      "name": "resolveLocale",
+      "group": "Локализация",
+      "entry": "orihon/standard",
+      "summary": "Преобразует имя языка или частичный словарь переводов в полный набор текстов интерфейса.",
+      "url": "./functions/resolveLocale/"
+    }
+  ]
+}

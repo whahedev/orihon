@@ -21,6 +21,18 @@ tsconfig.plugin-template.json
 **/*.map
 dist/**/*.map
 dist/release-manifest.json
+# Retired heat APIs must never leak from a stale local TypeScript output tree.
+dist/layers/heat-layer.*
+dist/layers/webgl-heat-layer.*
+dist/layers/heat-isoline-layer.*
+dist/layers/heat-pipeline-layer.*
+dist/services/heat-scale.*
+dist/services/heat-pipeline.*
+dist/services/heat-pipeline-worker.*
+dist/layers/webgl-tile-layer.*
+dist/layers/webgpu-tile-layer.*
 *.tgz
 tmp-debug-*.mjs
 .codex-confluence-attachments-dom.txt
+docs/developer-guide/confluence-source.json
+docs/developer-guide/playground-examples.json

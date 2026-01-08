@@ -98,7 +98,7 @@ function expandBBox(
 }
 
 /** Approx haversine meters — good enough for dash/gradient progress. */
-function approxMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+export function approxHaversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const toRad = Math.PI / 180;
   const dLat = (lat2 - lat1) * toRad;
   const dLng = (lng2 - lng1) * toRad;
@@ -186,7 +186,7 @@ function normalizeLineString(raw: unknown, maxVertices: number): NormalizedLineS
     coords[i * 2] = lat;
     coords[i * 2 + 1] = lng;
     bbox = expandBBox(bbox, lat, lng);
-    if (i > 0) length += approxMeters(prevLat, prevLng, lat, lng);
+    if (i > 0) length += approxHaversineMeters(prevLat, prevLng, lat, lng);
     distances[i] = length;
     prevLat = lat;
     prevLng = lng;

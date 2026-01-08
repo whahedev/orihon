@@ -1,11 +1,12 @@
 import { createEl } from "../dom.js";
-import { latLng, latLngBounds, type LatLngLike } from "../geo.js";
+import { latLng, bounds, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
-import { parseCssColor } from "../webgl-utils.js";
+import { clampOpacity, parseCssColor } from "../webgl-utils.js";
 import { normalizeDashArray } from "./vector.js";
 import type { ObjectGradientStop } from "../services/object-types.js";
+import { approxHaversineMeters } from "../services/object-geometry.js";
 
 export interface StyledPathStyle {
   color?: string;
@@ -99,7 +100,7 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
       if (path.distances && path.distances.length > i) {
         distances[i] = Number(path.distances[i]) || 0;
       } else if (i > 0) {
-        length += haversine(lat[i - 1], lng[i - 1], p.lat, p.lng);
+        length += approxHaversineMeters(lat[i - 1], lng[i - 1], p.lat, p.lng);
         distances[i] = length;
       }
     }
@@ -188,7 +189,7 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    const view = latLngBounds(map.getBounds()).pad(0.15);
+    const view = bounds(map.getBounds()).pad(0.15);
     for (const path of this.paths) {
       if (
         path.bbox[2] < view.south ||
@@ -282,7 +283,7 @@ export function webglStyledPathBatch(options?: WebGLStyledPathBatchOptions): Web
 function normalizeStyle(style: StyledPathStyle | undefined): Required<StyledPathStyle> {
   return {
     color: style?.color ?? "#2563eb",
-    opacity: clamp01(style?.opacity ?? 0.85),
+    opacity: clampOpacity(style?.opacity ?? 0.85),
     width: Math.max(0.5, Number(style?.width) || 2),
     dashArray: normalizeDashArray((style?.dashArray as string | number[] | null | undefined) ?? null),
     dashOffset: Number(style?.dashOffset) || 0,
@@ -321,21 +322,6 @@ function mixCss(a: string, b: string, t: number): string {
   const ca = parseCssColor(a, { r: 0, g: 0, b: 0 });
   const cb = parseCssColor(b, { r: 0, g: 0, b: 0 });
   return `rgb(${Math.round(ca.r + (cb.r - ca.r) * t)},${Math.round(ca.g + (cb.g - ca.g) * t)},${Math.round(ca.b + (cb.b - ca.b) * t)})`;
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 1;
-  return Math.max(0, Math.min(1, value));
-}
-
-function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const toRad = Math.PI / 180;
-  const dLat = (lat2 - lat1) * toRad;
-  const dLng = (lng2 - lng1) * toRad;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLng / 2) ** 2;
-  return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
 function distanceToSegment(

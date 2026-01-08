@@ -137,8 +137,10 @@ export class DivIcon {
 
 export type MarkerIcon = Icon | DivIcon;
 
-export function icon(options: IconOptions): Icon {
-  return new Icon(options);
+export function icon(options: IconOptions): Icon;
+export function icon(options?: DivIconOptions): DivIcon;
+export function icon(options: IconOptions | DivIconOptions = {}): Icon | DivIcon {
+  return "iconUrl" in options ? new Icon(options) : new DivIcon(options);
 }
 
 export function divIcon(options?: DivIconOptions): DivIcon {

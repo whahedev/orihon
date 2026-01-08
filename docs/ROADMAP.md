@@ -15,7 +15,7 @@ These hold for every item below. If a design violates them, change the design.
 5. **Network is BYO.** Search, routing, geocoding, traffic stay provider-based with `AbortSignal`.
 6. **Do not become MapLibre.** No Mapbox Style spec, glyphs/PBF fonts, terrain, globe, or map-level pitch/bearing camera in 1.x.
 7. **Do not become OpenLayers.** No Proj4 / arbitrary CRS in core. WMS already speaks `EPSG:3857` and `EPSG:4326` as *request* CRS; the map stays Web Mercator unless `CRS.Simple` is set.
-8. **GPU layers assume Mercator.** `webglPointLayer`, `webglHeatLayer`, `tileLayer({ renderer: "webgl"|"auto" })` / `webglTileLayer`, `WebGLPathBatch`, ObjectManager WebGL path **throw a typed error** on a Simple-CRS map rather than rendering wrong.
+8. **GPU layers assume Mercator.** `webglPointLayer`, `heatLayer`, `tileLayer({ renderer: "webgl"|"auto" })`, `WebGLPathBatch`, ObjectManager WebGL path **throw a typed error** on a Simple-CRS map rather than rendering wrong.
 
 ## Packaging
 
@@ -86,7 +86,7 @@ draw.loadData(featureCollection);
 
 - `src/draw/handler.ts` — mode state machine
 - `src/draw/snap.ts` — pixel-space snap
-- `src/draw/handles.ts` — SVG vertex/midpoint markers (`divIcon` or SVG circles in overlay pane)
+- `src/draw/handles.ts` — SVG vertex/midpoint markers (`icon({ content })` or SVG circles in overlay pane)
 - `src/draw/control.ts` — toolbar `Control`
 - `src/draw/index.ts` — public entry
 - `test/draw.test.js`
@@ -322,7 +322,7 @@ textLayer(features, {
 
 **Behavior.** One canvas in overlay pane. Rebuild collision on `moveend`/`zoomend` (not every `move` frame). Greedy: higher-priority / larger zoom first; skip overlapping boxes. `placement: "line"` uses the same 40%-along-path idea as isolines. RTL: `direction: inherit` via canvas `textAlign` from map locale when locale is `ar`/`hi` only if we detect RTL locale flag — add `OrihonLocale.rtl?: boolean` or infer from `ar`.
 
-**Reuse.** Extract `pickLabelAnchor` from `heat-isoline-layer.ts` into `src/services/label-layout.ts`. Isolines call the shared helper.
+**Reuse.** `src/layers/heat.ts` and `textLayer` share `pickLabelAnchor` from `src/services/label-layout.ts`.
 
 **Acceptance.** 2k labels at z=12: no overlap, pan stays ≥ 50 fps on the bench page’s machine class. Standard budget: if this blows 36 KiB, ship as `orihon` Advanced-only (`textLayer` already conceptually “scale”). Prefer Advanced if > 2 KiB gzip.
 

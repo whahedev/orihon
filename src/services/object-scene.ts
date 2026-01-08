@@ -1,5 +1,6 @@
 import type { Orihon } from "../map.js";
-import { webglHeatLayer, type WebGLHeatLayer } from "../layers/webgl-heat-layer.js";
+import { heatLayer, type HeatLayer } from "../layers/heat.js";
+import type { HeatBackend, HeatMode, HeatEvaluation } from "./heat.js";
 import { webglSymbolLayer, type WebGLSymbolLayer, type WebGLSymbolInstance } from "../layers/webgl-symbol-layer.js";
 import { webglStyledPathBatch, type WebGLStyledPathBatch } from "../layers/webgl-styled-path-batch.js";
 import { webglPolygonBatch, type WebGLPolygonBatch } from "../layers/webgl-polygon-batch.js";
@@ -69,12 +70,23 @@ export interface ObjectSceneOptions {
   time?: ObjectTimeConfig | null;
   clusterProperties?: ClusterPropertiesConfig;
   heatmapWeight?: ((object: { properties?: Record<string, unknown> }, id?: string | number) => number) | null;
+  heatmapDisplay?: HeatMode;
+  heatmapIsolineLabels?: boolean;
+  heatmapBackend?: HeatBackend;
+  heatmapEvaluation?: HeatEvaluation;
+  heatmapIsolineStep?: "auto" | number;
 }
 
 /** Heatmap is the low-zoom view (auto until ~7). Bandwidth is defined there, not at city zoom. */
 const OBJECT_HEAT_SCALE_ZOOM = 6;
 
-function objectHeatLayerOptions() {
+function objectHeatLayerOptions(options: {
+  display: HeatMode;
+  labels: boolean;
+  backend: HeatBackend;
+  evaluation: HeatEvaluation;
+  isolineStep: "auto" | number;
+}) {
   return {
     pane: "overlay" as const,
     // Geographic stamps — avoid tight maxRadius clamps that change neighbourhood
@@ -82,14 +94,16 @@ function objectHeatLayerOptions() {
     radius: 16,
     blur: 12,
     scaleZoom: OBJECT_HEAT_SCALE_ZOOM,
-    minRadius: 6,
-    maxRadius: 56,
-    intensity: 1,
-    max: 1,
-    field: "value" as const,
+    mode: options.display,
+    backend: options.backend,
+    evaluation: options.evaluation,
+    step: options.isolineStep,
+    labels: options.labels,
+    levels: 5,
     minOpacity: 0.05,
     opacity: 0.85,
-    aggregateCellFactor: 0.22,
+    isolineWidth: 1.6,
+    isolineOpacity: 0.9,
     // Full sensor range: cool→green, alarm threshold≈0.5→yellow, hot→red.
     gradient: {
       0: "rgba(34, 197, 94, 0.15)",
@@ -119,9 +133,14 @@ export class ObjectSceneController {
   visualization: ObjectVisualizationMode = "objects";
   visualizationByZoom: ObjectVisualizationByZoom = { heatmapUntil: 7, clustersUntil: 12 };
   heatmapWeight: ((object: { properties?: Record<string, unknown> }, id?: string | number) => number) | null = null;
+  heatmapDisplay: HeatMode = "heatmap";
+  heatmapIsolineLabels = true;
+  heatmapBackend: HeatBackend = "auto";
+  heatmapEvaluation: HeatEvaluation = "static";
+  heatmapIsolineStep: "auto" | number = "auto";
 
   symbolLayer: WebGLSymbolLayer | null = null;
-  heatLayer: WebGLHeatLayer | null = null;
+  heatLayer: HeatLayer | null = null;
   pathBatch: WebGLStyledPathBatch | null = null;
   polygonBatch: WebGLPolygonBatch | null = null;
   labelCanvas: HTMLCanvasElement | null = null;
@@ -142,6 +161,11 @@ export class ObjectSceneController {
     };
     this.clusterProperties = options.clusterProperties ?? {};
     this.heatmapWeight = options.heatmapWeight ?? null;
+    this.heatmapDisplay = options.heatmapDisplay ?? "heatmap";
+    this.heatmapIsolineLabels = options.heatmapIsolineLabels !== false;
+    this.heatmapBackend = options.heatmapBackend ?? "auto";
+    this.heatmapEvaluation = options.heatmapEvaluation ?? "static";
+    this.heatmapIsolineStep = options.heatmapIsolineStep ?? "auto";
     this.searchIndex = options.search?.fields?.length
       ? new ObjectSearchIndex(options.search)
       : null;
@@ -398,7 +422,13 @@ export class ObjectSceneController {
       return;
     }
     if (!this.heatLayer) {
-      this.heatLayer = webglHeatLayer(hot, objectHeatLayerOptions());
+      this.heatLayer = heatLayer(hot, objectHeatLayerOptions({
+        display: this.heatmapDisplay,
+        labels: this.heatmapIsolineLabels,
+        backend: this.heatmapBackend,
+        evaluation: this.heatmapEvaluation,
+        isolineStep: this.heatmapIsolineStep
+      }));
       this.heatLayer.addTo(map);
       return;
     }
@@ -417,7 +447,13 @@ export class ObjectSceneController {
       return;
     }
     if (!this.heatLayer) {
-      this.heatLayer = webglHeatLayer([], objectHeatLayerOptions());
+      this.heatLayer = heatLayer([], objectHeatLayerOptions({
+        display: this.heatmapDisplay,
+        labels: this.heatmapIsolineLabels,
+        backend: this.heatmapBackend,
+        evaluation: this.heatmapEvaluation,
+        isolineStep: this.heatmapIsolineStep
+      }));
       this.heatLayer.addTo(map);
     }
     this.heatLayer.setPackedMercator(merc64, pointCount, weights);

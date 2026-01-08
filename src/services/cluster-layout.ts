@@ -142,6 +142,93 @@ function cellKey(cx: number, cy: number): number {
   return (cx + 0x1000000) * 0x2000000 + (cy + 0x1000000);
 }
 
+class PackedDistanceGrid {
+  readonly cellSize: number;
+  readonly radius2: number;
+  queries = 0;
+  inserts = 0;
+  probes = 0;
+  candidateChecks = 0;
+  private readonly trackStats: boolean;
+  private readonly mask: number;
+  private readonly keyX: Int32Array;
+  private readonly keyY: Int32Array;
+  private readonly head: Int32Array;
+  private readonly next: Int32Array;
+
+  constructor(cellSize: number, pointCapacity: number, trackStats = false) {
+    this.cellSize = Math.max(1e-12, cellSize);
+    this.trackStats = trackStats;
+    this.radius2 = this.cellSize * this.cellSize;
+    let tableCapacity = 16;
+    const target = Math.max(16, pointCapacity * 2);
+    while (tableCapacity < target) tableCapacity *= 2;
+    this.mask = tableCapacity - 1;
+    this.keyX = new Int32Array(tableCapacity);
+    this.keyY = new Int32Array(tableCapacity);
+    this.head = new Int32Array(tableCapacity);
+    this.head.fill(-1);
+    this.next = new Int32Array(pointCapacity);
+  }
+
+  private hash(cx: number, cy: number): number {
+    return (Math.imul(cx, 0x9e3779b1) ^ Math.imul(cy, 0x85ebca6b)) >>> 0;
+  }
+
+  /** Existing slot >= 0; otherwise bitwise-complement insertion slot. */
+  private findSlot(cx: number, cy: number): number {
+    let slot = this.hash(cx, cy) & this.mask;
+    for (;;) {
+      if (this.trackStats) this.probes++;
+      const head = this.head[slot];
+      if (head < 0) return ~slot;
+      if (this.keyX[slot] === cx && this.keyY[slot] === cy) return slot;
+      slot = (slot + 1) & this.mask;
+    }
+  }
+
+  insert(x: number, y: number, id: number): void {
+    if (this.trackStats) this.inserts++;
+    const cx = Math.floor(x / this.cellSize);
+    const cy = Math.floor(y / this.cellSize);
+    let slot = this.findSlot(cx, cy);
+    if (slot < 0) {
+      slot = ~slot;
+      this.keyX[slot] = cx;
+      this.keyY[slot] = cy;
+      this.next[id] = -1;
+    } else {
+      this.next[id] = this.head[slot];
+    }
+    this.head[slot] = id;
+  }
+
+  queryNearest(x: number, y: number, xs: Float64Array, ys: Float64Array): number {
+    if (this.trackStats) this.queries++;
+    const cx = Math.floor(x / this.cellSize);
+    const cy = Math.floor(y / this.cellSize);
+    let best = -1;
+    let bestDist = this.radius2;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const slot = this.findSlot(cx + dx, cy + dy);
+        if (slot < 0) continue;
+        for (let id = this.head[slot]; id >= 0; id = this.next[id]) {
+          if (this.trackStats) this.candidateChecks++;
+          const ddx = xs[id] - x;
+          const ddy = ys[id] - y;
+          const d2 = ddx * ddx + ddy * ddy;
+          if (d2 < bestDist || (best < 0 && d2 <= bestDist)) {
+            bestDist = d2;
+            best = id;
+          }
+        }
+      }
+    }
+    return best;
+  }
+}
+
 function appendChild(
   firstChild: Int32Array,
   nextSibling: Int32Array,
@@ -179,12 +266,22 @@ function buildClusterIndex(input: Omit<ClusterLayoutRequest, "zoomBucket">): Clu
   firstChild.fill(-1);
   nextSibling.fill(-1);
 
+  const simpleProjection = input.simple === true;
   for (let i = 0; i < leafCount; i++) {
     const la = coords[i * 2];
     const ln = coords[i * 2 + 1];
-    const p = projectCoordinate01(la, ln, input.simple);
-    x[i] = p.x;
-    y[i] = p.y;
+    if (simpleProjection) {
+      x[i] = ln / TILE_SIZE;
+      y[i] = la / TILE_SIZE;
+    } else {
+      let clampedLat = la;
+      if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
+      else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
+      const wrappedLng = ((ln + 180) % 360 + 360) % 360 - 180;
+      const sin = Math.sin((clampedLat * Math.PI) / 180);
+      x[i] = (wrappedLng + 180) / 360;
+      y[i] = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+    }
     lat[i] = la;
     lng[i] = ln;
     weight[i] = 1;
@@ -500,11 +597,333 @@ function buildClusterLayout(input: ClusterLayoutRequest): ClusterLayoutResult {
  * Single-zoom greedy clustering (O(n)) for fast first paint.
  * Full hierarchy is built separately via `buildClusterIndex`.
  */
+type GreedyProfile = Record<string, number | boolean | string>;
+type GreedyInternalRequest = ClusterLayoutRequest & {
+  __greedyProfile?: GreedyProfile;
+  /** Internal benchmark knob. 0 forces the pre-D4 grid-only path. */
+  __greedyDirectThreshold?: number;
+};
+
+function shouldUseAdaptiveDirectGreedy(
+  coords: Float64Array | Float32Array,
+  count: number,
+  cellSize: number,
+  directThreshold: number
+): boolean {
+  const sampleCount = Math.min(count, 64);
+  if (sampleCount <= 0 || directThreshold <= 0) return false;
+  // Origins can merge across adjacent cells, so allow a modestly wider sample
+  // footprint than the live-origin threshold itself. Sparse/regional datasets
+  // still fail this gate quickly.
+  const sampleCellLimit = Math.min(64, Math.max(directThreshold, directThreshold * 4));
+  const sampleX = new Int32Array(sampleCellLimit);
+  const sampleY = new Int32Array(sampleCellLimit);
+  const degToRad = Math.PI / 180;
+  const invFourPi = 1 / (4 * Math.PI);
+  let uniqueCells = 0;
+  for (let sample = 0; sample < sampleCount; sample++) {
+    const i = sampleCount === 1
+      ? 0
+      : Math.floor((sample * (count - 1)) / (sampleCount - 1));
+    const la = coords[i * 2];
+    const ln = coords[i * 2 + 1];
+    let clampedLat = la;
+    if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
+    else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
+    const wrappedLng = ln >= -180 && ln < 180
+      ? ln
+      : ((ln + 180) % 360 + 360) % 360 - 180;
+    const sin = Math.sin(clampedLat * degToRad);
+    const px = (wrappedLng + 180) / 360;
+    const py = 0.5 - Math.log((1 + sin) / (1 - sin)) * invFourPi;
+    const cx = Math.floor(px / cellSize);
+    const cy = Math.floor(py / cellSize);
+    let seen = false;
+    for (let j = 0; j < uniqueCells; j++) {
+      if (sampleX[j] === cx && sampleY[j] === cy) {
+        seen = true;
+        break;
+      }
+    }
+    if (seen) continue;
+    if (uniqueCells >= sampleCellLimit) return false;
+    sampleX[uniqueCells] = cx;
+    sampleY[uniqueCells] = cy;
+    uniqueCells++;
+  }
+  return true;
+}
+
+function buildAdaptiveDirectGreedyLayout(
+  input: ClusterLayoutRequest,
+  count: number,
+  idAt: (index: number) => ClusterLayoutId,
+  z: number,
+  cellSize: number,
+  minPoints: number,
+  directThreshold: number,
+  profile: GreedyProfile | undefined,
+  started: number
+): ClusterLayoutResult {
+  const now = (): number => typeof performance !== "undefined" ? performance.now() : Date.now();
+  const coords = input.coords;
+  const degToRad = Math.PI / 180;
+  const invFourPi = 1 / (4 * Math.PI);
+  const singles: ClusterLayoutSingle[] = [];
+  const clusters: ClusterLayoutCluster[] = [];
+
+  const setupStarted = profile ? now() : 0;
+  const ox = new Float64Array(count);
+  const oy = new Float64Array(count);
+  const assigned = new Uint8Array(count);
+  const clusterWeight = new Uint32Array(count);
+  const clusterTail = new Int32Array(count);
+  const nextLeaf = new Int32Array(count);
+  const clusterOrigins = new Int32Array(count);
+  let clusterOriginCount = 0;
+
+  const directCapacity = directThreshold + 1;
+  const directOriginId = new Int32Array(directCapacity);
+  const directCellX = new Int32Array(directCapacity);
+  const directCellY = new Int32Array(directCapacity);
+  const directInsertX = new Float64Array(directCapacity);
+  const directInsertY = new Float64Array(directCapacity);
+  let insertedOriginCount = 0;
+  let directQueries = 0;
+  let directOriginScans = 0;
+  let directCandidateChecks = 0;
+  let grid: PackedDistanceGrid | null = null;
+  const setupFinished = profile ? now() : 0;
+
+  const directStarted = profile ? now() : 0;
+  let cursor = 0;
+  while (cursor < count && insertedOriginCount <= directThreshold) {
+    const la = coords[cursor * 2];
+    const ln = coords[cursor * 2 + 1];
+    let clampedLat = la;
+    if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
+    else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
+    const wrappedLng = ln >= -180 && ln < 180
+      ? ln
+      : ((ln + 180) % 360 + 360) % 360 - 180;
+    const sin = Math.sin(clampedLat * degToRad);
+    const px = (wrappedLng + 180) / 360;
+    const py = 0.5 - Math.log((1 + sin) / (1 - sin)) * invFourPi;
+    const cx = Math.floor(px / cellSize);
+    const cy = Math.floor(py / cellSize);
+    const radius2 = cellSize * cellSize;
+    let origin = -1;
+    let bestDist = radius2;
+    let bestCellOrder = 10;
+    let bestSequence = -1;
+    directQueries++;
+
+    for (let sequence = 0; sequence < insertedOriginCount; sequence++) {
+      directOriginScans++;
+      const dx = directCellX[sequence] - cx;
+      if (dx < -1 || dx > 1) continue;
+      const dy = directCellY[sequence] - cy;
+      if (dy < -1 || dy > 1) continue;
+      directCandidateChecks++;
+      const candidate = directOriginId[sequence];
+      const ddx = ox[candidate] - px;
+      const ddy = oy[candidate] - py;
+      const d2 = ddx * ddx + ddy * ddy;
+      if (d2 > bestDist) continue;
+      const cellOrder = (dx + 1) * 3 + (dy + 1);
+      const precedesBest = cellOrder < bestCellOrder
+        || (cellOrder === bestCellOrder && sequence > bestSequence);
+      if (d2 < bestDist || origin < 0 || (d2 === bestDist && precedesBest)) {
+        bestDist = d2;
+        bestCellOrder = cellOrder;
+        bestSequence = sequence;
+        origin = candidate;
+      }
+    }
+
+    if (origin >= 0) {
+      let w = clusterWeight[origin];
+      if (w === 0) {
+        w = 1;
+        clusterWeight[origin] = 1;
+        clusterTail[origin] = origin;
+        nextLeaf[origin] = -1;
+        clusterOrigins[clusterOriginCount++] = origin;
+        assigned[origin] = 1;
+      }
+      const nw = w + 1;
+      ox[origin] = (ox[origin] * w + px) / nw;
+      oy[origin] = (oy[origin] * w + py) / nw;
+      const tail = clusterTail[origin];
+      nextLeaf[tail] = cursor;
+      nextLeaf[cursor] = -1;
+      clusterTail[origin] = cursor;
+      clusterWeight[origin] = nw;
+      assigned[cursor] = 1;
+    } else {
+      ox[cursor] = px;
+      oy[cursor] = py;
+      directOriginId[insertedOriginCount] = cursor;
+      directCellX[insertedOriginCount] = cx;
+      directCellY[insertedOriginCount] = cy;
+      directInsertX[insertedOriginCount] = px;
+      directInsertY[insertedOriginCount] = py;
+      insertedOriginCount++;
+      if (insertedOriginCount === directCapacity) {
+        grid = new PackedDistanceGrid(cellSize, count, Boolean(profile));
+        for (let sequence = 0; sequence < directCapacity; sequence++) {
+          grid.insert(
+            directInsertX[sequence],
+            directInsertY[sequence],
+            directOriginId[sequence]
+          );
+        }
+      }
+    }
+    cursor++;
+  }
+  const directFinished = profile ? now() : 0;
+
+  let projectionMs = 0;
+  let gridScanMs = 0;
+  let tempProjectedBytes = 0;
+  const remaining = count - cursor;
+  if (remaining > 0) {
+    const projectionStarted = profile ? now() : 0;
+    const xs = new Float64Array(remaining);
+    const ys = new Float64Array(remaining);
+    tempProjectedBytes = remaining * 16;
+    for (let j = 0; j < remaining; j++) {
+      const i = cursor + j;
+      const la = coords[i * 2];
+      const ln = coords[i * 2 + 1];
+      let clampedLat = la;
+      if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
+      else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
+      const wrappedLng = ln >= -180 && ln < 180
+        ? ln
+        : ((ln + 180) % 360 + 360) % 360 - 180;
+      const sin = Math.sin(clampedLat * degToRad);
+      xs[j] = (wrappedLng + 180) / 360;
+      ys[j] = 0.5 - Math.log((1 + sin) / (1 - sin)) * invFourPi;
+    }
+    const projectionFinished = profile ? now() : 0;
+    projectionMs = projectionFinished - projectionStarted;
+    if (!grid) grid = new PackedDistanceGrid(cellSize, count, Boolean(profile));
+
+    const scanStarted = profile ? now() : 0;
+    for (let j = 0; j < remaining; j++) {
+      const i = cursor + j;
+      const px = xs[j];
+      const py = ys[j];
+      const origin = grid.queryNearest(px, py, ox, oy);
+      if (origin >= 0) {
+        let w = clusterWeight[origin];
+        if (w === 0) {
+          w = 1;
+          clusterWeight[origin] = 1;
+          clusterTail[origin] = origin;
+          nextLeaf[origin] = -1;
+          clusterOrigins[clusterOriginCount++] = origin;
+          assigned[origin] = 1;
+        }
+        const nw = w + 1;
+        ox[origin] = (ox[origin] * w + px) / nw;
+        oy[origin] = (oy[origin] * w + py) / nw;
+        const tail = clusterTail[origin];
+        nextLeaf[tail] = i;
+        nextLeaf[i] = -1;
+        clusterTail[origin] = i;
+        clusterWeight[origin] = nw;
+        assigned[i] = 1;
+        continue;
+      }
+      ox[i] = px;
+      oy[i] = py;
+      grid.insert(px, py, i);
+      insertedOriginCount++;
+    }
+    const scanFinished = profile ? now() : 0;
+    gridScanMs = scanFinished - scanStarted;
+  }
+
+  const materializeStarted = profile ? now() : 0;
+  let clusterSeq = 0;
+  for (let clusterIndex = 0; clusterIndex < clusterOriginCount; clusterIndex++) {
+    const origin = clusterOrigins[clusterIndex];
+    const weight = clusterWeight[origin];
+    if (weight < minPoints) {
+      for (let leaf = origin; leaf >= 0; leaf = nextLeaf[leaf]) {
+        singles.push({ id: idAt(leaf), lat: coords[leaf * 2], lng: coords[leaf * 2 + 1] });
+      }
+      continue;
+    }
+    const ids: ClusterLayoutId[] = new Array(weight);
+    let meanLat = 0;
+    let meanLng = 0;
+    let position = 0;
+    for (let leaf = origin; leaf >= 0; leaf = nextLeaf[leaf]) {
+      const la = coords[leaf * 2];
+      const ln = coords[leaf * 2 + 1];
+      ids[position] = idAt(leaf);
+      const nextCount = position + 1;
+      meanLat = (meanLat * position + la) / nextCount;
+      meanLng = (meanLng * position + ln) / nextCount;
+      position = nextCount;
+    }
+    clusters.push({
+      key: `g${z}:${clusterSeq++}`,
+      lat: meanLat,
+      lng: meanLng,
+      ids,
+      count: weight,
+      nodeId: -1
+    });
+  }
+  for (let i = 0; i < count; i++) {
+    if (assigned[i]) continue;
+    singles.push({ id: idAt(i), lat: coords[i * 2], lng: coords[i * 2 + 1] });
+  }
+  const materializeFinished = profile ? now() : 0;
+
+  if (profile) {
+    const directMs = directFinished - directStarted;
+    profile.count = count;
+    profile.packedGrid = true;
+    profile.adaptiveDirect = true;
+    profile.fusedProjection = true;
+    profile.fusedProjectionPoints = directQueries;
+    profile.bulkProjectionPoints = remaining;
+    profile.tempProjectedBytes = tempProjectedBytes;
+    profile.projectionMs = projectionMs;
+    profile.directMs = directMs;
+    profile.gridScanMs = gridScanMs;
+    profile.scanMs = directMs + gridScanMs;
+    profile.setupMs = setupFinished - setupStarted;
+    profile.materializeMs = materializeFinished - materializeStarted;
+    profile.totalMs = materializeFinished - started;
+    profile.clusterOrigins = clusterOriginCount;
+    profile.insertedOrigins = insertedOriginCount;
+    profile.clusters = clusters.length;
+    profile.singles = singles.length;
+    profile.directThreshold = directThreshold;
+    profile.directQueries = directQueries;
+    profile.directOriginScans = directOriginScans;
+    profile.directCandidateChecks = directCandidateChecks;
+    profile.packedGridAllocated = Boolean(grid);
+    profile.gridQueries = grid?.queries ?? 0;
+    profile.gridInserts = grid?.inserts ?? 0;
+    profile.hashProbes = grid?.probes ?? 0;
+    profile.candidateChecks = grid?.candidateChecks ?? 0;
+  }
+  return { clusters, singles };
+}
+
 function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutResult {
   const coordCount = Math.floor(input.coords.length / 2);
-  // Workers intentionally omit arbitrary user ids to avoid cloning a 1M-element
-  // JS array. In that mode layout ids are leaf indices and the caller remaps only
-  // the small result set that crosses the worker boundary.
+  // The worker deliberately omits arbitrary user ids and returns leaf indices,
+  // which GeometryWorkerPool remaps after the transferable result arrives.
+  // Keep that compact wire format working alongside the normal id-bearing path.
   const hasIds = input.ids.length > 0;
   const count = hasIds ? Math.min(input.ids.length, coordCount) : coordCount;
   const idAt = (index: number): ClusterLayoutId => hasIds ? input.ids[index] : index;
@@ -516,7 +935,6 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
     }
     return { clusters, singles };
   }
-
   const zoomBucket = Math.floor(input.zoomBucket);
   const maxZoom = Math.max(0, Math.floor(input.clusterMaxZoom));
   if (zoomBucket > maxZoom) {
@@ -526,56 +944,105 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
     return { clusters, singles };
   }
 
+  const internalInput = input as GreedyInternalRequest;
+  const profile = internalInput.__greedyProfile;
+  const now = (): number => typeof performance !== "undefined" ? performance.now() : Date.now();
+  const started = profile ? now() : 0;
+
   const z = Math.max(0, Math.min(maxZoom, zoomBucket));
   const radius = Math.max(20, Number(input.gridSize) || 50);
   const minPoints = Math.max(2, Math.floor(input.minPoints));
-  const grid = new DistanceGrid(radius / (TILE_SIZE * 2 ** z));
+  const cellSize = radius / (TILE_SIZE * 2 ** z);
 
+  const projectionStarted = profile ? now() : 0;
+  const xs = new Float64Array(count);
+  const ys = new Float64Array(count);
   const coords = input.coords;
-  const ox = new Float64Array(count);
-  const oy = new Float64Array(count);
-  const assigned = new Uint8Array(count);
-  type Acc = { lat: number; lng: number; w: number; leaves: number[] | null };
-  const byOrigin = new Map<number, Acc>();
-  /** Keep leaf ids only for small clusters — 1M greedy must not allocate 1M id arrays. */
-  const expandLeavesUntil = 256;
-
+  const simpleProjection = input.simple === true;
+  const degToRad = Math.PI / 180;
+  const invFourPi = 1 / (4 * Math.PI);
   for (let i = 0; i < count; i++) {
     const la = coords[i * 2];
     const ln = coords[i * 2 + 1];
-    let px: number;
-    let py: number;
-    if (input.simple) {
-      px = ln / TILE_SIZE;
-      py = la / TILE_SIZE;
+    if (simpleProjection) {
+      xs[i] = ln / TILE_SIZE;
+      ys[i] = la / TILE_SIZE;
     } else {
       let clampedLat = la;
       if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
       else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
-      const wrappedLng = ((ln + 180) % 360 + 360) % 360 - 180;
-      const sin = Math.sin((clampedLat * Math.PI) / 180);
-      px = (wrappedLng + 180) / 360;
-      py = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+      const wrappedLng = ln >= -180 && ln < 180
+        ? ln
+        : ((ln + 180) % 360 + 360) % 360 - 180;
+      const sin = Math.sin(clampedLat * degToRad);
+      xs[i] = (wrappedLng + 180) / 360;
+      ys[i] = 0.5 - Math.log((1 + sin) / (1 - sin)) * invFourPi;
     }
+  }
+  const projectionFinished = profile ? now() : 0;
+
+  const packedGridSafe = !simpleProjection
+    && count >= 4096
+    && count <= 2_000_000
+    && cellSize >= 1 / 0x7fffffff;
+  const requestedDirectThreshold = Number(internalInput.__greedyDirectThreshold ?? 8);
+  const directThreshold = packedGridSafe && Number.isFinite(requestedDirectThreshold)
+    ? Math.max(0, Math.min(256, Math.floor(requestedDirectThreshold)))
+    : 0;
+  if (
+    directThreshold > 0
+    && shouldUseAdaptiveDirectGreedy(coords, count, cellSize, directThreshold)
+  ) {
+    return buildAdaptiveDirectGreedyLayout(
+      input,
+      count,
+      idAt,
+      z,
+      cellSize,
+      minPoints,
+      directThreshold,
+      profile,
+      started
+    );
+  }
+
+  const setupStarted = profile ? now() : 0;
+  const grid: DistanceGrid | PackedDistanceGrid = packedGridSafe
+    ? new PackedDistanceGrid(cellSize, count, Boolean(profile))
+    : new DistanceGrid(cellSize);
+  const ox = new Float64Array(count);
+  const oy = new Float64Array(count);
+  const assigned = new Uint8Array(count);
+  const clusterWeight = new Uint32Array(count);
+  const clusterTail = new Int32Array(count);
+  const nextLeaf = new Int32Array(count);
+  const clusterOrigins = new Int32Array(count);
+  let clusterOriginCount = 0;
+  const setupFinished = profile ? now() : 0;
+
+  const scanStarted = profile ? now() : 0;
+  for (let i = 0; i < count; i++) {
+    const px = xs[i];
+    const py = ys[i];
     const origin = grid.queryNearest(px, py, ox, oy);
     if (origin >= 0) {
-      let acc = byOrigin.get(origin);
-      if (!acc) {
-        acc = { lat: coords[origin * 2], lng: coords[origin * 2 + 1], w: 1, leaves: [origin] };
-        byOrigin.set(origin, acc);
+      let w = clusterWeight[origin];
+      if (w === 0) {
+        w = 1;
+        clusterWeight[origin] = 1;
+        clusterTail[origin] = origin;
+        nextLeaf[origin] = -1;
+        clusterOrigins[clusterOriginCount++] = origin;
         assigned[origin] = 1;
       }
-      const w = acc.w;
       const nw = w + 1;
       ox[origin] = (ox[origin] * w + px) / nw;
       oy[origin] = (oy[origin] * w + py) / nw;
-      acc.lat = (acc.lat * w + la) / nw;
-      acc.lng = (acc.lng * w + ln) / nw;
-      acc.w = nw;
-      if (acc.leaves) {
-        if (nw >= minPoints && acc.leaves.length >= expandLeavesUntil) acc.leaves = null;
-        else acc.leaves.push(i);
-      }
+      const tail = clusterTail[origin];
+      nextLeaf[tail] = i;
+      nextLeaf[i] = -1;
+      clusterTail[origin] = i;
+      clusterWeight[origin] = nw;
       assigned[i] = 1;
       continue;
     }
@@ -583,45 +1050,108 @@ function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRes
     oy[i] = py;
     grid.insert(px, py, i);
   }
+  const scanFinished = profile ? now() : 0;
 
+  const materializeStarted = profile ? now() : 0;
   let clusterSeq = 0;
-  for (const acc of byOrigin.values()) {
-    if (acc.w < minPoints) {
-      for (const leaf of acc.leaves ?? []) {
+  for (let clusterIndex = 0; clusterIndex < clusterOriginCount; clusterIndex++) {
+    const origin = clusterOrigins[clusterIndex];
+    const weight = clusterWeight[origin];
+    if (weight < minPoints) {
+      for (let leaf = origin; leaf >= 0; leaf = nextLeaf[leaf]) {
         singles.push({ id: idAt(leaf), lat: coords[leaf * 2], lng: coords[leaf * 2 + 1] });
       }
       continue;
     }
-    const ids: ClusterLayoutId[] = acc.leaves
-      ? acc.leaves.map((leaf) => idAt(leaf))
-      : [];
+
+    const ids: ClusterLayoutId[] = new Array(weight);
+    let meanLat = 0;
+    let meanLng = 0;
+    let position = 0;
+    for (let leaf = origin; leaf >= 0; leaf = nextLeaf[leaf]) {
+      const la = coords[leaf * 2];
+      const ln = coords[leaf * 2 + 1];
+      ids[position] = idAt(leaf);
+      const nextCount = position + 1;
+      meanLat = (meanLat * position + la) / nextCount;
+      meanLng = (meanLng * position + ln) / nextCount;
+      position = nextCount;
+    }
     clusters.push({
       key: `g${z}:${clusterSeq++}`,
-      lat: acc.lat,
-      lng: acc.lng,
+      lat: meanLat,
+      lng: meanLng,
       ids,
-      count: acc.w,
+      count: weight,
       nodeId: -1
     });
   }
-
   for (let i = 0; i < count; i++) {
     if (assigned[i]) continue;
     singles.push({ id: idAt(i), lat: coords[i * 2], lng: coords[i * 2 + 1] });
   }
+  const materializeFinished = profile ? now() : 0;
+
+  if (profile) {
+    profile.count = count;
+    profile.packedGrid = packedGridSafe;
+    profile.adaptiveDirect = false;
+    profile.fusedProjection = false;
+    profile.fusedProjectionPoints = 0;
+    profile.bulkProjectionPoints = count;
+    profile.tempProjectedBytes = count * 16;
+    profile.directThreshold = directThreshold;
+    profile.directQueries = 0;
+    profile.directOriginScans = 0;
+    profile.directCandidateChecks = 0;
+    profile.projectionMs = projectionFinished - projectionStarted;
+    profile.setupMs = setupFinished - setupStarted;
+    profile.scanMs = scanFinished - scanStarted;
+    profile.materializeMs = materializeFinished - materializeStarted;
+    profile.totalMs = materializeFinished - started;
+    profile.clusterOrigins = clusterOriginCount;
+    profile.clusters = clusters.length;
+    profile.singles = singles.length;
+    profile.packedGridAllocated = grid instanceof PackedDistanceGrid;
+    if (grid instanceof PackedDistanceGrid) {
+      profile.gridQueries = grid.queries;
+      profile.gridInserts = grid.inserts;
+      profile.insertedOrigins = grid.inserts;
+      profile.hashProbes = grid.probes;
+      profile.candidateChecks = grid.candidateChecks;
+    } else {
+      profile.gridQueries = count;
+      profile.gridInserts = 0;
+      profile.insertedOrigins = 0;
+      profile.hashProbes = 0;
+      profile.candidateChecks = 0;
+    }
+  }
 
   return { clusters, singles };
 }
-
 function encodeClusterIndex(index: ClusterIndex): {
   payload: Record<string, unknown>;
   transfer: ArrayBuffer[];
 } {
-  const copyBuf = (arr: Float64Array | Uint32Array | Int8Array | Int32Array): ArrayBuffer =>
-    arr.buffer.slice(arr.byteOffset, arr.byteOffset + arr.byteLength) as ArrayBuffer;
+  const view = (arr: Float64Array | Uint32Array | Int8Array | Int32Array) => ({
+    buffer: arr.buffer as ArrayBuffer,
+    byteOffset: arr.byteOffset,
+    length: arr.length
+  });
 
+  const x = view(index.x);
+  const y = view(index.y);
+  const lat = view(index.lat);
+  const lng = view(index.lng);
+  const weight = view(index.weight);
+  const zoom = view(index.zoom);
+  const parent = view(index.parent);
+  const firstChild = view(index.firstChild);
+  const nextSibling = view(index.nextSibling);
   const trees = index.trees.map((tree) => ({
-    buffer: copyBuf(tree),
+    buffer: tree.buffer as ArrayBuffer,
+    byteOffset: tree.byteOffset,
     length: tree.length
   }));
 
@@ -632,30 +1162,37 @@ function encodeClusterIndex(index: ClusterIndex): {
     minZoom: index.minZoom,
     minPoints: index.minPoints,
     radius: index.radius,
-    x: copyBuf(index.x),
-    y: copyBuf(index.y),
-    lat: copyBuf(index.lat),
-    lng: copyBuf(index.lng),
-    weight: copyBuf(index.weight),
-    zoom: copyBuf(index.zoom),
-    parent: copyBuf(index.parent),
-    firstChild: copyBuf(index.firstChild),
-    nextSibling: copyBuf(index.nextSibling),
+    x,
+    y,
+    lat,
+    lng,
+    weight,
+    zoom,
+    parent,
+    firstChild,
+    nextSibling,
     trees
   };
 
-  const transfer: ArrayBuffer[] = [
-    payload.x,
-    payload.y,
-    payload.lat,
-    payload.lng,
-    payload.weight,
-    payload.zoom,
-    payload.parent,
-    payload.firstChild,
-    payload.nextSibling,
-    ...trees.map((t) => t.buffer)
-  ];
+  const transfer: ArrayBuffer[] = [];
+  const seen = new Set<ArrayBuffer>();
+  const add = (buffer: ArrayBuffer): void => {
+    if (buffer.byteLength === 0 || seen.has(buffer)) return;
+    seen.add(buffer);
+    transfer.push(buffer);
+  };
+
+  add(x.buffer);
+  add(y.buffer);
+  add(lat.buffer);
+  add(lng.buffer);
+  add(weight.buffer);
+  add(zoom.buffer);
+  add(parent.buffer);
+  add(firstChild.buffer);
+  add(nextSibling.buffer);
+  for (const tree of trees) add(tree.buffer);
+
   return { payload, transfer };
 }
 
@@ -681,7 +1218,38 @@ export const buildGreedyClusterLayout = clusterRuntime.buildGreedyClusterLayout;
 export const encodeClusterIndex = clusterRuntime.encodeClusterIndex;
 
 export function decodeClusterIndex(data: Record<string, unknown>): ClusterIndex {
-  const treesRaw = data.trees as Array<{ buffer: ArrayBuffer; length: number }>;
+  type EncodedClusterView = ArrayBuffer | {
+    buffer: ArrayBuffer;
+    byteOffset: number;
+    length: number;
+  };
+
+  const f64 = (value: EncodedClusterView): Float64Array =>
+    value instanceof ArrayBuffer
+      ? new Float64Array(value)
+      : new Float64Array(value.buffer, value.byteOffset, value.length);
+
+  const u32 = (value: EncodedClusterView): Uint32Array =>
+    value instanceof ArrayBuffer
+      ? new Uint32Array(value)
+      : new Uint32Array(value.buffer, value.byteOffset, value.length);
+
+  const i32 = (value: EncodedClusterView): Int32Array =>
+    value instanceof ArrayBuffer
+      ? new Int32Array(value)
+      : new Int32Array(value.buffer, value.byteOffset, value.length);
+
+  const i8 = (value: EncodedClusterView): Int8Array =>
+    value instanceof ArrayBuffer
+      ? new Int8Array(value)
+      : new Int8Array(value.buffer, value.byteOffset, value.length);
+
+  const treesRaw = data.trees as Array<{
+    buffer: ArrayBuffer;
+    byteOffset?: number;
+    length: number;
+  }>;
+
   return {
     leafCount: Number(data.leafCount),
     nodeCount: Number(data.nodeCount),
@@ -690,20 +1258,20 @@ export function decodeClusterIndex(data: Record<string, unknown>): ClusterIndex 
     minPoints: Number(data.minPoints),
     radius: Number(data.radius),
     ids: (data.ids as ClusterLayoutId[]) || [],
-    x: new Float64Array(data.x as ArrayBuffer),
-    y: new Float64Array(data.y as ArrayBuffer),
-    lat: new Float64Array(data.lat as ArrayBuffer),
-    lng: new Float64Array(data.lng as ArrayBuffer),
-    weight: new Uint32Array(data.weight as ArrayBuffer),
-    zoom: new Int8Array(data.zoom as ArrayBuffer),
-    parent: new Int32Array(data.parent as ArrayBuffer),
-    firstChild: new Int32Array(data.firstChild as ArrayBuffer),
-    nextSibling: new Int32Array(data.nextSibling as ArrayBuffer),
-    trees: treesRaw.map((t) => new Int32Array(t.buffer, 0, t.length))
+    x: f64(data.x as EncodedClusterView),
+    y: f64(data.y as EncodedClusterView),
+    lat: f64(data.lat as EncodedClusterView),
+    lng: f64(data.lng as EncodedClusterView),
+    weight: u32(data.weight as EncodedClusterView),
+    zoom: i8(data.zoom as EncodedClusterView),
+    parent: i32(data.parent as EncodedClusterView),
+    firstChild: i32(data.firstChild as EncodedClusterView),
+    nextSibling: i32(data.nextSibling as EncodedClusterView),
+    trees: treesRaw.map((tree) =>
+      new Int32Array(tree.buffer, tree.byteOffset ?? 0, tree.length)
+    )
   };
-}
-
-function clusterWorkerMain(createRuntime: () => ReturnType<typeof createClusterLayoutRuntime>): void {
+}function clusterWorkerMain(createRuntime: () => ReturnType<typeof createClusterLayoutRuntime>): void {
   const api = createRuntime();
   const scope = globalThis as typeof globalThis & {
     onmessage: ((event: MessageEvent) => void) | null;

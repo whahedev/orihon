@@ -6,10 +6,9 @@ import {
   RemoteObjectManager,
   SearchProvider,
   TrafficLayer,
-  createArraySearchProvider,
-  createSearchProvider,
+  objectManager,
   createStraightLineRoutingProvider,
-  remoteObjectManager,
+  searchProvider,
   routingLayer,
   trafficLayer
 } from "../dist/index.js";
@@ -85,7 +84,7 @@ test("RemoteObjectManager loads viewport objects and cancels stale work", async 
   }
 
   let calls = 0;
-  const manager = remoteObjectManager({
+  const manager = objectManager({
     minZoom: 20,
     debounceMs: 0,
     loader: async ({ signal }) => {
@@ -107,7 +106,7 @@ test("RemoteObjectManager loads viewport objects and cancels stale work", async 
 });
 
 test("SearchProvider normalizes search, geocode and reverse APIs", async () => {
-  const provider = createArraySearchProvider([
+  const provider = searchProvider([
     { name: "Berlin", center: [52.520, 13.405] },
     { name: "Hamburg", center: [53.551, 9.994] }
   ]);
@@ -116,7 +115,7 @@ test("SearchProvider normalizes search, geocode and reverse APIs", async () => {
   assert.equal((await provider.geocode("ham"))?.name, "Hamburg");
   assert.equal((await provider.reverse([1, 2]))?.name, "1.000000, 2.000000");
 
-  const custom = createSearchProvider({
+  const custom = searchProvider({
     search: () => [{ name: "Only", center: [0, 0] }]
   });
   assert.equal((await custom.geocode("x"))?.name, "Only");
@@ -148,4 +147,3 @@ test("TrafficLayer tracks state and refresh data time", () => {
   assert.equal(layer.getDataTime().toISOString(), "2026-08-06T00:00:00.000Z");
   assert.deepEqual(states, ["loading", "ready"]);
 });
-

@@ -4,6 +4,8 @@
 
 # Orihon
 
+**ORIHON — Offers Responsive Interactions, Handles Overlays Natively.**
+
 [![npm](https://img.shields.io/npm/v/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![downloads](https://img.shields.io/npm/dm/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![CI](https://github.com/whahedev/orihon/actions/workflows/ci.yml/badge.svg)](https://github.com/whahedev/orihon/actions/workflows/ci.yml)
@@ -50,9 +52,18 @@ Use the tiny core for simple maps. Add everyday GIS in Standard (still **no WebG
 npm install orihon
 ```
 
+Coordinate order is explicit when you need it:
+
+```ts
+const moscow = latLng(55.751244, 37.618423); // latitude, longitude
+const berlin = lngLat(13.405, 52.52);        // longitude, latitude (MapLibre / GeoJSON order)
+
+marker(berlin).addTo(map);
+```
+
 Development and release tooling requires **Node.js 22 or newer**; the repository pins **Node.js 24.19.0 LTS** in `.node-version`. Browser consumers are unaffected by this build-time requirement.
 
-## Tiers
+## Package complexity: tiers
 
 Orihon is built as three intentional surfaces. Start narrow; grow only when the product needs it.
 
@@ -62,9 +73,51 @@ Orihon is built as three intentional surfaces. Start narrow; grow only when the 
 | **Standard** | `orihon/standard` | Core + markers, SVG/canvas vectors, GeoJSON (`svg`/`canvas`), popups, controls, overlays, locales — **no WebGL** |
 | **Advanced** | `orihon` | Standard + WebGL (points, heat, path batch, raster tiles), MVT, ObjectManager, routing, traffic, offline, workers, adapters |
 
-Optional entries keep product-specific integrations outside those tier budgets: `orihon/draw`, `orihon/react`, `orihon/pmtiles`, `orihon/mlt` (MLT **encoder**), `orihon/mvt-wasm` / `orihon/webgpu` (Standard-only opt-in), `orihon/controls`, `orihon/geo` and `orihon/popup-content`.
+Optional entries keep product-specific integrations outside those tier budgets: `orihon/easy`, `orihon/draw`, `orihon/react`, `orihon/pmtiles`, `orihon/mlt` (MLT **encoder**), `orihon/mvt-wasm` / `orihon/webgpu` (Standard-only opt-in), `orihon/controls`, `orihon/geo` and `orihon/popup-content`.
 
-**WebGL policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `webglHeatLayer`, `tileLayer({ renderer: "webgl"|"webgpu"|"auto" })` / `webglTileLayer`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets). `tileLayer({ renderer: "auto" })` uses WebGPU when `navigator.gpu` exists, else WebGL, else DOM. `createMVTProvider` / `decodePackedMVT` / `decodeMVT` accept Mapbox MVT and Orihon MLT, and decode MVT geometry with WASM when available.
+## API complexity
+
+Package size and API difficulty are separate axes:
+
+| API level | Intended use |
+| --- | --- |
+| **Easy** | A Standard-powered adapter for first maps: options create a basemap and map methods add common objects. |
+| **Layer API** | Explicit composition with `tileLayer()`, `marker()`, `geoJSON()` and other layers. |
+| **Rendering API** | Backend selection, packed data, workers, WebGL/WebGPU and renderer diagnostics. |
+
+```js
+import { createMap } from "orihon/easy";
+
+const map = createMap("map", {
+  center: { lat: 55.751244, lng: 37.618423 },
+  zoom: 12,
+  basemap: {
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "© OpenStreetMap contributors"
+  }
+});
+
+map.addMarker({
+  position: { lat: 55.751244, lng: 37.618423 },
+  popup: "Москва"
+});
+
+map.addPolyline(route, { stroke: "#2563eb" });
+map.addPolygon(district, { fill: "#2563eb", fillOpacity: 0.2 });
+map.addGeoJSON(places);
+map.addTileLayer("https://example.test/{z}/{x}/{y}.png");
+
+// The same Easy surface can be configuration-driven:
+const routeLayer = map.add({
+  type: "polyline",
+  coordinates: route,
+  style: { stroke: "#2563eb", width: 4, opacity: 0.8 }
+});
+```
+
+`orihon/easy` supports one discriminated `map.add(description)` contract for `marker`, `polyline`, `polygon`, `geojson` and `raster`, which maps naturally to React/Vue/Svelte props and configuration. The returned layers are normal Standard objects. Every map also accepts an already-created layer through `map.add(layer)`, while `layer.addTo(map)` remains unchanged. A MapLibre-style `addSource()` is deliberately deferred until Orihon has a real named, reusable source lifecycle instead of disguising a layer as a source. See the [Easy API guide](./docs/EASY.md).
+
+**GPU policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `heatLayer({ backend: "auto" })`, `tileLayer({ renderer: "webgl"|"webgpu"|"auto" })`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets). `tileLayer({ renderer: "auto" })` uses the unified GPU tile pipeline: WebGPU when available, then WebGL, then DOM. Normal vector-tile applications use `createMVTProvider` / `decodeMVT`; low-level packed decoding is isolated in `orihon/mvt`.
 
 ```js
 // Core — basemap only
@@ -153,7 +206,7 @@ Everything in Standard, plus:
 
 - `MarkerCollection` — viewport-culled, recycled HTML markers; `renderer:"svg"` with one real SVG circle per point, shared group style/camera transform, spatially distributed HTML buttons (`htmlButtonLimit` + `buttonCellSize`) and selected-object priority through `setSelected()`; automatic WebGL from 2,500 points; or `renderer:"hybrid"` with bounded HTML over a WebGL remainder. Internal marker nodes stay out of the map-wide frame loop.
 - `ObjectManager` / `RemoteObjectManager` — high-volume collections with viewport DOM, clustering and stale-request cancellation.
-- `WebGLPointLayer`, `WebGLHeatLayer`, `HeatIsolineLayer` / `buildHeatIsolines`, MVT-capable `VectorTileLayer`, canvas `heatLayer`.
+- `WebGLPointLayer`, unified `HeatLayer` / `heatLayer()` / `buildHeat()` (continuous heat, WASM isolines, or both from one scalar field), and MVT-capable `VectorTileLayer`. The former Canvas heat, point-splat WebGL heat and standalone isoline layers have been removed.
 - Provider-based search, suggest, routing and traffic.
 - Offline tile cache / Service Worker helpers, geometry workers, performance inspector and framework / Web Component adapters.
 
@@ -221,7 +274,7 @@ await manager.addAsync(
 const manager = objectManager({
   clusterRenderer: "auto",
   style: (object, state, context) => ({
-    color:
+    fill:
       context.selected
         ? "#7c3aed"
         : context.hovered
@@ -231,7 +284,7 @@ const manager = objectManager({
             : object.properties?.status === "offline"
               ? "#64748b"
               : "#16a34a",
-    opacity: state.disabled === true ? 0.3 : 0.9,
+    fillOpacity: state.disabled === true ? 0.3 : 0.9,
     size: context.zoom >= 14 ? 13 : 7
   })
 });
@@ -240,7 +293,7 @@ manager.setObjectState("truck-42", { alarm: true });
 manager.setSelected("truck-42");
 ```
 
-Style priority: base defaults → legacy category/alert/selected/hover (`styleByCategory`) → custom `style` → normalization. Custom resolvers are not auto-wrapped with purple/orange selection colors — use `context.selected` / `context.hovered` explicitly. `setObjectState` shallow-merges scalars (`undefined` deletes a key; `null` is kept). Batch updates use `setObjectStates`. Changing state patches only touched WebGL color/size slots when the GPU buffer topology is unchanged. `clear()` clears object data and states but keeps the configured style resolver.
+Point styles use the same vocabulary as vector fills: `fill`, `fillOpacity`, `size`. The former `color` and `opacity` names remain compatibility aliases; canonical fields win when both are present. Style priority: base defaults → legacy category/alert/selected/hover (`styleByCategory`) → custom `style` → normalization. Custom resolvers are not auto-wrapped with purple/orange selection colors — use `context.selected` / `context.hovered` explicitly. `setObjectState` shallow-merges scalars (`undefined` deletes a key; `null` is kept). Batch updates use `setObjectStates`. Changing state patches only touched WebGL color/size slots when the GPU buffer topology is unchanged. `clear()` clears object data and states but keeps the configured style resolver.
 
 ### Managed geometries, icons, labels, and scene modes
 
@@ -270,7 +323,8 @@ const manager = objectManager({
     }
   },
   style: (object, state, context) => ({
-    color: state.selected ? "#7c3aed" : state.alarm ? "#dc2626" : "#2563eb",
+    fill: state.selected ? "#7c3aed" : state.alarm ? "#dc2626" : "#2563eb",
+    fillOpacity: 0.9,
     size: context.zoom >= 14 ? 18 : 12,
     icon: object.properties?.type === "truck" ? "truck" : null,
     rotation: Number(object.properties?.heading ?? 0),
@@ -290,7 +344,7 @@ const manager = objectManager({
         ? { enabled: true, maxPoints: 40, color: "#2563eb", width: 2, opacity: 0.5 }
         : null,
     line: object.geometry?.type === "LineString"
-      ? { color: "#2563eb", width: 3, dashArray: [8, 4] }
+      ? { stroke: "#2563eb", strokeWidth: 3, dashArray: [8, 4] }
       : undefined,
     polygon: object.geometry?.type === "Polygon"
       ? { fill: "#0f766e", fillOpacity: 0.2, stroke: "#0f766e", strokeWidth: 1.5 }
@@ -311,7 +365,7 @@ manager.search("truck 42", { limit: 10 });
 manager.setTimeRange(Date.now() - 3600_000, Date.now());
 ```
 
-**Icons:** GPU sprite atlas rebuilt only on `registerIcon` / `removeIcon` / `clearIcons` — not on object moves. Missing icons fall back to a default symbol. Tint uses `iconTint` when set, otherwise `color`.
+**Icons:** GPU sprite atlas rebuilt only on `registerIcon` / `removeIcon` / `clearIcons` — not on object moves. Missing icons fall back to a default symbol. Tint uses `iconTint` when set, otherwise point `fill` (or legacy `color`).
 
 **Rotation:** degrees (`0` up, `90` right). Per-instance GPU attribute on symbol quads (`rotationAlignment: "screen"` in v1).
 
@@ -363,7 +417,7 @@ await lines.addDataAsync(fileBlob, {
 
 `addDataAsync()` accepts parsed GeoJSON, raw JSON text/Blob, or an async stream. Its defaults are `chunkSize:5000`, `useWorker:true`, `yieldMode:"frame"` and a 256 MiB raw-input limit. If Blob workers are unavailable (for example because of CSP), parsing falls back to the main thread while ingestion remains chunked. `yieldMode:"task"` is useful before a map is attached or in a background import workflow.
 
-For write-once, non-interactive path sets at hundreds of thousands to millions of features, combine `addDataAsync()` with `renderer:"webgl"` and `retainFeatures:false`. This keeps only the packed path buffer; discarded features are intentionally unavailable through `toGeoJSON()` or later per-feature restyling. During continuous pan/zoom, the WebGL path batch camera-warps its last exact frame and throttles full GPU redraws; an exact frame is rendered after the camera settles. Direct `webglPathBatch()` users can tune `cameraRedrawInterval` (default 250 ms; `0` restores every-frame redraw) and `cameraSettleDelay` (default 120 ms).
+For write-once, non-interactive path sets at hundreds of thousands to millions of features, combine `addDataAsync()` with `renderer:"webgl"` and `retainFeatures:false`. This keeps only the packed path buffer; discarded features are intentionally unavailable through `toGeoJSON()` or later per-feature restyling. During continuous pan/zoom, the WebGL path batch camera-warps its last exact frame and throttles full GPU redraws; an exact frame is rendered after the camera settles. Direct `pathBatch({ mode:"uniform" })` users can tune `cameraRedrawInterval` (default 250 ms; `0` restores every-frame redraw) and `cameraSettleDelay` (default 120 ms).
 
 WMS GetMap URLs are generated per tile with WMS 1.1.1 or 1.3.0 axis ordering and either `EPSG:3857` or `EPSG:4326` bounds:
 
@@ -379,10 +433,10 @@ const districts = wmsTileLayer("https://maps.example.test/wms", {
 districts.setParams({ styles: "selected" });
 ```
 
-Grid and media overlays expose the same lightweight lifecycle surface:
+Custom tile grids use the `GridLayer` extension class; media overlays expose the normal layer lifecycle:
 
 ```js
-gridLayer({ tileSize: 512 });
+class CustomTiles extends GridLayer {}
 videoOverlay("traffic.mp4", [[52.48, 13.30], [52.55, 13.45]], { poster: "preview.png" }).addTo(map);
 svgOverlay(document.querySelector("svg"), [[52.48, 13.30], [52.55, 13.45]]).addTo(map);
 ```
@@ -453,7 +507,7 @@ const place = marker([52.52, 13.405], { opacity: 0.8, zIndexOffset: 100 })
 The services layer stays provider-based: Orihon owns orchestration, cancellation and display, while an app can plug in local or commercial data providers.
 
 ```js
-const search = createArraySearchProvider([
+const search = searchProvider([
   { name: "Berlin", center: [52.520, 13.405] },
   { name: "Hamburg", center: [53.551, 9.994] }
 ]);
@@ -498,12 +552,40 @@ await points.setDataAsync(bigPointArray, {
   yieldMode: "task"
 });
 
-const heat = webglHeatLayer([], { field: "density" }).addTo(map);
-await heat.setDataAsync(weightedPoints, {
-  chunkSize: 50_000,
-  signal: importController.signal,
-  onProgress: (processed, total) => updateProgress(processed, total)
-});
+const heat = heatLayer(weightedPoints, {
+  mode: "both",             // "heatmap" | "isolines" | "both"
+  backend: "auto",          // "auto" | "wasm" | "webgpu"
+  evaluation: "static",     // full dataset; use "zoom" for local refinement
+  labels: true,
+  step: "auto",             // spatially adaptive levels; or an absolute interval
+  bands: true,               // fill every contour zone, including edges
+  cover: true,
+  interactive: true          // line/zone hover, click, query and selection
+}).addTo(map);
+
+heat
+  .bindTooltip(({ data }) => data.kind === "line"
+    ? `Contour ${data.value}`
+    : `Zone ${data.lowerValue}–${data.upperValue ?? "∞"}`)
+  .bindPopup(({ data }) => JSON.stringify(data));
+
+heat.on("select", ({ feature }) => console.log("selected", feature));
+heat.on("contextmenu", ({ feature }) => openAnalysisMenu(feature));
+heat.clearSelection();
+
+// The same feature is available through the common map query API.
+const hit = map.query([320, 240], { layers: [heat] })[0]?.feature;
+
+// The same flags work on ObjectManager's packed 100k–1M heat visualization.
+const sensors = objectManager({
+  visualization: "heatmap",
+  heatmapDisplay: "both",
+  heatmapBackend: "auto",
+  heatmapEvaluation: "static",
+  heatmapIsolineLabels: true,
+  heatmapIsolineStep: 0.25,
+  heatmapWeight: (object) => Number(object.properties?.value ?? 1)
+}).addTo(map);
 
 const vectorTiles = vectorTileLayer({
   provider: async ({ x, y, z, signal }) => {
@@ -567,7 +649,7 @@ For a script-tag/global setup:
 | --- | --- |
 | `orihon.core.esm.js` | ≤ 22 KiB gzip |
 | `orihon.standard.esm.js` | ≤ 36 KiB gzip |
-| `orihon.esm.js` | ≤ 105 KiB gzip (Advanced + WebGL/WebGPU) |
+| `orihon.esm.js` | ≤ 141 KiB gzip (Advanced + WebGL/WebGPU/WASM) |
 | `orihon.controls.esm.js` | ≤ 8 KiB gzip (imports shared modules) |
 | `orihon.geo.esm.js` | ≤ 2 KiB gzip (imports shared geometry) |
 
@@ -584,6 +666,7 @@ Raw minified sizes are larger; production cost is the gzip figure. Prefer modula
 - [Plugin development](docs/PLUGINS.md)
 - [Scale showcase](examples/showcase) (open `index.html` · [live](https://whahedev.github.io/orihon/showcase/))
 - [Engine benchmark](examples/bench-compare) (open `index.html` · [live](https://whahedev.github.io/orihon/bench/))
+- [European temperature heatmap and isolines](examples/temperature-isolines) — one million clickable GPU observations, heatmap/isolines modes, labels and point popups
 - [Examples hub](https://whahedev.github.io/orihon/)
 
 ## Design Goals

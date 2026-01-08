@@ -14,8 +14,9 @@ Live: https://whahedev.github.io/orihon/bench/
 | --- | --- |
 | **Points** | Static N points — Orihon `WebGLPointLayer`, MapLibre **raw GL buffer** (fair), Leaflet canvas, OL vector |
 | **Clusters** | Orihon `ObjectManager`, Leaflet.markercluster, OL `Cluster`, MapLibre GeoJSON cluster. Camera = **discrete** view steps |
-| **Heatmap** | Shared hub-weighted dataset + `HEAT_BENCH` paint |
-| **Isolines** | Orihon `heatIsolineLayer` (Leaflet / OL / MapLibre: n/a) |
+| **Heatmap** | Shared hub-weighted dataset replaced by `orihon-mark-shape-v1`: sources trace the accordion-map mark silhouette; Orihon `heatLayer` continuous scalar-field colors |
+| **Isolines** | Orihon `heatLayer` WASM field + marching-squares stitching (Leaflet / OL / MapLibre: n/a) |
+| **Heatmap + isolines** | Orihon renders colors, matching contours and labels from one scalar field |
 | **GeoJSON** | N four-vertex LineStrings; Orihon streams disposable chunks into a packed WebGL buffer |
 | **Markers** | Marker renderers **hard-capped at 5k**; Orihon keeps all 5k in DOM (≤500 HTML buttons + SVG DOM remainder), Leaflet uses HTML, OpenLayers canvas, MapLibre ≤500 HTML + GPU |
 | **Chart popup** | Marker open latency with chart content |
@@ -32,6 +33,7 @@ Live: https://whahedev.github.io/orihon/bench/
 | --- | --- |
 | Init | Map + basemap construction |
 | Load | Add data + first settled frames |
+| Field / Contours / Paint | Orihon heat breakdown inside Load; field/contours exclude source packing and map/tile setup |
 | FPS | Avg during camera / live stress (`60≈` = vsync-capped) |
 | p95 / max | Frame-time tail |
 | drop% | Frames slower than ~18.2 ms |
@@ -46,6 +48,8 @@ The tile-scroll scenario also reports **Settle**, each engine's tile-pipeline **
 ## Notes
 
 - Engines run **sequentially**.
+- Heat rows use `orihon-mark-shape-v1`: point sources follow the Orihon accordion-map mark (panels, strokes, route, end nodes), radius 5 px, blur 16 px, opacity 72% and the shared thermal ramp. Orihon also receives the captured 512×384 static field, Worker/WASM, 32 contour levels and selection weights. Leaflet/OpenLayers receive their native radius+blur controls. MapLibre has no separate blur control, so the benchmark uses one equivalent 21 px kernel. The **Temperature profile 1M** preset selects this scenario, one run and every engine. Exported JSON embeds the complete heat profile.
+- Orihon heat sources are packed cooperatively with `setDataAsync()`. The v2 field aggregates weighted sources into cluster-like cells, then runs separable Gaussian passes in WASM/WebGPU; `auto` considers WebGPU at 100k+ in all display modes and reports readback separately. Static rows evaluate the full dataset once, zoom-refined rows rebuild in a persistent Worker, and camera motion compositor-warps the last complete surface.
 - MapLibre points/live use a custom mercator buffer layer so Heap is comparable to Orihon.
 - Orihon's mass GeoJSON row uses `retainFeatures:false`; it measures write-once rendering, not source round-trip or later per-feature restyling. Continuous camera motion mixes cheap camera-warp frames with throttled exact GPU redraws, then waits for the final exact settled frame.
 - DOM markers above ~5k and GeoJSON above ~25k are intentionally warned. Above 50k LineStrings, Leaflet/OpenLayers per-feature rows return `n/a`; Orihon keeps its disposable packed-chunk path, while MapLibre receives the same paths as bounded `MultiLineString` features through a valid GeoJSON Blob URL so its worker does not first clone one million main-thread `Feature` objects.

@@ -1,11 +1,4 @@
-import {
-  LatLng,
-  latLng,
-  latLngBounds,
-  wrapLng,
-  type LatLngBoundsLike,
-  type LatLngLike
-} from "../geo.js";
+import { LatLng, latLng, bounds, wrapLng, type LatLngBoundsLike, type LatLngLike } from "../geo.js";
 
 export type SpatialId = string | number;
 
@@ -127,16 +120,16 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
     value: LatLngBoundsLike,
     visit: (record: StoredRecord<TValue, TId>) => void
   ): void {
-    const bounds = latLngBounds(value);
-    if (!bounds.isValid()) return;
-    const south = Math.max(-90, bounds.south);
-    const north = Math.min(90, bounds.north);
+    const area = bounds(value);
+    if (!area.isValid()) return;
+    const south = Math.max(-90, area.south);
+    const north = Math.min(90, area.north);
     if (south > north) return;
 
-    const rawWidth = Math.abs(bounds.east - bounds.west);
+    const rawWidth = Math.abs(area.east - area.west);
     const fullWorld = rawWidth >= 360;
-    const west = wrapLng(bounds.west);
-    const east = wrapLng(bounds.east);
+    const west = wrapLng(area.west);
+    const east = wrapLng(area.east);
     const longitudeRanges: Array<[number, number]> = fullWorld
       ? [[-180, 180]]
       : west <= east

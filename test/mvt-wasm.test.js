@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodePackedMVT } from "../dist/index.js";
+import { decodePackedMVT } from "orihon/mvt";
 import {
   decodeMvtGeometryWasm,
   decodePackedMVTWasm,

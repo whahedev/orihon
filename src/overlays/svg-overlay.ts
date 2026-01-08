@@ -1,8 +1,7 @@
-import { listenTap } from "../dom.js";
-import { LatLngBounds, latLngBounds, type LatLngBoundsLike } from "../geo.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import type { LatLngBoundsLike } from "../geo.js";
+import type { LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
-import type { OverlayContent, PopupOptions } from "./div-overlay.js";
+import { MediaOverlay } from "./media-overlay.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -24,15 +23,12 @@ interface ResolvedSVGOverlayOptions extends LayerOptions {
   zIndex: number;
 }
 
-export class SVGOverlay extends Layer<ResolvedSVGOverlayOptions> {
+export class SVGOverlay extends MediaOverlay<SVGElement, ResolvedSVGOverlayOptions> {
   content: SVGOverlayContent;
-  overlayBounds: LatLngBounds;
   element: SVGElement | null = null;
-  readonly _unsub: Array<() => void> = [];
-  private _interactiveUnsub: (() => void) | null = null;
 
   constructor(content: SVGOverlayContent, value: LatLngBoundsLike, options: SVGOverlayOptions = {}) {
-    super({
+    super(value, {
       pane: "overlay",
       attribution: "",
       opacity: 1,
@@ -42,88 +38,29 @@ export class SVGOverlay extends Layer<ResolvedSVGOverlayOptions> {
       ...options
     } as ResolvedSVGOverlayOptions);
     this.content = content;
-    this.overlayBounds = new LatLngBounds(latLngBounds(value));
   }
 
   override onAdd(map: Orihon): void {
     super.onAdd(map);
-    const pane = this.getPane();
-    if (!pane) throw new Error(`Orihon pane not found: ${this.options.pane}`);
     this.element = this.#createElement();
-    this.element.classList.add("oh-svg-overlay");
-    if (this.options.className) this.element.classList.add(...this.options.className.split(/\s+/).filter(Boolean));
-    this.element.style.opacity = String(this.options.opacity);
-    this.element.style.zIndex = String(this.options.zIndex);
-    pane.appendChild(this.element);
-    this.#syncInteractive();
-    this.render();
+    this.attachMediaElement(this.element, "oh-svg-overlay");
   }
 
-  override onRemove(): void {
-    this._interactiveUnsub?.();
-    this._interactiveUnsub = null;
-    for (const unsubscribe of this._unsub.splice(0)) unsubscribe();
-    this.element?.remove();
-    this.element = null;
-    super.onRemove();
-  }
+  protected override mediaElement(): SVGElement | null { return this.element; }
+  protected override clearMediaElement(): void { this.element = null; }
 
   setContent(content: SVGOverlayContent): this {
     this.content = content;
     if (!this.map || !this.element) return this;
-    const parent = this.element.parentElement;
-    this.element.remove();
+    this.resetMediaElement();
     this.element = this.#createElement();
-    this.element.classList.add("oh-svg-overlay");
-    if (this.options.className) this.element.classList.add(...this.options.className.split(/\s+/).filter(Boolean));
-    this.element.style.opacity = String(this.options.opacity);
-    this.element.style.zIndex = String(this.options.zIndex);
-    parent?.appendChild(this.element);
-    this.#syncInteractive();
-    this.render();
+    this.attachMediaElement(this.element, "oh-svg-overlay");
     return this;
   }
-
-  setBounds(value: LatLngBoundsLike): this {
-    this.overlayBounds = new LatLngBounds(latLngBounds(value));
-    this.render();
-    return this;
-  }
-
-  override bindPopup(content: OverlayContent, options?: PopupOptions): this {
-    this.options.interactive = true;
-    this.#syncInteractive();
-    return super.bindPopup(content, options);
-  }
-
-  getBounds(): LatLngBounds {
-    return new LatLngBounds(this.overlayBounds);
-  }
-
-  setOpacity(opacity: number): this {
-    this.options.opacity = Math.max(0, Math.min(1, Number(opacity)));
-    if (this.element) this.element.style.opacity = String(this.options.opacity);
-    return this;
-  }
-
-  setZIndex(zIndex: number): this {
-    this.options.zIndex = Number(zIndex);
-    if (this.element) this.element.style.zIndex = String(this.options.zIndex);
-    return this;
-  }
-
-  bringToFront(): this { return this.#moveToEdge(true); }
-  bringToBack(): this { return this.#moveToEdge(false); }
-  getElement(): SVGElement | null { return this.element; }
 
   override render(): void {
-    if (!this.map || !this.element) return;
-    const northWest = this.map.latLngToLayerPoint(this.overlayBounds.getNorthWest());
-    const southEast = this.map.latLngToLayerPoint(this.overlayBounds.getSouthEast());
-    this.element.style.left = `${northWest.x}px`;
-    this.element.style.top = `${northWest.y}px`;
-    this.element.style.width = `${Math.max(0, southEast.x - northWest.x)}px`;
-    this.element.style.height = `${Math.max(0, southEast.y - northWest.y)}px`;
+    super.render();
+    if (!this.element) return;
     this.element.setAttribute("preserveAspectRatio", this.element.getAttribute("preserveAspectRatio") || "none");
   }
 
@@ -138,35 +75,6 @@ export class SVGOverlay extends Layer<ResolvedSVGOverlayOptions> {
     return fallback;
   }
 
-  #syncInteractive(): void {
-    this._interactiveUnsub?.();
-    this._interactiveUnsub = null;
-    if (!this.element || !this.map || !this.options.interactive) return;
-    this.element.classList.add("oh-interactive");
-    this._interactiveUnsub = listenTap(this.element, (event) => {
-      event.stopPropagation();
-      const rect = this.map!.container.getBoundingClientRect();
-      this.emit("click", {
-        originalEvent: event,
-        latlng: this.map!.containerPointToLatLng([event.clientX - rect.left, event.clientY - rect.top])
-      });
-    });
-  }
-
-  #moveToEdge(front: boolean): this {
-    const element = this.element;
-    const parent = element?.parentElement;
-    if (!element || !parent) return this;
-    const siblingZIndexes = Array.from(parent.children, (child) => {
-      const value = Number.parseInt(getComputedStyle(child).zIndex, 10);
-      return Number.isFinite(value) ? value : 0;
-    });
-    const edge = front ? Math.max(0, ...siblingZIndexes) + 1 : Math.min(0, ...siblingZIndexes) - 1;
-    this.setZIndex(edge);
-    if (front) parent.appendChild(element);
-    else parent.prepend(element);
-    return this;
-  }
 }
 
 export function svgOverlay(content: SVGOverlayContent, value: LatLngBoundsLike, options?: SVGOverlayOptions): SVGOverlay {

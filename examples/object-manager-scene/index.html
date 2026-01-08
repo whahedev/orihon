@@ -284,15 +284,15 @@
           return {
             line: object.properties?.dashed
               ? {
-                  color: selected ? "#7c3aed" : (propColor || "#64748b"),
-                  width: selected ? 5 : 3,
-                  opacity: 0.9,
+                  stroke: selected ? "#7c3aed" : (propColor || "#64748b"),
+                  strokeWidth: selected ? 5 : 3,
+                  strokeOpacity: 0.9,
                   dashArray: [10, 6],
                   dashOffset: 0
                 }
               : {
-                  width: selected ? 6 : 4,
-                  opacity: 0.95,
+                  strokeWidth: selected ? 6 : 4,
+                  strokeOpacity: 0.95,
                   gradient: [
                     { offset: 0, color: "#22c55e" },
                     { offset: 0.5, color: "#eab308" },
@@ -343,8 +343,8 @@
             : propColor || (type === "warehouse" ? "#0f766e" : "#2563eb");
 
         return {
-          color: baseColor,
-          opacity: state.disabled === true
+          fill: baseColor,
+          fillOpacity: state.disabled === true
             ? 0.35
             : Number.isFinite(propOpacity)
               ? propOpacity

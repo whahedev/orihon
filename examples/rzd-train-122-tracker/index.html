@@ -2600,7 +2600,7 @@
         trainMarker = Orihon.marker(
           [stops[0].lat, stops[0].lon],
           {
-            icon: Orihon.divIcon({
+            icon: Orihon.icon({
               content: makeTrainNode(),
               iconSize: [34, 34],
               iconAnchor: [17, 17],
@@ -3426,7 +3426,7 @@
                   [lat, lon],
                   {
                     icon:
-                      Orihon.divIcon({
+                      Orihon.icon({
                         content:
                           makeStationNode(
                             Boolean(stop.major)
@@ -4332,7 +4332,7 @@
                 [lat, lon],
                 {
                   icon:
-                    Orihon.divIcon({
+                    Orihon.icon({
                       content:
                         makeActiveTrainNode(
                           train.number

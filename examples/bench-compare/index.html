@@ -422,7 +422,7 @@ tbody tr.empty td {
         <img class="brand" src="../../assets/brand/svg/orihon-logo-reversed.svg" alt="Orihon" width="1200" height="280" />
         <h1>Engine benchmark</h1>
         <p class="lede">
-          Same data, sequential runs — points, clusters, heatmap, isolines, GeoJSON, markers, chart popups, filter, live updates, pick and basemap across Orihon, Leaflet, OpenLayers and MapLibre.
+          Same data, sequential runs — points, clusters, unified heat field, isolines, GeoJSON, markers, chart popups, filter, live updates, pick and basemap across Orihon, Leaflet, OpenLayers and MapLibre.
         </p>
       </div>
       <div class="controls" id="controls">
@@ -433,6 +433,7 @@ tbody tr.empty td {
             <option value="clusters">Clusters / ObjectManager</option>
             <option value="heatmap">Heatmap</option>
             <option value="isolines">Isolines (from heat)</option>
+            <option value="heatboth">Heatmap + isolines</option>
             <option value="geojson">GeoJSON lines</option>
             <option value="markers">DOM markers</option>
             <option value="popup">Chart popup</option>
@@ -469,6 +470,13 @@ tbody tr.empty td {
             <option value="3" selected>3 → median</option>
           </select>
         </label>
+        <label class="field" id="heat-evaluation-wrap" hidden>
+          <span>Heat evaluation</span>
+          <select id="heat-evaluation">
+            <option value="static" selected>Static · full dataset</option>
+            <option value="zoom">Refine on zoom</option>
+          </select>
+        </label>
         <label class="field">
           <span>Preset</span>
           <select id="preset">
@@ -480,7 +488,9 @@ tbody tr.empty td {
             <option value="rich1mnc">Rich 1M (no clusters)</option>
             <option value="objects">ObjectManager 50k</option>
             <option value="heatmap">Heatmap 50k</option>
+            <option value="heatprofile1m">Temperature profile 1M</option>
             <option value="isolines">Isolines 25k</option>
+            <option value="heatboth">Heat + isolines 25k</option>
             <option value="geojson">GeoJSON 5k</option>
             <option value="markers">Markers 5k</option>
             <option value="popup">Chart popup 100</option>
@@ -1221,14 +1231,17 @@ async function loadOrihon() {
       // retain stale modules from an earlier build under the same package version.
       const mod = await import("/dist/orihon.esm.js" + localBuild);
       if (link) link.href = "/dist/orihon.css" + localBuild;
+      console.info("[bench] using local /dist/orihon.esm.js");
       return mod;
-    } catch {
+    } catch (error) {
+      console.warn("[bench] local /dist/orihon.esm.js failed, trying /dist/index.js", error);
       try {
         const mod = await import("/dist/index.js" + localBuild);
         if (link) link.href = "/dist/orihon.css" + localBuild;
+        console.info("[bench] using local /dist/index.js");
         return mod;
-      } catch {
-        /* fall through to CDN */
+      } catch (indexError) {
+        console.warn("[bench] local dist unavailable — falling back to CDN (HeatLayer may lack setDataAsync)", indexError);
       }
     }
   }
@@ -1239,15 +1252,29 @@ async function loadOrihon() {
 const {
   createMap,
   geoJSON,
-  heatIsolineLayer,
+  heatLayer,
   marker,
-  markerCollection,
   objectManager,
   tileLayer,
-  webglHeatLayer,
-  webglPointLayer,
-  webglTileLayer
+  webglPointLayer
 } = await loadOrihon();
+
+/** Prefer cooperative ingest; older CDN HeatLayer only had sync setData. */
+async function ingestAsync(layer, points, options = { chunkSize: 50_000, yieldMode: "task" }) {
+  if (typeof layer?.setDataAsync === "function") {
+    await layer.setDataAsync(points, options);
+    return;
+  }
+  if (typeof layer?.setData !== "function") {
+    throw new TypeError("Orihon layer missing setData / setDataAsync — reload against a local dist build");
+  }
+  // Yield between chunks so the tab stays responsive, then one atomic setData.
+  const chunk = Math.max(1_000, options.chunkSize || 50_000);
+  for (let i = 0; i < points.length; i += chunk) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  layer.setData(points);
+}
 
 const CENTER = [50.1, 14.4];
 const ZOOM = 5;
@@ -1259,61 +1286,107 @@ const POPUP_MARKERS_MAX = MARKERS_MAX;
 /** Even with thousands of markers, only hop this many times (spread across the set). */
 const POPUP_SWITCH_MAX = 40;
 
-/** City-ish hotspots for realistic heat / isoline benches (Europe + near). */
-const HEAT_HUBS = [
-  [50.08, 14.42, 1.0], // Prague
-  [52.52, 13.405, 0.95], // Berlin
-  [48.21, 16.37, 0.7], // Vienna
-  [47.5, 19.04, 0.65], // Budapest
-  [52.23, 21.01, 0.8], // Warsaw
-  [50.06, 19.94, 0.55], // Krakow
-  [48.86, 2.35, 0.9], // Paris
-  [51.51, -0.12, 1.0], // London
-  [41.9, 12.5, 0.75], // Rome
-  [40.42, -3.7, 0.7], // Madrid
-  [52.37, 4.9, 0.72], // Amsterdam
-  [50.85, 4.35, 0.5], // Brussels
-  [55.75, 37.62, 0.85], // Moscow
-  [59.93, 30.33, 0.6], // Saint Petersburg
-  [45.46, 9.19, 0.58], // Milan
-  [48.14, 11.58, 0.62] // Munich
-];
+/**
+ * Orihon mark geometry in SVG user units (assets/brand/svg/orihon-mark.svg viewBox 524×280).
+ * Heat points are sampled from these shapes and projected around CENTER.
+ */
+const ORIHON_MARK = {
+  view: { x0: 24, y0: 35, x1: 500, y1: 245 },
+  /** Geographic span so the silhouette fills ~most of the heat viewport at HEAT_ZOOM. */
+  latSpan: 5.4,
+  panels: [
+    [[24, 35], [144, 55], [144, 225], [24, 245]],
+    [[164, 60], [272, 42], [272, 238], [164, 220]],
+    [[272, 42], [378, 62], [378, 218], [272, 238]],
+    [[398, 60], [500, 40], [500, 240], [398, 220]]
+  ],
+  /** Light interior map strokes (straight segments + coarse polyline approximations of curves). */
+  strokes: [
+    [[25, 105], [144, 118]],
+    [[25, 172], [144, 181]],
+    [[91, 46], [91, 234]],
+    [[165, 118], [272, 105]],
+    [[220, 51], [221, 81], [205, 108], [224, 168], [229, 226]],
+    [[272, 103], [378, 119]],
+    [[272, 164], [378, 164]],
+    [[319, 51], [319, 229]],
+    [[399, 129], [500, 112]],
+    [[446, 51], [447, 75], [430, 105], [426, 166], [423, 225]]
+  ],
+  /** Cubic Bezier chain for the ochre route (absolute C commands after M47 160). */
+  route: [
+    [[47, 160], [112, 163], [139, 179], [164, 181]],
+    [[164, 181], [207, 185], [218, 119], [270, 119]],
+    [[270, 119], [322, 119], [335, 148], [378, 150]],
+    [[378, 150], [416, 151], [457, 148], [478, 148]]
+  ],
+  nodes: [
+    [47, 160],
+    [478, 148]
+  ]
+};
 
 /** Shared heatmap look: cooler mid-tones visible, red only at peaks. */
 const HEAT_GRADIENT = {
-  0.0: "rgba(0,0,255,0)",
-  0.15: "blue",
-  0.35: "cyan",
-  0.55: "lime",
-  0.75: "yellow",
-  0.9: "orange",
-  1.0: "red"
+  0.0: "rgba(23,70,209,0)",
+  0.24: "#1746d1",
+  0.43: "#00b8ff",
+  0.58: "#24d36b",
+  0.73: "#ffe63b",
+  0.87: "#ff8c19",
+  1.0: "#e31a1c"
 };
 
 /**
  * Fair cross-engine heat paint. Engines expose different knobs, but these keep
  * visual weight / color ramp in the same ballpark on the shared dataset.
+ * Kernel is a bit tighter than the old city-hub profile so the accordion silhouette reads.
  */
 const HEAT_BENCH = {
+  profile: "orihon-mark-shape-v1",
   zoom: HEAT_ZOOM,
-  /** Kernel radius in screen px (Orihon / Leaflet / OL). */
-  radius: 20,
-  blur: 18,
-  /** Orihon global multiplier. */
-  intensity: 0.32,
-  opacity: 0.75,
+  backend: "auto",
+  worker: true,
+  adaptiveLevels: false,
+  cols: 512,
+  rows: 384,
+  webgpuThreshold: 100_000,
+  radius: 5,
+  blur: 16,
+  opacity: 0.72,
+  minOpacity: 0.04,
+  domainOpacity: 0.06,
+  domainPadding: 0.08,
+  pad: 0.18,
+  levels: 32,
+  step: "auto",
+  maxIsolineLevels: 32,
+  isolineWidth: 1.7,
+  isolineOpacity: 0.9,
+  isolineLabelMinVertices: 3,
+  outlierQuantiles: [0.02, 0.98],
+  candidateMultiplier: 10,
+  coverageRadius: 1,
+  minCandidateCells: 83,
+  minIsolineLength: 0,
+  minIsolineArea: 0,
+  coverageWeight: 2,
+  rangeWeight: 1,
+  redundancyWeight: 0.6,
+  fragmentWeight: 1.12,
   /** Leaflet.heat: higher maxZoom → less zoom-out boost (avoids solid red). */
   leafletMaxZoom: 16,
   /** OpenLayers gradient (CSS color stops, cold → hot). */
-  olGradient: ["#0000ff", "#00ffff", "#00ff00", "#ffff00", "#ff8c00", "#ff0000"],
+  olGradient: ["#1746d1", "#00b8ff", "#24d36b", "#ffe63b", "#ff8c19", "#e31a1c"],
   /** Leaflet.heat rejects fully-transparent first stop — start slightly opaque. */
   leafletGradient: {
-    0.15: "blue",
-    0.35: "cyan",
-    0.55: "lime",
-    0.75: "yellow",
-    0.9: "orange",
-    1.0: "red"
+    0.01: "#1746d1",
+    0.24: "#1746d1",
+    0.43: "#00b8ff",
+    0.58: "#24d36b",
+    0.73: "#ffe63b",
+    0.87: "#ff8c19",
+    1.0: "#e31a1c"
   }
 };
 
@@ -1367,7 +1440,9 @@ const PRESETS = {
   live: { scenario: "live", count: "50000", runs: "1" },
   pick: { scenario: "pick", count: "50000", runs: "3" },
   heatmap: { scenario: "heatmap", count: "50000", runs: "3" },
+  heatprofile1m: { scenario: "heatmap", count: "1000000", runs: "1" },
   isolines: { scenario: "isolines", count: "25000", runs: "3" },
+  heatboth: { scenario: "heatboth", count: "25000", runs: "3" },
   geojson: { scenario: "geojson", count: "5000", runs: "3" },
   markers: { scenario: "markers", count: "5000", runs: "3" },
   filter: { scenario: "filter", count: "50000", runs: "3" },
@@ -1378,7 +1453,7 @@ const PRESETS = {
 
 const SCENARIO_NOTES = {
   points:
-    "WebGL points (Orihon + MapLibre raw buffer), Leaflet canvas, OL vector. Orihon uses cooperative setDataAsync() before one atomic GPU-buffer swap; basemap = webglTileLayer (CSS-warp while moving, same idea as MapLibre). Camera zigzag+zoom ~3s — prefer p95 / drop% over raw FPS.",
+    "WebGL points (Orihon + MapLibre raw buffer), Leaflet canvas, OL vector. Orihon uses cooperative setDataAsync() before one atomic GPU-buffer swap; basemap = tileLayer with WebGL renderer. Camera zigzag+zoom ~3s — prefer p95 / drop% over raw FPS.",
   clusters:
     "Orihon ObjectManager (cooperative addAsync ingest + hierarchical greedy radius clusters + WebGL + worker index), Leaflet.markercluster, OL Cluster, MapLibre GeoJSON cluster. Camera = discrete view steps; Orihon does not rebuild clusters on pan-only moves. 1M uses the mass-point path (`sceneFeatures: false`) so Load is ingest + one greedy zoom, not a full hierarchy clone.",
   live:
@@ -1386,9 +1461,11 @@ const SCENARIO_NOTES = {
   pick:
     "Same O(n) screen-space nearest scan via each engine’s project() — fair across stacks. Samples are projected from real points (guaranteed on-feature).",
   heatmap:
-    "One shared hub-weighted dataset + HEAT_BENCH paint. Orihon projects the source cooperatively with setDataAsync(), then swaps the heat buffer once. Heap = absolute tab usedJSHeapSize with that engine live; previous engine is destroyed and heap is allowed to reclaim before each run.",
+    "Shared orihon-mark-shape-v1 profile: heat sources trace the accordion-map mark (4 panels + interior strokes + ochre route + end nodes) around the map center; radius 5px + blur 16px, opacity 72%, thermal ramp. Orihon additionally uses 512×384 grid, full-domain static field, 6% zero-zone, Worker/WASM, 32 levels and the recorded contour-selection weights. Leaflet/OpenLayers receive their native radius+blur knobs; MapLibre has no separate blur, so it receives the equivalent 21px kernel at reference zoom. Unsupported engine-specific knobs are not emulated or hidden. Backend auto considers WebGPU at 100k+. Heap = absolute tab usedJSHeapSize with that engine live; previous engine is destroyed and heap is allowed to reclaim before each run.",
   isolines:
-    "Orihon only: heatIsolineLayer builds density field + marching-squares isolines on moveend/zoomend (discrete camera). Leaflet / OpenLayers / MapLibre have no built-in heat→isolines API — rows marked n/a (plugins/Turf/DEM contours are a different feature).",
+    "Orihon only: heatLayer builds one world-space field and extracts/stitches marching-squares isolines in WASM; labels use the resulting CPU geometry. Leaflet / OpenLayers / MapLibre have no built-in heat→isolines API — rows marked n/a.",
+  heatboth:
+    "Orihon only: one heatLayer field feeds continuous colors and matching WASM isolines with labels. The field is not calculated twice. At 100k+ auto may use the linear WebGPU field path and reports GPU→CPU readback before WASM stitching.",
   geojson:
     "N LineString features (4 vertices each). Orihon cooperatively streams disposable GeoJSON chunks into one packed WebGL path buffer (`retainFeatures:false`) using scheduler/MessageChannel task boundaries; continuous camera motion uses throttled exact GPU frames plus camera-warp frames, followed by an exact settled redraw. Source round-trip is intentionally disabled for this mass-render preset. Heap shows absolute / active Δ; retained is baseline growth across repeated runs.",
   markers:
@@ -1400,7 +1477,7 @@ const SCENARIO_NOTES = {
   popup:
     "Markers count = Points control (capped at 5,000). All markers load with chart popups; stress only hops ≤40 times (spread across the set) with zoom ~9–13. Open p50/p95 = view+open per hop.",
   basemap:
-    "Tiles only — no overlay data. Orihon uses webglTileLayer; others keep their native raster path. Continuous camera stress.",
+    "Tiles only — no overlay data. Orihon uses the unified tileLayer with WebGL renderer; others keep their native raster path. Continuous camera stress.",
   "tile-scroll":
     "One wheel-like zoom-in → zoom-out round-trip with lateral edge exposure. Initial Load waits for visible tiles; Settle measures time until the final zoom-out view is complete. Coverage min is Orihon's geometric exact/parent/child tile-pyramid coverage sampled on every stress frame (other engines do not expose an equivalent public metric). Requests count each engine's own tile-pipeline starts; Reloads count coordinates/URLs started more than once in the same run. Lower is better except Coverage. No overlay data.",
 };
@@ -1413,8 +1490,9 @@ const COLUMNS = {
   clusters: ["Engine", "Init", "Load", "FPS", "p95", "drop%", "Markers", "Heap"],
   live: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Heap"],
   pick: ["Engine", "Init", "Load", "Pick p50", "Pick p95", "Heap"],
-  heatmap: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Heap"],
-  isolines: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Rings", "Heap"],
+  heatmap: ["Engine", "Init", "Load", "Field", "Contours", "Paint", "FPS", "p95", "max", "drop%", "Heap"],
+  isolines: ["Engine", "Init", "Load", "Field", "Contours", "Paint", "FPS", "p95", "max", "drop%", "Rings", "Heap"],
+  heatboth: ["Engine", "Init", "Load", "Field", "Contours", "Paint", "FPS", "p95", "max", "drop%", "Rings", "Heap"],
   geojson: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Heap / Δ"],
   markers: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Heap"],
   filter: ["Engine", "Init", "Load", "FPS", "p95", "drop%", "Markers", "Heap"],
@@ -1441,6 +1519,8 @@ const els = {
   hudStatus: document.getElementById("hud-status"),
   richCluster: document.getElementById("rich-cluster"),
   richClusterWrap: document.getElementById("rich-cluster-wrap"),
+  heatEvaluation: document.getElementById("heat-evaluation"),
+  heatEvaluationWrap: document.getElementById("heat-evaluation-wrap"),
   checks: {
     orihon: document.getElementById("engines-orihon"),
     leaflet: document.getElementById("engines-leaflet"),
@@ -1477,8 +1557,8 @@ function createPoints(count) {
 }
 
 /**
- * Weighted heat-like distribution: most mass in city gaussians, light rural noise.
- * Returns [lat, lng, weight]. Cached & frozen — one shared master per count for all engines.
+ * Heat sources shaped like the Orihon accordion mark (same silhouette for every engine).
+ * Returns [lat, lng, weight]. Cached & frozen — one shared master per count.
  */
 function createHeatPoints(count) {
   const key = `heat:${count}`;
@@ -1486,23 +1566,160 @@ function createHeatPoints(count) {
   if (cached) return cached;
   const rand = mulberry32(count ^ 0x51f5a11);
   const points = new Array(count);
-  const clustered = Math.floor(count * 0.78);
-  for (let i = 0; i < clustered; i++) {
-    const hub = HEAT_HUBS[(rand() * HEAT_HUBS.length) | 0];
-    // Mix tight cores and softer suburbs (degrees).
-    const sigma = 0.08 + rand() * rand() * 0.7;
-    const u = Math.max(1e-9, rand());
+  const { view, latSpan, panels, strokes, route, nodes } = ORIHON_MARK;
+  const aspect = (view.x1 - view.x0) / (view.y1 - view.y0);
+  const lngSpan = (latSpan * aspect) / Math.max(0.2, Math.cos((CENTER[0] * Math.PI) / 180));
+
+  const svgToLatLng = (x, y) => {
+    const u = (x - view.x0) / (view.x1 - view.x0);
+    const v = (y - view.y0) / (view.y1 - view.y0);
+    return [CENTER[0] - (v - 0.5) * latSpan, CENTER[1] + (u - 0.5) * lngSpan];
+  };
+
+  const pointInRing = (x, y, ring) => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0];
+      const yi = ring[i][1];
+      const xj = ring[j][0];
+      const yj = ring[j][1];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi + 0) + xi) inside = !inside;
+    }
+    return inside;
+  };
+
+  const ringBBox = (ring) => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of ring) {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    return { minX, minY, maxX, maxY };
+  };
+
+  const sampleInPanel = (ring) => {
+    const box = ringBBox(ring);
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const x = box.minX + rand() * (box.maxX - box.minX);
+      const y = box.minY + rand() * (box.maxY - box.minY);
+      if (pointInRing(x, y, ring)) return [x, y];
+    }
+    // Fallback to centroid if rejection fails (degenerate / thin tip).
+    let cx = 0;
+    let cy = 0;
+    for (const [x, y] of ring) {
+      cx += x;
+      cy += y;
+    }
+    return [cx / ring.length, cy / ring.length];
+  };
+
+  const cubicAt = (p0, p1, p2, p3, t) => {
+    const u = 1 - t;
+    const uu = u * u;
+    const tt = t * t;
+    return [
+      uu * u * p0[0] + 3 * uu * t * p1[0] + 3 * u * tt * p2[0] + tt * t * p3[0],
+      uu * u * p0[1] + 3 * uu * t * p1[1] + 3 * u * tt * p2[1] + tt * t * p3[1]
+    ];
+  };
+
+  const sampleAlongPolyline = (poly, width) => {
+    if (poly.length < 2) return poly[0] || [0, 0];
+    let total = 0;
+    const segLen = [];
+    for (let i = 1; i < poly.length; i++) {
+      const dx = poly[i][0] - poly[i - 1][0];
+      const dy = poly[i][1] - poly[i - 1][1];
+      const len = Math.hypot(dx, dy);
+      segLen.push(len);
+      total += len;
+    }
+    let walk = rand() * Math.max(total, 1e-6);
+    let i = 0;
+    while (i < segLen.length - 1 && walk > segLen[i]) {
+      walk -= segLen[i];
+      i += 1;
+    }
+    const len = Math.max(segLen[i], 1e-6);
+    const t = walk / len;
+    const a = poly[i];
+    const b = poly[i + 1];
+    const x = a[0] + (b[0] - a[0]) * t;
+    const y = a[1] + (b[1] - a[1]) * t;
+    const nx = -(b[1] - a[1]) / len;
+    const ny = (b[0] - a[0]) / len;
+    const j = (rand() - 0.5) * width;
+    return [x + nx * j, y + ny * j];
+  };
+
+  const sampleRoute = (width) => {
+    const seg = route[(rand() * route.length) | 0];
+    const t = rand();
+    const [p0, p1, p2, p3] = seg;
+    const [x, y] = cubicAt(p0, p1, p2, p3, t);
+    const u = 1 - t;
+    const dx =
+      3 * u * u * (p1[0] - p0[0]) + 6 * u * t * (p2[0] - p1[0]) + 3 * t * t * (p3[0] - p2[0]);
+    const dy =
+      3 * u * u * (p1[1] - p0[1]) + 6 * u * t * (p2[1] - p1[1]) + 3 * t * t * (p3[1] - p2[1]);
+    const len = Math.hypot(dx, dy) || 1;
+    const j = (rand() - 0.5) * width;
+    return [x - (dy / len) * j, y + (dx / len) * j];
+  };
+
+  const nPanel = Math.floor(count * 0.58);
+  const nStroke = Math.floor(count * 0.12);
+  const nRoute = Math.floor(count * 0.22);
+  const nNode = Math.floor(count * 0.06);
+  let i = 0;
+
+  for (; i < nPanel; i++) {
+    const panel = panels[i % panels.length];
+    const [x, y] = sampleInPanel(panel);
+    const [lat, lng] = svgToLatLng(x, y);
+    // Outer panels slightly cooler than the parchment middle fold.
+    const fold = i % panels.length;
+    const base = fold === 0 || fold === 3 ? 0.28 : 0.42;
+    points[i] = Object.freeze([lat, lng, base + rand() * 0.22]);
+  }
+  for (; i < nPanel + nStroke; i++) {
+    const stroke = strokes[(rand() * strokes.length) | 0];
+    const [x, y] = sampleAlongPolyline(stroke, 2.4);
+    const [lat, lng] = svgToLatLng(x, y);
+    points[i] = Object.freeze([lat, lng, 0.55 + rand() * 0.25]);
+  }
+  for (; i < nPanel + nStroke + nRoute; i++) {
+    const [x, y] = sampleRoute(5.5);
+    const [lat, lng] = svgToLatLng(x, y);
+    points[i] = Object.freeze([lat, lng, 0.82 + rand() * 0.18]);
+  }
+  for (; i < nPanel + nStroke + nRoute + nNode; i++) {
+    const node = nodes[i & 1];
+    const ang = rand() * Math.PI * 2;
+    const r = Math.sqrt(rand()) * 11;
+    const [lat, lng] = svgToLatLng(node[0] + Math.cos(ang) * r, node[1] + Math.sin(ang) * r);
+    points[i] = Object.freeze([lat, lng, 0.95 + rand() * 0.05]);
+  }
+  for (; i < count; i++) {
+    // Soft halo just outside the mark so the silhouette eases out instead of clipping hard.
+    const u = rand();
     const v = rand();
-    const r = Math.sqrt(-2 * Math.log(u));
-    const ang = 2 * Math.PI * v;
-    const lat = hub[0] + r * Math.cos(ang) * sigma;
-    const lng = hub[1] + r * Math.sin(ang) * sigma * 1.35;
-    const weight = hub[2] * (0.2 + rand() * 0.8);
-    points[i] = Object.freeze([lat, lng, weight]);
+    const x = view.x0 + u * (view.x1 - view.x0);
+    const y = view.y0 + v * (view.y1 - view.y0);
+    const pad = 18 + rand() * 28;
+    const side = (rand() * 4) | 0;
+    const sx = side === 0 ? view.x0 - pad : side === 1 ? view.x1 + pad : x;
+    const sy = side === 2 ? view.y0 - pad : side === 3 ? view.y1 + pad : y;
+    const [lat, lng] = svgToLatLng(sx, sy);
+    points[i] = Object.freeze([lat, lng, 0.04 + rand() * 0.1]);
   }
-  for (let i = clustered; i < count; i++) {
-    points[i] = Object.freeze([36 + rand() * 26, -12 + rand() * 50, 0.04 + rand() * 0.18]);
-  }
+
   Object.freeze(points);
   return rememberPoints(key, points);
 }
@@ -1608,7 +1825,7 @@ function median(values) {
 }
 
 function medianRow(rows) {
-  const keys = ["initMs", "loadMs", "fps", "p95Ms", "maxMs", "dropPct", "coveragePct", "pickP50", "pickP95", "settleMs", "requests", "reloads", "heap", "heapDelta", "heapBaseline", "markers"];
+  const keys = ["initMs", "loadMs", "fieldMs", "contoursMs", "renderMs", "fps", "p95Ms", "maxMs", "dropPct", "coveragePct", "pickP50", "pickP95", "settleMs", "requests", "reloads", "heap", "heapDelta", "heapBaseline", "markers"];
   const out = { ...rows[0], runs: rows.length, median: true };
   for (const key of keys) {
     const values = rows.map((row) => row[key]).filter((value) => Number.isFinite(value));
@@ -2486,7 +2703,7 @@ async function pointsOrihon(points) {
     controls: false
   });
   // GPU basemap (CSS-warp while moving) — fair vs MapLibre raster; DOM tiles thrash on every setView.
-  webglTileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19, maxDpr: 1 }).addTo(map);
+  tileLayer(OSM, { renderer: "webgl", attribution: "© OpenStreetMap", maxZoom: 19, maxDpr: 1 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
 
@@ -3288,7 +3505,7 @@ async function pickMapLibre(points) {
 
 /* -------------------- engines: heatmap -------------------- */
 
-async function heatmapOrihon(points) {
+async function heatOrihon(points, mode) {
   const host = blankHost();
   const initStart = performance.now();
   const map = createMap(host, { center: CENTER, zoom: HEAT_BENCH.zoom, controls: false });
@@ -3297,23 +3514,58 @@ async function heatmapOrihon(points) {
   const initMs = performance.now() - initStart;
 
   const loadStart = performance.now();
-  const layer = webglHeatLayer([], {
+  const layer = heatLayer([], {
+    mode,
+    backend: HEAT_BENCH.backend,
+    evaluation: els.heatEvaluation?.value || "static",
+    labels: mode !== "heatmap",
+    step: HEAT_BENCH.step,
+    bands: true,
+    cover: true,
+    worker: HEAT_BENCH.worker,
+    adaptiveLevels: HEAT_BENCH.adaptiveLevels,
+    cols: HEAT_BENCH.cols,
+    rows: HEAT_BENCH.rows,
+    webgpuThreshold: HEAT_BENCH.webgpuThreshold,
+    domainOpacity: HEAT_BENCH.domainOpacity,
+    domainPadding: HEAT_BENCH.domainPadding,
+    pad: HEAT_BENCH.pad,
     radius: HEAT_BENCH.radius,
     blur: HEAT_BENCH.blur,
     scaleZoom: HEAT_BENCH.zoom,
-    intensity: HEAT_BENCH.intensity,
     opacity: HEAT_BENCH.opacity,
-    maxDpr: 1.5,
-    gradient: HEAT_GRADIENT
+    minOpacity: HEAT_BENCH.minOpacity,
+    gradient: HEAT_GRADIENT,
+    levels: HEAT_BENCH.levels,
+    maxIsolineLevels: HEAT_BENCH.maxIsolineLevels,
+    isolineWidth: HEAT_BENCH.isolineWidth,
+    isolineOpacity: HEAT_BENCH.isolineOpacity,
+    isolineLabelMinVertices: HEAT_BENCH.isolineLabelMinVertices,
+    outlierQuantiles: HEAT_BENCH.outlierQuantiles,
+    candidateMultiplier: HEAT_BENCH.candidateMultiplier,
+    coverageRadius: HEAT_BENCH.coverageRadius,
+    minCandidateCells: HEAT_BENCH.minCandidateCells,
+    minIsolineLength: HEAT_BENCH.minIsolineLength,
+    minIsolineArea: HEAT_BENCH.minIsolineArea,
+    coverageWeight: HEAT_BENCH.coverageWeight,
+    rangeWeight: HEAT_BENCH.rangeWeight,
+    redundancyWeight: HEAT_BENCH.redundancyWeight,
+    fragmentWeight: HEAT_BENCH.fragmentWeight,
+    isolineLabelFont: "700 14px ui-sans-serif, system-ui, sans-serif",
+    isolineLabelColor: "#0f172a"
   });
-  await layer.setDataAsync(points, { chunkSize: 50_000, yieldMode: "task" });
+  await ingestAsync(layer, points);
   layer.addTo(map);
-  await waitFrames(4);
+  await layer.rebuildAsync();
+  await waitFrames(2);
   const loadMs = performance.now() - loadStart;
+  const loadStats = layer.getStats();
 
   const pan = await stressOrihonCamera(map, STRESS_MS, HEAT_BENCH.zoom);
   map.setView(CENTER, HEAT_BENCH.zoom);
-  await waitFrames(3);
+  if (layer.options.evaluation === "zoom") await layer.rebuildAsync();
+  else layer.render();
+  await waitFrames(2);
   const stats = layer.getStats();
   active = {
     destroy() {
@@ -3326,12 +3578,22 @@ async function heatmapOrihon(points) {
       map.remove();
     }
   };
-  const tag =
-    layer.renderer === "webgl"
-      ? ` · drawn ${stats.drawn}/${stats.aggregated}`
-      : " fallback";
-  // heap filled by runOne probe (peak Δ)
-  return { name: `Orihon (WebGL heat${tag})`, initMs, loadMs, ...pan, heap: NaN };
+  const fallback = stats.fallbackReason ? ` fallback: ${stats.fallbackReason}` : "";
+  return {
+    name: `Orihon (${HEAT_BENCH.profile} · ${mode} · ${layer.options.evaluation} · ${stats.backend} ${stats.worker ? "worker" : "main"}${fallback})`,
+    initMs,
+    loadMs,
+    fieldMs: loadStats.fieldMs,
+    contoursMs: loadStats.contoursMs,
+    renderMs: loadStats.renderMs,
+    ...pan,
+    markers: stats.rings,
+    heap: NaN
+  };
+}
+
+async function heatmapOrihon(points) {
+  return heatOrihon(points, "heatmap");
 }
 
 async function heatmapLeaflet(points) {
@@ -3358,7 +3620,7 @@ async function heatmapLeaflet(points) {
     blur: HEAT_BENCH.blur,
     maxZoom: HEAT_BENCH.leafletMaxZoom,
     max: 1.0,
-    minOpacity: 0.05,
+    minOpacity: HEAT_BENCH.minOpacity,
     gradient: HEAT_BENCH.leafletGradient
   }).addTo(map);
   await waitFrames(4);
@@ -3383,7 +3645,7 @@ async function heatmapLeaflet(points) {
       map.remove();
     }
   };
-  return { name: "Leaflet (heat)", initMs, loadMs, ...pan, heap: NaN };
+  return { name: `Leaflet (${HEAT_BENCH.profile} · native radius+blur)`, initMs, loadMs, ...pan, heap: NaN };
 }
 
 async function heatmapOpenLayers(points) {
@@ -3449,7 +3711,7 @@ async function heatmapOpenLayers(points) {
       map.dispose();
     }
   };
-  return { name: "OpenLayers (heatmap)", initMs, loadMs, ...pan, heap: NaN };
+  return { name: `OpenLayers (${HEAT_BENCH.profile} · native radius+blur)`, initMs, loadMs, ...pan, heap: NaN };
 }
 
 async function heatmapMapLibre(points) {
@@ -3488,37 +3750,29 @@ async function heatmapMapLibre(points) {
     source: "heat",
     paint: {
       "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 1, 1],
-      "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 4, 0.45, 6, 0.7, 10, 1.0],
-      "heatmap-radius": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
-        4,
-        HEAT_BENCH.radius * 0.85,
-        6,
-        HEAT_BENCH.radius + HEAT_BENCH.blur * 0.35,
-        10,
-        HEAT_BENCH.radius + HEAT_BENCH.blur * 0.6
-      ],
+      "heatmap-intensity": 1,
+      // MapLibre exposes one kernel radius but no independent blur. Match the
+      // radius+blur support of the other engines at the reference zoom.
+      "heatmap-radius": HEAT_BENCH.radius + HEAT_BENCH.blur,
       "heatmap-opacity": HEAT_BENCH.opacity,
       "heatmap-color": [
         "interpolate",
         ["linear"],
         ["heatmap-density"],
         0,
-        "rgba(0,0,255,0)",
-        0.15,
-        "rgb(0,0,255)",
-        0.35,
-        "rgb(0,255,255)",
-        0.55,
-        "rgb(0,255,0)",
-        0.75,
-        "rgb(255,255,0)",
-        0.9,
-        "rgb(255,140,0)",
+        `rgba(23,70,209,${Math.min(1, HEAT_BENCH.domainOpacity / HEAT_BENCH.opacity)})`,
+        0.24,
+        "rgb(23,70,209)",
+        0.43,
+        "rgb(0,184,255)",
+        0.58,
+        "rgb(36,211,107)",
+        0.73,
+        "rgb(255,230,59)",
+        0.87,
+        "rgb(255,140,25)",
         1,
-        "rgb(255,0,0)"
+        "rgb(227,26,28)"
       ]
     }
   });
@@ -3550,58 +3804,17 @@ async function heatmapMapLibre(points) {
       map.remove();
     }
   };
-  return { name: "MapLibre (heatmap)", initMs, loadMs, ...pan, heap: NaN };
+  return { name: `MapLibre (${HEAT_BENCH.profile} · effective ${HEAT_BENCH.radius + HEAT_BENCH.blur}px kernel)`, initMs, loadMs, ...pan, heap: NaN };
 }
 
 /* -------------------- engines: isolines (heat → contours) -------------------- */
 
 async function isolinesOrihon(points) {
-  const host = blankHost();
-  const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: HEAT_ZOOM, controls: false });
-  tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
-  await waitFrames(3);
-  const initMs = performance.now() - initStart;
+  return heatOrihon(points, "isolines");
+}
 
-  const loadStart = performance.now();
-  const layer = heatIsolineLayer(points, {
-    levels: 5,
-    radius: 20,
-    blur: 18,
-    scaleZoom: HEAT_ZOOM,
-    gradient: HEAT_GRADIENT,
-    colorByLevel: true,
-    strokeWidth: 1.6,
-    opacity: 0.9,
-    labels: true,
-    labelFont: "700 14px ui-sans-serif, system-ui, sans-serif",
-    labelColor: "#0f172a"
-  }).addTo(map);
-  await waitFrames(4);
-  const loadMs = performance.now() - loadStart;
-
-  // Discrete camera: isolines rebuild on moveend/zoomend (same fairness as clusters).
-  const pan = await stressClusters((lat, lng, zoom) => map.setView([lat, lng], zoom), 16, STRESS_MS, HEAT_ZOOM);
-  // Settle back to center so labels are readable on the final frame.
-  map.setView(CENTER, HEAT_ZOOM);
-  layer.rebuild();
-  await waitFrames(3);
-  const heap = readHeap();
-  const stats = layer.getStats();
-  active = {
-    destroy() {
-      layer.remove();
-      map.remove();
-    }
-  };
-  return {
-    name: `Orihon (heat isolines · ${stats.rings} rings)`,
-    initMs,
-    loadMs,
-    ...pan,
-    markers: stats.rings,
-    heap
-  };
+async function heatBothOrihon(points) {
+  return heatOrihon(points, "both");
 }
 
 function isolinesUnsupported(label, reason) {
@@ -3619,6 +3832,18 @@ const isolinesOpenLayers = isolinesUnsupported(
 const isolinesMapLibre = isolinesUnsupported(
   "MapLibre",
   "No built-in heat→isolines (maplibre-contour is DEM elevation, not heatmap density)."
+);
+const heatBothLeaflet = isolinesUnsupported(
+  "Leaflet",
+  "No built-in shared point-heat field that produces matching colors, isolines and labels."
+);
+const heatBothOpenLayers = isolinesUnsupported(
+  "OpenLayers",
+  "No built-in shared point-heat field that produces matching colors, isolines and labels."
+);
+const heatBothMapLibre = isolinesUnsupported(
+  "MapLibre",
+  "No built-in point-heat contour extraction; DEM contour extensions are a different feature."
 );
 
 /* -------------------- engines: geojson lines -------------------- */
@@ -3844,7 +4069,7 @@ async function markersOrihon(points) {
   const initMs = performance.now() - initStart;
 
   const loadStart = performance.now();
-  const layer = markerCollection(points, {
+  const layer = objectManager({ points,
     renderer: "svg",
     htmlButtonLimit: MARKER_DOM_CAP,
     viewportCull: true,
@@ -4328,7 +4553,7 @@ async function basemapOrihon(_points) {
   const host = blankHost();
   const initStart = performance.now();
   const map = createMap(host, { center: CENTER, zoom: ZOOM, controls: false });
-  const layer = webglTileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
+  const layer = tileLayer(OSM, { renderer: "webgl", attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(4);
   const initMs = performance.now() - initStart;
   const loadMs = 0;
@@ -4428,7 +4653,7 @@ async function tileScrollOrihon(_points) {
   const initStart = performance.now();
   const map = createMap(host, { center: CENTER, zoom: 5.25, zoomSnap: 0, controls: false });
   const tracker = createTileRequestTracker();
-  const layer = webglTileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 });
+  const layer = tileLayer(OSM, { renderer: "webgl", attribution: "© OpenStreetMap", maxZoom: 19 });
   layer.on("tileloadstart", (event) => tracker.record(event.url || `${event.z}:${event.x}:${event.y}`));
   layer.addTo(map);
   await waitFrames(1);
@@ -4845,7 +5070,7 @@ async function richOrihon(points) {
     maxZoom: 14,
     controls: false
   });
-  webglTileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19, maxDpr: 1 }).addTo(map);
+  tileLayer(OSM, { renderer: "webgl", attribution: "© OpenStreetMap", maxZoom: 19, maxDpr: 1 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
 
@@ -5184,6 +5409,12 @@ const ENGINE_RUNNERS = {
     ol: isolinesOpenLayers,
     maplibre: isolinesMapLibre
   },
+  heatboth: {
+    orihon: heatBothOrihon,
+    leaflet: heatBothLeaflet,
+    ol: heatBothOpenLayers,
+    maplibre: heatBothMapLibre
+  },
   geojson: {
     orihon: geojsonOrihon,
     leaflet: geojsonLeaflet,
@@ -5242,6 +5473,9 @@ function syncScenarioUi() {
   if (els.richClusterWrap) {
     els.richClusterWrap.hidden = scenario !== "rich";
   }
+  if (els.heatEvaluationWrap) {
+    els.heatEvaluationWrap.hidden = scenario !== "heatmap" && scenario !== "isolines" && scenario !== "heatboth";
+  }
   const cols = COLUMNS[scenario] || COLUMNS.points;
   els.resultsHead.innerHTML = `<tr>${cols.map((col) => `<th>${col}</th>`).join("")}</tr>`;
   if (!els.results.querySelector("tr:not(.empty)")) {
@@ -5251,7 +5485,7 @@ function syncScenarioUi() {
 
 function cellFor(scenario, row, key) {
   if (row.unsupported && key !== "name") {
-    return key === "markers" && (scenario === "isolines" || scenario === "rich") ? "n/a" : "n/a";
+    return key === "markers" && (scenario === "isolines" || scenario === "heatboth" || scenario === "rich") ? "n/a" : "n/a";
   }
   if (row.running && (row[key] == null || (key === "heap" && !Number.isFinite(row.heap)))) return "…";
   switch (key) {
@@ -5263,6 +5497,12 @@ function cellFor(scenario, row, key) {
       return formatMs(row.initMs);
     case "loadMs":
       return formatMs(row.loadMs);
+    case "fieldMs":
+      return formatMs(row.fieldMs);
+    case "contoursMs":
+      return formatMs(row.contoursMs);
+    case "renderMs":
+      return formatMs(row.renderMs);
     case "fps":
       return formatFps(row.fps);
     case "p95Ms":
@@ -5304,8 +5544,11 @@ function rowKeys(scenario) {
   if (scenario === "rich") {
     return ["name", "initMs", "loadMs", "fps", "p95Ms", "maxMs", "dropPct", "markers", "caps", "heap"];
   }
-  if (scenario === "isolines") {
-    return ["name", "initMs", "loadMs", "fps", "p95Ms", "maxMs", "dropPct", "markers", "heap"];
+  if (scenario === "isolines" || scenario === "heatboth") {
+    return ["name", "initMs", "loadMs", "fieldMs", "contoursMs", "renderMs", "fps", "p95Ms", "maxMs", "dropPct", "markers", "heap"];
+  }
+  if (scenario === "heatmap") {
+    return ["name", "initMs", "loadMs", "fieldMs", "contoursMs", "renderMs", "fps", "p95Ms", "maxMs", "dropPct", "heap"];
   }
   if (scenario === "pick" || scenario === "popup") {
     return ["name", "initMs", "loadMs", "pickP50", "pickP95", "heap"];
@@ -5381,6 +5624,10 @@ function applyPreset(name) {
     // Rich compares Orihon + MapLibre; bare 1M points keeps MapLibre too.
     if (els.checks.maplibre) els.checks.maplibre.checked = true;
   }
+  if (name === "heatprofile1m") {
+    for (const checkbox of Object.values(els.checks)) if (checkbox) checkbox.checked = true;
+    if (els.heatEvaluation) els.heatEvaluation.value = "static";
+  }
   syncScenarioUi();
 }
 
@@ -5453,7 +5700,7 @@ async function runBenchmark() {
     pointCount = MARKERS_MAX;
     setHud(
       "Markers cap",
-      `DOM markers capped at ${MARKERS_MAX.toLocaleString("en-US")} — use Points / markerCollection(auto) for 50k+.`
+      `DOM markers capped at ${MARKERS_MAX.toLocaleString("en-US")} — use Points / objectManager({ points, renderer: "auto" }) for 50k+.`
     );
     await sleep(600);
   }
@@ -5486,7 +5733,7 @@ async function runBenchmark() {
       ? []
       : scenario === "popup"
         ? createPopupPoints(pointCount)
-        : scenario === "heatmap" || scenario === "isolines"
+        : scenario === "heatmap" || scenario === "isolines" || scenario === "heatboth"
           ? createHeatPoints(pointCount)
           : createPoints(pointCount);
   const rows = [];
@@ -5575,6 +5822,9 @@ async function runBenchmark() {
     scenario,
     count: pointCount,
     runs: runCount,
+    heatProfile: scenario === "heatmap" || scenario === "isolines" || scenario === "heatboth"
+      ? { ...HEAT_BENCH, gradient: HEAT_GRADIENT, mapLibreEffectiveRadius: HEAT_BENCH.radius + HEAT_BENCH.blur }
+      : undefined,
     userAgent: navigator.userAgent,
     results: rows
   };

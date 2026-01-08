@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   MAX_LAT,
+  bounds,
   clampLat,
   distance,
-  latLngBounds,
   project,
   unproject,
   wrapLng
@@ -42,13 +42,13 @@ test("distance and bounds invariants survive coordinate fuzzing", () => {
     const b = [random() * 170 - 85, random() * 360 - 180];
     const ab = distance(a, b);
     const ba = distance(b, a);
-    const bounds = latLngBounds(a, b);
+    const area = bounds(a, b);
 
     assert.equal(Number.isFinite(ab), true);
     assert.ok(ab >= 0);
     assert.ok(Math.abs(ab - ba) < 1e-7);
-    assert.equal(bounds.contains(a), true);
-    assert.equal(bounds.contains(b), true);
+    assert.equal(area.contains(a), true);
+    assert.equal(area.contains(b), true);
     assert.ok(wrapLng(a[1]) >= -180 && wrapLng(a[1]) <= 180);
   }
 });

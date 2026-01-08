@@ -12,8 +12,9 @@ export function normalizeLabel(value: ObjectStyle["label"]): ObjectLabelStyle | 
 }
 
 export function styleTint(style: ObjectStyle): readonly [number, number, number, number] {
-  const color = style.iconTint ?? style.color ?? "#ffffff";
+  const color = style.iconTint ?? style.fill ?? style.color ?? "#ffffff";
   const rgb = parseCssColor(color, { r: 255, g: 255, b: 255 });
-  const opacity = Number.isFinite(Number(style.opacity)) ? Number(style.opacity) : 1;
+  const rawOpacity = style.fillOpacity ?? style.opacity;
+  const opacity = Number.isFinite(Number(rawOpacity)) ? Number(rawOpacity) : 1;
   return [rgb.r / 255, rgb.g / 255, rgb.b / 255, Math.max(0, Math.min(1, opacity))];
 }

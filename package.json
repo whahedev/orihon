@@ -19,6 +19,10 @@
       "types": "./dist/standard.d.ts",
       "import": "./dist/standard.js"
     },
+    "./easy": {
+      "types": "./dist/easy-entry.d.ts",
+      "import": "./dist/easy-entry.js"
+    },
     "./draw": {
       "types": "./dist/draw/index.d.ts",
       "import": "./dist/draw/index.js"
@@ -39,6 +43,10 @@
     "./mvt-wasm": {
       "types": "./dist/layers/mvt-wasm.d.ts",
       "import": "./dist/layers/mvt-wasm.js"
+    },
+    "./mvt": {
+      "types": "./dist/mvt-entry.d.ts",
+      "import": "./dist/mvt-entry.js"
     },
     "./webgpu": {
       "types": "./dist/webgpu-entry.d.ts",
@@ -72,15 +80,17 @@
     "./dist/webgpu-entry.js",
     "./dist/layers/mlt.js",
     "./dist/layers/mvt-wasm.js",
+    "./dist/mvt-entry.js",
     "./src/webgpu-entry.ts",
     "./src/layers/mlt.ts",
-    "./src/layers/mvt-wasm.ts"
+    "./src/layers/mvt-wasm.ts",
+    "./src/mvt-entry.ts"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
     "pretest": "npm run build",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:browser": "node test/browser-smoke.mjs && node test/geojson-async-browser.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs",
+    "test:browser": "node test/browser-smoke.mjs && node test/tile-gpu-browser.mjs && node test/geojson-async-browser.mjs && node test/heat-browser.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs",
     "test:server": "node scripts/browser-test-server.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",
@@ -93,7 +103,10 @@
     "dist": "npm run build && node scripts/pack-dist.mjs",
     "prepack": "npm run build && node scripts/strip-publish-maps.mjs",
     "prepublishOnly": "npm run check",
+    "docs:build": "node scripts/build-developer-guide.mjs",
+    "demo:docs": "npm run build && npm run docs:build && node scripts/developer-guide-server.mjs",
     "demo:bench": "npm run build && npx --yes serve . -p 4176",
+    "demo:heat-bench": "npm run build && npx --yes serve . -p 4178",
     "bench:object-manager": "npm run build && node scripts/bench-object-manager-scene.mjs",
     "demo:showcase": "npx --yes serve . -p 4177",
     "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
@@ -101,7 +114,8 @@
     "demo:rzd": "node examples/rzd-train-122-tracker/server.mjs",
     "demo:navigation": "npx --yes serve . -p 8791",
     "demo:studio": "node _local/studio/server.mjs",
-    "embed:examples": "node scripts/embed-examples.mjs"
+    "embed:examples": "node scripts/embed-examples.mjs",
+    "bench:p0": "npm run build && node --expose-gc scripts/bench-p0-webgl.mjs"
   },
   "keywords": [
     "map",
@@ -120,7 +134,8 @@
   "files": [
     "dist",
     "assets/brand",
-    "docs",
+    "docs/*.md",
+    "docs/developer-guide/README.md",
     "LICENSE",
     "LICENSE-NOTICE.md",
     "README.md",

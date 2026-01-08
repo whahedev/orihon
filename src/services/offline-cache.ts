@@ -1,4 +1,4 @@
-import { LatLngBounds, latLngBounds, project, TILE_SIZE, type LatLngBoundsLike } from "../geo.js";
+import { LatLngBounds, bounds, project, TILE_SIZE, type LatLngBoundsLike } from "../geo.js";
 import { TileLayer } from "../layers/tile-layer.js";
 
 const DEFAULT_MAX_TILES = 4096;
@@ -118,7 +118,7 @@ export class OfflineTileCache {
     const urls: string[] = [];
     for (const zoom of options.zooms) {
       const max = 2 ** zoom - 1;
-      const fromBounds = options.bounds ? tileRangeForBounds(latLngBounds(options.bounds), zoom, tileSize) : null;
+      const fromBounds = options.bounds ? tileRangeForBounds(bounds(options.bounds), zoom, tileSize) : null;
       const xRange = options.xRange ?? fromBounds?.xRange;
       const yRange = options.yRange ?? fromBounds?.yRange;
       if (!xRange || !yRange) {

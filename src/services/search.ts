@@ -75,3 +75,26 @@ export function createArraySearchProvider<TResult extends SearchResult>(
     }
   }, options);
 }
+
+export type SearchProviderSource<TResult extends SearchResult> = SearchAdapter<TResult> | TResult[];
+export type SearchProviderOptions<TResult extends SearchResult> = {
+  limit?: number;
+  text?: (item: TResult) => string;
+};
+
+export function searchProvider<TResult extends SearchResult>(
+  source: TResult[],
+  options?: SearchProviderOptions<TResult>
+): SearchProvider<TResult>;
+export function searchProvider<TResult extends SearchResult>(
+  source: SearchAdapter<TResult>,
+  options?: { limit?: number }
+): SearchProvider<TResult>;
+export function searchProvider<TResult extends SearchResult>(
+  source: SearchProviderSource<TResult>,
+  options: SearchProviderOptions<TResult> = {}
+): SearchProvider<TResult> {
+  return Array.isArray(source)
+    ? createArraySearchProvider(source, options)
+    : createSearchProvider(source, options);
+}

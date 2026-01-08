@@ -2,19 +2,7 @@ import { createEl, getContainer, listen, rafThrottle } from "./dom.js";
 import type { CameraState } from "./camera.js";
 import { CRS, resolveCRS, type CoordinateReferenceSystem, type CRSInput } from "./crs.js";
 import { Evented } from "./events.js";
-import {
-  LatLng,
-  LatLngBounds,
-  Point,
-  latLng,
-  latLngBounds,
-  point,
-  TILE_SIZE,
-  distance,
-  type LatLngBoundsLike,
-  type LatLngLike,
-  type PointLike
-} from "./geo.js";
+import { LatLng, LatLngBounds, Point, latLng, bounds, point, TILE_SIZE, distance, type LatLngBoundsLike, type LatLngLike, type PointLike } from "./geo.js";
 import type { Layer, QueryHit, QueryOptions, ResolvedQueryOptions } from "./layer.js";
 import { AttributionControl, ScaleControl, ZoomControl, type Control } from "./ui/control.js";
 import { ensureLocalePacks, resolveLocale, type OrihonLocale, type LocaleInput } from "./ui/locale.js";
@@ -115,7 +103,7 @@ const DEFAULT_PANES = new Set(["tile", "overlay", "marker", "tooltip", "popup", 
 
 function normalizeMaxBounds(value: LatLngBoundsLike | null | undefined): LatLngBounds | null {
   if (!value) return null;
-  const target = latLngBounds(value);
+  const target = bounds(value);
   return target.isValid() ? target : null;
 }
 
@@ -388,7 +376,7 @@ export class Orihon extends Evented {
         this.container.classList.remove("oh-box-zooming");
         this.emit("boxzoomend", {
           containerPoint: current,
-          bounds: latLngBounds(
+          bounds: bounds(
             this.containerPointToLatLng([Math.min(start.x, current.x), Math.max(start.y, current.y)]),
             this.containerPointToLatLng([Math.max(start.x, current.x), Math.min(start.y, current.y)])
           )
@@ -766,6 +754,11 @@ export class Orihon extends Evented {
     return this;
   }
 
+  /** Short map-centric alias for `addLayer`; complements `layer.addTo(map)`. */
+  add(layer: Layer): this {
+    return this.addLayer(layer);
+  }
+
   removeLayer(layer: Layer): this {
     if (!this.layers.delete(layer)) return this;
     layer.onRemove();
@@ -876,10 +869,10 @@ export class Orihon extends Evented {
   }
 
   panInsideBounds(value: LatLngBoundsLike, options: { animate?: boolean; duration?: number } = {}): this {
-    const target = latLngBounds(value);
+    const target = bounds(value);
     if (!target.isValid()) return this;
-    const bounds = this.getBounds();
-    if (target.contains(bounds)) return this;
+    const view = this.getBounds();
+    if (target.contains(view)) return this;
     const nextCenter = this.#limitCenter(this.center, this.zoom);
     return options.animate ? this.flyTo(nextCenter, this.zoom, options) : this.setView(nextCenter, this.zoom);
   }
@@ -922,7 +915,7 @@ export class Orihon extends Evented {
   }
 
   fitBounds(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; duration?: number } = {}): this {
-    const target = latLngBounds(value);
+    const target = bounds(value);
     const zoom = this.#zoomForBounds(target, options.padding ?? 32);
     return options.animate ? this.flyTo(target.getCenter(), zoom, options) : this.setView(target.getCenter(), zoom);
   }
@@ -938,7 +931,7 @@ export class Orihon extends Evented {
   }
 
   flyToBounds(value: LatLngBoundsLike, options: { padding?: number; duration?: number } = {}): this {
-    const target = latLngBounds(value);
+    const target = bounds(value);
     const zoom = this.#zoomForBounds(target, options.padding ?? 32);
     return this.flyTo(target.getCenter(), zoom, options);
   }
@@ -966,7 +959,7 @@ export class Orihon extends Evented {
   getBounds(): LatLngBounds {
     const northWest = this.containerPointToLatLng([0, 0]);
     const southEast = this.containerPointToLatLng([this.size.width, this.size.height]);
-    return latLngBounds([southEast.lat, northWest.lng], [northWest.lat, southEast.lng]);
+    return bounds([southEast.lat, northWest.lng], [northWest.lat, southEast.lng]);
   }
 
   #zoomForBounds(target: LatLngBounds, padding: number): number {

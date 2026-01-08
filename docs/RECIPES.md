@@ -106,10 +106,10 @@ Cache only sources whose terms permit offline storage. Bump the cache name when 
 ## Cleanup In Single-Page Applications
 
 ```js
-import { createMap, remoteObjectManager } from "orihon";
+import { createMap, objectManager } from "orihon";
 
 const map = createMap(container, options);
-const remote = remoteObjectManager({ loader }).addTo(map);
+const remote = objectManager({ loader }).addTo(map);
 
 return () => {
   remote.remove();

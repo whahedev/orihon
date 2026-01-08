@@ -43,6 +43,14 @@ export interface PackedVectorTile {
 
 const packedMvt = createPackedMvtRuntime();
 
+/** Internal parser primitives reused by the feature-level WASM fallback. */
+export const packedMvtInternals = {
+  PbfReader: packedMvt.PbfReader,
+  readValue: packedMvt.readValue,
+  growInt32: packedMvt.growInt32,
+  growUint32: packedMvt.growUint32
+};
+
 export type PackedTileDecoder = (
   data: ArrayBuffer | Uint8Array,
   tile: Pick<VectorTileCoordinates, "x" | "y" | "z">,
@@ -632,5 +640,5 @@ function createPackedMvtRuntime() {
     return null;
   }
 
-  return { decodePackedMVT, packedToGeoJSON };
+  return { decodePackedMVT, packedToGeoJSON, PbfReader, readValue, growInt32, growUint32 };
 }

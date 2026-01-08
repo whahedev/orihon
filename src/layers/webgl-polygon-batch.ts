@@ -1,9 +1,9 @@
 import { createEl } from "../dom.js";
-import { latLng, latLngBounds, type LatLngLike } from "../geo.js";
+import { latLng, bounds, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
-import { parseCssColor } from "../webgl-utils.js";
+import { clampOpacity, parseCssColor } from "../webgl-utils.js";
 import { pointInRing } from "../services/object-geometry.js";
 
 export interface PolygonBatchStyle {
@@ -103,9 +103,9 @@ export class WebGLPolygonBatch extends Layer<Required<WebGLPolygonBatchOptions>>
     if (!rings.length || !bbox) return this;
     const style = {
       fill: input.style?.fill ?? "#0f766e",
-      fillOpacity: clamp01(input.style?.fillOpacity ?? 0.25),
+      fillOpacity: clampOpacity(input.style?.fillOpacity ?? 0.25),
       stroke: input.style?.stroke ?? "#0f766e",
-      strokeOpacity: clamp01(input.style?.strokeOpacity ?? 0.85),
+      strokeOpacity: clampOpacity(input.style?.strokeOpacity ?? 0.85),
       strokeWidth: Math.max(0, Number(input.style?.strokeWidth) || 1.5)
     };
     const fill = parseCssColor(style.fill, { r: 15, g: 118, b: 110 });
@@ -200,7 +200,7 @@ export class WebGLPolygonBatch extends Layer<Required<WebGLPolygonBatchOptions>>
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    const view = latLngBounds(map.getBounds()).pad(0.15);
+    const view = bounds(map.getBounds()).pad(0.15);
     for (const polygon of this.polygons) {
       if (
         polygon.bbox[2] < view.south ||
@@ -237,11 +237,6 @@ export class WebGLPolygonBatch extends Layer<Required<WebGLPolygonBatchOptions>>
 
 export function webglPolygonBatch(options?: WebGLPolygonBatchOptions): WebGLPolygonBatch {
   return new WebGLPolygonBatch(options);
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 1;
-  return Math.max(0, Math.min(1, value));
 }
 
 /** Simple ear clipping for a single ring packed as lat/lng pairs. Returns triangle lat/lng verts. */

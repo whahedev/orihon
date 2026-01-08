@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/dist/orihon.css" />
+  <style>
+    html, body, #map { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #0a1721; }
+    body { font-family: Inter, system-ui, sans-serif; }
+    #badge {
+      position: absolute; z-index: 1000; top: .65rem; left: .65rem; padding: .34rem .5rem;
+      color: #a9c2cd; background: rgba(5, 13, 19, .82); border: 1px solid #274756;
+      border-radius: .4rem; font: 700 10px/1.2 monospace; letter-spacing: .05em; text-transform: uppercase;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="badge">Orihon live example</div>
+  <script type="module">
+    const badge = document.querySelector("#badge");
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    const api = await import("/dist/orihon.esm.js?developer-guide=1");
+
+    let map = null;
+    let runId = 0;
+    let outputText = "";
+    const center = [55.751244, 37.618423];
+    const demoBounds = [[55.45, 37.05], [56.03, 38.15]];
+    const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+    const weightedPoints = createWeightedPoints(2500);
+    const points = weightedPoints.map((point, index) => ({ ...point, data: { id: index, value: point.weight } }));
+    const objects = points.slice(0, 1200).map((point, index) => ({
+      id: `object-${index}`,
+      coordinates: [point.lat, point.lng],
+      properties: { title: `Объект ${index + 1}`, value: point.weight, active: index % 7 !== 0 }
+    }));
+    const geojson = {
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: { name: "Маршрут" }, geometry: { type: "LineString", coordinates: [[37.35,55.65],[37.62,55.75],[37.92,55.86]] } },
+        { type: "Feature", properties: { name: "Зона" }, geometry: { type: "Polygon", coordinates: [[[37.42,55.62],[37.78,55.62],[37.78,55.88],[37.42,55.88],[37.42,55.62]]] } }
+      ]
+    };
+
+    resetMap();
+    parent.postMessage({ type: "orihon-playground-ready" }, "*");
+
+    addEventListener("message", async (event) => {
+      const message = event.data;
+      if (message?.type === "orihon-playground-probe") {
+        parent.postMessage({ type: "orihon-playground-ready" }, "*");
+        return;
+      }
+      if (!message || message.type !== "orihon-playground-run") return;
+      const current = ++runId;
+      resetMap();
+      outputText = "";
+      parent.postMessage({ type: "orihon-playground-result", text: "" }, "*");
+      badge.textContent = message.name ? `${message.name}() · выполняется` : "выполняется";
+      try {
+        const code = stripImports(String(message.code ?? ""));
+        const context = {
+          ...api,
+          Orihon: api,
+          map,
+          center,
+          demoBounds,
+          OSM,
+          points,
+          weightedPoints,
+          objects,
+          data: points,
+          geojson,
+          nextFeature: geojson.features[0],
+          showResult,
+          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+        };
+        const names = Object.keys(context);
+        const fn = new AsyncFunction(...names, `"use strict";\n${code}`);
+        const result = await fn(...names.map((name) => context[name]));
+        if (current !== runId) return;
+        if (result !== undefined && !outputText) showResult(result);
+        badge.textContent = message.name ? `${message.name}() · готово` : "готово";
+        parent.postMessage({ type: "orihon-playground-done", name: message.name }, "*");
+      } catch (error) {
+        outputText = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        badge.textContent = message.name ? `${message.name}() · ошибка` : "ошибка";
+        parent.postMessage({ type: "orihon-playground-error", name: message.name, message: outputText }, "*");
+      }
+    });
+
+    function resetMap() {
+      map?.remove();
+      document.querySelector("#map").replaceChildren();
+      map = api.createMap("map", { center, zoom: 9, controls: false, locale: "ru" });
+      api.tileLayer(OSM, { renderer: "dom", attribution: "© OpenStreetMap contributors" }).addTo(map);
+      api.scaleControl({ position: "bottom-left" }).addTo(map);
+    }
+
+    function showResult(value, label = "Результат") {
+      outputText = `${label}:\n${format(value)}`;
+      parent.postMessage({ type: "orihon-playground-result", text: outputText }, "*");
+    }
+
+    function format(value) {
+      if (value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+      if (value instanceof Float32Array || value instanceof Float64Array || value instanceof Uint32Array) {
+        return `${value.constructor.name}(${value.length}) [${[...value.slice(0, 12)].join(", ")}${value.length > 12 ? ", …" : ""}]`;
+      }
+      try {
+        return JSON.stringify(value, (key, item) => {
+          if (key === "map" || key === "canvas" || key === "container") return undefined;
+          if (ArrayBuffer.isView(item)) return `${item.constructor.name}(${item.length})`;
+          return item;
+        }, 2).slice(0, 5000);
+      } catch {
+        return Object.prototype.toString.call(value);
+      }
+    }
+
+    function stripImports(code) {
+      return code
+        .replace(/^\s*import\s+[\s\S]*?\s+from\s+["'][^"']+["'];?\s*$/gm, "")
+        .replace(/^\s*import\s+["'][^"']+["'];?\s*$/gm, "")
+        .trim();
+    }
+
+    function createWeightedPoints(count) {
+      let state = 0x6d2b79f5;
+      const random = () => {
+        state = Math.imul(state ^ state >>> 15, state | 1);
+        state ^= state + Math.imul(state ^ state >>> 7, state | 61);
+        return ((state ^ state >>> 14) >>> 0) / 4294967296;
+      };
+      const hubs = [[55.75,37.62,1],[55.64,37.42,.65],[55.88,37.75,.8],[55.55,37.9,.45]];
+      return Array.from({ length: count }, (_, index) => {
+        const hub = hubs[index % hubs.length];
+        const angle = random() * Math.PI * 2;
+        const radius = Math.sqrt(random()) * .24;
+        return {
+          lat: hub[0] + Math.sin(angle) * radius,
+          lng: hub[1] + Math.cos(angle) * radius * 1.7,
+          weight: Math.max(.05, hub[2] * (.45 + random() * .55))
+        };
+      });
+    }
+  </script>
+</body>
+</html>

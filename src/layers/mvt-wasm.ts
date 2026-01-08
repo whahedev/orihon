@@ -7,6 +7,7 @@
 
 import {
   decodePackedMVTJs,
+  packedMvtInternals,
   packedToGeoJSON,
   registerPackedMvtWasm,
   type MVTDecodeOptions,
@@ -14,8 +15,13 @@ import {
   type PackedVectorTile
 } from "./mvt.js";
 import type { VectorTileCoordinates, VectorTileProvider } from "./vector-tile-layer.js";
+import { decodePackedMVTTileWasm, mvtTileWasmError, mvtTileWasmSupported } from "./mvt-tile-wasm.js";
+import { alignWasm4, growWasmMemory } from "../services/wasm-utils.js";
+export { mvtTileWasmError, mvtTileWasmSupported };
 
 type PbfValue = string | number | boolean | null;
+
+const { PbfReader, readValue, growInt32, growUint32 } = packedMvtInternals;
 
 interface WasmGeom {
   decode: (inPtr: number, inEnd: number, xyPtr: number, xyEnd: number, partsPtr: number, partsEnd: number) => number;
@@ -41,7 +47,7 @@ export function decodeMvtGeometryWasm(bytes: Uint8Array): { xy: Int32Array; part
   return decoded;
 }
 
-export function decodePackedMVTWasm(
+export function decodePackedMVTFeatureWasm(
   data: ArrayBuffer | Uint8Array,
   tile: Pick<VectorTileCoordinates, "x" | "y" | "z">,
   options: MVTDecodeOptions = {}
@@ -53,6 +59,16 @@ export function decodePackedMVTWasm(
   } catch {
     return decodePackedMVTJs(data, tile, options);
   }
+}
+
+export function decodePackedMVTWasm(
+  data: ArrayBuffer | Uint8Array,
+  tile: Pick<VectorTileCoordinates, "x" | "y" | "z">,
+  options: MVTDecodeOptions = {}
+): PackedVectorTile {
+  const tilePacked = decodePackedMVTTileWasm(data, tile, options);
+  if (tilePacked) return tilePacked;
+  return decodePackedMVTFeatureWasm(data, tile, options);
 }
 
 export function createMVTWasmProvider(
@@ -73,7 +89,7 @@ export function createMVTWasmProvider(
   };
 }
 
-if (mvtGeometryWasmSupported()) registerPackedMvtWasm(decodePackedMVTWasm);
+if (mvtTileWasmSupported() || mvtGeometryWasmSupported()) registerPackedMvtWasm(decodePackedMVTWasm);
 
 function loadWasm(): WasmGeom | null {
   if (wasmGeom !== undefined) return wasmGeom;
@@ -106,10 +122,10 @@ function wasmDecode(wasm: WasmGeom, bytes: Uint8Array): { xy: Int32Array; partEn
   const inputPtr = 16;
   const xyCap = 16_384 * 8;
   const partsCap = 4_096 * 4;
-  const xyPtr = align4(inputPtr + bytes.length + 8);
+  const xyPtr = alignWasm4(inputPtr + bytes.length + 8);
   const partsPtr = xyPtr + xyCap;
   const need = partsPtr + partsCap + 16;
-  ensureMemory(wasm.memory, need);
+  growWasmMemory(wasm.memory, need);
   const heap = new Uint8Array(wasm.memory.buffer);
   heap.set(bytes, inputPtr);
   const code = wasm.decode(inputPtr, inputPtr + bytes.length, xyPtr, xyPtr + xyCap, partsPtr, partsPtr + partsCap);
@@ -121,16 +137,6 @@ function wasmDecode(wasm: WasmGeom, bytes: Uint8Array): { xy: Int32Array; partEn
   const xy = Int32Array.from(new Int32Array(wasm.memory.buffer, xyPtr, verts * 2));
   const partEnds = Uint32Array.from(new Uint32Array(wasm.memory.buffer, partsPtr, parts));
   return { xy, partEnds };
-}
-
-function ensureMemory(memory: WebAssembly.Memory, bytes: number): void {
-  const pages = Math.ceil(bytes / 65536);
-  const have = memory.buffer.byteLength / 65536;
-  if (pages > have) memory.grow(pages - have);
-}
-
-function align4(value: number): number {
-  return (value + 3) & ~3;
 }
 
 function decodePackedWithWasm(
@@ -244,135 +250,6 @@ function decodePackedWithWasm(
     });
   }
   return { x: tile.x, y: tile.y, z: tile.z, layers };
-}
-
-function growInt32(buffer: Int32Array<ArrayBufferLike>, min: number): Int32Array<ArrayBufferLike> {
-  if (buffer.length >= min) return buffer;
-  const next = new Int32Array(Math.max(min, buffer.length * 2 || min));
-  next.set(buffer);
-  return next;
-}
-
-function growUint32(buffer: Uint32Array<ArrayBufferLike>, min: number): Uint32Array<ArrayBufferLike> {
-  if (buffer.length >= min) return buffer;
-  const next = new Uint32Array(Math.max(min, buffer.length * 2 || min));
-  next.set(buffer);
-  return next;
-}
-
-const textDecoder = typeof TextDecoder === "undefined" ? null : new TextDecoder();
-
-function zigZag(value: number): number {
-  return (value >> 1) ^ -(value & 1);
-}
-
-class PbfReader {
-  position: number;
-  view: DataView;
-  constructor(
-    readonly bytes: Uint8Array,
-    readonly end: number,
-    readonly maxLength: number,
-    readonly maxString: number,
-    position = 0
-  ) {
-    this.position = position;
-    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  }
-  get done(): boolean { return this.position >= this.end; }
-  fork(start: number, end: number): PbfReader {
-    return new PbfReader(this.bytes, end, this.maxLength, this.maxString, start);
-  }
-  tag(): { field: number; wire: number } {
-    const value = this.varint();
-    return { field: value >> 3, wire: value & 7 };
-  }
-  varint(): number {
-    let result = 0;
-    let shift = 0;
-    while (this.position < this.end) {
-      const byte = this.bytes[this.position++];
-      result += (byte & 0x7f) * 2 ** shift;
-      if (byte < 0x80) break;
-      shift += 7;
-    }
-    return result;
-  }
-  svarint(): number { return zigZag(this.varint()); }
-  readRange(): { start: number; end: number } {
-    const length = this.varint();
-    if (length < 0 || length > this.maxLength || this.position + length > this.end) {
-      this.position = this.end;
-      return { start: this.position, end: this.position };
-    }
-    const start = this.position;
-    this.position += length;
-    return { start, end: start + length };
-  }
-  packedVarints(): Uint32Array {
-    const range = this.readRange();
-    const child = this.fork(range.start, range.end);
-    let cap = 32;
-    let values = new Uint32Array(cap);
-    let n = 0;
-    while (!child.done) {
-      if (n >= cap) {
-        cap *= 2;
-        const next = new Uint32Array(cap);
-        next.set(values);
-        values = next;
-      }
-      values[n++] = child.varint() >>> 0;
-    }
-    return new Uint32Array(values.subarray(0, n));
-  }
-  string(): string {
-    const range = this.readRange();
-    const length = range.end - range.start;
-    if (length <= 0 || length > this.maxString) return "";
-    const slice = this.bytes.subarray(range.start, range.end);
-    return textDecoder ? textDecoder.decode(slice) : "";
-  }
-  float(): number {
-    if (this.position + 4 > this.end) {
-      this.position = this.end;
-      return 0;
-    }
-    const value = this.view.getFloat32(this.position, true);
-    this.position += 4;
-    return value;
-  }
-  double(): number {
-    if (this.position + 8 > this.end) {
-      this.position = this.end;
-      return 0;
-    }
-    const value = this.view.getFloat64(this.position, true);
-    this.position += 8;
-    return value;
-  }
-  skip(wire: number): void {
-    if (wire === 0) this.varint();
-    else if (wire === 1) this.position += 8;
-    else if (wire === 2) this.position += this.varint();
-    else if (wire === 5) this.position += 4;
-    else this.position = this.end;
-  }
-}
-
-function readValue(reader: PbfReader): PbfValue {
-  let value: PbfValue = null;
-  while (!reader.done) {
-    const { field, wire } = reader.tag();
-    if (field === 1 && wire === 2) value = reader.string();
-    else if (field === 2 && wire === 5) value = reader.float();
-    else if (field === 3 && wire === 1) value = reader.double();
-    else if (field === 4 && wire === 0) value = reader.varint();
-    else if (field === 5 && wire === 0) value = reader.svarint();
-    else if (field === 6 && wire === 0) value = Boolean(reader.varint());
-    else reader.skip(wire);
-  }
-  return value;
 }
 
 function i32const(value: number): number[] {

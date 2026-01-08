@@ -1,8 +1,12 @@
 # Orihon brand assets
 
+**ORIHON — Offers Responsive Interactions, Handles Overlays Natively.**
+
+This expansion communicates the library's product promise: responsive map interaction and native overlay handling.
+
 The npm package includes production SVG and PNG artwork in `assets/brand`. These files are visual assets only and do not add JavaScript to the runtime bundle.
 
-![Orihon logo variants](./assets/orihon-brand-assets.png)
+![Orihon logo](../assets/brand/svg/orihon-logo-stacked.svg)
 
 ## Package paths
 

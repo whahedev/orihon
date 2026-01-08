@@ -2,7 +2,7 @@ export { Evented } from "./events.js";
 export { Layer } from "./layer.js";
 export { Orihon, createMap } from "./map.js";
 export { CRS, CRSCompatibilityError } from "./crs.js";
-export { GridLayer, gridLayer } from "./layers/grid-layer.js";
+export { GridLayer } from "./layers/grid-layer.js";
 export { TileLayer, tileLayer } from "./layers/tile-layer.js";
 export {
   Point,
@@ -12,9 +12,8 @@ export {
   point,
   pointBounds,
   latLng,
-  latLngBounds,
+  lngLat,
   bounds,
-  extendBounds,
   project,
   unproject,
   distance,

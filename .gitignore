@@ -7,6 +7,15 @@ test-results/
 **/test-results/
 *.tgz
 *.tsbuildinfo
+*.bak
+*.before-*
+*.diff
+*.patch
+debug.log
+src.zip
+orihon-git-state.txt
+tmp-gzip-breakdown.json
+install-p0-bench.ps1
 .DS_Store
 .npmrc
 .env

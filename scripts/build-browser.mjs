@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,26 @@ const pkg = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
 const manifestPath = resolve(dist, "release-manifest.json");
 
 await mkdir(dist, { recursive: true });
+
+// `tsc` does not prune outputs for deleted sources. Never publish retired heat
+// renderers or the former long-named pipeline beside the unified heat API.
+const obsoleteHeatModules = [
+  "layers/heat-layer",
+  "layers/webgl-heat-layer",
+  "layers/heat-isoline-layer",
+  "services/heat-scale",
+  "layers/heat-pipeline-layer",
+  "services/heat-pipeline",
+  "services/heat-pipeline-worker"
+];
+const obsoleteGpuTileModules = ["layers/webgl-tile-layer", "layers/webgpu-tile-layer"];
+const obsoletePublicModules = ["layers/canvas-base-layer"];
+for (const modulePath of [...obsoleteHeatModules, ...obsoleteGpuTileModules, ...obsoletePublicModules]) {
+  for (const suffix of [".js", ".js.map", ".d.ts", ".d.ts.map"]) {
+    await unlink(resolve(dist, `${modulePath}${suffix}`)).catch(() => {});
+  }
+}
+
 await copyFile(resolve(root, "src", "orihon.css"), resolve(dist, "orihon.css"));
 await copyFile(resolve(root, "src", "draw", "orihon.draw.css"), resolve(dist, "draw.css"));
 
@@ -31,7 +51,9 @@ const banner = `/*! Orihon ${pkg.version} | Apache-2.0 | Copyright 2026 whahe */
 /** Safe property mangling: only rename identifiers matching /^_/ (keeps `_unsub`). */
 const terserPropertyMangle = {
   regex: /^_/,
-  reserved: ["_unsub"]
+  // These are public names exported by embedded WASM modules, not JS-private fields.
+  // Renaming `__heap_base` makes the one-file browser bundle silently fall back to JS.
+  reserved: ["_unsub", "__heap_base", "__data_end"]
 };
 
 async function terserMinifyFile(filePath, { module }) {

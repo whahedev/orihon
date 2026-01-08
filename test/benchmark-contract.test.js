@@ -36,6 +36,7 @@ test("browser benchmark pins the current package and rebuilds local dist", async
   assert.match(html, /retainFeatures:\s*false/);
   assert.match(html, /addDataAsync/);
   assert.match(html, /setDataAsync/);
+  assert.match(html, /async function ingestAsync/);
   assert.match(html, /manager\.addAsync/);
   assert.match(html, /renderer:\s*"svg"/);
   assert.match(html, /htmlButtonLimit:\s*MARKER_DOM_CAP/);
@@ -54,5 +55,18 @@ test("browser benchmark pins the current package and rebuilds local dist", async
   assert.match(html, /Coverage min/);
   assert.match(html, /coveragePct/);
   assert.match(html, /"tile-scroll": \["Engine"[\s\S]*"Settle", "Requests", "Reloads"/);
+  assert.match(html, /profile:\s*"orihon-mark-shape-v1"/);
+  assert.match(html, /ORIHON_MARK/);
+  assert.match(html, /route:/);
+  assert.match(html, /async function heatOrihon\(points, mode\)/);
+  assert.match(html, /\$\{mode\} · \$\{layer\.options\.evaluation\}/);
+  assert.doesNotMatch(html, /\$\{display\}/);
+  assert.match(html, /cols:\s*512[\s\S]*rows:\s*384/);
+  assert.match(html, /radius:\s*5[\s\S]*blur:\s*16/);
+  assert.match(html, /levels:\s*32[\s\S]*minCandidateCells:\s*83/);
+  assert.match(html, /coverageWeight:\s*2[\s\S]*fragmentWeight:\s*1\.12/);
+  assert.match(html, /"heatmap-radius": HEAT_BENCH\.radius \+ HEAT_BENCH\.blur/);
+  assert.match(html, /value="heatprofile1m"/);
+  assert.match(html, /heatProfile:[\s\S]*mapLibreEffectiveRadius/);
   assert.doesNotMatch(html, /runner\(clonePoints\(points\)\)/);
 });

@@ -6,17 +6,7 @@ import { DivIcon, type MarkerIcon } from "../layers/icon.js";
 import { Marker, type MarkerOptions } from "../layers/marker.js";
 import { Polyline, polyline } from "../layers/vector.js";
 import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js";
-import {
-  LatLng,
-  Point,
-  clampLat,
-  latLng,
-  latLngBounds,
-  wrapLng,
-  type LatLngBoundsLike,
-  type LatLngLike,
-  type PointLike
-} from "../geo.js";
+import { LatLng, LatLngBounds, Point, clampLat, latLng, bounds, wrapLng, type LatLngBoundsLike, type LatLngLike, type PointLike } from "../geo.js";
 import type { Orihon } from "../map.js";
 import {
   Popup,
@@ -51,6 +41,7 @@ import type { LabelCandidate } from "./object-label-layout.js";
 import { ObjectSceneController } from "./object-scene.js";
 import { normalizeLabel, styleTint } from "./object-style-helpers.js";
 import type { ObjectVisualizationByZoom, ObjectVisualizationMode } from "./object-scene.js";
+import type { HeatBackend, HeatMode, HeatEvaluation } from "./heat.js";
 import type { ManagedIconOptions, ManagedIconSource } from "./object-icon-atlas.js";
 import type { ObjectSearchOptions, ObjectSearchResult } from "./object-search-index.js";
 import type { ClusterPropertiesConfig } from "./object-cluster-aggregates.js";
@@ -112,6 +103,10 @@ function deferClusterHierarchy(fn: () => void): void {
   setTimeout(fn, 0);
 }
 
+function perfNow(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
 export interface ManagedObject {
   id?: ObjectId;
   /** Legacy point position [lat, lng] or {lat,lng}. Prefer `geometry`. */
@@ -156,6 +151,7 @@ interface ResolvedObjectStyle {
 
 const EMPTY_OBJECT_STATE: Readonly<ObjectState> = Object.freeze({});
 const DEFAULT_OBJECT_COLOR = "#0f766e";
+const DEFAULT_OBJECT_RGB = { r: 15, g: 118, b: 110 } as const;
 const DEFAULT_OBJECT_SIZE = 10;
 const DEFAULT_OBJECT_OPACITY = 0.88;
 const MAX_OBJECT_SIZE = 256;
@@ -176,8 +172,8 @@ export interface ObjectManagerOptions {
   /** When true (default), WebGL singles use category/alert/selected/hover palette colors. */
   styleByCategory?: boolean;
   /**
-   * Data-driven style resolver. When set, overrides legacy palette colors for returned
-   * properties. Unspecified properties fall back to base → legacy category → defaults.
+   * Data-driven style resolver. Point styles use fill/fillOpacity/size; color/opacity
+   * remain compatibility aliases. Unspecified properties fall back to legacy/defaults.
    * Priority: base defaults → legacy category/alert/selected/hover → custom `style` → normalize.
    */
   style?: ObjectStyleResolver | null;
@@ -244,6 +240,16 @@ export interface ObjectManagerOptions {
   clusterProperties?: ClusterPropertiesConfig;
   /** Optional heatmap value/weight for visualization:"heatmap"|"auto". */
   heatmapWeight?: ((object: ManagedObject, id?: ObjectId) => number) | null;
+  /** Heat visualization from one scalar field: colors, contours, or both. Default "heatmap". */
+  heatmapDisplay?: HeatMode;
+  /** Draw one caption per visible contour level. Default true. */
+  heatmapIsolineLabels?: boolean;
+  /** Scalar-field compute backend. `auto` avoids GPU readback for contour modes. */
+  heatmapBackend?: HeatBackend;
+  /** Full immutable dataset field, or per-zoom refinement. Default `"static"`. */
+  heatmapEvaluation?: HeatEvaluation;
+  /** Absolute isoline value interval, or automatic engineering step. */
+  heatmapIsolineStep?: "auto" | number;
   /** Cluster badge styling using aggregate properties. */
   clusterStyle?: ((
     cluster: { id: string; count: number; properties: Record<string, number>; containsSelected: boolean },
@@ -334,6 +340,63 @@ type WebGLMeta =
   | { kind: "cluster"; id: string }
   | { kind: "object"; id: ObjectId };
 
+interface WebGLIdIndex {
+  readonly size: number;
+  get(id: ObjectId): number | undefined;
+  has(id: ObjectId): boolean;
+  clear(): void;
+}
+
+/**
+ * Zero-storage id → GPU-slot index for the common mass-data case where ids are
+ * exactly 0..N-1. It preserves the Map-like lookup contract used internally
+ * without allocating/hash-inserting a million entries.
+ */
+class DenseObjectIdIndex implements WebGLIdIndex {
+  private _size: number;
+
+  constructor(size: number) {
+    this._size = size;
+  }
+
+  get(id: ObjectId): number | undefined {
+    return typeof id === "number" && id >= 0 && id < this._size && Number.isInteger(id) ? id : undefined;
+  }
+
+  has(id: ObjectId): boolean {
+    return this.get(id) !== undefined;
+  }
+
+  clear(): void {
+    this._size = 0;
+  }
+
+  get size(): number {
+    return this._size;
+  }
+}
+
+function cloneWebglIdIndex(index: WebGLIdIndex): Map<ObjectId, number> {
+  if (index instanceof Map) return new Map(index);
+  const result = new Map<ObjectId, number>();
+  for (let slot = 0; slot < index.size; slot++) result.set(slot, slot);
+  return result;
+}
+
+interface WebGLSyncProfile {
+  points: number;
+  totalMs: number;
+  packMs: number;
+  packAllocateMs: number;
+  packFillMs: number;
+  styleMs: number;
+  layerMs: number;
+  canonicalMs: number;
+  styled: boolean;
+  zeroCopyCanonical: boolean;
+  denseIdIndex: boolean;
+}
+
 type ResolvedObjectManagerOptions = Required<ObjectManagerOptions>;
 
 export class ObjectManager extends Evented {
@@ -358,7 +421,7 @@ export class ObjectManager extends Evented {
   private _webglLayer: WebGLPointLayer | null = null;
   private _webglMeta: WebGLMeta[] = [];
   /** GPU slot index for each object id currently drawn in `_webglMeta`. */
-  private _webglIdToIndex = new Map<ObjectId, number>();
+  private _webglIdToIndex: WebGLIdIndex = new Map<ObjectId, number>();
   /** Full (unfiltered) GPU pack — filter/live compact without re-encoding mercator. */
   private _webglPack: {
     latlng: Float32Array;
@@ -366,12 +429,24 @@ export class ObjectManager extends Evented {
     colors: Float32Array | null;
     sizes: Float32Array | null;
     meta: WebGLMeta[];
-    idToIndex: Map<ObjectId, number>;
+    idToIndex: WebGLIdIndex;
     singles: Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>;
   } | null = null;
   /** GPU draw list is a sparse subset of `_webglPack` (alarms-only etc). */
   private _gpuSubset = false;
   private _heatWeightBuf = new Float32Array(0);
+  /** Reused source-slot scratch for compacting filtered WebGL packs. */
+  private _webglFilterIndexScratch = new Uint32Array(0);
+  /** Reused packed slot mask for indexed temporal filtering. */
+  private _webglSystemMask = new Uint32Array(0);
+  /** Last full WebGL rebuild timings; intentionally internal but readable from JS benchmarks. */
+  private _webglSyncProfile: WebGLSyncProfile | null = null;
+  /** Tiny bounded cache for repeated CSS colors returned by mass-point style resolvers. */
+  private readonly _webglColorCache = new Map<string, readonly [number, number, number]>();
+  /** Reused buffers for batched WebGL style patches. */
+  private _webglStylePatchIndices = new Uint32Array(0);
+  private _webglStylePatchColors = new Float32Array(0);
+  private _webglStylePatchSizes = new Float32Array(0);
   private _heatRefreshTimer = 0;
   private _heatRefreshPending = false;
   private _webglSyncedZoom: number | null = null;
@@ -410,6 +485,8 @@ export class ObjectManager extends Evented {
   private _layoutCoords = new Float64Array(0);
   private _layoutPacked = 0;
   private _layoutPackDirty = true;
+  /** Monotonic version of the packed coordinate dataset installed in GeometryWorkerPool. */
+  private _layoutDatasetVersion = 0;
   private _leafMask: Uint8Array | null = null;
   private _leafMaskFilter: ObjectFilter | null | undefined = undefined;
   private _leafMaskIndex: ClusterIndex | null = null;
@@ -451,6 +528,11 @@ export class ObjectManager extends Evented {
       time: null,
       clusterProperties: {},
       heatmapWeight: null,
+      heatmapDisplay: "heatmap",
+      heatmapIsolineLabels: true,
+      heatmapBackend: "auto",
+      heatmapEvaluation: "static",
+      heatmapIsolineStep: "auto",
       clusterStyle: null,
       sceneFeatures: true,
       maxVerticesPerGeometry: DEFAULT_MAX_VERTICES_PER_GEOMETRY,
@@ -460,6 +542,19 @@ export class ObjectManager extends Evented {
     this.options.clusterMinPoints = Math.max(2, Math.floor(this.options.clusterMinPoints));
     this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
     this.options.layoutWorkerThreshold = Math.max(1, Math.floor(this.options.layoutWorkerThreshold));
+    if (!["heatmap", "isolines", "both"].includes(this.options.heatmapDisplay)) {
+      throw new TypeError(`Invalid heatmapDisplay: ${String(this.options.heatmapDisplay)}`);
+    }
+    if (!["auto", "wasm", "webgpu"].includes(this.options.heatmapBackend)) {
+      throw new TypeError(`Invalid heatmapBackend: ${String(this.options.heatmapBackend)}`);
+    }
+    if (!["static", "zoom"].includes(this.options.heatmapEvaluation)) {
+      throw new TypeError(`Invalid heatmapEvaluation: ${String(this.options.heatmapEvaluation)}`);
+    }
+    if (this.options.heatmapIsolineStep !== "auto" &&
+        (!Number.isFinite(this.options.heatmapIsolineStep) || this.options.heatmapIsolineStep <= 0)) {
+      throw new TypeError(`Invalid heatmapIsolineStep: ${String(this.options.heatmapIsolineStep)}`);
+    }
     const hierarchyLimit = Number(this.options.clusterHierarchyMaxObjects);
     this.options.clusterHierarchyMaxObjects = Number.isFinite(hierarchyLimit)
       ? Math.max(0, Math.floor(hierarchyLimit))
@@ -478,7 +573,12 @@ export class ObjectManager extends Evented {
       search: this.options.search,
       time: this.options.time,
       clusterProperties: this.options.clusterProperties,
-      heatmapWeight: this.options.heatmapWeight
+      heatmapWeight: this.options.heatmapWeight,
+      heatmapDisplay: this.options.heatmapDisplay,
+      heatmapIsolineLabels: this.options.heatmapIsolineLabels,
+      heatmapBackend: this.options.heatmapBackend,
+      heatmapEvaluation: this.options.heatmapEvaluation,
+      heatmapIsolineStep: this.options.heatmapIsolineStep
     });
     this.index = new SpatialGridIndex<ManagedObject, ObjectId>(this.options.indexCellSize);
     this._render = () => this.render();
@@ -955,7 +1055,7 @@ export class ObjectManager extends Evented {
     if (ids == null) {
       this._gpuSubset = false;
       if (this._webglPack && this._webglLayer) {
-        this.#applyWebglPack(this._webglPack, Math.floor(this.map.zoom), true);
+        this.#applyWebglPack(this._webglPack, Math.floor(this.map.zoom), false);
       } else {
         this.#fastWebglFilterSync();
       }
@@ -1470,15 +1570,15 @@ export class ObjectManager extends Evented {
     const useCanvasClusters = this.#useCanvasClusters();
     this._activeRenderer = useWebgl ? "webgl" : "dom";
 
-    const bounds = latLngBounds(map.getBounds()).pad(0.15);
+    const area = bounds(map.getBounds()).pad(0.15);
     const timeActive = this.scene.activeTimeIds();
 
     if (useWebgl) {
       this.#clearObjectMarkers();
       if (useClusters) {
-        const clusterSpecs = this.#pickClusterSpecs(layout, bounds);
+        const clusterSpecs = this.#pickClusterSpecs(layout, area);
         this.#filterClusterSpecsByTime(clusterSpecs, timeActive);
-        this._visibleObjects = this.#countVisibleFromLayout(layout, bounds, clusterSpecs);
+        this._visibleObjects = this.#countVisibleFromLayout(layout, area, clusterSpecs);
         this.#syncWebgl(layout);
         if (useCanvasClusters) {
           this.#clearDomClusters();
@@ -1499,13 +1599,13 @@ export class ObjectManager extends Evented {
     }
 
     const visibleIds = new Set(
-      this.index.searchIds(bounds, (id, value) => {
+      this.index.searchIds(area, (id, value) => {
         if (timeActive && !timeActive.has(id)) return false;
         return !this.filter || this.filter(value, id);
       })
     );
     this._visibleObjects = visibleIds.size;
-    const clusterSpecs = this.#pickClusterSpecs(layout, bounds, visibleIds);
+    const clusterSpecs = this.#pickClusterSpecs(layout, area, visibleIds);
     this.#filterClusterSpecsByTime(clusterSpecs, timeActive);
 
     const markerRecords = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
@@ -1550,13 +1650,13 @@ export class ObjectManager extends Evented {
 
   #countVisibleFromLayout(
     layout: LayoutCache,
-    bounds: ReturnType<typeof latLngBounds>,
+    area: LatLngBounds,
     clusterSpecs: Map<string, ClusterSpec>
   ): number {
     let total = 0;
     for (const spec of clusterSpecs.values()) total += spec.count || spec.ids.length;
     for (const record of layout.singles.values()) {
-      if (bounds.contains(record.position)) total += 1;
+      if (area.contains(record.position)) total += 1;
     }
     return total;
   }
@@ -1628,6 +1728,7 @@ export class ObjectManager extends Evented {
       clusterize: boolean;
       clusterMaxZoom: number;
       simple?: boolean;
+      __datasetVersion?: number;
     },
     generation: number,
     zoomBucket: number
@@ -1678,7 +1779,8 @@ export class ObjectManager extends Evented {
       minPoints: this.options.clusterMinPoints,
       clusterize: this.options.clusterize,
       clusterMaxZoom: this.options.clusterMaxZoom,
-      simple: this.map?.crs?.code === "Simple"
+      simple: this.map?.crs?.code === "Simple",
+      __datasetVersion: this._layoutDatasetVersion
     };
   }
 
@@ -1697,6 +1799,7 @@ export class ObjectManager extends Evented {
     this._layoutIds.length = packed;
     this._layoutPacked = packed;
     this._layoutPackDirty = false;
+    this._layoutDatasetVersion += 1;
   }
 
   #queryClusterIndex(index: ClusterIndex, zoomBucket: number): ClusterLayoutResult {
@@ -1837,7 +1940,7 @@ export class ObjectManager extends Evented {
 
   #pickClusterSpecs(
     layout: LayoutCache,
-    bounds: ReturnType<typeof latLngBounds>,
+    area: LatLngBounds,
     visibleIds?: Set<ObjectId>
   ): Map<string, ClusterSpec> {
     // World-stable keys: when the full set is modest, keep every badge mounted so pan
@@ -1846,7 +1949,7 @@ export class ObjectManager extends Evented {
     if (layout.clusters.size <= this._clusterDomBudget) return layout.clusters;
     const clusterSpecs = new Map<string, ClusterSpec>();
     for (const [key, spec] of layout.clusters) {
-      if (bounds.contains(spec.position)) {
+      if (area.contains(spec.position)) {
         clusterSpecs.set(key, spec);
         continue;
       }
@@ -1956,7 +2059,6 @@ export class ObjectManager extends Evented {
       }
       const title = record.value.properties?.title || "";
       const created = new Marker(record.position, { ...this.options.marker, title });
-      this.#paintDomMarker(created, id, record.value);
       created.on("click", (event) => {
         this.setSelected(id);
         const payload = {
@@ -1980,6 +2082,7 @@ export class ObjectManager extends Evented {
         }
       });
       created.addTo(this.map as Orihon);
+      this.#paintDomMarker(created, id, record.value);
       this.markers.set(id, created);
     }
   }
@@ -2175,34 +2278,77 @@ export class ObjectManager extends Evented {
       return;
     }
 
+    const syncStarted = perfNow();
     const timeActive = this.scene.activeTimeIds();
     const count = layout.singles.size;
+    const fullFlatMassPack = !this.filter && !timeActive && !this.options.sceneFeatures;
+
+    const packStarted = perfNow();
+    const packAllocateStarted = perfNow();
     const meta: WebGLMeta[] = new Array(count);
-    const idToIndex = new Map<ObjectId, number>();
     const latlng = new Float32Array(count * 2);
     const merc64 = new Float64Array(count * 2);
+    const packAllocateMs = perfNow() - packAllocateStarted;
+    let idToIndex: WebGLIdIndex;
+    let denseIdIndex = false;
     let i = 0;
-    for (const [id, record] of layout.singles) {
-      if (!this.#keepFlatWebglId(id, record.value, timeActive)) continue;
-      idToIndex.set(id, i);
-      meta[i] = { kind: "object", id };
-      const lat = record.position.lat;
-      const lng = record.position.lng;
-      const o = i * 2;
-      latlng[o] = lat;
-      latlng[o + 1] = lng;
-      const sin = Math.sin((clampLat(lat) * Math.PI) / 180);
-      merc64[o] = (wrapLng(lng) + 180) / 360;
-      merc64[o + 1] = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
-      i++;
-    }
+    const packFillStarted = perfNow();
 
-    this._webglMeta = meta.slice(0, i);
+    if (fullFlatMassPack) {
+      // Common 100k–1M point path: every spatial record is renderable. Avoid one
+      // private-method call plus filter/time/geometry branches for every object.
+      // Start in the zero-storage dense-id mode. If the first non slot-aligned id
+      // appears, lazily materialize a Map and backfill only the already-seen slots.
+      let denseIds = true;
+      let sparseIdToIndex: Map<ObjectId, number> | null = null;
+      for (const [id, record] of layout.singles) {
+        if (denseIds && id !== i) {
+          denseIds = false;
+          sparseIdToIndex = new Map<ObjectId, number>();
+          for (let slot = 0; slot < i; slot++) sparseIdToIndex.set(slot, slot);
+        }
+        if (!denseIds) sparseIdToIndex!.set(id, i);
+        meta[i] = { kind: "object", id };
+        const lat = record.position.lat;
+        const lng = record.position.lng;
+        const o = i * 2;
+        latlng[o] = lat;
+        latlng[o + 1] = lng;
+        const sin = Math.sin((clampLat(lat) * Math.PI) / 180);
+        merc64[o] = (wrapLng(lng) + 180) / 360;
+        merc64[o + 1] = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+        i++;
+      }
+      denseIdIndex = denseIds;
+      idToIndex = denseIds ? new DenseObjectIdIndex(i) : sparseIdToIndex!;
+    } else {
+      const sparseIdToIndex = new Map<ObjectId, number>();
+      for (const [id, record] of layout.singles) {
+        if (!this.#keepFlatWebglId(id, record.value, timeActive)) continue;
+        sparseIdToIndex.set(id, i);
+        meta[i] = { kind: "object", id };
+        const lat = record.position.lat;
+        const lng = record.position.lng;
+        const o = i * 2;
+        latlng[o] = lat;
+        latlng[o + 1] = lng;
+        const sin = Math.sin((clampLat(lat) * Math.PI) / 180);
+        merc64[o] = (wrapLng(lng) + 180) / 360;
+        merc64[o + 1] = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+        i++;
+      }
+      idToIndex = sparseIdToIndex;
+    }
+    const packFillMs = perfNow() - packFillStarted;
+
+    this._webglMeta = i === count ? meta : meta.slice(0, i);
     this._webglIdToIndex = idToIndex;
     this._webglSyncedZoom = zoomBucket;
     this._webglSyncedEpoch = this._webglDataEpoch;
     this._webglViewKey = viewKey;
     this._styleZoom = zoomBucket;
+    const packMs = perfNow() - packStarted;
+
     if (i === 0) {
       if (this._webglLayer) {
         this._webglLayer.off();
@@ -2211,11 +2357,32 @@ export class ObjectManager extends Evented {
       }
       this._gpuSubset = false;
       this._webglPack = null;
+      this._webglSyncProfile = {
+        points: 0,
+        totalMs: perfNow() - syncStarted,
+        packMs,
+        packAllocateMs,
+        packFillMs,
+        styleMs: 0,
+        layerMs: 0,
+        canonicalMs: 0,
+        styled: this.#usesStyledWebgl(),
+        zeroCopyCanonical: false,
+        denseIdIndex
+      };
       return;
     }
-    const { colors, sizes } = this.#buildWebglStyles(this._webglMeta);
+
+    const styleStarted = perfNow();
+    const { colors, sizes } =
+      fullFlatMassPack && i === count
+        ? this.#buildWebglStylesFromSingles(layout.singles, i)
+        : this.#buildWebglStyles(this._webglMeta);
+    const styleMs = perfNow() - styleStarted;
+
     const interactive = i <= 40_000;
     const maxDpr = i >= 250_000 ? 1 : 1.5;
+    const layerStarted = perfNow();
     if (!this._webglLayer) {
       this._webglLayer = webglPointLayer([], {
         pointSize: DEFAULT_OBJECT_SIZE,
@@ -2235,17 +2402,53 @@ export class ObjectManager extends Evented {
     const packedLat = i === count ? latlng : latlng.subarray(0, i * 2);
     const packedMerc = i === count ? merc64 : merc64.subarray(0, i * 2);
     this._webglLayer.setPackedData(packedLat, packedMerc, { colors, sizes, adopt: i === count });
+    const layerMs = perfNow() - layerStarted;
+
+    const canonicalStarted = perfNow();
+    let zeroCopyCanonical = false;
     if (!this.options.clusterize && !this.filter && !timeActive) {
-      this._webglPack = {
-        latlng: packedLat instanceof Float32Array ? packedLat : new Float32Array(packedLat),
-        merc64: packedMerc instanceof Float64Array ? packedMerc : new Float64Array(packedMerc),
-        colors: colors ? colors.slice() : null,
-        sizes: sizes ? sizes.slice() : null,
-        meta: this._webglMeta.slice(),
-        idToIndex: new Map(idToIndex),
-        singles: layout.singles
-      };
+      if (i === count) {
+        // `setPackedData(..., adopt:true)` already made these the layer's canonical
+        // arrays. Keep the same references instead of copying 20+ MB of styles,
+        // cloning a 1M-entry Map and duplicating the metadata array.
+        this._webglPack = {
+          latlng,
+          merc64,
+          colors,
+          sizes,
+          meta: this._webglMeta,
+          idToIndex,
+          singles: layout.singles
+        };
+        zeroCopyCanonical = true;
+      } else {
+        // Rare sceneFeatures/non-point path: retain the conservative compact copy.
+        this._webglPack = {
+          latlng: packedLat instanceof Float32Array ? packedLat : new Float32Array(packedLat),
+          merc64: packedMerc instanceof Float64Array ? packedMerc : new Float64Array(packedMerc),
+          colors: colors ? colors.slice() : null,
+          sizes: sizes ? sizes.slice() : null,
+          meta: this._webglMeta.slice(),
+          idToIndex: cloneWebglIdIndex(idToIndex),
+          singles: layout.singles
+        };
+      }
     }
+    const canonicalMs = perfNow() - canonicalStarted;
+
+    this._webglSyncProfile = {
+      points: i,
+      totalMs: perfNow() - syncStarted,
+      packMs,
+      packAllocateMs,
+      packFillMs,
+      styleMs,
+      layerMs,
+      canonicalMs,
+      styled: this.#usesStyledWebgl(),
+      zeroCopyCanonical,
+      denseIdIndex
+    };
   }
 
   #buildFlatLayout(zoomBucket: number): void {
@@ -2285,56 +2488,168 @@ export class ObjectManager extends Evented {
 
     // Restore or compact from the full pack — avoids re-running latLng→mercator for 1M points.
     if (this._webglPack && this._webglLayer) {
-      if (!this.filter && !this.scene.activeTimeIds()) {
-        this.#applyWebglPack(this._webglPack, zoomBucket, true);
+      const activeTimeIds = this.scene.activeTimeIds();
+      if (!this.filter && !activeTimeIds) {
+        this.#applyWebglPack(this._webglPack, zoomBucket, false);
         return;
       }
+
       const pack = this._webglPack;
+      const sourceCount = pack.meta.length;
+      const filter = this.filter;
       let w = 0;
-      const meta: WebGLMeta[] = [];
+
+      // If every managed object is a canonical packed point and the temporal index
+      // returns the same cardinality, its active set necessarily covers the full pack.
+      // Skip the 1M id→slot lookups + bitset build in that common full-range case.
+      const temporalCoversFullPack = Boolean(
+        activeTimeIds &&
+          activeTimeIds.size === sourceCount &&
+          sourceCount === this.items.size &&
+          pack.idToIndex.size === sourceCount
+      );
+
+      if (activeTimeIds && !temporalCoversFullPack) {
+        // Time filtering is already indexed by ObjectSceneController. Convert the active
+        // ids to packed GPU slots once, then scan 32 slots per JS iteration. This avoids
+        // `Set.has()` + object lookup for every source point and, when a custom filter is
+        // also active, invokes that callback only for temporally eligible candidates.
+        const wordCount = Math.ceil(sourceCount / 32);
+        if (this._webglSystemMask.length < wordCount) {
+          this._webglSystemMask = new Uint32Array(wordCount);
+        } else {
+          this._webglSystemMask.fill(0, 0, wordCount);
+        }
+
+        const mask = this._webglSystemMask;
+        let marked = 0;
+        for (const id of activeTimeIds) {
+          const slot = pack.idToIndex.get(id);
+          if (slot == null) continue;
+          const wordIndex = slot >>> 5;
+          const bit = 1 << (slot & 31);
+          if ((mask[wordIndex] & bit) !== 0) continue;
+          mask[wordIndex] |= bit;
+          marked += 1;
+        }
+
+        if (marked > 0) {
+          this.#ensureWebglFilterIndexCapacity(marked);
+          const items = this.items;
+          for (let wordIndex = 0; wordIndex < wordCount; wordIndex++) {
+            let bits = mask[wordIndex] >>> 0;
+            while (bits !== 0) {
+              const bitIndex = 31 - Math.clz32(bits & -bits);
+              const slot = (wordIndex << 5) + bitIndex;
+              if (!filter) {
+                this._webglFilterIndexScratch[w++] = slot;
+              } else {
+                const entry = pack.meta[slot];
+                const id = entry.id;
+                const object = items.get(id);
+                if (object && filter(object, id)) {
+                  this._webglFilterIndexScratch[w++] = slot;
+                }
+              }
+              bits = (bits & (bits - 1)) >>> 0;
+            }
+          }
+        }
+      } else if (filter) {
+        // Full temporal coverage is equivalent to no temporal restriction. Arbitrary
+        // callbacks still require O(N), but avoid building/enumerating the system bitset.
+        this.#ensureWebglFilterIndexCapacity(sourceCount);
+        const items = this.items;
+        for (let i = 0; i < sourceCount; i++) {
+          const entry = pack.meta[i];
+          const id = entry.id;
+          const object = items.get(id);
+          if (object && filter(object, id)) {
+            this._webglFilterIndexScratch[w++] = i;
+          }
+        }
+      } else {
+        w = sourceCount;
+      }
+
+      // A predicate that keeps every object should cost only the scan. Reusing the
+      // canonical pack avoids rebuilding 1M Maps and typed arrays for an identical view.
+      if (w === sourceCount) {
+        if (this._webglMeta === pack.meta && this._webglIdToIndex === pack.idToIndex) {
+          this._layout = { zoomBucket, singles: pack.singles, clusters: new Map() };
+          this._layoutDirty = false;
+          this._visibleObjects = sourceCount;
+          this._webglSyncedZoom = zoomBucket;
+          this._webglSyncedEpoch = this._webglDataEpoch;
+          this._webglViewKey = this.#flatViewKey();
+          this._styleZoom = zoomBucket;
+          this._activeRenderer = "webgl";
+          this.emit("render", { stats: this.getStats() });
+        } else {
+          this.#applyWebglPack(pack, zoomBucket, false);
+        }
+        return;
+      }
+
+      const meta = new Array<WebGLMeta>(w);
       const idToIndex = new Map<ObjectId, number>();
       const singles = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
-      const latlng = new Float32Array(pack.latlng.length);
-      const merc64 = new Float64Array(pack.merc64.length);
-      const colors = pack.colors ? new Float32Array(pack.colors.length) : null;
-      const sizes = pack.sizes ? new Float32Array(pack.sizes.length) : null;
-      for (let i = 0; i < pack.meta.length; i++) {
-        const entry = pack.meta[i];
-        const object = this.items.get(entry.id);
-        if (!this.#keepFlatWebglId(entry.id, object, this.scene.activeTimeIds())) continue;
-        const record = pack.singles.get(entry.id) || this.index.records.get(entry.id);
-        if (!record) continue;
-        latlng[w * 2] = pack.latlng[i * 2];
-        latlng[w * 2 + 1] = pack.latlng[i * 2 + 1];
-        merc64[w * 2] = pack.merc64[i * 2];
-        merc64[w * 2 + 1] = pack.merc64[i * 2 + 1];
+      const latlng = new Float32Array(w * 2);
+      const merc64 = new Float64Array(w * 2);
+      const colors = pack.colors ? new Float32Array(w * 4) : null;
+      const sizes = pack.sizes ? new Float32Array(w) : null;
+
+      // Copy packed numeric data by contiguous source runs. TypedArray#set moves
+      // long accepted ranges in native code instead of scalar JS assignments.
+      let dstRun = 0;
+      let runStart = -1;
+      let runEnd = -1;
+      const flushRun = (): void => {
+        if (runStart < 0) return;
+        const runLength = runEnd - runStart + 1;
+        latlng.set(pack.latlng.subarray(runStart * 2, (runEnd + 1) * 2), dstRun * 2);
+        merc64.set(pack.merc64.subarray(runStart * 2, (runEnd + 1) * 2), dstRun * 2);
         if (colors && pack.colors) {
-          const s = i * 4;
-          const d = w * 4;
-          colors[d] = pack.colors[s];
-          colors[d + 1] = pack.colors[s + 1];
-          colors[d + 2] = pack.colors[s + 2];
-          colors[d + 3] = pack.colors[s + 3];
+          colors.set(pack.colors.subarray(runStart * 4, (runEnd + 1) * 4), dstRun * 4);
         }
         if (sizes && pack.sizes) {
-          sizes[w] = pack.sizes[i];
+          sizes.set(pack.sizes.subarray(runStart, runEnd + 1), dstRun);
         }
-        idToIndex.set(entry.id, w);
-        meta.push(entry);
+        dstRun += runLength;
+      };
+
+      for (let dstIndex = 0; dstIndex < w; dstIndex++) {
+        const srcIndex = this._webglFilterIndexScratch[dstIndex];
+        if (runStart < 0) {
+          runStart = srcIndex;
+          runEnd = srcIndex;
+        } else if (srcIndex === runEnd + 1) {
+          runEnd = srcIndex;
+        } else {
+          flushRun();
+          runStart = srcIndex;
+          runEnd = srcIndex;
+        }
+
+        const entry = pack.meta[srcIndex];
+        const record = pack.singles.get(entry.id) || this.index.records.get(entry.id);
+        if (!record) continue;
+        idToIndex.set(entry.id, dstIndex);
+        meta[dstIndex] = entry;
         singles.set(entry.id, record);
-        w += 1;
       }
-      // Recompute styles when selection/hover/custom style active — pack may store base colors.
-      let liveColors: Float32Array | null = colors ? colors.subarray(0, w * 4) : null;
-      let liveSizes: Float32Array | null = sizes ? sizes.subarray(0, w) : null;
-      if (this.#usesStyledWebgl() && (this._styleResolver || this._selectedId != null || this._hoveredId != null || !liveColors)) {
+      flushRun();
+
+      // P0.5 keeps full-pack styles synchronized even for objects currently hidden
+      // by a filter. Rebuild only if a styled pack is unexpectedly missing arrays.
+      let liveColors: Float32Array | null = colors;
+      let liveSizes: Float32Array | null = sizes;
+      if (this.#usesStyledWebgl() && (!liveColors || (this._styleResolver && !liveSizes))) {
         const live = this.#buildWebglStyles(meta);
         liveColors = live.colors;
         liveSizes = live.sizes;
       }
-      const compactLat = latlng.slice(0, w * 2);
-      const compactMerc = merc64.slice(0, w * 2);
-      this._webglLayer.setPackedData(compactLat, compactMerc, {
+      this._webglLayer.setPackedData(latlng, merc64, {
         colors: liveColors,
         sizes: liveSizes,
         adopt: true
@@ -2358,9 +2673,10 @@ export class ObjectManager extends Evented {
     const points: LatLngLike[] = [];
     const meta: WebGLMeta[] = [];
     const idToIndex = new Map<ObjectId, number>();
+    const activeTimeIds = this.scene.activeTimeIds();
 
     for (const record of this.index.records.values()) {
-      if (!this.#keepFlatWebglId(record.id, record.value, this.scene.activeTimeIds())) continue;
+      if (!this.#keepFlatWebglId(record.id, record.value, activeTimeIds)) continue;
       singles.set(record.id, record);
       idToIndex.set(record.id, points.length);
       points.push(record.position);
@@ -2411,6 +2727,12 @@ export class ObjectManager extends Evented {
     this.emit("render", { stats: this.getStats() });
   }
 
+  #ensureWebglFilterIndexCapacity(count: number): void {
+    if (this._webglFilterIndexScratch.length >= count) return;
+    const next = Math.max(count, 1024, Math.ceil(this._webglFilterIndexScratch.length * 1.5));
+    this._webglFilterIndexScratch = new Uint32Array(next);
+  }
+
   #applyWebglIdSubset(ids: Iterable<ObjectId>): void {
     if (!this.map || !this._webglLayer) return;
     const pack = this._webglPack;
@@ -2458,7 +2780,7 @@ export class ObjectManager extends Evented {
     }
     let liveColors: Float32Array | null = colors ? colors.subarray(0, w * 4) : null;
     let liveSizes: Float32Array | null = sizes ? sizes.subarray(0, w) : null;
-    if (this.#usesStyledWebgl()) {
+    if (this.#usesStyledWebgl() && (!liveColors || (this._styleResolver && !liveSizes))) {
       const live = this.#buildWebglStyles(meta);
       liveColors = live.colors;
       liveSizes = live.sizes;
@@ -2496,7 +2818,9 @@ export class ObjectManager extends Evented {
     this._webglLayer.setPackedData(pack.latlng, pack.merc64, {
       colors: styles.colors,
       sizes: styles.sizes,
-      adopt: false
+      // Canonical ObjectManager pack: WebGLPointLayer may reference these buffers
+      // directly; all point mutations are mirrored back into the same pack.
+      adopt: true
     });
     this._layout = { zoomBucket, singles: pack.singles, clusters: new Map() };
     this._layoutDirty = false;
@@ -2551,29 +2875,132 @@ export class ObjectManager extends Evented {
   #buildWebglStyles(meta: WebGLMeta[]): { colors: Float32Array | null; sizes: Float32Array | null } {
     if (!this.#usesStyledWebgl()) return { colors: null, sizes: null };
     const colors = new Float32Array(meta.length * 4);
-    const useCustom = Boolean(this._styleResolver);
-    const sizes = useCustom ? new Float32Array(meta.length) : null;
+    const sizes = this._styleResolver ? new Float32Array(meta.length) : null;
+    const zoom = this.map?.zoom ?? 0;
+    const visualization = this.scene.getActiveVisualization();
     for (let i = 0; i < meta.length; i++) {
       const entry = meta[i];
-      const id = entry.kind === "object" ? entry.id : "";
-      const object = entry.kind === "object" ? this.items.get(entry.id) : undefined;
-      const o = i * 4;
-      if (!useCustom) {
-        const rgba = this.#legacyRgba(object, id === "" ? null : id);
-        colors[o] = rgba[0];
-        colors[o + 1] = rgba[1];
-        colors[o + 2] = rgba[2];
-        colors[o + 3] = rgba[3];
+      if (entry.kind !== "object") {
+        const o = i * 4;
+        colors[o] = OBJECT_MANAGER_PALETTE.alpha[0];
+        colors[o + 1] = OBJECT_MANAGER_PALETTE.alpha[1];
+        colors[o + 2] = OBJECT_MANAGER_PALETTE.alpha[2];
+        colors[o + 3] = OBJECT_MANAGER_PALETTE.alpha[3];
+        if (sizes) sizes[i] = DEFAULT_OBJECT_SIZE;
         continue;
       }
-      const resolved = this.#resolveObjectStyle(id, object ?? {}, "webgl");
-      colors[o] = resolved.rgba[0];
-      colors[o + 1] = resolved.rgba[1];
-      colors[o + 2] = resolved.rgba[2];
-      colors[o + 3] = resolved.rgba[3];
-      sizes![i] = resolved.size;
+      const object = this.items.get(entry.id);
+      if (!object) continue;
+      this.#writeWebglPointStyle(entry.id, object, colors, sizes, i, zoom, visualization);
     }
     return { colors, sizes };
+  }
+
+  #buildWebglStylesFromSingles(
+    singles: Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>,
+    count: number
+  ): { colors: Float32Array | null; sizes: Float32Array | null } {
+    if (!this.#usesStyledWebgl()) return { colors: null, sizes: null };
+    const colors = new Float32Array(count * 4);
+    const sizes = this._styleResolver ? new Float32Array(count) : null;
+    const zoom = this.map?.zoom ?? 0;
+    const visualization = this.scene.getActiveVisualization();
+    let i = 0;
+    for (const [id, record] of singles) {
+      if (i >= count) break;
+      this.#writeWebglPointStyle(id, record.value, colors, sizes, i, zoom, visualization);
+      i += 1;
+    }
+    return { colors, sizes };
+  }
+
+  #writeWebglPointStyle(
+    id: ObjectId,
+    object: ManagedObject,
+    colors: Float32Array,
+    sizes: Float32Array | null,
+    index: number,
+    zoom: number,
+    visualization: ObjectStyleContext["visualization"]
+  ): void {
+    const state = this.objectStates.size > 0 ? (this.objectStates.get(id) ?? EMPTY_OBJECT_STATE) : EMPTY_OBJECT_STATE;
+    const selected = this._selectedId === id;
+    const hovered = this._hoveredId === id;
+
+    let color = DEFAULT_OBJECT_COLOR;
+    let opacity = DEFAULT_OBJECT_OPACITY;
+    let size = DEFAULT_OBJECT_SIZE;
+
+    if (this.options.styleByCategory) {
+      if (selected || state.selected) {
+        color = PALETTE_HEX.selected;
+        opacity = OBJECT_MANAGER_PALETTE.selected[3];
+      } else if (hovered || state.hovered) {
+        color = PALETTE_HEX.hover;
+        opacity = OBJECT_MANAGER_PALETTE.hover[3];
+      } else if (object.properties?.alert) {
+        color = PALETTE_HEX.alert;
+        opacity = OBJECT_MANAGER_PALETTE.alert[3];
+      } else {
+        const category = String(object.properties?.category || "alpha");
+        if (category === "beta") {
+          color = PALETTE_HEX.beta;
+          opacity = OBJECT_MANAGER_PALETTE.beta[3];
+        } else if (category === "gamma") {
+          color = PALETTE_HEX.gamma;
+          opacity = OBJECT_MANAGER_PALETTE.gamma[3];
+        } else {
+          color = PALETTE_HEX.alpha;
+          opacity = OBJECT_MANAGER_PALETTE.alpha[3];
+        }
+      }
+    }
+
+    if (this._styleResolver) {
+      const context: ObjectStyleContext = {
+        id,
+        zoom,
+        renderer: "webgl",
+        selected,
+        hovered,
+        visualization
+      };
+      const custom = this._styleResolver(object, state, context);
+      if (custom) {
+        const customFill = custom.fill ?? custom.color;
+        const customFillOpacity = custom.fillOpacity ?? custom.opacity;
+        if (customFill !== undefined) color = customFill;
+        if (customFillOpacity !== undefined) opacity = customFillOpacity;
+        if (custom.size !== undefined) size = custom.size;
+      }
+    }
+
+    const normalizedColor = typeof color === "string" && color.trim() ? color : DEFAULT_OBJECT_COLOR;
+    const rgb = this.#webglRgb(normalizedColor);
+    let normalizedOpacity = Number(opacity);
+    if (!Number.isFinite(normalizedOpacity)) normalizedOpacity = DEFAULT_OBJECT_OPACITY;
+    normalizedOpacity = Math.max(0, Math.min(1, normalizedOpacity));
+    let normalizedSize = Number(size);
+    if (!Number.isFinite(normalizedSize)) normalizedSize = DEFAULT_OBJECT_SIZE;
+    normalizedSize = Math.max(1, Math.min(MAX_OBJECT_SIZE, normalizedSize));
+
+    const o = index * 4;
+    colors[o] = rgb[0];
+    colors[o + 1] = rgb[1];
+    colors[o + 2] = rgb[2];
+    colors[o + 3] = normalizedOpacity;
+    if (sizes) sizes[index] = normalizedSize;
+  }
+
+  #webglRgb(color: string): readonly [number, number, number] {
+    const cached = this._webglColorCache.get(color);
+    if (cached) return cached;
+    const rgb = parseCssColor(color, { r: DEFAULT_OBJECT_RGB.r, g: DEFAULT_OBJECT_RGB.g, b: DEFAULT_OBJECT_RGB.b });
+    const normalized = [rgb.r / 255, rgb.g / 255, rgb.b / 255] as const;
+    // A bounded cache captures the common constant/palette case without retaining
+    // arbitrarily many data-driven colors from user style callbacks.
+    if (this._webglColorCache.size < 64) this._webglColorCache.set(color, normalized);
+    return normalized;
   }
 
   #legacyRgba(object: ManagedObject | undefined, id: ObjectId | null): readonly [number, number, number, number] {
@@ -2592,46 +3019,105 @@ export class ObjectManager extends Evented {
     this._webglLayer.setColors(colors);
     if (sizes) this._webglLayer.setSizes(sizes);
     else this._webglLayer.setSizes(null);
-    if (this._webglPack) {
-      this._webglPack.colors = colors ? colors.slice() : null;
-      this._webglPack.sizes = sizes ? sizes.slice() : null;
+
+    const pack = this._webglPack;
+    if (!pack || !colors) return;
+    const fullPackView =
+      (this._webglMeta === pack.meta && this._webglIdToIndex === pack.idToIndex) ||
+      (!this.filter && !this._gpuSubset && !this.scene.activeTimeIds() && this._webglMeta.length === pack.meta.length);
+    if (fullPackView) {
+      pack.colors = colors.slice();
+      pack.sizes = sizes ? sizes.slice() : null;
+      return;
+    }
+
+    // If styling was enabled after the full pack was created, build canonical
+    // arrays once. Never leave hidden slots zero/stale in a partially styled pack.
+    if (!pack.colors || (sizes && !pack.sizes)) {
+      const full = this.#buildWebglStyles(pack.meta);
+      pack.colors = full.colors ? full.colors.slice() : null;
+      pack.sizes = full.sizes ? full.sizes.slice() : null;
+      return;
+    }
+
+    // Current GPU view is filtered/subset: patch matching slots in the canonical
+    // full pack instead of replacing it with shorter, differently aligned arrays.
+    for (let i = 0; i < this._webglMeta.length; i++) {
+      const entry = this._webglMeta[i];
+      if (entry.kind !== "object") continue;
+      const packSlot = pack.idToIndex.get(entry.id);
+      if (packSlot == null) continue;
+      const src = i * 4;
+      const dst = packSlot * 4;
+      pack.colors[dst] = colors[src];
+      pack.colors[dst + 1] = colors[src + 1];
+      pack.colors[dst + 2] = colors[src + 2];
+      pack.colors[dst + 3] = colors[src + 3];
+      if (sizes && pack.sizes) pack.sizes[packSlot] = sizes[i];
     }
   }
 
   #patchWebglStyles(ids: ObjectId[]): void {
-    if (!this._webglLayer || !this.#usesStyledWebgl()) return;
+    if (!this._webglLayer || !this.#usesStyledWebgl() || ids.length === 0) return;
     const useCustom = Boolean(this._styleResolver);
+    this.#ensureWebglStylePatchCapacity(ids.length);
+    const pack = this._webglPack;
+    let write = 0;
+
     for (const id of ids) {
-      const slot = this._webglIdToIndex.get(id);
-      if (slot == null) continue;
       const object = this.items.get(id);
       if (!object) continue;
-      if (!useCustom) {
-        const rgba = this.#legacyRgba(object, id);
-        this._webglLayer.patchColor(slot, rgba);
-        const packSlot = this._webglPack?.idToIndex.get(id);
-        if (this._webglPack?.colors && packSlot != null) {
-          const o = packSlot * 4;
-          this._webglPack.colors[o] = rgba[0];
-          this._webglPack.colors[o + 1] = rgba[1];
-          this._webglPack.colors[o + 2] = rgba[2];
-          this._webglPack.colors[o + 3] = rgba[3];
-        }
-        continue;
+
+      let rgba: readonly [number, number, number, number];
+      let resolvedSize = 0;
+      if (useCustom) {
+        const resolved = this.#resolveObjectStyle(id, object, "webgl");
+        rgba = resolved.rgba;
+        resolvedSize = resolved.size;
+      } else {
+        rgba = this.#legacyRgba(object, id);
       }
-      const resolved = this.#resolveObjectStyle(id, object, "webgl");
-      this._webglLayer.patchColor(slot, resolved.rgba);
-      this._webglLayer.patchSize(slot, resolved.size);
-      const packSlot = this._webglPack?.idToIndex.get(id);
-      if (this._webglPack?.colors && packSlot != null) {
+
+      // Keep the canonical full pack current even when the object is currently
+      // filtered out. Future compaction can reuse styles without N callbacks.
+      const packSlot = pack?.idToIndex.get(id);
+      if (pack?.colors && packSlot != null) {
         const o = packSlot * 4;
-        this._webglPack.colors[o] = resolved.rgba[0];
-        this._webglPack.colors[o + 1] = resolved.rgba[1];
-        this._webglPack.colors[o + 2] = resolved.rgba[2];
-        this._webglPack.colors[o + 3] = resolved.rgba[3];
+        pack.colors[o] = rgba[0];
+        pack.colors[o + 1] = rgba[1];
+        pack.colors[o + 2] = rgba[2];
+        pack.colors[o + 3] = rgba[3];
       }
-      if (this._webglPack?.sizes && packSlot != null) this._webglPack.sizes[packSlot] = resolved.size;
+      if (useCustom && pack?.sizes && packSlot != null) pack.sizes[packSlot] = resolvedSize;
+
+      const slot = this._webglIdToIndex.get(id);
+      if (slot == null) continue;
+      this._webglStylePatchIndices[write] = slot;
+      const patchOffset = write * 4;
+      this._webglStylePatchColors[patchOffset] = rgba[0];
+      this._webglStylePatchColors[patchOffset + 1] = rgba[1];
+      this._webglStylePatchColors[patchOffset + 2] = rgba[2];
+      this._webglStylePatchColors[patchOffset + 3] = rgba[3];
+      if (useCustom) this._webglStylePatchSizes[write] = resolvedSize;
+      write += 1;
     }
+
+    if (write > 0) {
+      this._webglLayer.patchStyles(
+        this._webglStylePatchIndices,
+        this._webglStylePatchColors,
+        useCustom ? this._webglStylePatchSizes : null,
+        write
+      );
+    }
+  }
+
+  #ensureWebglStylePatchCapacity(count: number): void {
+    if (this._webglStylePatchIndices.length >= count) return;
+    const next = Math.max(count, 64, Math.ceil(this._webglStylePatchIndices.length * 1.5));
+    this._webglStylePatchIndices = new Uint32Array(next);
+    this._webglStylePatchColors = new Float32Array(next * 4);
+    this._webglStylePatchSizes = new Float32Array(next);
   }
 
   #resolveObjectStyle(
@@ -2669,8 +3155,10 @@ export class ObjectManager extends Evented {
     if (this._styleResolver) {
       const custom = this._styleResolver(object, state, context);
       if (custom) {
-        if (custom.color !== undefined) merged.color = custom.color;
-        if (custom.opacity !== undefined) merged.opacity = custom.opacity;
+        if (custom.fill !== undefined) merged.fill = custom.fill;
+        else if (custom.color !== undefined) merged.color = custom.color;
+        if (custom.fillOpacity !== undefined) merged.fillOpacity = custom.fillOpacity;
+        else if (custom.opacity !== undefined) merged.opacity = custom.opacity;
         if (custom.size !== undefined) merged.size = custom.size;
         if (custom.icon !== undefined) merged.icon = custom.icon;
         if (custom.iconTint !== undefined) merged.iconTint = custom.iconTint;
@@ -2840,8 +3328,8 @@ export class ObjectManager extends Evented {
     const polygons = [];
     const labelCandidates: LabelCandidate[] = [];
     const labelAnchors = [];
-    const bounds = latLngBounds(this.map.getBounds()).pad(0.2);
-    const viewportBBox = [bounds.south, bounds.west, bounds.north, bounds.east] as const;
+    const area = bounds(this.map.getBounds()).pad(0.2);
+    const viewportBBox = [area.south, area.west, area.north, area.east] as const;
 
     for (const [id, object] of this.items) {
       if (timeActive && !timeActive.has(id)) continue;
@@ -2960,9 +3448,9 @@ export class ObjectManager extends Evented {
           positions,
           distances: geometry.distances,
           style: {
-            color: resolved.line?.color ?? resolved.color,
-            opacity: resolved.line?.opacity ?? resolved.opacity,
-            width: resolved.line?.width ?? 2,
+            color: resolved.line?.stroke ?? resolved.line?.color ?? resolved.color,
+            opacity: resolved.line?.strokeOpacity ?? resolved.line?.opacity ?? resolved.opacity,
+            width: resolved.line?.strokeWidth ?? resolved.line?.width ?? 2,
             dashArray: resolved.line?.dashArray,
             dashOffset: resolved.line?.dashOffset,
             gradient: resolved.line?.gradient
@@ -3215,14 +3703,14 @@ export class ObjectManager extends Evented {
     if (!this.options.clusterZoomOnClick) return;
     this.unspiderfy();
     if (this.options.zoomToBoundsOnClick) {
-      const bounds = latLngBounds();
+      const area = bounds();
       for (const id of ids) {
         const object = this.items.get(id);
         const objectPosition = object ? this.#objectPosition(object) : null;
-        if (objectPosition) bounds.extend(objectPosition);
+        if (objectPosition) area.extend(objectPosition);
       }
-      if (bounds.isValid()) {
-        this.map.fitBounds(bounds, { padding: 40 });
+      if (area.isValid()) {
+        this.map.fitBounds(area, { padding: 40 });
         return;
       }
     }
@@ -3477,9 +3965,10 @@ function legacyObjectStyle(
 
 function normalizeResolvedStyle(style: ObjectStyle): ResolvedObjectStyle {
   const fallbackRgb = parseCssColor(DEFAULT_OBJECT_COLOR, { r: 15, g: 118, b: 110 });
-  const color = typeof style.color === "string" && style.color.trim() ? style.color : DEFAULT_OBJECT_COLOR;
+  const requestedFill = style.fill ?? style.color;
+  const color = typeof requestedFill === "string" && requestedFill.trim() ? requestedFill : DEFAULT_OBJECT_COLOR;
   const rgb = parseCssColor(color, fallbackRgb);
-  let opacity = Number(style.opacity);
+  let opacity = Number(style.fillOpacity ?? style.opacity);
   if (!Number.isFinite(opacity)) opacity = DEFAULT_OBJECT_OPACITY;
   opacity = Math.max(0, Math.min(1, opacity));
   let size = Number(style.size);

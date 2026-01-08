@@ -49,7 +49,7 @@ marker(position).bindPopup({
 ## Markers and DivIcon
 
 - Marker title / fallback label strings use `textContent`.
-- `divIcon({ content })` string content is always plain text (`textContent`). A string that looks like HTML is **not** parsed. Pass a `Node` when the icon must contain structured markup.
+- `icon({ content })` string content is always plain text (`textContent`). A string that looks like HTML is **not** parsed. Pass a `Node` when the icon must contain structured markup.
 
 ## SVG overlays
 

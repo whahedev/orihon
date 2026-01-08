@@ -1,6 +1,6 @@
 import { cameraWarpCss } from "../camera.js";
 import { createEl, createSvgEl, rafThrottle } from "../dom.js";
-import { latLng, latLngBounds, type LatLngLike } from "../geo.js";
+import { latLng, bounds, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { SpatialGridIndex } from "../services/spatial-grid-index.js";
@@ -36,7 +36,13 @@ export interface MarkerCollectionOptions extends LayerOptions {
   viewportCull?: boolean;
   marker?: MarkerOptions;
   pointSize?: number;
+  /** Canonical point fill color. Takes precedence over `color`. */
+  fill?: string;
+  /** Canonical point fill opacity. Takes precedence over `opacity`. */
+  fillOpacity?: number;
+  /** Compatibility alias for `fill`. */
   color?: string;
+  /** Compatibility alias for `fillOpacity`. */
   opacity?: number;
   indexCellSize?: number;
 }
@@ -72,13 +78,15 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
   private readonly _onView = (): void => this.#scheduleViewLayout();
 
   constructor(points: Iterable<LatLngLike> = [], options: MarkerCollectionOptions = {}) {
+    const fill = options.fill ?? options.color ?? "#0f766e";
+    const fillOpacity = options.fillOpacity ?? options.opacity ?? 0.88;
     const markerOpts: MarkerOptions = {
       keyboard: false,
       interactive: false,
       shape: "dot",
       size: options.pointSize ?? 8,
       strokeWidth: 0,
-      color: options.color ?? "#0f766e",
+      color: fill,
       ...(options.marker ?? {})
     };
     super({
@@ -91,10 +99,12 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
       iconMinZoom: Number.POSITIVE_INFINITY,
       viewportCull: true,
       pointSize: 8,
-      color: "#0f766e",
-      opacity: 0.88,
       indexCellSize: 1,
       ...options,
+      fill,
+      fillOpacity,
+      color: fill,
+      opacity: fillOpacity,
       marker: markerOpts
     });
     this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
@@ -276,13 +286,13 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
 
   #syncDomMarkers(limit: number): Set<number> {
     if (!this.map) return new Set();
-    const bounds = this.options.viewportCull
-      ? latLngBounds(this.map.getBounds()).pad(0.12)
+    const area = this.options.viewportCull
+      ? bounds(this.map.getBounds()).pad(0.12)
       : null;
 
     const visible = new Set<number>();
-    if (bounds) {
-      for (const id of this.index.searchIds(bounds)) {
+    if (area) {
+      for (const id of this.index.searchIds(area)) {
         if (visible.size >= limit) break;
         visible.add(id);
       }
@@ -352,8 +362,8 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
     const group = this._svgGroup!;
     svg.setAttribute("viewBox", `0 0 ${map.size.width} ${map.size.height}`);
 
-    const bounds = this.options.viewportCull ? latLngBounds(map.getBounds()).pad(0.12) : null;
-    const visible = new Set(bounds ? this.index.searchIds(bounds) : this.index.records.keys());
+    const area = this.options.viewportCull ? bounds(map.getBounds()).pad(0.12) : null;
+    const visible = new Set(area ? this.index.searchIds(area) : this.index.records.keys());
 
     const buttonIds = new Set<number>();
     for (const id of this._selected) if (visible.has(id)) buttonIds.add(id);

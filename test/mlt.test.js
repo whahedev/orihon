@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodePackedMVT, packedToGeoJSON } from "../dist/index.js";
+import { decodePackedMVT, packedToGeoJSON } from "orihon/mvt";
 import { decodePackedMLT, encodePackedMLT, decodeMLT, createMLTProvider, looksLikeMLT } from "orihon/mlt";
 
 test("encodePackedMLT round-trips a packed point tile", () => {

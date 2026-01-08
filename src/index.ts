@@ -3,38 +3,31 @@ export { Layer } from "./layer.js";
 export { LayerGroup, FeatureGroup, featureGroup } from "./layer-group.js";
 export { Renderer } from "./renderer.js";
 export { Orihon, createMap } from "./map.js";
-export {
-  geoTransformCss,
-  cameraWarpCss,
-  cameraWarpCoversViewport,
-  tileCornerLayerTransform,
-  tileLevelWarpCss
-} from "./camera.js";
 export { CRS, CRSCompatibilityError } from "./crs.js";
-export { GridLayer, gridLayer } from "./layers/grid-layer.js";
-export { TileLayer, tileLayer, registerWebGLTileFactory, registerGpuTileFactory } from "./layers/tile-layer.js";
-export { WebGLTileLayer, webglTileLayer } from "./layers/webgl-tile-layer.js";
+export { GridLayer } from "./layers/grid-layer.js";
+export { TileLayer, tileLayer } from "./layers/tile-layer.js";
+export { GPUTileLayer } from "./layers/gpu-tile-layer.js";
 export { WTinyLfu, CountMinSketch, wTinyLfu } from "./services/tiny-lfu.js";
-import { registerGpuTileFactory, registerWebGLTileFactory } from "./layers/tile-layer.js";
-import { WebGLTileLayer } from "./layers/webgl-tile-layer.js";
-import { WebGPUTileLayer } from "./layers/webgpu-tile-layer.js";
+import { registerGpuTileFactory } from "./layers/tile-layer.js";
+import { GPUTileLayer } from "./layers/gpu-tile-layer.js";
 import { sniffPackedMLT } from "./layers/mlt.js";
 import { decodePackedMVTWasm, mvtGeometryWasmSupported } from "./layers/mvt-wasm.js";
 import { registerPackedMvtWasm, registerPackedTileSniffer } from "./layers/mvt.js";
 // Advanced: enable GPU raster tiles for tileLayer({ renderer: "webgl" | "webgpu" | "auto" }).
-registerWebGLTileFactory((template, options) => new WebGLTileLayer(template, options));
-registerGpuTileFactory((template, options) => new WebGPUTileLayer(template, options));
-// Advanced: createMVTProvider / decodePackedMVT accept MLT and use WASM geometry when present.
+registerGpuTileFactory((template, options) => new GPUTileLayer(template, {
+  ...options,
+  backend: options?.renderer === "webgl" || options?.renderer === "webgpu" ? options.renderer : "auto"
+}));
+// Advanced: createMVTProvider / decodeMVT accept MLT and use WASM geometry when present.
 registerPackedTileSniffer(sniffPackedMLT);
 if (mvtGeometryWasmSupported()) registerPackedMvtWasm(decodePackedMVTWasm);
 export { WMSTileLayer, wmsTileLayer } from "./layers/wms-tile-layer.js";
 export { WMTSTileLayer, wmtsTileLayer, createWMTSFromCapabilities } from "./layers/wmts-tile-layer.js";
 export { VectorTileLayer, vectorTileLayer } from "./layers/vector-tile-layer.js";
-export { createMVTProvider, decodeMVT, decodePackedMVT, packedToGeoJSON } from "./layers/mvt.js";
+export { createMVTProvider, decodeMVT } from "./layers/mvt.js";
 export { Marker, marker, markerShapeMetrics } from "./layers/marker.js";
-export { MarkerCollection, markerCollection } from "./layers/marker-collection.js";
-export { Icon, DivIcon, icon, divIcon } from "./layers/icon.js";
-export { CanvasBaseLayer, canvasBaseLayer } from "./layers/canvas-base-layer.js";
+export { MarkerCollection } from "./layers/marker-collection.js";
+export { Icon, DivIcon, icon } from "./layers/icon.js";
 export { TextLayer, textLayer } from "./layers/text-layer.js";
 export {
   SvgLayer,
@@ -95,22 +88,22 @@ export {
 import { registerLocalePacks } from "./ui/locale.js";
 import { localePacks } from "./ui/locale-packs.js";
 registerLocalePacks(localePacks);
-export { ObjectManager, objectManager, OBJECT_MANAGER_PALETTE } from "./services/object-manager.js";
-export { RemoteObjectManager, remoteObjectManager } from "./services/remote-object-manager.js";
+export { ObjectManager, OBJECT_MANAGER_PALETTE } from "./services/object-manager.js";
+export { RemoteObjectManager } from "./services/remote-object-manager.js";
+export { objectManager } from "./services/object-manager-factory.js";
 export { SpatialGridIndex, spatialGridIndex } from "./services/spatial-grid-index.js";
 export { TrafficLayer, trafficLayer } from "./services/traffic-layer.js";
-export { SearchProvider, createArraySearchProvider, createSearchProvider } from "./services/search.js";
+export { SearchProvider, searchProvider } from "./services/search.js";
 export { RoutingLayer, createStraightLineRoutingProvider, routingLayer } from "./services/routing.js";
 export { SuggestProvider, SuggestWidget, createSuggestProvider, createSuggestWidget } from "./services/suggest.js";
 export { WebGLPointLayer, webglPointLayer } from "./layers/webgl-point-layer.js";
 export { WebGLSymbolLayer, webglSymbolLayer } from "./layers/webgl-symbol-layer.js";
-export { WebGLStyledPathBatch, webglStyledPathBatch } from "./layers/webgl-styled-path-batch.js";
+export { WebGLStyledPathBatch } from "./layers/webgl-styled-path-batch.js";
 export { WebGLPolygonBatch, webglPolygonBatch } from "./layers/webgl-polygon-batch.js";
-export { HeatLayer, heatLayer } from "./layers/heat-layer.js";
-export { WebGLHeatLayer, webglHeatLayer } from "./layers/webgl-heat-layer.js";
-export { WebGLPathBatch, webglPathBatch } from "./layers/webgl-path-batch.js";
-export { HeatIsolineLayer, heatIsolineLayer } from "./layers/heat-isoline-layer.js";
-export { buildHeatIsolines, heatRadiusScale, heatIntensityScale, heatKernelAtZoom } from "./services/heat-isolines.js";
+export { HeatLayer, heatLayer } from "./layers/heat.js";
+export { WebGLPathBatch } from "./layers/webgl-path-batch.js";
+export { pathBatch } from "./layers/path-batch.js";
+export { buildHeat, heatSupport } from "./services/heat.js";
 export { GeometryWorkerPool, geometryWorkerPool, preparePointBatch, preparePointBatchAsync } from "./services/geometry-worker.js";
 export { OfflineTileCache, offlineTileCache } from "./services/offline-cache.js";
 export { PerformanceInspector, performanceInspector } from "./services/performance.js";
@@ -123,9 +116,8 @@ export {
   point,
   pointBounds,
   latLng,
-  latLngBounds,
+  lngLat,
   bounds,
-  extendBounds,
   project,
   unproject,
   distance,
@@ -150,16 +142,15 @@ export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
 export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
-export type { TileCoordinates, TileTemplate, TileLayerOptions, WebGLTileFactory } from "./layers/tile-layer.js";
-export type { WebGLTileLayerOptions, WebGLTileLayerStats } from "./layers/webgl-tile-layer.js";
+export type { TileCoordinates, TileTemplate, TileLayerOptions, GPUTileFactory } from "./layers/tile-layer.js";
+export type { GPUTileBackend, GPUTileLayerOptions, GPUTileLayerStats } from "./layers/gpu-tile-layer.js";
 export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-layer.js";
 export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts-tile-layer.js";
 export type { MVTPaintRule, VectorTileCoordinates, VectorTileLayerOptions, VectorTileProvider } from "./layers/vector-tile-layer.js";
-export type { MVTDecodeOptions, PackedMVTLayer, PackedVectorTile } from "./layers/mvt.js";
+export type { MVTDecodeOptions } from "./layers/mvt.js";
 export type { MarkerOptions, MarkerAppearance, MarkerShape } from "./layers/marker.js";
 export type { MarkerCollectionOptions, MarkerCollectionRenderer } from "./layers/marker-collection.js";
 export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
-export type { CanvasBaseLayerOptions } from "./layers/canvas-base-layer.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";
 export type { PathOptions, CircleMarkerOptions } from "./layers/vector.js";
 export type {
@@ -238,35 +229,38 @@ export type {
   ClusterPopupContext
 } from "./services/object-manager.js";
 export type { RemoteObjectLoadContext, RemoteObjectLoader, RemoteObjectManagerOptions } from "./services/remote-object-manager.js";
+export type { PointObjectManagerOptions, UnifiedObjectManagerOptions } from "./services/object-manager-factory.js";
 export type { SpatialId, SpatialRecord } from "./services/spatial-grid-index.js";
 export type { TrafficLayerOptions, TrafficState } from "./services/traffic-layer.js";
-export type { SearchAdapter, SearchContext, SearchResult } from "./services/search.js";
+export type { SearchAdapter, SearchContext, SearchResult, SearchProviderSource, SearchProviderOptions } from "./services/search.js";
 export type { RouteResult, RouteWaypoint, RoutingContext, RoutingLayerOptions, RoutingProvider } from "./services/routing.js";
 export type { SuggestOptions, SuggestContext, SuggestFetcher, SuggestWidgetOptions } from "./services/suggest.js";
 export type { WebGLPointInput, WebGLPointDataOptions, WebGLPointAsyncDataOptions, WebGLPointLayerOptions, WebGLPointLayerStats } from "./layers/webgl-point-layer.js";
 export type { WebGLSymbolInstance, WebGLSymbolLayerOptions } from "./layers/webgl-symbol-layer.js";
 export type { StyledPathInput, StyledPathStyle, WebGLStyledPathBatchOptions } from "./layers/webgl-styled-path-batch.js";
+export type { PathBatch, PathBatchMode, PathBatchOptions, UniformPathBatchOptions, FeaturePathBatchOptions } from "./layers/path-batch.js";
 export type { PolygonBatchInput, PolygonBatchStyle, WebGLPolygonBatchOptions } from "./layers/webgl-polygon-batch.js";
-export type { HeatPoint, HeatLayerOptions } from "./layers/heat-layer.js";
-export type {
-  WebGLHeatInput,
-  WebGLHeatAsyncDataOptions,
-  WebGLHeatLayerOptions,
-  WebGLHeatLayerStats
-} from "./layers/webgl-heat-layer.js";
 export type { WebGLPathBatchOptions } from "./layers/webgl-path-batch.js";
 export type {
-  HeatIsolineLayerOptions,
-  HeatIsolineLayerStats,
-  HeatIsolineGradient
-} from "./layers/heat-isoline-layer.js";
+  HeatLayerOptions,
+  HeatAsyncDataOptions,
+  HeatLayerStats,
+  HeatGradient,
+  HeatFeature
+} from "./layers/heat.js";
 export type {
-  HeatIsolineInput,
-  HeatIsolineBuildOptions,
-  HeatIsolineRing,
-  HeatIsolineResult,
-  HeatKernelScale
-} from "./services/heat-isolines.js";
+  HeatMode,
+  HeatBackend,
+  HeatEvaluation,
+  ResolvedHeatBackend,
+  HeatPoint,
+  HeatGrid,
+  HeatContour,
+  HeatOptions,
+  HeatProfile,
+  HeatResult,
+  HeatSupport
+} from "./services/heat.js";
 export { buildClusterLayout, buildClusterIndex, queryClusterLayout } from "./services/cluster-layout.js";
 export type {
   ClusterIndex,

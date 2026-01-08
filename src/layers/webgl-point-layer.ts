@@ -112,6 +112,8 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   private _colorBuf = new Uint8Array(0);
   private _colorFloat = new Float32Array(0);
   private _sizeBuf = new Float32Array(0);
+  /** Reused sorted GPU-slot scratch for batched style updates. */
+  private _stylePatchIndexScratch = new Uint32Array(0);
   private _gpuMercBytes = 0;
   private _gpuColorBytes = 0;
   private _gpuSizeBytes = 0;
@@ -430,10 +432,79 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   patchSize(index: number, size: number): this {
     if (!this._useVertexSize || index < 0 || index >= this.sizes.length) return this;
     const next = normalizePointSize(size, this.options.pointSize);
+    const prev = this._sizeBuf[index];
+    if (next === prev) return this;
     this._sizeBuf[index] = next;
-    if (next > this._maxVertexSize) this._maxVertexSize = next;
-    else this.#recomputeMaxVertexSize();
+    if (next > this._maxVertexSize) {
+      this._maxVertexSize = next;
+    } else if (prev === this._maxVertexSize && next < prev) {
+      this.#recomputeMaxVertexSize();
+    }
     this.#uploadSizeRange(index, 1);
+    this.#requestGpuPaint();
+    return this;
+  }
+
+  /**
+   * Patch many vertex colors/sizes in one pass. GPU writes are merged into
+   * contiguous ranges and large/fragmented batches fall back to one full upload.
+   */
+  patchStyles(
+    indices: ArrayLike<number>,
+    colors: ArrayLike<number> | null = null,
+    sizes: ArrayLike<number> | null = null,
+    count = indices.length
+  ): this {
+    const n = Math.min(indices.length, Math.max(0, Math.floor(count)));
+    if (n <= 0 || (!colors && !sizes)) return this;
+
+    if (this._stylePatchIndexScratch.length < n) {
+      this._stylePatchIndexScratch = new Uint32Array(n);
+    }
+
+    let maxCouldShrink = false;
+    let dirtyCount = 0;
+    let hasColorPatch = false;
+    let hasSizePatch = false;
+
+    for (let i = 0; i < n; i++) {
+      const index = Math.trunc(Number(indices[i]));
+      if (!Number.isFinite(index) || index < 0 || index >= this.points.length / 2) continue;
+
+      let patched = false;
+      if (colors && this._useVertexColor && index * 4 + 3 < this.colors.length && i * 4 + 3 < colors.length) {
+        const src = i * 4;
+        const dst = index * 4;
+        this._colorBuf[dst] = floatToByte(Number(colors[src]) || 0);
+        this._colorBuf[dst + 1] = floatToByte(Number(colors[src + 1]) || 0);
+        this._colorBuf[dst + 2] = floatToByte(Number(colors[src + 2]) || 0);
+        this._colorBuf[dst + 3] = floatToByte(Number(colors[src + 3]) || this.options.opacity);
+        hasColorPatch = true;
+        patched = true;
+      }
+
+      if (sizes && this._useVertexSize && index < this.sizes.length && i < sizes.length) {
+        const prev = this._sizeBuf[index];
+        const next = normalizePointSize(sizes[i], this.options.pointSize);
+        if (next !== prev) {
+          if (prev === this._maxVertexSize && next < prev) maxCouldShrink = true;
+          this._sizeBuf[index] = next;
+          if (next > this._maxVertexSize) this._maxVertexSize = next;
+        }
+        hasSizePatch = true;
+        patched = true;
+      }
+
+      if (patched) this._stylePatchIndexScratch[dirtyCount++] = index;
+    }
+
+    if (dirtyCount <= 0) return this;
+    if (maxCouldShrink) this.#recomputeMaxVertexSize();
+
+    const dirty = this._stylePatchIndexScratch.subarray(0, dirtyCount);
+    dirty.sort();
+    if (hasColorPatch) this.#uploadColorPatchRanges(dirty);
+    if (hasSizePatch) this.#uploadSizePatchRanges(dirty);
     this.#requestGpuPaint();
     return this;
   }
@@ -976,6 +1047,89 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
       floatOffset * 4,
       this._sizeBuf.subarray(floatOffset, floatOffset + floatCount)
     );
+  }
+
+  #uploadColorPatchRanges(indices: Uint32Array): void {
+    const pointCount = this.colors.length / 4;
+    if (pointCount <= 0 || indices.length <= 0) return;
+    this.#uploadPatchRanges(indices, pointCount, (start, count) => this.#uploadColorRange(start * 4, count * 4));
+  }
+
+  #uploadSizePatchRanges(indices: Uint32Array): void {
+    const pointCount = this.sizes.length;
+    if (pointCount <= 0 || indices.length <= 0) return;
+    this.#uploadPatchRanges(indices, pointCount, (start, count) => this.#uploadSizeRange(start, count));
+  }
+
+  #uploadPatchRanges(
+    indices: Uint32Array,
+    pointCount: number,
+    upload: (start: number, count: number) => void
+  ): void {
+    // Merge nearby slots to amortize WebGL driver calls, but do not promote a
+    // sparse batch to a full-buffer upload merely because it has many ranges.
+    // The old `rangeCount > 256` rule turned 1k scattered updates on a 1M-point
+    // layer into a ~4 MB upload. Estimate driver-call overhead in point units
+    // and choose the cheaper plan instead.
+    const mergeGap = 8;
+    const fullUploadRatio = 0.15;
+    const callPenaltyPoints = 512;
+
+    let uniqueCount = 0;
+    let rangeCount = 0;
+    let coveredPoints = 0;
+    let rangeStart = -1;
+    let rangeEnd = -1;
+
+    for (let i = 0; i < indices.length; i++) {
+      const index = indices[i];
+      if (index === rangeEnd) continue;
+      uniqueCount += 1;
+
+      if (rangeStart < 0) {
+        rangeStart = index;
+        rangeEnd = index;
+        rangeCount = 1;
+        continue;
+      }
+      if (index <= rangeEnd + mergeGap + 1) {
+        rangeEnd = index;
+        continue;
+      }
+
+      coveredPoints += rangeEnd - rangeStart + 1;
+      rangeStart = index;
+      rangeEnd = index;
+      rangeCount += 1;
+    }
+    if (rangeStart >= 0) coveredPoints += rangeEnd - rangeStart + 1;
+
+    const denseEnoughForFullUpload = uniqueCount >= Math.ceil(pointCount * fullUploadRatio);
+    const estimatedPartialCost = coveredPoints + rangeCount * callPenaltyPoints;
+    if (denseEnoughForFullUpload || estimatedPartialCost >= pointCount) {
+      upload(0, pointCount);
+      return;
+    }
+
+    let start = -1;
+    let end = -1;
+    for (let i = 0; i < indices.length; i++) {
+      const index = indices[i];
+      if (index === end) continue;
+      if (start < 0) {
+        start = index;
+        end = index;
+        continue;
+      }
+      if (index <= end + mergeGap + 1) {
+        end = index;
+        continue;
+      }
+      upload(start, end - start + 1);
+      start = index;
+      end = index;
+    }
+    if (start >= 0) upload(start, end - start + 1);
   }
 
   /**

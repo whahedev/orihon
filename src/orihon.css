@@ -406,7 +406,7 @@
   user-select: none;
 }
 
-.oh-webgl-tile-layer {
+.oh-gpu-tile-layer {
   position: absolute;
   left: 0;
   top: 0;
@@ -416,8 +416,7 @@
   user-select: none;
 }
 
-.oh-heat-layer,
-.oh-webgl-heat-layer {
+.oh-heat-layer {
   position: absolute;
   display: block;
   max-width: none;

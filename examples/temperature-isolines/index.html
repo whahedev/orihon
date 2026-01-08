@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Orihon · температура Европы</title>
+  <link rel="stylesheet" href="/dist/orihon.css?temperature-demo=1" />
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color:#e8f1f8; background:#07111a; }
+    * { box-sizing:border-box; }
+    html, body, #map { width:100%; height:100%; margin:0; }
+    body { overflow:hidden; }
+    #map { background:#0a1720; }
+    .panel {
+      position:absolute; z-index:1000; top:18px; left:18px; width:min(440px,calc(100vw - 36px));
+      max-height:calc(100vh - 36px); overflow:auto; scrollbar-width:thin;
+      padding:16px; border:1px solid rgba(151,190,212,.3); border-radius:16px;
+      background:rgba(7,17,26,.9); box-shadow:0 18px 55px rgba(0,0,0,.32); backdrop-filter:blur(14px);
+    }
+    h1 { margin:0; font-size:20px; letter-spacing:-.02em; }
+    .intro { margin:7px 0 14px; color:#aac0cf; font-size:13px; line-height:1.45; }
+    .label { margin:12px 0 7px; color:#8fa9ba; font-size:11px; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+    .modes { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .modes input { position:absolute; opacity:0; pointer-events:none; }
+    .modes span, button {
+      display:block; padding:9px 8px; border:1px solid #294657; border-radius:9px;
+      color:#c9dae5; background:#102330; text-align:center; font:700 12px/1 system-ui,sans-serif; cursor:pointer;
+    }
+    .modes input:checked + span { color:#fff; border-color:#2dd4bf; background:#0f766e; box-shadow:0 0 0 1px rgba(45,212,191,.2); }
+    .toggles { display:flex; flex-wrap:wrap; gap:14px; margin-top:13px; color:#d8e6ee; font-size:13px; }
+    .toggles label { display:flex; gap:7px; align-items:center; cursor:pointer; }
+    .toggles input { accent-color:#14b8a6; }
+    .tuning { margin-top:13px; border:1px solid #294657; border-radius:11px; background:rgba(10,29,41,.72); }
+    .tuning summary { padding:11px 12px; color:#d8e6ee; font-size:12px; font-weight:800; cursor:pointer; user-select:none; }
+    .tuning[open] summary { border-bottom:1px solid #294657; }
+    .control-section { padding:10px 12px 2px; }
+    .control-section + .control-section { border-top:1px solid rgba(41,70,87,.72); }
+    .control-title { margin-bottom:9px; color:#66dbc9; font-size:10px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+    .select-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .select-control { display:grid; gap:4px; color:#9fb5c4; font-size:10px; }
+    .select-control select { min-width:0; padding:7px; border:1px solid #294657; border-radius:7px; color:#dceaf2; background:#102330; }
+    .switch-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px 10px; margin-top:10px; }
+    .switch-grid label { display:flex; align-items:center; gap:6px; color:#bdd0dc; font-size:10px; cursor:pointer; }
+    .slider { display:grid; grid-template-columns:minmax(125px,1fr) minmax(110px,1.1fr) 54px; align-items:center; gap:8px; min-height:28px; color:#b7cbd7; font-size:10px; }
+    .slider input { width:100%; accent-color:#2dd4bf; }
+    .slider output { color:#7ee3d3; font-variant-numeric:tabular-nums; text-align:right; }
+    .tuning-actions { display:flex; gap:8px; padding:10px 12px 12px; border-top:1px solid rgba(41,70,87,.72); }
+    .tuning-actions button { flex:1; }
+    .actions { display:flex; align-items:center; gap:10px; margin-top:13px; }
+    button { padding:9px 12px; }
+    button:hover { border-color:#5d899f; }
+    #status { flex:1; color:#83d9ca; font-size:11px; font-variant-numeric:tabular-nums; text-align:right; }
+    #clear-selection { display:none; }
+    #clear-selection.active { display:block; }
+    .inspect { min-height:30px; margin-top:10px; padding:8px 10px; border:1px solid rgba(45,212,191,.18); border-radius:8px; color:#9fc8cf; background:rgba(13,39,51,.55); font-size:10px; line-height:1.4; }
+    .legend { margin-top:14px; }
+    .legend-bar { height:10px; border-radius:999px; background:linear-gradient(90deg,#1746d1 0%,#00b8ff 28%,#24d36b 50%,#ffe63b 70%,#ff8c19 85%,#e31a1c 100%); }
+    .legend-labels { display:flex; justify-content:space-between; margin-top:4px; color:#9db2c0; font-size:10px; }
+    .source { margin-top:10px; color:#728d9f; font-size:10px; line-height:1.4; }
+    .station-popup { min-width:190px; color:#13232e; }
+    .station-popup strong { display:block; margin-bottom:5px; font-size:15px; }
+    .station-popup .temp { color:#b42318; font-size:24px; font-weight:800; }
+    .station-popup small { display:block; margin-top:5px; color:#5e7180; }
+    @media (max-width:640px) { .panel { top:10px; left:10px; width:calc(100vw - 20px); } .intro,.source { display:none; } }
+  </style>
+</head>
+<body>
+  <div id="map" aria-label="Синтетическая карта температуры воздуха в Европе"></div>
+  <section class="panel" aria-label="Настройки температурного поля">
+    <h1>Температура воздуха · Европа</h1>
+    <p class="intro">Миллион синтетических измерений по Европе. Интерактивные станции показывают опорные значения; южный градиент дополнен очагами жары вокруг Мадрида, Рима, Афин, Будапешта и Бухареста.</p>
+
+    <div class="label">Режим поверхности</div>
+    <div class="modes" id="modes">
+      <label><input type="radio" name="mode" value="heatmap" /><span>Тепловая</span></label>
+      <label><input type="radio" name="mode" value="isolines" /><span>Изолинии</span></label>
+      <label><input type="radio" name="mode" value="both" checked /><span>Оба слоя</span></label>
+    </div>
+
+    <div class="toggles">
+      <label><input id="stations" type="checkbox" checked /> Показать 1M точек</label>
+      <label><input id="labels" type="checkbox" checked /> Подписи изолиний</label>
+    </div>
+    <details class="tuning">
+      <summary>Точная настройка поля и изолиний</summary>
+      <div id="advanced-controls"></div>
+      <div class="tuning-actions">
+        <button id="defaults" type="button">По умолчанию</button>
+        <button id="rebuild-now" type="button">Пересчитать</button>
+      </div>
+    </details>
+    <div class="actions">
+      <button id="reset" type="button">Вся Европа</button>
+      <button id="clear-selection" type="button">Снять выбор</button>
+      <span id="status">Подготовка поля…</span>
+    </div>
+    <div class="inspect" id="inspect">Наведите на изолинию или зону; щелчок зафиксирует выбор и откроет popup.</div>
+
+    <div class="legend" aria-label="Температурная шкала от 5 до 40 градусов Цельсия">
+      <div class="legend-bar"></div>
+      <div class="legend-labels"><span>5 °C</span><span>15 °C</span><span>25 °C</span><span>32 °C</span><span>40 °C</span></div>
+    </div>
+    <div class="source">Значения демонстрационные, не являются метеопрогнозом. Все 1 000 000 GPU-точек кликабельны: щёлкните по любой, чтобы увидеть её температуру.</div>
+  </section>
+
+  <script type="module">
+    const { createMap, heatLayer, textLayer, tileLayer, webglPointLayer } = await import(`/dist/orihon.esm.js?temperature-demo=${Date.now().toString(36)}`);
+
+    const EUROPE_VIEW = { center:[51.2, 14.5], zoom:4 };
+    const HOTSPOTS = [
+      [40.42,-3.7,8.0], [41.9,12.5,7.2], [37.98,23.73,7.5], [47.5,19.04,6.4], [44.43,26.1,6.2]
+    ];
+    const REGIONS = [
+      [37.2,43.2,-8.5,2.0,3,5,"Иберия"], [43.5,51.3,-1.2,7.4,4,5,"Западная Европа"],
+      [50.7,57.4,-7.4,1.2,4,4,"Британские острова"], [47.0,55.2,7.5,21.5,4,7,"Центральная Европа"],
+      [38.0,47.0,8.0,25.0,5,7,"Южная Европа"], [55.0,66.0,5.0,30.0,5,7,"Скандинавия"],
+      [45.0,60.5,22.0,39.0,6,6,"Восточная Европа"]
+    ];
+    const CITY_STATIONS = [
+      ["Лиссабон",38.72,-9.14],["Мадрид",40.42,-3.7],["Париж",48.86,2.35],["Лондон",51.51,-.12],
+      ["Амстердам",52.37,4.9],["Берлин",52.52,13.41],["Прага",50.08,14.42],["Варшава",52.23,21.01],
+      ["Вена",48.21,16.37],["Будапешт",47.5,19.04],["Рим",41.9,12.5],["Афины",37.98,23.73],
+      ["Бухарест",44.43,26.1],["София",42.7,23.32],["Стокгольм",59.33,18.07],["Хельсинки",60.17,24.94],
+      ["Осло",59.91,10.75],["Копенгаген",55.68,12.57],["Дублин",53.35,-6.26],["Киев",50.45,30.52]
+    ];
+
+    let seed = 0x6e624eb7;
+    const random = () => ((seed = (Math.imul(seed,1664525) + 1013904223) >>> 0) / 4294967296);
+    const temperatureAt = (lat,lng) => {
+      let value = 31.5 - (lat - 38) * .58 + lng * .025;
+      for (const [hLat,hLng,power] of HOTSPOTS) {
+        const dx = (lng - hLng) * Math.cos(lat * Math.PI / 180);
+        const dy = lat - hLat;
+        value += power * Math.exp(-(dx * dx + dy * dy) / 7.5);
+      }
+      value += Math.sin(lat * 1.7 + lng * .43) * .7;
+      return Math.max(4, Math.min(41, value));
+    };
+    const projectMercator = (lat,lng) => {
+      const x = (lng + 180) / 360;
+      const sin = Math.sin(Math.max(-85.05112878,Math.min(85.05112878,lat))*Math.PI/180);
+      return [x,.5-Math.log((1+sin)/(1-sin))/(4*Math.PI)];
+    };
+
+    const stations = [];
+    for (const [south,north,west,east,rows,cols,region] of REGIONS) {
+      for (let row=0; row<rows; row++) for (let col=0; col<cols; col++) {
+        const lat = south + (north-south) * (row+.5)/rows + (random()-.5)*.35;
+        const lng = west + (east-west) * (col+.5)/cols + (random()-.5)*.45;
+        const temp = temperatureAt(lat,lng) + (random()-.5)*1.4;
+        stations.push({ name:`${region} · ${String(row*cols+col+1).padStart(2,"0")}`, lat, lng, temp });
+      }
+    }
+    for (const [name,lat,lng] of CITY_STATIONS) stations.push({ name,lat,lng,temp:temperatureAt(lat,lng)+.6 });
+
+    const map = createMap("map", { ...EUROPE_VIEW, controls:true, locale:"ru" });
+    tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution:"© OpenStreetMap contributors", maxZoom:19
+    }).addTo(map);
+
+    // A million permanent captions would be unreadable and expensive. Keep a
+    // collision-managed set of reference labels while every GPU point remains
+    // individually pickable.
+    const stationLabels=textLayer(CITY_STATIONS.map(([name,lat,lng]) => ({
+      type:"Feature",
+      properties:{ name, temperature:temperatureAt(lat,lng) },
+      geometry:{ type:"Point", coordinates:[lng,lat] }
+    })),{
+      text:(feature) => `${feature.properties.name} · ${feature.properties.temperature.toFixed(1)} °C`,
+      priority:(feature) => HOTSPOTS.some(([lat,lng]) =>
+        Math.abs(lat-feature.geometry.coordinates[1])<.02 && Math.abs(lng-feature.geometry.coordinates[0])<.02
+      ) ? 10 : 1,
+      font:"700 11px system-ui", fill:"#10212c", halo:"rgba(255,255,255,.96)", haloWidth:3,
+      offset:[0,-9], collision:true, collisionPadding:7, maxLabels:CITY_STATIONS.length
+    });
+
+    const SOURCE_COUNT = 1_000_000;
+    async function buildMillionObservations() {
+      const latlng = new Float32Array(SOURCE_COUNT*2);
+      const mercator = new Float64Array(SOURCE_COUNT*2);
+      const weights = new Float32Array(SOURCE_COUNT);
+      const temperatures = new Float32Array(SOURCE_COUNT);
+      const status = document.getElementById("status");
+      for (let i=0; i<SOURCE_COUNT; i++) {
+        const station = stations[i%stations.length];
+        const lat = station.lat + (random()+random()+random()-1.5)*.55;
+        const lng = station.lng + (random()+random()+random()-1.5)*.8/Math.max(.35,Math.cos(lat*Math.PI/180));
+        const [mx,my] = projectMercator(lat,lng);
+        latlng[i*2]=lat; latlng[i*2+1]=lng;
+        mercator[i*2]=mx; mercator[i*2+1]=my;
+        const observed = temperatureAt(lat,lng)+(random()-.5)*1.8;
+        temperatures[i]=observed;
+        weights[i]=Math.max(.04,Math.min(1,(observed-3)/38));
+        if (i>0 && i%50_000===0) {
+          status.textContent=`Подготовка ${Math.round(i/SOURCE_COUNT*100)}%…`;
+          await new Promise(requestAnimationFrame);
+        }
+      }
+      return { latlng,mercator,weights,temperatures };
+    }
+
+    const surface = heatLayer([], {
+      mode:"both", backend:"auto", evaluation:"static",
+      labels:true, step:"auto", bands:true,
+      cover:true, domainOpacity:.09, radius:46, blur:34, scaleZoom:4,
+      levels:7, opacity:.68, minOpacity:.025, isolineWidth:1.7,
+      interactive:true, hitTolerance:7, hoverHighlight:true, selectOnClick:true,
+      highlightColor:"#22d3ee", selectionColor:"#f59e0b", highlightWidth:4,
+      gradient:{ 0:"rgba(23,70,209,0)", .24:"#1746d1", .43:"#00b8ff", .58:"#24d36b", .73:"#ffe63b", .87:"#ff8c19", 1:"#e31a1c" },
+      isolineLabelFormat:(ring) => `${Math.round(5 + ring.t * 35)} °C`,
+      isolineLabelColor:"#10212c"
+    });
+
+    const heatTemperature=(value) => {
+      const normalizer=Math.max(surface.options.referenceMax??surface.getStats().peak,1e-12);
+      return 5+Math.max(0,Math.min(1,value/normalizer))*35;
+    };
+    const heatFeatureText=(feature) => {
+      if(!feature) return "";
+      if(feature.kind==="line") return `Изолиния · ${heatTemperature(feature.value).toFixed(1)} °C`;
+      const low=heatTemperature(feature.lowerValue).toFixed(1);
+      const high=feature.upperValue==null ? "выше" : `${heatTemperature(feature.upperValue).toFixed(1)} °C`;
+      return `Зона ${low} °C — ${high} · оценка ${heatTemperature(feature.fieldValue).toFixed(1)} °C`;
+    };
+    const heatOverlay=(context,compact=false) => {
+      const feature=context.data;
+      const node=document.createElement("div"); node.className="station-popup";
+      const title=document.createElement("strong"); title.textContent=feature?.kind==="line" ? "Изолиния" : "Температурная зона";
+      const value=document.createElement("div"); value.className="temp"; value.textContent=`${heatTemperature(feature?.kind==="line"?feature.value:feature?.fieldValue??0).toFixed(1)} °C`;
+      node.append(title,value);
+      if(!compact){
+        const details=document.createElement("small"); details.textContent=heatFeatureText(feature);
+        const hint=document.createElement("small"); hint.textContent="Объект выбран; геометрия и метаданны доступны в event.feature.";
+        node.append(details,hint);
+      }
+      return node;
+    };
+    surface.bindTooltip((context) => heatOverlay(context,true),{ direction:"top",opacity:.96 });
+    surface.bindPopup((context) => heatOverlay(context,false),{ maxWidth:320,autoPan:false });
+    surface.on("hover",(event) => {
+      document.getElementById("inspect").textContent=event.feature ? heatFeatureText(event.feature) : "Наведите на изолинию или зону; щелчок зафиксирует выбор.";
+    });
+    surface.on("select",(event) => {
+      const button=document.getElementById("clear-selection"); button.classList.add("active");
+      document.getElementById("inspect").textContent=`Выбрано: ${heatFeatureText(event.feature)}`;
+    });
+    surface.on("unselect",() => document.getElementById("clear-selection").classList.remove("active"));
+
+    const PALETTES={
+      thermal:{ 0:"rgba(23,70,209,0)", .24:"#1746d1", .43:"#00b8ff", .58:"#24d36b", .73:"#ffe63b", .87:"#ff8c19", 1:"#e31a1c" },
+      viridis:{ 0:"rgba(68,1,84,0)", .18:"#482878", .38:"#31688e", .58:"#1f9e89", .78:"#6ece58", 1:"#fde725" },
+      diverging:{ 0:"rgba(49,54,149,0)", .2:"#3288bd", .4:"#99d594", .5:"#ffffbf", .65:"#fee08b", .82:"#f46d43", 1:"#9e0142" },
+      gray:{ 0:"rgba(15,23,42,0)", .25:"#475569", .5:"#94a3b8", .75:"#e2e8f0", 1:"#ffffff" }
+    };
+    const CONTROL_SECTIONS=[
+      { title:"Вычисление", selects:[
+        ["backend","Бэкенд",[["auto","Auto"],["wasm","WASM"],["webgpu","WebGPU"]],"auto"],
+        ["evaluation","Поле",[["static","Статичное"],["zoom","Пересчёт при zoom"]],"static"],
+        ["palette","Палитра",[["thermal","Тепловая"],["viridis","Viridis"],["diverging","Контрастная"],["gray","Серая"]],"thermal"]
+      ], switches:[
+        ["worker","Вычислять в Worker",true],
+        ["adaptive","Адаптивные уровни",true], ["bands","Заливка зон",true],
+        ["coverDomain","Окрашивать 0-зону",true], ["autoStep","Автошаг",true]
+      ], ranges:[
+        ["cols","Столбцы grid",96,1024,16,512,"int"], ["rows","Строки grid",72,768,12,384,"int"],
+        ["webgpuThreshold","WebGPU от",10000,1000000,10000,100000,"compact"], ["scaleZoom","Scale zoom",1,12,.25,4,"fixed1"],
+        ["domainPadding","Поля домена",0,20,.5,3.5,"percent"], ["viewportPad","Запас viewport",0,50,1,12,"percent"]
+      ]},
+      { title:"Тепловая поверхность", ranges:[
+        ["radius","Радиус",4,140,1,46,"px"], ["blur","Размытие",0,100,1,34,"px"],
+        ["opacity","Макс. opacity",0,100,1,68,"percent","render"], ["minOpacity","Мин. opacity",0,40,1,2.5,"percent","render"],
+        ["domainOpacity","Opacity 0-зоны",0,40,1,9,"percent","render"], ["referenceMax","Нормализация peak",40,200,5,100,"percent"]
+      ], switches:[["fixedMax","Фиксировать peak",false]]},
+      { title:"Изолинии", ranges:[
+        ["levels","Количество уровней",2,32,1,7,"int"], ["step","Шаг от peak",1,40,.5,10,"percent"],
+        ["maxLevels","Лимит уровней",3,64,1,32,"int"], ["lineWidth","Толщина линий",.5,8,.1,1.7,"px","render"],
+        ["lineOpacity","Opacity линий",0,100,1,90,"percent","render"], ["labelVertices","Мин. вершин подписи",2,100,1,3,"int","render"],
+        ["quantileLow","Отсечь снизу",0,30,1,2,"percent"], ["quantileHigh","Отсечь сверху",70,100,1,98,"percent"],
+        ["candidates","Кандидатов ×N",5,20,1,10,"fixed1"], ["coverageRadius","Радиус покрытия",0,6,1,1,"cells"],
+        ["minCells","Мин. ячеек",1,200,1,4,"int"], ["minLength","Мин. длина",0,200,1,0,"cells"],
+        ["minArea","Мин. площадь",0,300,1,0,"cells2"]
+      ]},
+      { title:"Веса адаптивного выбора", ranges:[
+        ["coverageWeight","Покрытие",0,3,.05,1,"fixed2"], ["rangeWeight","Диапазон",0,2,.02,.18,"fixed2"],
+        ["redundancyWeight","Штраф overlap",0,2,.02,.22,"fixed2"], ["fragmentWeight","Штраф фрагментов",0,2,.02,.08,"fixed2"]
+      ]}
+    ];
+    const formatControl=(kind,value) => kind==="int" ? Math.round(value).toLocaleString("ru-RU")
+      : kind==="compact" ? Math.round(value).toLocaleString("ru-RU")
+      : kind==="percent" ? `${Number(value).toFixed(value%1?1:0)}%`
+      : kind==="px" ? `${Number(value).toFixed(value%1?1:0)} px`
+      : kind==="cells" ? `${Math.round(value)} cell`
+      : kind==="cells2" ? `${Math.round(value)} cell²`
+      : kind==="fixed2" ? Number(value).toFixed(2) : Number(value).toFixed(1);
+    function buildAdvancedControls(){
+      const host=document.getElementById("advanced-controls"); host.replaceChildren();
+      for(const section of CONTROL_SECTIONS){
+        const root=document.createElement("section"); root.className="control-section";
+        const title=document.createElement("div"); title.className="control-title"; title.textContent=section.title; root.append(title);
+        if(section.selects?.length){
+          const grid=document.createElement("div"); grid.className="select-grid";
+          for(const [id,label,choices,value] of section.selects){
+            const wrap=document.createElement("label"); wrap.className="select-control"; wrap.textContent=label;
+            const select=document.createElement("select"); select.id=id; select.dataset.default=value;
+            for(const [optionValue,text] of choices){ const option=new Option(text,optionValue,undefined,optionValue===value); select.add(option); }
+            wrap.append(select); grid.append(wrap);
+          } root.append(grid);
+        }
+        if(section.switches?.length){
+          const grid=document.createElement("div"); grid.className="switch-grid";
+          for(const [id,label,checked] of section.switches){
+            const wrap=document.createElement("label"); const input=document.createElement("input"); input.type="checkbox"; input.id=id; input.checked=checked; input.dataset.default=String(checked);
+            wrap.append(input,document.createTextNode(label)); grid.append(wrap);
+          } root.append(grid);
+        }
+        for(const [id,label,min,max,step,value,format,mode] of section.ranges??[]){
+          const wrap=document.createElement("label"); wrap.className="slider"; wrap.dataset.mode=mode??"compute";
+          const caption=document.createElement("span"); caption.textContent=label;
+          const input=document.createElement("input"); Object.assign(input,{type:"range",id,min:String(min),max:String(max),step:String(step),value:String(value)}); input.dataset.default=String(value); input.dataset.format=format;
+          const output=document.createElement("output"); output.htmlFor=id; output.textContent=formatControl(format,Number(value));
+          wrap.append(caption,input,output); root.append(wrap);
+        }
+        host.append(root);
+      }
+    }
+    buildAdvancedControls();
+
+    let observationLayer = null;
+    let revision = 0;
+    let fixedReferencePeak = null;
+    let appliedPalette = "thermal";
+    const controlNumber=(id) => Number(document.getElementById(id).value);
+    const controlChecked=(id) => document.getElementById(id).checked;
+    function applyRenderControls(){
+      surface.options.opacity=controlNumber("opacity")/100;
+      surface.options.minOpacity=controlNumber("minOpacity")/100;
+      surface.options.domainOpacity=controlNumber("domainOpacity")/100;
+      surface.options.isolineWidth=controlNumber("lineWidth");
+      surface.options.isolineOpacity=controlNumber("lineOpacity")/100;
+      surface.options.isolineLabelMinVertices=Math.round(controlNumber("labelVertices"));
+      surface.options.bands=controlChecked("bands");
+      surface.options.cover=controlChecked("coverDomain");
+      const palette=document.getElementById("palette").value;
+      if(palette!==appliedPalette){ appliedPalette=palette; surface.setGradient(PALETTES[palette]); }
+      else surface.render();
+    }
+    function applyComputeControls(){
+      applyRenderControls();
+      surface.options.backend=document.getElementById("backend").value;
+      surface.options.evaluation=document.getElementById("evaluation").value;
+      surface.options.worker=controlChecked("worker");
+      surface.options.adaptiveLevels=controlChecked("adaptive");
+      surface.options.cols=Math.round(controlNumber("cols"));
+      surface.options.rows=Math.round(controlNumber("rows"));
+      surface.options.webgpuThreshold=Math.round(controlNumber("webgpuThreshold"));
+      surface.options.scaleZoom=controlNumber("scaleZoom");
+      surface.options.domainPadding=controlNumber("domainPadding")/100;
+      surface.options.pad=controlNumber("viewportPad")/100;
+      surface.options.radius=controlNumber("radius");
+      surface.options.blur=controlNumber("blur");
+      surface.options.levels=Math.round(controlNumber("levels"));
+      surface.options.maxIsolineLevels=Math.round(controlNumber("maxLevels"));
+      const currentPeak=surface.getStats().peak||1;
+      surface.options.step=controlChecked("autoStep") ? "auto" : currentPeak*controlNumber("step")/100;
+      if(controlChecked("fixedMax")){
+        fixedReferencePeak??=currentPeak;
+        surface.options.referenceMax=fixedReferencePeak*controlNumber("referenceMax")/100;
+      }else{
+        fixedReferencePeak=null;
+        surface.options.referenceMax=undefined;
+      }
+      const low=Math.min(99,controlNumber("quantileLow"));
+      const high=Math.max(low+1,controlNumber("quantileHigh"));
+      surface.options.outlierQuantiles=[low/100,Math.min(1,high/100)];
+      surface.options.candidateMultiplier=Math.round(controlNumber("candidates"));
+      surface.options.coverageRadius=Math.round(controlNumber("coverageRadius"));
+      surface.options.minCandidateCells=Math.round(controlNumber("minCells"));
+      surface.options.minIsolineLength=controlNumber("minLength");
+      surface.options.minIsolineArea=controlNumber("minArea");
+      surface.options.coverageWeight=controlNumber("coverageWeight");
+      surface.options.rangeWeight=controlNumber("rangeWeight");
+      surface.options.redundancyWeight=controlNumber("redundancyWeight");
+      surface.options.fragmentWeight=controlNumber("fragmentWeight");
+    }
+    function statusText(stats){
+      const pointStats=observationLayer?.getStats();
+      const coverage=stats.levelSelection;
+      const quality=coverage ? ` · C ${(coverage.coverage*100).toFixed(0)}% / ${(coverage.uniformCoverage*100).toFixed(0)}%` : "";
+      const timing=Number.isFinite(stats.totalMs) ? ` · ${stats.totalMs.toFixed(0)} ms` : "";
+      const worker=stats.worker ? " worker" : "";
+      return `1M · pick ${(pointStats?.pickIndex??0).toLocaleString("ru-RU")} · ${stats.cols}×${stats.rows} · ${stats.rings} lines · ${stats.backend.toUpperCase()}${worker}${timing}${quality}`;
+    }
+    async function rebuild() {
+      const current = ++revision;
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      document.getElementById("status").textContent = "Расчёт поля…";
+      applyComputeControls();
+      surface.options.mode=mode;
+      surface.setLabels(document.getElementById("labels").checked);
+      await surface.rebuildAsync();
+      if (current !== revision) return;
+      document.getElementById("status").textContent = statusText(surface.getStats());
+    }
+
+    document.getElementById("modes").addEventListener("change", rebuild);
+    document.getElementById("labels").addEventListener("change", rebuild);
+    document.getElementById("reset").addEventListener("click", () => map.setView(EUROPE_VIEW.center,EUROPE_VIEW.zoom));
+    document.getElementById("clear-selection").addEventListener("click",() => {
+      surface.clearSelection(); surface.closePopup();
+      document.getElementById("inspect").textContent="Выбор снят. Наведите на изолинию или зону.";
+    });
+    const advancedControls=document.getElementById("advanced-controls");
+    advancedControls.addEventListener("input",(event) => {
+      const input=event.target;
+      if(input.matches('input[type="range"]')) input.nextElementSibling.textContent=formatControl(input.dataset.format,Number(input.value));
+      if(input.closest(".slider")?.dataset.mode==="render") applyRenderControls();
+    });
+    advancedControls.addEventListener("change",() => { void rebuild(); });
+    document.getElementById("rebuild-now").addEventListener("click",() => { void rebuild(); });
+    document.getElementById("defaults").addEventListener("click",() => {
+      for(const input of advancedControls.querySelectorAll("[data-default]")){
+        if(input.type==="checkbox") input.checked=input.dataset.default==="true";
+        else input.value=input.dataset.default;
+        if(input.type==="range") input.nextElementSibling.textContent=formatControl(input.dataset.format,Number(input.value));
+      }
+      fixedReferencePeak=null; void rebuild();
+    });
+    let observations = await buildMillionObservations();
+    surface.setPackedMercator(observations.mercator,SOURCE_COUNT,observations.weights);
+    const temperatures=observations.temperatures;
+    observationLayer=webglPointLayer([], {
+      pointSize:2.6, color:"#10212c", opacity:.82, maxDpr:1.5,
+      interactive:false, hitTolerance:7, cull:true
+    });
+    observationLayer.setPackedData(observations.latlng,observations.mercator,{ adopt:true });
+    observationLayer.bindPopup((context) => {
+      const index=Number(context.event?.index);
+      if (!Number.isInteger(index) || index<0 || index>=SOURCE_COUNT) return "Точка не найдена";
+      const points=observationLayer.getLatLngBuf();
+      const lat=points[index*2], lng=points[index*2+1];
+      const node=document.createElement("div"); node.className="station-popup";
+      const title=document.createElement("strong"); title.textContent=`Наблюдение #${(index+1).toLocaleString("ru-RU")}`;
+      const temp=document.createElement("div"); temp.className="temp"; temp.textContent=`${temperatures[index].toFixed(1)} °C`;
+      const coords=document.createElement("small");
+      coords.textContent=`${lat.toFixed(3)}°, ${lng.toFixed(3)}° · район: ${stations[index%stations.length].name}`;
+      node.append(title,temp,coords); return node;
+    },{ maxWidth:280, autoPan:false });
+    observations = null;
+    document.getElementById("status").textContent="Расчёт поля…";
+    applyComputeControls();
+    await new Promise((resolve) => { surface.once("rebuild",resolve); surface.addTo(map); });
+    observationLayer.addTo(map);
+    stationLabels.addTo(map);
+    document.getElementById("stations").addEventListener("change", (event) => {
+      const visible=event.target.checked;
+      // remove() is destructive for a mass WebGL layer: it deliberately frees
+      // the adopted million-point buffers. setHidden() preserves them so the
+      // same layer can be shown again without rebuilding the dataset.
+      observationLayer.setHidden(!visible);
+      if (visible) {
+        if (!stationLabels.map) stationLabels.addTo(map);
+      } else {
+        stationLabels.remove();
+      }
+    });
+    document.getElementById("status").textContent=statusText(surface.getStats());
+  </script>
+</body>
+</html>

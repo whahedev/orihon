@@ -42,8 +42,17 @@ export interface ObjectGradientStop {
 }
 
 export interface ObjectLineStyle {
+  /** Canonical line color, matching PathOptions. */
+  stroke?: string;
+  /** Canonical line opacity, matching PathOptions. */
+  strokeOpacity?: number;
+  /** Canonical line width in CSS pixels, matching PathOptions. */
+  strokeWidth?: number;
+  /** @deprecated Compatibility alias for `stroke`. */
   color?: string;
+  /** @deprecated Compatibility alias for `strokeOpacity`. */
   opacity?: number;
+  /** @deprecated Compatibility alias for `strokeWidth`. */
   width?: number;
   dashArray?: readonly number[];
   dashOffset?: number;
@@ -61,11 +70,17 @@ export interface ObjectPolygonStyle {
 export type ObjectCollisionMode = "auto" | "always" | "hide";
 
 export interface ObjectStyle {
+  /** Canonical point fill color. Takes precedence over `color`. */
+  fill?: string;
+  /** Canonical point fill opacity from 0 to 1. Takes precedence over `opacity`. */
+  fillOpacity?: number;
+  /** Compatibility alias for `fill`. */
   color?: string;
+  /** Compatibility alias for `fillOpacity`. */
   opacity?: number;
   size?: number;
   icon?: string | null;
-  /** Explicit icon tint; when omitted, `color` is used for tintable icons. */
+  /** Explicit icon tint; when omitted, `fill` (or legacy `color`) is used for tintable icons. */
   iconTint?: string;
   /** Degrees: 0 up, 90 right, 180 down, 270 left. */
   rotation?: number;

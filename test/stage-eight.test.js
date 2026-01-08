@@ -7,34 +7,23 @@ import {
   PerformanceInspector,
   VectorTileLayer,
   WebGLPointLayer,
-  HeatLayer,
-  WebGLHeatLayer,
   MarkerCollection,
   buildClusterIndex,
-  buildHeatIsolines,
   createMVTProvider,
   createMapAdapter,
   decodeMVT,
-  decodePackedMVT,
-  packedToGeoJSON,
   defineOrihonElement,
   geometryWorkerPool,
-  heatIsolineLayer,
-  heatLayer,
-  heatKernelAtZoom,
-  heatRadiusScale,
-  heatIntensityScale,
-  markerCollection,
+  objectManager,
   offlineTileCache,
   performanceInspector,
   preparePointBatch,
   queryClusterLayout,
   vectorTileLayer,
-  webglHeatLayer,
   webglPointLayer
 } from "../dist/index.js";
+import { decodePackedMVT, packedToGeoJSON } from "orihon/mvt";
 import { prefetchUrlAllowed } from "../dist/services/offline-cache.js";
-import { heatWarpNeedsGpu, valueHeatTone } from "../dist/services/heat-scale.js";
 
 class FakeClassList {
   values = new Set();
@@ -131,410 +120,6 @@ globalThis.requestAnimationFrame = (callback) => {
 };
 globalThis.cancelAnimationFrame = () => {};
 
-test("HeatLayer stores weighted points and attaches a canvas overlay", () => {
-  class FakeMap extends Evented {
-    zoom = 12;
-    panes = { overlay: new FakeElement() };
-    layers = new Set();
-    getZoom() { return this.zoom; }
-    getSize() { return { x: 800, y: 600 }; }
-    getPane(name) { return this.panes[name] ?? null; }
-    latLngToContainerPoint([lat, lng]) {
-      return { x: (lng + 180) * 2, y: (90 - lat) * 2 };
-    }
-    addLayer(layer) {
-      this.layers.add(layer);
-      layer.onAdd(this);
-      layer.render();
-    }
-    removeLayer(layer) {
-      if (!this.layers.delete(layer)) return;
-      layer.onRemove();
-    }
-  }
-
-  const layer = heatLayer([
-    [52.52, 13.405, 0.8],
-    [52.53, 13.41],
-    { lat: 52.515, lng: 13.39 }
-  ], { radius: 28, blur: 18, scaleZoom: 12 });
-
-  assert.ok(layer instanceof HeatLayer);
-  assert.equal(layer.options.radius, 28);
-  layer.addLatLng([52.51, 13.38, 1]);
-  layer.setLatLngs([[52.52, 13.405, 1]]);
-
-  const map = new FakeMap();
-  layer.addTo(map);
-  assert.equal(map.panes.overlay.children.length, 1);
-  assert.equal(map.panes.overlay.children[0].className, "oh-heat-layer");
-  layer.remove();
-  assert.equal(map.panes.overlay.children.length, 0);
-});
-
-test("heat kernel scale encodes density, not screen overlap", () => {
-  assert.equal(heatRadiusScale(12, 12), 1);
-  assert.equal(heatIntensityScale(12, 12), 1);
-  assert.equal(heatRadiusScale(10, 12), 0.25);
-  assert.equal(heatRadiusScale(14, 12), 4);
-  // Geographic kernel: intensity stays 1 (area and radius shrink/grow together).
-  assert.equal(heatIntensityScale(10, 12, 0.25), 1);
-  assert.equal(heatIntensityScale(14, 12, 4), 1);
-  // Constant pixel radius: dim on zoom-out, boost on zoom-in so density is stable.
-  assert.equal(heatIntensityScale(10, 12, 1), 0.0625);
-  assert.equal(heatIntensityScale(14, 12, 1), 16);
-  const clamped = heatKernelAtZoom(10, 12, 20, { minRadiusCss: 10 });
-  assert.equal(clamped.geographicScale, 0.25);
-  assert.equal(clamped.radiusCss, 10);
-  assert.equal(clamped.radiusScale, 0.5);
-  assert.equal(clamped.intensityScale, 0.25);
-  const native = heatKernelAtZoom(12, 12, 28, { minRadiusCss: 4 });
-  assert.equal(native.radiusScale, 1);
-  assert.equal(native.intensityScale, 1);
-  const far = heatKernelAtZoom(4, 12, 28, { minRadiusCss: 4 });
-  assert.ok(far.intensityScale < 0.02, `far zoom must dim, got ${far.intensityScale}`);
-  assert.ok(far.radiusCss <= 4.01);
-  const close = heatKernelAtZoom(14, 12, 20, { maxRadiusCss: 40 });
-  assert.equal(close.geographicScale, 4);
-  assert.equal(close.radiusCss, 40);
-  assert.equal(close.intensityScale, 4);
-});
-
-test("value heatmap kernel stays a local halo on the sensor", () => {
-  const base = 20 + 16 * 0.5;
-  const overview = heatKernelAtZoom(6, 6, base, { minRadiusCss: 24, maxRadiusCss: 48 });
-  assert.equal(overview.radiusCss, 28);
-  const close = heatKernelAtZoom(10, 6, base, { minRadiusCss: 24, maxRadiusCss: 48 });
-  assert.equal(close.radiusCss, 48);
-  assert.ok(close.radiusCss < base * 2 ** (10 - 6), "must not grow into a country-sized average");
-  const far = heatKernelAtZoom(3, 6, base, { minRadiusCss: 24, maxRadiusCss: 48 });
-  assert.equal(far.radiusCss, 24);
-});
-
-test("value heatmap keeps every sensor instead of one tile per city", () => {
-  const points = [];
-  for (let i = 0; i < 800; i++) {
-    const row = i % 40;
-    const col = Math.floor(i / 40);
-    points.push([48 + row * 0.08, 11 + col * 0.1, 0.35 + (i % 5) * 0.12]);
-  }
-  const layer = webglHeatLayer(points, {
-    field: "value",
-    max: 1,
-    radius: 20,
-    blur: 16,
-    scaleZoom: 6,
-    minRadius: 24,
-    maxRadius: 48,
-    aggregate: true,
-    aggregateCellFactor: 0.22
-  });
-  layer.prepare(5);
-  const overview = layer.getStats();
-  assert.equal(overview.points, 800);
-  assert.equal(overview.aggregated, 800, `value field collapsed to ${overview.aggregated} city tiles`);
-});
-
-test("heat warp rebuilds on zoom-out so newly revealed world is not empty", () => {
-  assert.equal(heatWarpNeedsGpu(0.5, 0, 0, 80), true);
-  assert.equal(heatWarpNeedsGpu(0.8, 10, 10, 80), true);
-  // Zoom-in must rebuild too — CSS scale turns soft edges into aureoles.
-  assert.equal(heatWarpNeedsGpu(1.2, 0, 0, 80), true);
-  assert.equal(heatWarpNeedsGpu(1.05, 0, 0, 80), false);
-  assert.equal(heatWarpNeedsGpu(1, 12, 8, 80), false);
-  assert.equal(heatWarpNeedsGpu(1, 120, 0, 80), true);
-  // Value fields may CSS-warp across ±1 zoom so paused temps do not reshuffle.
-  assert.equal(heatWarpNeedsGpu(0.5, 0, 0, 80, { zoomLevels: 1 }), false);
-  assert.equal(heatWarpNeedsGpu(2, 0, 0, 80, { zoomLevels: 1 }), false);
-  assert.equal(heatWarpNeedsGpu(0.25, 0, 0, 80, { zoomLevels: 1 }), true);
-});
-
-test("value heat tone balances mean and peak by alarm share", () => {
-  const mean = 0.32;
-  const peak = 0.9;
-  assert.ok(valueHeatTone(mean, peak, 0.02) < 0.4, "2% alarms stay cool/green");
-  assert.ok(valueHeatTone(mean, peak, 0.2) > 0.55, "20% alarms pull toward peak/red");
-  assert.ok(
-    valueHeatTone(mean, peak, 0.1) > valueHeatTone(mean, peak, 0.02),
-    "more alarms must raise the tone"
-  );
-  assert.ok(
-    valueHeatTone(mean, peak, 0.2) < peak,
-    "blend must not snap fully to peak (zoom-stable)"
-  );
-});
-
-test("ObjectManager heatmap kernel stays visible at overview zoom", () => {
-  // Live demo is zoom 5; heatmap mode is the low-zoom view.
-  const overview = heatKernelAtZoom(5, 6, 22 + 14 * 0.5, { minRadiusCss: 4, maxRadiusCss: 64 });
-  assert.ok(overview.radiusCss >= 4, `kernel ${overview.radiusCss}px`);
-  assert.ok(overview.intensityScale >= 0.5, `intensity ${overview.intensityScale}`);
-  const zoomedOut = heatKernelAtZoom(3, 6, 22 + 14 * 0.5, { minRadiusCss: 4, maxRadiusCss: 64 });
-  const zoomedIn = heatKernelAtZoom(8, 6, 22 + 14 * 0.5, { minRadiusCss: 4, maxRadiusCss: 64 });
-  // World-area compensation: zoom-out must not raise density vs overview.
-  const outNet = zoomedOut.intensityScale * zoomedOut.radiusCss ** 2 * 4 ** -(3 - 6);
-  const midNet = overview.intensityScale * overview.radiusCss ** 2 * 4 ** -(5 - 6);
-  const inNet = zoomedIn.intensityScale * zoomedIn.radiusCss ** 2 * 4 ** -(8 - 6);
-  assert.ok(Math.abs(outNet - midNet) / midNet < 0.05, `zoom-out density ${outNet} vs ${midNet}`);
-  assert.ok(Math.abs(inNet - midNet) / midNet < 0.05, `zoom-in density ${inNet} vs ${midNet}`);
-});
-
-test("heat camera warp keeps mercator points glued to the map", () => {
-  const TILE = 256;
-  const merc = 0.42;
-  const paintedZoom = 5;
-  const paintedOx = 120;
-  const paintedOy = 340;
-  const zoom = 6.25;
-  const ox = 410;
-  const oy = 880;
-  const paintedPx = merc * TILE * 2 ** paintedZoom - paintedOx;
-  const s = 2 ** (zoom - paintedZoom);
-  const tx = paintedOx * s - ox;
-  const warpedPx = paintedPx * s + tx;
-  const expected = merc * TILE * 2 ** zoom - ox;
-  assert.ok(Math.abs(warpedPx - expected) < 1e-6, `${warpedPx} vs ${expected}`);
-});
-
-test("heat overscan warp stays glued when canvas is padded", () => {
-  const TILE = 256;
-  const merc = 0.42;
-  const pad = 160;
-  const paintedZoom = 5;
-  const ox0 = 120;
-  const oy0 = 340;
-  const zoom = 7;
-  const ox1 = 890;
-  const oy1 = 1400;
-  const drawOx0 = ox0 - pad;
-  const drawOy0 = oy0 - pad;
-  const s = 2 ** (zoom - paintedZoom);
-  const tx = drawOx0 * s - (ox1 - pad);
-  const ty = drawOy0 * s - (oy1 - pad);
-  const paintedCx = merc * TILE * 2 ** paintedZoom - drawOx0;
-  const screenX = -pad + paintedCx * s + tx;
-  const screenY = -pad + (merc * TILE * 2 ** paintedZoom - drawOy0) * s + ty;
-  const expectedX = merc * TILE * 2 ** zoom - ox1;
-  const expectedY = merc * TILE * 2 ** zoom - oy1;
-  assert.ok(Math.abs(screenX - expectedX) < 1e-6, `x ${screenX} vs ${expectedX}`);
-  assert.ok(Math.abs(screenY - expectedY) < 1e-6, `y ${screenY} vs ${expectedY}`);
-});
-
-test("WebGLHeatLayer packed weights stay on the value channel", () => {
-  const layer = webglHeatLayer([], { field: "value", max: 1 });
-  const merc = new Float64Array([0.4, 0.5, 0.41, 0.51]);
-  layer.setPackedMercator(merc, 2, [0.25, 0.8]);
-  assert.equal(layer.count, 2);
-  assert.ok(Math.abs(layer.data[2] - 0.25) < 1e-6);
-  assert.ok(Math.abs(layer.data[5] - 0.8) < 1e-6);
-});
-
-test("WebGLHeatLayer packed zero weights stay zero and are dropped", () => {
-  const layer = webglHeatLayer([], { field: "value", max: 1 });
-  const merc = new Float64Array([0.4, 0.5, 0.41, 0.51, 0.42, 0.52]);
-  // Regression: `Number(w) || 1` turned cool sensors into full heat.
-  layer.setPackedMercator(merc, 3, [0, 0.7, 0]);
-  assert.equal(layer.count, 1);
-  assert.ok(Math.abs(layer.data[0] - 0.41) < 1e-6);
-  assert.ok(Math.abs(layer.data[1] - 0.51) < 1e-6);
-  assert.ok(Math.abs(layer.data[2] - 0.7) < 1e-6);
-});
-
-test("WebGLHeatLayer packs mercator+weight and exposes count", () => {
-  const layer = webglHeatLayer([
-    [52.52, 13.405, 0.8],
-    { lat: 52.53, lng: 13.41 },
-    [Number.NaN, 1]
-  ], { radius: 20 });
-  assert.ok(layer instanceof WebGLHeatLayer);
-  assert.equal(layer.count, 2);
-  assert.equal(layer.data.length, 6);
-  assert.ok(layer.data[2] > 0.7 && layer.data[2] < 0.9);
-  layer.setData([[50, 10, 1], [51, 11, 0.5]]);
-  assert.equal(layer.count, 2);
-  assert.equal(layer.getStats().points, 2);
-  layer.clear();
-  assert.equal(layer.count, 0);
-});
-
-test("WebGLHeatLayer setDataAsync packs chunks atomically", async () => {
-  const layer = webglHeatLayer([[0, 0, 1]]);
-  const progress = [];
-  await layer.setDataAsync([
-    [52.52, 13.405, 0.8],
-    [52.53, 13.41, 0.4],
-    [Number.NaN, 1, 1]
-  ], {
-    chunkSize: 2,
-    yieldMode: "task",
-    onProgress: (processed, total) => progress.push([processed, total])
-  });
-  assert.equal(layer.count, 2);
-  assert.equal(layer.data.length, 6);
-  assert.deepEqual(progress, [[2, 3], [3, 3]]);
-});
-
-test("WebGLHeatLayer and HeatIsolineLayer keep points across remove/add", () => {
-  class FakeMap extends Evented {
-    zoom = 10;
-    size = { width: 800, height: 600 };
-    pixelOrigin = { x: 0, y: 0 };
-    panes = { overlay: new FakeElement() };
-    layers = new Set();
-    getZoom() { return this.zoom; }
-    getSize() { return { x: 800, y: 600 }; }
-    getBounds() { return [[52.4, 13.3], [52.6, 13.5]]; }
-    getPane(name) { return this.panes[name] ?? null; }
-    latLngToContainerPoint([lat, lng]) {
-      return { x: (lng + 180) * 2, y: (90 - lat) * 2 };
-    }
-    addLayer(layer) {
-      this.layers.add(layer);
-      layer.onAdd(this);
-      return this;
-    }
-    removeLayer(layer) {
-      if (!this.layers.delete(layer)) return this;
-      layer.onRemove();
-      return this;
-    }
-    hasLayer(layer) { return this.layers.has(layer); }
-    addAttribution() { return this; }
-    removeAttribution() { return this; }
-  }
-
-  const map = new FakeMap();
-  const heat = webglHeatLayer([[52.52, 13.405, 1], [52.53, 13.41, 0.5]]);
-  heat.addTo(map);
-  assert.equal(heat.count, 2);
-  heat.remove();
-  assert.equal(heat.count, 2);
-  heat.addTo(map);
-  assert.equal(heat.count, 2);
-  assert.ok(map.hasLayer(heat));
-  heat.remove();
-
-  const isolines = heatIsolineLayer([[52.52, 13.405, 1], [52.53, 13.41, 0.5]], {
-    levels: 3,
-    dynamic: false,
-    labels: false
-  });
-  isolines.addTo(map);
-  assert.equal(isolines.count, 2);
-  isolines.remove();
-  assert.equal(isolines.count, 2);
-  isolines.addTo(map);
-  assert.equal(isolines.count, 2);
-  assert.ok(map.hasLayer(isolines));
-});
-
-test("WebGLHeatLayer aggregates dense points at low zoom", () => {
-  const points = [];
-  for (let i = 0; i < 200; i++) {
-    points.push([52.5 + (i % 10) * 0.0002, 13.4 + Math.floor(i / 10) * 0.0002, 1]);
-  }
-  const layer = webglHeatLayer(points, {
-    radius: 24,
-    blur: 15,
-    scaleZoom: 10,
-    aggregate: true,
-    aggregateCellFactor: 0.45
-  });
-  layer.prepare(5);
-  const low = layer.getStats();
-  assert.equal(low.points, 200);
-  assert.ok(low.aggregated < 150, `expected aggregation, got ${low.aggregated}`);
-
-  layer.prepare(16);
-  const high = layer.getStats();
-  assert.ok(high.aggregated >= low.aggregated, "higher zoom should keep more cells");
-  assert.ok(high.aggregated <= 200);
-});
-
-test("WebGLHeatLayer does not collapse a spread field into cluster cells", () => {
-  const points = [];
-  for (let i = 0; i < 800; i++) {
-    const row = i % 40;
-    const col = Math.floor(i / 40);
-    points.push([48 + row * 0.08, 11 + col * 0.1, 1]);
-  }
-  const layer = webglHeatLayer(points, {
-    radius: 22,
-    blur: 14,
-    scaleZoom: 6,
-    maxRadius: 64,
-    aggregate: true,
-    aggregateCellFactor: 0.22
-  });
-  layer.prepare(5);
-  const overview = layer.getStats();
-  assert.ok(overview.aggregated > 200, `overview cells ${overview.aggregated} look like clusters`);
-  layer.prepare(12);
-  const close = layer.getStats();
-  assert.ok(close.aggregated >= overview.aggregated, "close zoom must not merge more");
-  assert.ok(close.aggregated > 400, `close cells ${close.aggregated}`);
-});
-
-test("WebGLHeatLayer marks moving via map move then settles", async () => {
-  class FakeMap extends Evented {
-    zoom = 8;
-    size = { width: 800, height: 600 };
-    pixelOrigin = { x: 0, y: 0 };
-    panes = { overlay: new FakeElement() };
-    layers = new Set();
-    getZoom() { return this.zoom; }
-    getSize() { return { x: 800, y: 600 }; }
-    getPane(name) { return this.panes[name] ?? null; }
-    addLayer(layer) {
-      this.layers.add(layer);
-      layer.onAdd(this);
-      return this;
-    }
-    removeLayer(layer) {
-      if (!this.layers.delete(layer)) return this;
-      layer.onRemove();
-      return this;
-    }
-    addAttribution() { return this; }
-    removeAttribution() { return this; }
-  }
-
-  const map = new FakeMap();
-  const layer = webglHeatLayer([[52.5, 13.4]], { aggregate: false });
-  layer.addTo(map);
-  assert.equal(layer.getStats().moving, false);
-  map.emit("move", { center: [52.5, 13.4] });
-  assert.equal(layer.getStats().moving, true);
-  await new Promise((resolve) => setTimeout(resolve, 130));
-  assert.equal(layer.getStats().moving, false);
-  layer.remove();
-});
-
-test("buildHeatIsolines extracts rings from a dense cluster", () => {
-  const points = [];
-  for (let i = 0; i < 80; i++) {
-    const a = (i / 80) * Math.PI * 2;
-    points.push([50.1 + Math.cos(a) * 0.15, 14.4 + Math.sin(a) * 0.25, 1]);
-  }
-  for (let i = 0; i < 40; i++) points.push([50.1, 14.4, 1]);
-
-  const result = buildHeatIsolines(points, [[49.6, 13.6], [50.6, 15.2]], {
-    cols: 64,
-    rows: 48,
-    radius: 32,
-    blur: 12,
-    zoom: 7,
-    scaleZoom: 7,
-    levels: 4
-  });
-  assert.ok(result.peak > 0);
-  assert.ok(result.rings.length >= 2, `expected isoline rings, got ${result.rings.length}`);
-  for (const ring of result.rings) {
-    assert.ok(ring.coordinates.length >= 2);
-    assert.ok(ring.t > 0 && ring.t <= 1);
-  }
-});
-
 test("MarkerCollection auto picks webgl above threshold", () => {
   class FakeMap extends Evented {
     zoom = 10;
@@ -572,7 +157,7 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   const points = [];
   for (let i = 0; i < 30; i++) points.push([52.5 + i * 0.01, 13.4 + i * 0.01]);
 
-  const small = markerCollection(points, { renderer: "auto", webglThreshold: 100 });
+  const small = objectManager({ points, renderer: "auto", webglThreshold: 100 });
   assert.ok(small instanceof MarkerCollection);
   assert.equal(small.size, 30);
 
@@ -595,14 +180,14 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   assert.deepEqual(collectionPane.children, mounted, "viewport return reuses existing DOM nodes");
   small.remove();
 
-  const hybrid = markerCollection(points, { renderer: "hybrid", domLimit: 10 });
+  const hybrid = objectManager({ points, renderer: "hybrid", domLimit: 10 });
   hybrid.addTo(map);
   assert.equal(hybrid.renderer, "hybrid");
   assert.equal(map.panes.marker.children[0].children.length, 10, "hybrid caps live DOM markers");
   assert.equal(map.layers.size, 2, "hybrid owns one collection plus one WebGL remainder");
   hybrid.remove();
 
-  const svgDom = markerCollection(points, {
+  const svgDom = objectManager({ points,
     renderer: "svg",
     htmlButtonLimit: 5,
     marker: { interactive: true, keyboard: true, title: "Open object" }
@@ -634,12 +219,12 @@ test("MarkerCollection auto picks webgl above threshold", () => {
 
   const largePts = [];
   for (let i = 0; i < 120; i++) largePts.push([52 + (i % 10) * 0.1, 13 + Math.floor(i / 10) * 0.1]);
-  const large = markerCollection(largePts, { renderer: "auto", webglThreshold: 50 });
+  const large = objectManager({ points: largePts, renderer: "auto", webglThreshold: 50 });
   large.addTo(map);
   assert.equal(large.renderer, "webgl");
 
   // Icon LOD: high zoom forces DOM markers even above the WebGL threshold.
-  const lod = markerCollection(largePts, {
+  const lod = objectManager({ points: largePts,
     renderer: "auto",
     webglThreshold: 50,
     iconMinZoom: 14,
@@ -653,6 +238,23 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   assert.equal(lod.renderer, "dom");
   lod.remove();
   large.remove();
+});
+
+test("MarkerCollection points prefer fill vocabulary over color aliases", () => {
+  const collection = objectManager({
+    points: [[55.75, 37.61]],
+    renderer: "svg",
+    fill: "#2563eb",
+    fillOpacity: 0.4,
+    color: "#dc2626",
+    opacity: 0.9
+  });
+  assert.ok(collection instanceof MarkerCollection);
+  assert.equal(collection.options.fill, "#2563eb");
+  assert.equal(collection.options.color, "#2563eb");
+  assert.equal(collection.options.fillOpacity, 0.4);
+  assert.equal(collection.options.opacity, 0.4);
+  collection.remove();
 });
 
 test("WebGLPointLayer stores large point batches compactly", () => {

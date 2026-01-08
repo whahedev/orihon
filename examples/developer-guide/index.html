@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Локальное руководство разработчика по публичным функциям Orihon" />
+  <title>Все функции · Orihon Developer Guide</title>
+  <link rel="icon" href="/assets/brand/svg/orihon-favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/examples/developer-guide/assets/guide.css" />
+</head>
+<body class="guide-home" data-canonical-path="/examples/developer-guide/">
+  <header class="topbar">
+    <a class="brand" href="/examples/developer-guide/" aria-label="Orihon Developer Guide">
+      <img src="/assets/brand/svg/orihon-logo-horizontal.svg" alt="Orihon" />
+      <span>Developer Guide</span>
+    </a>
+    <button class="nav-toggle" type="button" data-nav-toggle aria-label="Открыть навигацию">☰</button>
+    <label class="search">
+      <span class="sr-only">Поиск функции</span>
+      <input data-api-search type="search" placeholder="Функция…  /" autocomplete="off" />
+      <kbd>/</kbd>
+    </label>
+    <span class="version">v1.0.6</span>
+  </header>
+  <aside class="sidebar" data-sidebar>
+    <div class="sidebar-intro"><a href="/examples/developer-guide/">Все функции</a><span>72 страниц</span></div>
+    <nav aria-label="Функции Orihon"><section class="nav-group" data-nav-group>
+      <h2>Карта и камера</h2>
+      <div class="nav-links"><a data-api-link data-search="createmap создаёт карту orihon внутри указанного html-контейнера и настраивает начальный центр, масштаб и элементы управления." href="/examples/developer-guide/functions/createMap/"><code>createMap</code></a><a data-api-link data-search="featuregroup объединяет несколько интерактивных слоёв: события, добавление на карту и вычисление общей области выполняются как для одного объекта." href="/examples/developer-guide/functions/featureGroup/"><code>featureGroup</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>Вычисления без отрисовки</h2>
+      <div class="nav-links"><a data-api-link data-search="bounds создаёт расширяемую географическую область по двум углам, массиву координат или существующему объекту границ." href="/examples/developer-guide/functions/bounds/"><code>bounds</code></a><a data-api-link data-search="buildheat строит scalar field и, при необходимости, изолинии без создания слоя карты." href="/examples/developer-guide/functions/buildHeat/"><code>buildHeat</code></a><a data-api-link data-search="clamplat ограничивает широту диапазоном, который корректно отображается проекцией web mercator." href="/examples/developer-guide/functions/clampLat/"><code>clampLat</code></a><a data-api-link data-search="createwmtsfromcapabilities разбирает xml wmts getcapabilities в конфигурацию, пригодную для wmtstilelayer." href="/examples/developer-guide/functions/createWMTSFromCapabilities/"><code>createWMTSFromCapabilities</code></a><a data-api-link data-search="decodemvt декодирует бинарный mvt-тайл в набор геометрий и свойств, доступных javascript-коду." href="/examples/developer-guide/functions/decodeMVT/"><code>decodeMVT</code></a><a data-api-link data-search="destination находит координату, расположенную на заданном расстоянии и азимуте от исходной точки по поверхности земли." href="/examples/developer-guide/functions/destination/"><code>destination</code></a><a data-api-link data-search="distance вычисляет кратчайшее геодезическое расстояние между двумя координатами в метрах." href="/examples/developer-guide/functions/distance/"><code>distance</code></a><a data-api-link data-search="geodesicinterpolate добавляет промежуточные точки вдоль дуги большого круга, чтобы длинная линия корректно следовала кривизне земли." href="/examples/developer-guide/functions/geodesicInterpolate/"><code>geodesicInterpolate</code></a><a data-api-link data-search="latlng нормализует поддерживаемый формат координаты в объект latlng с широтой и долготой." href="/examples/developer-guide/functions/latLng/"><code>latLng</code></a><a data-api-link data-search="lnglat создаёт latlng из longitude-first координат maplibre, geojson и совместимых api." href="/examples/developer-guide/functions/lngLat/"><code>lngLat</code></a><a data-api-link data-search="markershapemetrics возвращает размеры и точки привязки встроенной формы маркера для собственного layout или renderer." href="/examples/developer-guide/functions/markerShapeMetrics/"><code>markerShapeMetrics</code></a><a data-api-link data-search="meterstopixels переводит реальное расстояние в экранные пиксели для заданной широты и масштаба web mercator." href="/examples/developer-guide/functions/metersToPixels/"><code>metersToPixels</code></a><a data-api-link data-search="point создаёт двумерную точку в экранных или мировых пиксельных координатах; это не широта и долгота." href="/examples/developer-guide/functions/point/"><code>point</code></a><a data-api-link data-search="pointbounds создаёт прямоугольную область в пиксельной системе координат по двум точкам или набору точек." href="/examples/developer-guide/functions/pointBounds/"><code>pointBounds</code></a><a data-api-link data-search="preparepointbatch синхронно упаковывает точки в типизированные массивы, пригодные для массовой gpu-отрисовки." href="/examples/developer-guide/functions/preparePointBatch/"><code>preparePointBatch</code></a><a data-api-link data-search="preparepointbatchasync кооперативно подготавливает большой iterable или async iterable точек без длительной блокировки main thread." href="/examples/developer-guide/functions/preparePointBatchAsync/"><code>preparePointBatchAsync</code></a><a data-api-link data-search="project переводит географическую координату в мировые пиксели web mercator на указанном zoom." href="/examples/developer-guide/functions/project/"><code>project</code></a><a data-api-link data-search="scale возвращает ширину мира web mercator в пикселях на заданном уровне масштаба." href="/examples/developer-guide/functions/scale/"><code>scale</code></a><a data-api-link data-search="unproject преобразует мировую пиксельную точку web mercator обратно в широту и долготу." href="/examples/developer-guide/functions/unproject/"><code>unproject</code></a><a data-api-link data-search="wraplng переносит долготу в стандартный диапазон от −180° включительно до 180°." href="/examples/developer-guide/functions/wrapLng/"><code>wrapLng</code></a><a data-api-link data-search="zoomforbounds подбирает максимальный zoom, при котором заданная географическая область целиком помещается в viewport." href="/examples/developer-guide/functions/zoomForBounds/"><code>zoomForBounds</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>Растровые тайлы</h2>
+      <div class="nav-links"><a data-api-link data-search="tilelayer создаёт растровую подложку и выбирает dom, webgl или webgpu без отдельной gpu-фабрики." href="/examples/developer-guide/functions/tileLayer/"><code>tileLayer</code></a><a data-api-link data-search="vectortilelayer запрашивает векторные тайлы через provider и отображает их геометрию по правилам paint." href="/examples/developer-guide/functions/vectorTileLayer/"><code>vectorTileLayer</code></a><a data-api-link data-search="wmstilelayer формирует wms getmap-запросы и показывает ответ сервера как растровую подложку." href="/examples/developer-guide/functions/wmsTileLayer/"><code>wmsTileLayer</code></a><a data-api-link data-search="wmtstilelayer создаёт wmts raster layer с матрицей тайлов и параметрами выбранного tilematrixset." href="/examples/developer-guide/functions/wmtsTileLayer/"><code>wmtsTileLayer</code></a><a data-api-link data-search="wtinylfu создаёт ограниченный кэш с политикой w-tinylfu, устойчивой к вытеснению часто используемых записей случайным потоком." href="/examples/developer-guide/functions/wTinyLfu/"><code>wTinyLfu</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>Векторные данные</h2>
+      <div class="nav-links"><a data-api-link data-search="circle рисует географический круг с радиусом в метрах; его экранный размер меняется вместе с масштабом карты." href="/examples/developer-guide/functions/circle/"><code>circle</code></a><a data-api-link data-search="circlemarker рисует точечный круг фиксированного размера в пикселях — удобно для станций, событий и небольших выборок." href="/examples/developer-guide/functions/circleMarker/"><code>circleMarker</code></a><a data-api-link data-search="createmvtprovider создаёт загрузчик бинарных mvt-тайлов, который можно передать в vectortilelayer." href="/examples/developer-guide/functions/createMVTProvider/"><code>createMVTProvider</code></a><a data-api-link data-search="geojson создаёт отображаемый слой из geojson geometry, feature или featurecollection." href="/examples/developer-guide/functions/geoJSON/"><code>geoJSON</code></a><a data-api-link data-search="polygon рисует замкнутую географическую область с заливкой, обводкой и интерактивными событиями." href="/examples/developer-guide/functions/polygon/"><code>polygon</code></a><a data-api-link data-search="polyline рисует географическую ломаную по упорядоченному массиву координат." href="/examples/developer-guide/functions/polyline/"><code>polyline</code></a><a data-api-link data-search="rectangle создаёт полигон прямоугольной формы по географическим границам." href="/examples/developer-guide/functions/rectangle/"><code>rectangle</code></a><a data-api-link data-search="textlayer размещает текст в географической точке как лёгкий слой с управлением стилем и видимостью." href="/examples/developer-guide/functions/textLayer/"><code>textLayer</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>Маркеры и оверлеи</h2>
+      <div class="nav-links"><a data-api-link data-search="icon описывает растровую иконку маркера: изображение, размер, anchor и дополнительные css-настройки." href="/examples/developer-guide/functions/icon/"><code>icon</code></a><a data-api-link data-search="imageoverlay растягивает изображение по заданной географической области и синхронизирует его с картой." href="/examples/developer-guide/functions/imageOverlay/"><code>imageOverlay</code></a><a data-api-link data-search="marker создаёт интерактивный dom-маркер в географической точке с popup, tooltip и обработчиками событий." href="/examples/developer-guide/functions/marker/"><code>marker</code></a><a data-api-link data-search="popup создаёт информационное окно, которое можно открыть в координате или привязать к слою." href="/examples/developer-guide/functions/popup/"><code>popup</code></a><a data-api-link data-search="sanitizesvgelement удаляет из svg скрипты, обработчики событий и опасные внешние url перед вставкой в dom." href="/examples/developer-guide/functions/sanitizeSvgElement/"><code>sanitizeSvgElement</code></a><a data-api-link data-search="svgoverlay размещает безопасное svg-изображение внутри заданных географических границ." href="/examples/developer-guide/functions/svgOverlay/"><code>svgOverlay</code></a><a data-api-link data-search="tooltip создаёт компактную подсказку для наведения или постоянного отображения рядом с объектом." href="/examples/developer-guide/functions/tooltip/"><code>tooltip</code></a><a data-api-link data-search="videooverlay размещает видео внутри географической области и синхронизирует его положение с картой." href="/examples/developer-guide/functions/videoOverlay/"><code>videoOverlay</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>Элементы управления</h2>
+      <div class="nav-links"><a data-api-link data-search="attributioncontrol показывает на карте авторство и лицензии активных источников данных." href="/examples/developer-guide/functions/attributionControl/"><code>attributionControl</code></a><a data-api-link data-search="customcontrol размещает пользовательский html-элемент в одной из стандартных областей управления карты." href="/examples/developer-guide/functions/customControl/"><code>customControl</code></a><a data-api-link data-search="geolocationcontrol добавляет кнопку определения текущего положения пользователя и перемещения карты к найденной координате." href="/examples/developer-guide/functions/geolocationControl/"><code>geolocationControl</code></a><a data-api-link data-search="layerscontrol добавляет панель выбора одной базовой подложки и включения независимых overlay-слоёв." href="/examples/developer-guide/functions/layersControl/"><code>layersControl</code></a><a data-api-link data-search="scalecontrol показывает линейку, связывающую экранную длину с реальным расстоянием на текущей широте." href="/examples/developer-guide/functions/scaleControl/"><code>scaleControl</code></a><a data-api-link data-search="zoomcontrol добавляет стандартные кнопки увеличения и уменьшения масштаба карты." href="/examples/developer-guide/functions/zoomControl/"><code>zoomControl</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>ObjectManager и поиск</h2>
+      <div class="nav-links"><a data-api-link data-search="createstraightlineroutingprovider создаёт демонстрационный routing provider, соединяющий путевые точки прямыми отрезками без дорожного графа." href="/examples/developer-guide/functions/createStraightLineRoutingProvider/"><code>createStraightLineRoutingProvider</code></a><a data-api-link data-search="createsuggestprovider добавляет задержку, отмену устаревших запросов и нормализацию результатов к пользовательской функции подсказок." href="/examples/developer-guide/functions/createSuggestProvider/"><code>createSuggestProvider</code></a><a data-api-link data-search="createsuggestwidget создаёт готовое поле ввода с выпадающими подсказками и обработкой выбора результата." href="/examples/developer-guide/functions/createSuggestWidget/"><code>createSuggestWidget</code></a><a data-api-link data-search="objectmanager хранит, индексирует, фильтрует, кластеризует и отображает большие наборы разнородных объектов карты." href="/examples/developer-guide/functions/objectManager/"><code>objectManager</code></a><a data-api-link data-search="routinglayer запрашивает маршруты у provider и отображает основной и альтернативные варианты на карте." href="/examples/developer-guide/functions/routingLayer/"><code>routingLayer</code></a><a data-api-link data-search="searchprovider создаёт единый поисковый provider из локального массива или пользовательского адаптера search/geocode/reverse." href="/examples/developer-guide/functions/searchProvider/"><code>searchProvider</code></a><a data-api-link data-search="spatialgridindex индексирует объекты по ячейкам, чтобы быстро находить элементы в прямоугольной области." href="/examples/developer-guide/functions/spatialGridIndex/"><code>spatialGridIndex</code></a><a data-api-link data-search="trafficlayer отображает пробки или другую дорожную обстановку из переданного тайлового источника." href="/examples/developer-guide/functions/trafficLayer/"><code>trafficLayer</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>WebGL</h2>
+      <div class="nav-links"><a data-api-link data-search="webglpointlayer рисует десятки тысяч и миллионы точек через webgl с компактным хранением данных." href="/examples/developer-guide/functions/webglPointLayer/"><code>webglPointLayer</code></a><a data-api-link data-search="webglpolygonbatch триангулирует и рисует пакет полигонов через webgl." href="/examples/developer-guide/functions/webglPolygonBatch/"><code>webglPolygonBatch</code></a><a data-api-link data-search="webglsymbollayer рисует большой набор gpu-символов с atlas-текстурами, поворотом и масштабированием." href="/examples/developer-guide/functions/webglSymbolLayer/"><code>webglSymbolLayer</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>Тепловые карты и изолинии</h2>
+      <div class="nav-links"><a data-api-link data-search="heatlayer создаёт единый интерактивный слой тепловой поверхности, изолиний или их комбинации." href="/examples/developer-guide/functions/heatLayer/"><code>heatLayer</code></a><a data-api-link data-search="heatsupport асинхронно сообщает, доступны ли ускоренные wasm и webgpu backend’ы в текущей среде." href="/examples/developer-guide/functions/heatSupport/"><code>heatSupport</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>Производительность и инфраструктура</h2>
+      <div class="nav-links"><a data-api-link data-search="createmapadapter оборачивает жизненный цикл карты в небольшой adapter для интеграции с ui-фреймворками." href="/examples/developer-guide/functions/createMapAdapter/"><code>createMapAdapter</code></a><a data-api-link data-search="defineorihonelement регистрирует web component, позволяющий создавать карту декларативным html-тегом." href="/examples/developer-guide/functions/defineOrihonElement/"><code>defineOrihonElement</code></a><a data-api-link data-search="geometryworkerpool создаёт переиспользуемый пул web workers для подготовки больших массивов геометрии вне main thread." href="/examples/developer-guide/functions/geometryWorkerPool/"><code>geometryWorkerPool</code></a><a data-api-link data-search="offlinetilecache управляет предварительной загрузкой тайлов в cache storage для последующей работы без сети." href="/examples/developer-guide/functions/offlineTileCache/"><code>offlineTileCache</code></a><a data-api-link data-search="pathbatch создаёт единый пакетный слой линий с выбором реализации по требуемому стилю." href="/examples/developer-guide/functions/pathBatch/"><code>pathBatch</code></a><a data-api-link data-search="performanceinspector собирает и показывает fps, задержки кадров, количество слоёв и другие показатели работающей карты." href="/examples/developer-guide/functions/performanceInspector/"><code>performanceInspector</code></a></div>
+    </section><section class="nav-group" data-nav-group>
+      <h2>Локализация</h2>
+      <div class="nav-links"><a data-api-link data-search="ensurelocalepacks асинхронно загружает дополнительные встроенные переводы перед использованием языка, отличного от английского." href="/examples/developer-guide/functions/ensureLocalePacks/"><code>ensureLocalePacks</code></a><a data-api-link data-search="registerlocalepacks регистрирует встроенные или пользовательские таблицы переводов, доступные всем новым картам." href="/examples/developer-guide/functions/registerLocalePacks/"><code>registerLocalePacks</code></a><a data-api-link data-search="resolvelocale преобразует имя языка или частичный словарь переводов в полный набор текстов интерфейса." href="/examples/developer-guide/functions/resolveLocale/"><code>resolveLocale</code></a></div>
+    </section></nav>
+    <p class="empty-search" data-empty-search hidden>Ничего не найдено.</p>
+  </aside>
+  <main class="content"><section class="hero">
+    <p class="eyebrow">orihon@1.0.6 · актуальный src/index.ts</p>
+    <h1>Руководство разработчика</h1>
+    <p><strong>ORIHON — Offers Responsive Interactions, Handles Overlays Natively.</strong></p>
+    <p>Одна публичная функция — одна отдельная страница. Сигнатуры и список функций берутся из текущего TypeScript API; описания перенесены из Confluence и обновлены для действующей архитектуры.</p>
+    <div class="hero-badges"><span>72 функций</span><span>11 разделов</span><span>Core · Standard · Advanced</span></div>
+  </section>
+  <aside class="callout">
+    <strong>Package tier ≠ сложность API.</strong>
+    Core, Standard и Advanced отвечают за состав и gzip budget. Easy, Layer API и Rendering API отвечают за уровень управления.
+    <code>orihon/easy</code> работает поверх Standard: единый декларативный <code>map.add({ type, ... })</code> подходит для React/Vue/Svelte, а автодополнение <code>map.add…</code> показывает специализированные методы для маркеров, линий, полигонов, GeoJSON и тайлов. Возвращаемые значения остаются обычными объектами Orihon. Для готового слоя доступны оба равнозначных стиля: <code>map.add(layer)</code> и <code>layer.addTo(map)</code>.
+  </aside>
+  <aside class="callout">
+    <strong>Heat API обновлён.</strong>
+    Старые <code>webglHeatLayer</code>, <code>heatIsolineLayer</code> и <code>buildHeatIsolines</code> исключены. Используйте
+    <a href="./functions/heatLayer/"><code>heatLayer()</code></a>,
+    <a href="./functions/buildHeat/"><code>buildHeat()</code></a> и
+    <a href="./functions/heatSupport/"><code>heatSupport()</code></a>.
+  </aside>
+  <section class="api-group" id="карта-и-камера">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Карта и камера</h2></div><span>2</span></div>
+      <p class="group-description">Создание карты, управление камерой и группировка слоёв.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/createMap/">
+        <code>createMap()</code>
+        <p>Создаёт карту Orihon внутри указанного HTML-контейнера и настраивает начальный центр, масштаб и элементы управления.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/featureGroup/">
+        <code>featureGroup()</code>
+        <p>Объединяет несколько интерактивных слоёв: события, добавление на карту и вычисление общей области выполняются как для одного объекта.</p>
+        <span>orihon/standard →</span>
+      </a></div>
+    </section><section class="api-group" id="вычисления-без-отрисовки">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Вычисления без отрисовки</h2></div><span>21</span></div>
+      <p class="group-description">Чистые вычисления и преобразования данных: геодезия, проекции, bounds, декодирование, heat field и packed-геометрия. Эти функции сами ничего не добавляют на карту.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/bounds/">
+        <code>bounds()</code>
+        <p>Создаёт расширяемую географическую область по двум углам, массиву координат или существующему объекту границ.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/buildHeat/">
+        <code>buildHeat()</code>
+        <p>Строит scalar field и, при необходимости, изолинии без создания слоя карты.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/clampLat/">
+        <code>clampLat()</code>
+        <p>Ограничивает широту диапазоном, который корректно отображается проекцией Web Mercator.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/createWMTSFromCapabilities/">
+        <code>createWMTSFromCapabilities()</code>
+        <p>Разбирает XML WMTS GetCapabilities в конфигурацию, пригодную для wmtsTileLayer.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/decodeMVT/">
+        <code>decodeMVT()</code>
+        <p>Декодирует бинарный MVT-тайл в набор геометрий и свойств, доступных JavaScript-коду.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/destination/">
+        <code>destination()</code>
+        <p>Находит координату, расположенную на заданном расстоянии и азимуте от исходной точки по поверхности Земли.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/distance/">
+        <code>distance()</code>
+        <p>Вычисляет кратчайшее геодезическое расстояние между двумя координатами в метрах.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/geodesicInterpolate/">
+        <code>geodesicInterpolate()</code>
+        <p>Добавляет промежуточные точки вдоль дуги большого круга, чтобы длинная линия корректно следовала кривизне Земли.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/latLng/">
+        <code>latLng()</code>
+        <p>Нормализует поддерживаемый формат координаты в объект LatLng с широтой и долготой.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/lngLat/">
+        <code>lngLat()</code>
+        <p>Создаёт LatLng из longitude-first координат MapLibre, GeoJSON и совместимых API.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/markerShapeMetrics/">
+        <code>markerShapeMetrics()</code>
+        <p>Возвращает размеры и точки привязки встроенной формы маркера для собственного layout или renderer.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/metersToPixels/">
+        <code>metersToPixels()</code>
+        <p>Переводит реальное расстояние в экранные пиксели для заданной широты и масштаба Web Mercator.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/point/">
+        <code>point()</code>
+        <p>Создаёт двумерную точку в экранных или мировых пиксельных координатах; это не широта и долгота.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/pointBounds/">
+        <code>pointBounds()</code>
+        <p>Создаёт прямоугольную область в пиксельной системе координат по двум точкам или набору точек.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/preparePointBatch/">
+        <code>preparePointBatch()</code>
+        <p>Синхронно упаковывает точки в типизированные массивы, пригодные для массовой GPU-отрисовки.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/preparePointBatchAsync/">
+        <code>preparePointBatchAsync()</code>
+        <p>Кооперативно подготавливает большой iterable или async iterable точек без длительной блокировки main thread.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/project/">
+        <code>project()</code>
+        <p>Переводит географическую координату в мировые пиксели Web Mercator на указанном zoom.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/scale/">
+        <code>scale()</code>
+        <p>Возвращает ширину мира Web Mercator в пикселях на заданном уровне масштаба.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/unproject/">
+        <code>unproject()</code>
+        <p>Преобразует мировую пиксельную точку Web Mercator обратно в широту и долготу.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/wrapLng/">
+        <code>wrapLng()</code>
+        <p>Переносит долготу в стандартный диапазон от −180° включительно до 180°.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/zoomForBounds/">
+        <code>zoomForBounds()</code>
+        <p>Подбирает максимальный zoom, при котором заданная географическая область целиком помещается в viewport.</p>
+        <span>orihon/core →</span>
+      </a></div>
+    </section><section class="api-group" id="растровые-тайлы">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Растровые тайлы</h2></div><span>5</span></div>
+      <p class="group-description">DOM, WebGL, WMS и WMTS-источники подложки.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/tileLayer/">
+        <code>tileLayer()</code>
+        <p>Создаёт растровую подложку и выбирает DOM, WebGL или WebGPU без отдельной GPU-фабрики.</p>
+        <span>orihon/core →</span>
+      </a><a class="api-card" href="./functions/vectorTileLayer/">
+        <code>vectorTileLayer()</code>
+        <p>Запрашивает векторные тайлы через provider и отображает их геометрию по правилам paint.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/wmsTileLayer/">
+        <code>wmsTileLayer()</code>
+        <p>Формирует WMS GetMap-запросы и показывает ответ сервера как растровую подложку.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/wmtsTileLayer/">
+        <code>wmtsTileLayer()</code>
+        <p>Создаёт WMTS raster layer с матрицей тайлов и параметрами выбранного TileMatrixSet.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/wTinyLfu/">
+        <code>wTinyLfu()</code>
+        <p>Создаёт ограниченный кэш с политикой W-TinyLFU, устойчивой к вытеснению часто используемых записей случайным потоком.</p>
+        <span>orihon →</span>
+      </a></div>
+    </section><section class="api-group" id="векторные-данные">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Векторные данные</h2></div><span>8</span></div>
+      <p class="group-description">GeoJSON, MVT, линии, полигоны и текстовые слои.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/circle/">
+        <code>circle()</code>
+        <p>Рисует географический круг с радиусом в метрах; его экранный размер меняется вместе с масштабом карты.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/circleMarker/">
+        <code>circleMarker()</code>
+        <p>Рисует точечный круг фиксированного размера в пикселях — удобно для станций, событий и небольших выборок.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/createMVTProvider/">
+        <code>createMVTProvider()</code>
+        <p>Создаёт загрузчик бинарных MVT-тайлов, который можно передать в vectorTileLayer.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/geoJSON/">
+        <code>geoJSON()</code>
+        <p>Создаёт отображаемый слой из GeoJSON Geometry, Feature или FeatureCollection.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/polygon/">
+        <code>polygon()</code>
+        <p>Рисует замкнутую географическую область с заливкой, обводкой и интерактивными событиями.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/polyline/">
+        <code>polyline()</code>
+        <p>Рисует географическую ломаную по упорядоченному массиву координат.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/rectangle/">
+        <code>rectangle()</code>
+        <p>Создаёт полигон прямоугольной формы по географическим границам.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/textLayer/">
+        <code>textLayer()</code>
+        <p>Размещает текст в географической точке как лёгкий слой с управлением стилем и видимостью.</p>
+        <span>orihon/standard →</span>
+      </a></div>
+    </section><section class="api-group" id="маркеры-и-оверлеи">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Маркеры и оверлеи</h2></div><span>8</span></div>
+      <p class="group-description">DOM-маркеры, popup, tooltip, изображения, видео и SVG.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/icon/">
+        <code>icon()</code>
+        <p>Описывает растровую иконку маркера: изображение, размер, anchor и дополнительные CSS-настройки.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/imageOverlay/">
+        <code>imageOverlay()</code>
+        <p>Растягивает изображение по заданной географической области и синхронизирует его с картой.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/marker/">
+        <code>marker()</code>
+        <p>Создаёт интерактивный DOM-маркер в географической точке с popup, tooltip и обработчиками событий.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/popup/">
+        <code>popup()</code>
+        <p>Создаёт информационное окно, которое можно открыть в координате или привязать к слою.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/sanitizeSvgElement/">
+        <code>sanitizeSvgElement()</code>
+        <p>Удаляет из SVG скрипты, обработчики событий и опасные внешние URL перед вставкой в DOM.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/svgOverlay/">
+        <code>svgOverlay()</code>
+        <p>Размещает безопасное SVG-изображение внутри заданных географических границ.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/tooltip/">
+        <code>tooltip()</code>
+        <p>Создаёт компактную подсказку для наведения или постоянного отображения рядом с объектом.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/videoOverlay/">
+        <code>videoOverlay()</code>
+        <p>Размещает видео внутри географической области и синхронизирует его положение с картой.</p>
+        <span>orihon/standard →</span>
+      </a></div>
+    </section><section class="api-group" id="элементы-управления">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Элементы управления</h2></div><span>6</span></div>
+      <p class="group-description">Стандартные и пользовательские контролы карты.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/attributionControl/">
+        <code>attributionControl()</code>
+        <p>Показывает на карте авторство и лицензии активных источников данных.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/customControl/">
+        <code>customControl()</code>
+        <p>Размещает пользовательский HTML-элемент в одной из стандартных областей управления карты.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/geolocationControl/">
+        <code>geolocationControl()</code>
+        <p>Добавляет кнопку определения текущего положения пользователя и перемещения карты к найденной координате.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/layersControl/">
+        <code>layersControl()</code>
+        <p>Добавляет панель выбора одной базовой подложки и включения независимых overlay-слоёв.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/scaleControl/">
+        <code>scaleControl()</code>
+        <p>Показывает линейку, связывающую экранную длину с реальным расстоянием на текущей широте.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/zoomControl/">
+        <code>zoomControl()</code>
+        <p>Добавляет стандартные кнопки увеличения и уменьшения масштаба карты.</p>
+        <span>orihon/standard →</span>
+      </a></div>
+    </section><section class="api-group" id="objectmanager-и-поиск">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>ObjectManager и поиск</h2></div><span>8</span></div>
+      <p class="group-description">Большие коллекции объектов, кластеризация, маршруты и providers.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/createStraightLineRoutingProvider/">
+        <code>createStraightLineRoutingProvider()</code>
+        <p>Создаёт демонстрационный routing provider, соединяющий путевые точки прямыми отрезками без дорожного графа.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/createSuggestProvider/">
+        <code>createSuggestProvider()</code>
+        <p>Добавляет задержку, отмену устаревших запросов и нормализацию результатов к пользовательской функции подсказок.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/createSuggestWidget/">
+        <code>createSuggestWidget()</code>
+        <p>Создаёт готовое поле ввода с выпадающими подсказками и обработкой выбора результата.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/objectManager/">
+        <code>objectManager()</code>
+        <p>Хранит, индексирует, фильтрует, кластеризует и отображает большие наборы разнородных объектов карты.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/routingLayer/">
+        <code>routingLayer()</code>
+        <p>Запрашивает маршруты у provider и отображает основной и альтернативные варианты на карте.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/searchProvider/">
+        <code>searchProvider()</code>
+        <p>Создаёт единый поисковый provider из локального массива или пользовательского адаптера search/geocode/reverse.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/spatialGridIndex/">
+        <code>spatialGridIndex()</code>
+        <p>Индексирует объекты по ячейкам, чтобы быстро находить элементы в прямоугольной области.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/trafficLayer/">
+        <code>trafficLayer()</code>
+        <p>Отображает пробки или другую дорожную обстановку из переданного тайлового источника.</p>
+        <span>orihon →</span>
+      </a></div>
+    </section><section class="api-group" id="webgl">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>WebGL</h2></div><span>3</span></div>
+      <p class="group-description">GPU-слои для точек, символов, линий и полигонов.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/webglPointLayer/">
+        <code>webglPointLayer()</code>
+        <p>Рисует десятки тысяч и миллионы точек через WebGL с компактным хранением данных.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/webglPolygonBatch/">
+        <code>webglPolygonBatch()</code>
+        <p>Триангулирует и рисует пакет полигонов через WebGL.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/webglSymbolLayer/">
+        <code>webglSymbolLayer()</code>
+        <p>Рисует большой набор GPU-символов с atlas-текстурами, поворотом и масштабированием.</p>
+        <span>orihon →</span>
+      </a></div>
+    </section><section class="api-group" id="тепловые-карты-и-изолинии">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Тепловые карты и изолинии</h2></div><span>2</span></div>
+      <p class="group-description">Общее scalar field, WASM/WebGPU backend и интерактивные изолинии.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/heatLayer/">
+        <code>heatLayer()</code>
+        <p>Создаёт единый интерактивный слой тепловой поверхности, изолиний или их комбинации.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/heatSupport/">
+        <code>heatSupport()</code>
+        <p>Асинхронно сообщает, доступны ли ускоренные WASM и WebGPU backend’ы в текущей среде.</p>
+        <span>orihon →</span>
+      </a></div>
+    </section><section class="api-group" id="производительность-и-инфраструктура">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Производительность и инфраструктура</h2></div><span>6</span></div>
+      <p class="group-description">Workers, offline-кэш, адаптеры, инспекция и служебные структуры.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/createMapAdapter/">
+        <code>createMapAdapter()</code>
+        <p>Оборачивает жизненный цикл карты в небольшой adapter для интеграции с UI-фреймворками.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/defineOrihonElement/">
+        <code>defineOrihonElement()</code>
+        <p>Регистрирует Web Component, позволяющий создавать карту декларативным HTML-тегом.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/geometryWorkerPool/">
+        <code>geometryWorkerPool()</code>
+        <p>Создаёт переиспользуемый пул Web Workers для подготовки больших массивов геометрии вне main thread.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/offlineTileCache/">
+        <code>offlineTileCache()</code>
+        <p>Управляет предварительной загрузкой тайлов в Cache Storage для последующей работы без сети.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/pathBatch/">
+        <code>pathBatch()</code>
+        <p>Создаёт единый пакетный слой линий с выбором реализации по требуемому стилю.</p>
+        <span>orihon →</span>
+      </a><a class="api-card" href="./functions/performanceInspector/">
+        <code>performanceInspector()</code>
+        <p>Собирает и показывает FPS, задержки кадров, количество слоёв и другие показатели работающей карты.</p>
+        <span>orihon →</span>
+      </a></div>
+    </section><section class="api-group" id="локализация">
+      <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>Локализация</h2></div><span>3</span></div>
+      <p class="group-description">Загрузка, регистрация и разрешение языковых пакетов.</p>
+      <div class="api-grid"><a class="api-card" href="./functions/ensureLocalePacks/">
+        <code>ensureLocalePacks()</code>
+        <p>Асинхронно загружает дополнительные встроенные переводы перед использованием языка, отличного от английского.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/registerLocalePacks/">
+        <code>registerLocalePacks()</code>
+        <p>Регистрирует встроенные или пользовательские таблицы переводов, доступные всем новым картам.</p>
+        <span>orihon/standard →</span>
+      </a><a class="api-card" href="./functions/resolveLocale/">
+        <code>resolveLocale()</code>
+        <p>Преобразует имя языка или частичный словарь переводов в полный набор текстов интерфейса.</p>
+        <span>orihon/standard →</span>
+      </a></div>
+    </section></main>
+  <script type="module" src="/examples/developer-guide/assets/guide.js"></script>
+</body>
+</html>

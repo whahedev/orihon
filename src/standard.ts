@@ -4,8 +4,7 @@ export { Renderer } from "./renderer.js";
 export { WMSTileLayer, wmsTileLayer } from "./layers/wms-tile-layer.js";
 export { WMTSTileLayer, wmtsTileLayer, createWMTSFromCapabilities } from "./layers/wmts-tile-layer.js";
 export { Marker, marker, markerShapeMetrics } from "./layers/marker.js";
-export { Icon, DivIcon, icon, divIcon } from "./layers/icon.js";
-export { CanvasBaseLayer, canvasBaseLayer } from "./layers/canvas-base-layer.js";
+export { Icon, DivIcon, icon } from "./layers/icon.js";
 export { TextLayer, textLayer } from "./layers/text-layer.js";
 export {
   SvgLayer,
@@ -68,7 +67,6 @@ export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-l
 export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts-tile-layer.js";
 export type { MarkerOptions, MarkerAppearance, MarkerShape } from "./layers/marker.js";
 export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
-export type { CanvasBaseLayerOptions } from "./layers/canvas-base-layer.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";
 export type { PathOptions, CircleMarkerOptions } from "./layers/vector.js";
 export type {

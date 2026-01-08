@@ -174,6 +174,14 @@ export function latLng(value: LatLngLike | number, lng?: number): LatLng {
   return new LatLng(value, Number(lng));
 }
 
+/**
+ * Create a LatLng from longitude-first coordinates.
+ * Useful at GeoJSON, MapLibre and other [longitude, latitude] API boundaries.
+ */
+export function lngLat(lng: number, lat: number): LatLng {
+  return new LatLng(lat, lng);
+}
+
 export class LatLngBounds {
   south = Number.POSITIVE_INFINITY;
   west = Number.POSITIVE_INFINITY;
@@ -197,7 +205,7 @@ export class LatLngBounds {
 
   extend(value: LatLngLike | LatLngBoundsLike): this {
     if (value instanceof LatLngBounds || (!Array.isArray(value) && "south" in value)) {
-      const other = value instanceof LatLngBounds ? value : latLngBounds(value);
+      const other = value instanceof LatLngBounds ? value : bounds(value);
       if (other.isValid()) {
         this.extend([other.south, other.west]);
         this.extend([other.north, other.east]);
@@ -223,7 +231,7 @@ export class LatLngBounds {
 
   contains(value: LatLngLike | LatLngBoundsLike): boolean {
     if (value instanceof LatLngBounds || (!Array.isArray(value) && "south" in value)) {
-      const other = value instanceof LatLngBounds ? value : latLngBounds(value);
+      const other = value instanceof LatLngBounds ? value : bounds(value);
       return other.south >= this.south && other.north <= this.north && other.west >= this.west && other.east <= this.east;
     }
     const next = latLng(value as LatLngLike);
@@ -231,7 +239,7 @@ export class LatLngBounds {
   }
 
   intersects(value: LatLngBoundsLike): boolean {
-    const other = latLngBounds(value);
+    const other = bounds(value);
     return other.north >= this.south && other.south <= this.north && other.east >= this.west && other.west <= this.east;
   }
 
@@ -242,7 +250,7 @@ export class LatLngBounds {
   }
 
   equals(value: LatLngBoundsLike, maxMargin = 1e-9): boolean {
-    const other = latLngBounds(value);
+    const other = bounds(value);
     return this.getSouthWest().equals(other.getSouthWest(), maxMargin) && this.getNorthEast().equals(other.getNorthEast(), maxMargin);
   }
 
@@ -255,18 +263,16 @@ export class LatLngBounds {
   }
 }
 
-export function latLngBounds(a?: LatLngLike | LatLngLike[] | LatLngBoundsLike, b?: LatLngLike): LatLngBounds {
-  return a instanceof LatLngBounds && b === undefined ? a : new LatLngBounds(a, b);
+export function bounds(
+  a?: LatLngLike | LatLngLike[] | LatLngBoundsLike | null,
+  b?: LatLngLike | LatLngBoundsLike
+): LatLngBounds {
+  if (a instanceof LatLngBounds && b === undefined) return a;
+  const result = new LatLngBounds(a ?? undefined);
+  if (b) result.extend(b);
+  return result;
 }
 
-// Backwards-compatible geographic bounds factory (legacy 0.2 API).
-export function bounds(a: LatLngLike, b: LatLngLike): LatLngBounds {
-  return new LatLngBounds(a, b);
-}
-
-export function extendBounds(target: LatLngBounds | null, value: LatLngLike): LatLngBounds {
-  return (target ?? new LatLngBounds()).extend(value);
-}
 
 export function clampLat(lat: number): number {
   return Math.max(-MAX_LAT, Math.min(MAX_LAT, lat));
@@ -370,7 +376,7 @@ export function metersToPixels(meters: number, latitude: number, zoom: number): 
 type ViewSize = PointLike | { width: number; height: number };
 
 export function zoomForBounds(viewSize: ViewSize, targetBounds: LatLngBoundsLike, padding = 32, maxZoom = 18): number {
-  const b = latLngBounds(targetBounds);
+  const b = bounds(targetBounds);
   const nw = project([b.north, b.west], 0);
   const se = project([b.south, b.east], 0);
   const dx = Math.max(1e-9, Math.abs(se.x - nw.x));

@@ -15,11 +15,9 @@ import {
   VideoOverlay,
   circle,
   circleMarker,
-  divIcon,
-  gridLayer,
   icon,
   imageOverlay,
-  latLngBounds,
+  bounds,
   layersControl,
   marker,
   polygon,
@@ -93,7 +91,7 @@ test("DivIcon strings stay text even when they look like HTML", () => {
   globalThis.HTMLDivElement = class FakeHTMLDivElement {};
   try {
     const payload = "<img src=x onerror=alert(1)>";
-    const created = divIcon({ content: payload }).createIcon();
+    const created = icon({ content: payload }).createIcon();
     assert.equal(created, element);
     assert.equal(assigned.innerHTML, 0);
     assert.equal(assigned.textContent, payload);
@@ -106,7 +104,7 @@ test("DivIcon strings stay text even when they look like HTML", () => {
 
 test("Icon and DivIcon retain size and anchor semantics", () => {
   const image = icon({ iconUrl: "marker.png", iconSize: [30, 40], iconAnchor: [15, 40] });
-  const div = divIcon({ content: "A", iconSize: [28, 28] });
+  const div = icon({ content: "A", iconSize: [28, 28] });
 
   assert.ok(image instanceof Icon);
   assert.deepEqual(image.getSize().toArray(), [30, 40]);
@@ -130,7 +128,7 @@ test("Marker draggability can be changed without recreating the layer", () => {
 });
 
 test("Rectangle, Circle and CircleMarker expose mutable geometry", () => {
-  const box = latLngBounds([10, 20], [12, 24]);
+  const box = bounds([10, 20], [12, 24]);
   const area = rectangle(box);
   const dot = circleMarker([11, 22], { radius: 12 });
   const metric = circle([11, 22], 1000);
@@ -167,7 +165,7 @@ test("ImageOverlay and LayersControl factories expose lifecycle state", () => {
 });
 
 test("GridLayer, VideoOverlay and SVGOverlay expose stage four factories", () => {
-  const grid = gridLayer({ tileSize: 512, opacity: 0.5 });
+  const grid = new GridLayer({ tileSize: 512, opacity: 0.5 });
   const video = videoOverlay(["a.webm", "a.mp4"], [[55, 37], [56, 38]], { controls: true });
   const svg = svgOverlay("<svg viewBox=\"0 0 10 10\"></svg>", [[55, 37], [56, 38]], { opacity: 0.6 });
 

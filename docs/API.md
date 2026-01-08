@@ -11,7 +11,7 @@ Core view methods:
 - `setView(center, zoom)`, `panTo(center)`, `panBy(offset)` and `setZoomAround(point, zoom)` update the current view.
 - `fitBounds(bounds)`, `fitWorld()`, `flyTo(center, zoom)`, `flyToBounds(bounds)` and `stop()` implement animated and bounded navigation.
 - `getCenter()`, `getZoom()`, `getSize()`, `getBounds()` and coordinate conversion methods inspect the view.
-- `addLayer(layer)`, `removeLayer(layer)`, `hasLayer(layer)` and `eachLayer(callback)` manage layers.
+- `add(layer)` is the short map-centric alias for `addLayer(layer)`; `removeLayer(layer)`, `hasLayer(layer)` and `eachLayer(callback)` manage the same layer lifecycle. Object-centric `layer.addTo(map)` remains equivalent.
 - `query(containerPoint, options)` and `queryLatLng(latlng, options)` return renderer-independent hits from topmost to bottommost. Options are `tolerance` (default `8` CSS px), `layers`, `pane` and `limit` (default `1`; use `Infinity` for every hit). A hit exposes `layer`, `latlng`, `source`, and renderer-specific `id`, `index` or `feature` metadata.
 - `createPane(name)`, `getPane(name)` and `removePane(name)` manage rendering panes.
 - `behaviors.enable(name)`, `disable(name)` and `isEnabled(name)` control `drag`, `scrollZoom`, `pinchZoom`, `dblClick` and `boxZoom`.
@@ -27,7 +27,7 @@ Map events include `load`, `movestart`, `move`, `moveend`, `zoomstart`, `zoom`, 
 ## Geometry
 
 - `Point`, `Bounds`, `LatLng` and `LatLngBounds` are immutable-value-style geometry helpers.
-- Factories: `point`, `bounds`, `latLng`, `latLngBounds`.
+- Factories: `point`, `pointBounds`, `latLng`, `bounds`. `bounds()` accepts one coordinate, any coordinate array, two opposite corners, or an existing geographic bounds object.
 - Projection: `project`, `unproject`, `scale`, `zoomForBounds`.
 - Geography: `distance`, `destination`, `geodesicInterpolate`, `metersToPixels`, `clampLat`, `wrapLng`.
 
@@ -35,10 +35,10 @@ Latitude is clamped to Web Mercator limits. Longitudes can cross the antimeridia
 
 ## Raster Layers
 
-- `tileLayer(url, options)` supports `{z}`, `{x}`, `{y}`, `{s}`, `{r}`, TMS, Retina, `maxNativeZoom`, `bounds`, `noWrap`, request limits and bounded caches. Option `renderer` is `"auto"` (default), `"dom"`, `"webgl"` or `"webgpu"`. Core/Standard always use DOM image tiles unless the app also imports `orihon/webgpu`. The full `orihon` entry registers WebGL and WebGPU backends so `"auto"` uses WebGPU when `navigator.gpu` exists, else WebGL textured quads, else DOM. `"webgl"` / `"webgpu"` fall back to DOM when that GPU path is unavailable (same pattern as GeoJSON). Explicit `webglTileLayer(url, options)` always constructs the WebGL layer. GPU tile layers retain a multi-level texture cache, prefetch toward the edge revealed by drag/inertia, and prepare the next coarser viewport at low priority. Frames are composited coarse-to-fine: a ready parent remains an opaque backstop until each exact tile arrives. CSS camera warping is used only while the warped framebuffer still covers the complete viewport; unsafe zoom-out and pan frames repaint immediately. `getStats()` includes `needed`, `visibleReady`, `preloadNeeded`, `preloadReady`, geometric `coveragePct`, `ready`, `loading`, `cached` and approximate GPU bytes.
+- `tileLayer(url, options)` is the only raster-tile factory. It supports `{z}`, `{x}`, `{y}`, `{s}`, `{r}`, TMS, Retina, `maxNativeZoom`, `bounds`, `noWrap`, request limits and bounded caches. `renderer` is `"auto"` (default), `"dom"`, `"webgl"` or `"webgpu"`; GPU-specific `maxDpr` and `maxNewPerFrame` are preserved by this same function. Core/Standard use DOM unless the Advanced/WebGPU registration is loaded. Advanced `auto` selects WebGPU, then WebGL, then DOM. Both GPU APIs share one cache, request queue, prefetch and zoom-backstop. `getStats()` is available on the selected GPU implementation and reports renderer, coverage, queues, cache and approximate GPU bytes.
 - `wmsTileLayer(url, options)` supports WMS 1.1.1/1.3.0 and EPSG:3857/EPSG:4326 axis rules.
 - `wmtsTileLayer(template, options)` supports Web Mercator WMTS REST templates with `{TileMatrix}`, `{TileCol}` and `{TileRow}`. `createWMTSFromCapabilities(xml)` extracts the first REST tile resource and its layer/style/matrix-set options. The lab server exposes a live local GetCapabilities document and SVG tile endpoint for an offline-compatible integration example.
-- `gridLayer(options)` is the extension base for custom tile grids.
+- `GridLayer` is the extension class for custom tile grids; the empty `gridLayer()` factory was removed.
 - `imageOverlay`, `videoOverlay` and `svgOverlay` position media in geographic bounds.
 
 Tile events are `tileloadstart`, `tileload`, `tileerror`, `tileabort` and `load`. Mutable methods include `setUrl`, `redraw`, `setOpacity`, `setZIndex` and `bringToFront`.
@@ -87,17 +87,59 @@ Optional `orihon/controls` exports:
 - `miniMap(layer, { zoomOffset: -4 })` owns a second synchronized map and a parent-viewport rectangle. Supply a fresh layer instance that is not attached elsewhere.
 - `graticuleLayer({ step: "auto" })` draws SVG meridians/parallels. On `CRS.Simple`, explicitly pass `units: "map"`.
 
-Icons are created with `icon` or `divIcon`. Marker icons, opacity and z-index can be changed without recreating the marker. `divIcon({ content })` strings are plain text; pass a `Node` for SVG/HTML structure.
+Icons are created with one `icon()` function: `{ iconUrl }` creates an image icon and `{ content }` creates a safe HTML/CSS icon. Marker icons, opacity and z-index can be changed without recreating the marker. String content is plain text; pass a `Node` for structured markup.
 
 ## Data And Services
 
 - `objectManager` renders and clusters local feature collections through a spatial grid. Clustering is **hierarchical greedy within a pixel radius** (Leaflet-style; option name `clusterGridSize` means radius in px, default `50`, clamp ≥ `20`). Up to `clusterHierarchyMaxObjects` (default `250000`) the all-zoom hierarchy is built once on data change; larger collections use compact, worker-built layouts only for integer zooms that are actually visited. Set the limit to `0` to force an unlimited hierarchy. `getStats().clusterStrategy` reports `"none"`, `"greedy"`, or `"hierarchy"`. Layout is pan-stable at integer zoom. Optional **WebGL** draws unclustered points (`clusterRenderer: "dom" | "webgl" | "auto"`); cluster count badges stay DOM with size/color tiers `<10` / `<100` / `≥100` (override via `clusterIcon`). Redraws are rAF-coalesced. Optional `maxObjects` caps ingest. `maxVerticesPerGeometry` (default 65536) rejects oversized LineString/Polygon. For **clustered 1M points** use `{ clusterize: true, sceneFeatures: false, styleByCategory: false, clusterRenderer: "webgl" }`; for flat points set `clusterize: false`. In both cases prefer `await manager.addAsync(iterable, { chunkSize:10000, yieldMode:"task", render:false })`, then call `prepareLayout()`.
-- Runtime **ObjectState** (`setObjectState` / `setObjectStates` / `getObjectState`) is separate from `ManagedObject.properties`. Data-driven `style(object, state, context)` resolves `color` / `opacity` / `size` for DOM and WebGL; legacy `styleByCategory` remains the default when `style` is unset. Priority: base → legacy palette → custom `style` → normalize. `setSelected` / `setHovered` stay as single-selection convenience APIs over `ObjectState`. WebGL updates patch per-point color/size buffers when possible. `sceneFeatures: false` skips icon/label/trail/path layers and is the 1M fast path; `update` / `{ animate }` still patch GPU points via the spatial index.
-- `remoteObjectManager` requests objects by viewport and cancels stale loads.
+- Runtime **ObjectState** (`setObjectState` / `setObjectStates` / `getObjectState`) is separate from `ManagedObject.properties`. Data-driven `style(object, state, context)` resolves point `fill` / `fillOpacity` / `size` for DOM and WebGL. Legacy `color` / `opacity` remain aliases; canonical fields take precedence. Lines accept canonical `stroke` / `strokeOpacity` / `strokeWidth` with `color` / `opacity` / `width` aliases, while polygons use `fill` and `stroke`. Legacy `styleByCategory` remains the default when `style` is unset. Priority: base → legacy palette → custom `style` → normalize. `setSelected` / `setHovered` stay as single-selection convenience APIs over `ObjectState`. WebGL updates patch per-point color/size buffers when possible. `sceneFeatures: false` skips icon/label/trail/path layers and is the 1M fast path; `update` / `{ animate }` still patch GPU points via the spatial index.
+- `objectManager({ loader })` requests objects by viewport and cancels stale loads; no separate remote factory is required.
 - `createSuggestWidget`, search providers, `trafficLayer` and `routingLayer` keep network providers application-defined.
 - `webglPointLayer` renders large point arrays on the GPU (precomputed Web Mercator buffer + per-frame uniforms) and supports rotation/pitch transforms. Interactive hit-testing uses a mercator spatial hash (linear scan only for small or rotated sets). `setDataAsync()` projects large iterable/async-iterable inputs in private chunks and atomically swaps the completed buffers.
-- `heatLayer` / `webglHeatLayer` render heatmaps from weighted `[lat, lng, intensity?]` points. Default color is **geographic density** (mass / kernel area). `webglHeatLayer({ field: "value" })` blends the kernel **mean** toward the **peak** by the local share of alarm-weight mass, so ~2% exceedances stay mostly green while ~20% pull yellow/red. `max` is the value (or overlap, in density mode) that maps to the top of the gradient. ObjectManager `heatmapWeight(object, id)` feeds the value field; the packed 100k–1M path forwards it (explicit zeros stay cool). `setDataAsync()` is the responsive replacement path for large raw arrays. Value-mode kernels clamp to `minRadius` / `maxRadius`. Zoom-in CSS-follows the last paint; zoom-out rebuilds with the same world kernel.
-- `vectorTileLayer` accepts GeoJSON tile providers; `createMVTProvider` adds binary decoding (`decodeMVT` defaults: 2 MiB / 16384 features / 8192 string bytes). The Advanced entry routes Mapbox MVT through a WASM geometry decoder when WebAssembly is available, and sniffs Orihon MLT subset 1 so the same `createMVTProvider` / `decodePackedMVT` / `decodeMVT` calls accept `.mlt` tiles. `decodeMVT()` remains the GeoJSON compatibility path. Its optional `paint` array supports source `layer`, geometry `type` (`fill`, `line`, `circle`), zoom limits, a predicate `filter`, and normal path/circle options. A `style` callback overrides `paint` when both are present.
+
+### Heat and isolines
+
+```ts
+import { heatLayer, buildHeat, heatSupport } from "orihon";
+
+const heat = heatLayer(weightedPoints, {
+  mode: "both",
+  backend: "auto",
+  evaluation: "static",
+  labels: true,
+  step: "auto",
+  bands: true,
+  cover: true
+}).addTo(map);
+
+heat.setMode("isolines");
+const support = await heatSupport(); // { wasm, webgpu }
+const snapshot = await buildHeat(weightedPoints, bounds, { mode: "both" });
+```
+
+| Short option | Meaning |
+| --- | --- |
+| `mode` | `"heatmap"`, `"isolines"`, or `"both"`; both views share one field |
+| `backend` | `"auto"`, `"wasm"`, or `"webgpu"`; `auto` applies measured fallback policy |
+| `evaluation` | `"static"` covers the complete source domain; `"zoom"` refines after settled zoom |
+| `labels` / `step` | Toggle contour labels; choose adaptive `"auto"` or an absolute contour interval |
+| `bands` / `cover` | Fill contour zones and retain the cold zero-value domain |
+| `worker` | Move field and contour rebuilds off the main thread (default `true`) |
+
+`HeatLayer` accepts `setData`, cooperative `setDataAsync`, and allocation-light `setPackedMercator`. Runtime controls are `setMode`, `setBackend`, `setEvaluation`, `setLabels`, `setInteractive`, and `rebuildAsync`. Inspection uses `getField`, `getIsolines`, `getStats`, `getFeatureAt`, `getHoveredFeature`, and `getSelectedFeature`. `clear()` releases the active field; removing and re-adding a populated layer retains its packed source snapshot.
+
+`buildHeat(points, bounds, options)` is the render-independent computation API. It returns `{ field, rings, thresholds, profile }`; `profile` separates field, contour, GPU readback and total timings. The advanced tuning options (`cols`, `rows`, `radius`, `blur`, adaptive-level weights and geometry filters) are shared with `HeatLayer`.
+
+There are intentionally no compatibility aliases: `webglHeatLayer`, `heatIsolineLayer`, `heatPipelineLayer`, `buildHeatPipeline`, and their classes were removed. This prevents accidental selection of an obsolete point-splat or duplicate-field path.
+
+- `heatLayer` is the unified heat renderer. A weighted, cluster-like cell aggregation consumes every source once; two separable Gaussian passes then create one scalar field for continuous colors, filled isoline bands, contour strokes and labels. The cost is `O(points + cells × kernelRadius)`, instead of the former `O(points × kernelRadius²)` point-disc pipeline. WASM performs aggregation/KDE plus marching/stitching; WebGPU performs aggregation/KDE with bounded fixed-point atomics and reports its readback separately. In `auto`, 100k–500k heatmap-only fields use validated WebGPU output; million-point heatmaps and all contour modes use deterministic WASM pending wider GPU parity data. An explicit backend still overrides this policy and invalid GPU output always falls back to WASM.
+- `evaluation: "static"` (default) calculates one immutable field over the complete source bounding box, including sources outside the current viewport. Camera movement only reprojects that field. `"zoom"` recalculates the padded visible domain after a settled zoom and defines the geographic kernel at the new zoom, revealing finer structure. Both modes compositor-warp the last complete surface during motion; field/contour work runs in the persistent Worker from the first build when `worker:true`.
+- `step: "auto"` uses adaptive spatial level selection in the unified pipeline. It clips the working range with `outlierQuantiles` (default 2–98%), builds a mixed quantile/uniform pool of `candidateMultiplier × N` candidates (default 10×, constrained to 5×–20×), previews their geometry on a compact zoning grid, and greedily maximizes marginal coverage. The score prioritizes new covered territory, then range novelty and meaningful length, with penalties for spatial overlap and fragmented noise. For `N ≥ 3`, low, central, and high thirds of the robust range are represented. `coverageRadius`, `minCandidateCells`, `coverageWeight`, `rangeWeight`, `redundancyWeight`, and `fragmentWeight` tune selection. `adaptiveLevels:false`, a numeric `step`, or an explicit `levels:number[]` retain deterministic numeric selection.
+- `validMask` and non-finite cells are excluded from adaptive statistics and candidate geometry. A mask switches final marching to the mask-aware JS path so contours cannot bridge NoData; unmasked final marching/stitching remains WASM. `minIsolineLength` and `minIsolineArea` filter insignificant adaptive output. Every adaptive ring reports `levelId`, `gridLength`, `gridArea`, and marginal `gain`. `result.levelSelection` / `profile.levelSelection` report robust range, selected levels, per-level gains, total coverage, uniform-level baseline coverage, redundancy, spatial-density variance, noise fraction, integrated score, valid-zone count, and candidate count. The adaptive selector is a lazy browser chunk, so it does not inflate the base bundle.
+- `maxIsolineLevels` (default 32) bounds output. `bands:true` quantizes the same field into filled zones in isolines-only mode. `cover:true` and `domainOpacity` paint the zero-value zone with the gradient's cold color across the complete visible surface, so the finite field bitmap cannot expose a rectangular boundary. A fixed logarithmic display curve prevents isolated density peaks from suppressing the broad low-density surface without changing scalar values or contour thresholds. `both` still computes the field once.
+- `interactive:true` makes the unified heat layer participate in the normal object interaction model. `queryHit()` / `map.query()` test contour strokes first using `hitTolerance`, then bilinearly sample the scalar grid and resolve the zone between adjacent thresholds. `HeatFeature.kind` is `"line"` or `"zone"` and reports `fieldValue`, normalized `t`, `lowerValue`, `upperValue`, `levelId`, and line geometry/metadata when applicable. `bindTooltip()` follows hover; `bindPopup()` opens on click. Events include `hover`, `mouseover`, `mousemove`, `mouseout`, `click`, `contextmenu`, `select`, and `unselect`. Click selection can be disabled with `selectOnClick:false`; use `getHoveredFeature()`, `getSelectedFeature()`, `selectFeature()`, and `clearSelection()` for linked legends, filters, inspectors, or editing tools. Hover/selection boundary highlighting is configurable through `hoverHighlight`, `highlightColor`, `selectionColor`, and `highlightWidth`.
+- `HeatLayer`, `heatLayer()` and `buildHeat()` are the only public heat surface. The former Canvas heat, point-splat WebGL heat and standalone isoline layers were removed; their duplicate field calculation and incompatible option vocabularies are no longer shipped. ObjectManager still accepts its existing `heatmapDisplay`, `heatmapIsolineLabels`, `heatmapBackend`, `heatmapEvaluation`, and `heatmapIsolineStep` bridge until the dedicated manager integration is revised in the next stage.
+- `vectorTileLayer` accepts GeoJSON tile providers; `createMVTProvider` adds binary decoding (`decodeMVT` defaults: 2 MiB / 16384 features / 8192 string bytes). The Advanced entry routes Mapbox MVT through a WASM geometry decoder when WebAssembly is available and also recognizes supported Orihon MLT tiles. `decodeMVT()` is the public direct-decoding path. Its optional `paint` array supports source `layer`, geometry `type` (`fill`, `line`, `circle`), zoom limits, a predicate `filter`, and normal path/circle options. A `style` callback overrides `paint` when both are present.
 - `geoJSON` accepts optional `maxFeatures`.
 - `geometryWorkerPool` prepares point batches off the main thread when workers are available.
 - `offlineTileCache` manages Cache Storage and can generate/register a Service Worker. Instance `urlPrefixes` also filter `prefetch()`.
@@ -113,7 +155,7 @@ Icons are created with `icon` or `divIcon`. Marker icons, opacity and z-index ca
 const manager = objectManager({
   clusterRenderer: "auto",
   style: (object, state, context) => ({
-    color:
+    fill:
       context.selected
         ? "#7c3aed"
         : context.hovered
@@ -123,7 +165,7 @@ const manager = objectManager({
             : object.properties?.status === "offline"
               ? "#64748b"
               : "#16a34a",
-    opacity: state.disabled === true ? 0.3 : 0.9,
+    fillOpacity: state.disabled === true ? 0.3 : 0.9,
     size: context.zoom >= 14 ? 13 : 7
   })
 });
@@ -136,7 +178,7 @@ manager.setObjectStates([
 ]);
 ```
 
-Style resolution order: base defaults → legacy `styleByCategory` palette (category / alert / selected / hover) → custom `style` → clamp/normalize. With a custom resolver, selected/hover colors are **not** forced on top — read `context.selected` / `context.hovered` when needed. `setStyle(null)` restores legacy styling. `clear()` drops objects and states but keeps the style resolver. Events: `objectstatechange` (`id`, `state`, `changedKeys`), `stylechange`. In a `setObjectStates` batch, the last `selected: true` / `hovered: true` wins so only one object remains selected or hovered.
+Style resolution order: base defaults → legacy `styleByCategory` palette (category / alert / selected / hover) → custom `style` → clamp/normalize. Point vocabulary is `fill`, `fillOpacity`, `size`; `color` and `opacity` are compatibility aliases. With a custom resolver, selected/hover colors are **not** forced on top — read `context.selected` / `context.hovered` when needed. `setStyle(null)` restores legacy styling. `clear()` drops objects and states but keeps the style resolver. Events: `objectstatechange` (`id`, `state`, `changedKeys`), `stylechange`. In a `setObjectStates` batch, the last `selected: true` / `hovered: true` wins so only one object remains selected or hovered.
 
 ### ObjectManager scene APIs
 
@@ -149,7 +191,7 @@ Style resolution order: base defaults → legacy `styleByCategory` palette (cate
 - **Time:** `time: { value }` or `{ from, to }` + `setTime` / `setTimeRange`. Indexed overlap query; does not mutate `ObjectState`. Flat WebGL (no clusters) compacts the GPU pack by the active range without a full layout rebuild.
 - **Motion / trails:** `updateObjects` / `moveObject` with `{ animate, duration }`; `style.trail` history batched into the styled path layer (`maxPoints` clamped to 512).
 - **Mass points:** `sceneFeatures: false` + `await addAsync(..., { render:false })` + `setPackedData({ adopt: true })` internally. Do not enable search/time/icons at 1M.
-- **Lines / polygons:** `style.line` (`dashArray`, `dashOffset`, `gradient`) and `style.polygon` (`fill`/`stroke`). Hit-testing uses bbox then path distance / point-in-polygon.
+- **Lines / polygons:** `style.line` (`stroke`, `strokeOpacity`, `strokeWidth`, `dashArray`, `dashOffset`, `gradient`) and `style.polygon` (`fill`/`stroke`). Hit-testing uses bbox then path distance / point-in-polygon.
 - **Events:** `visualizationchange`, `timerangechange`, `iconregister`, `iconremove` (in addition to existing object/state events). Avoids emitting per GPU attribute patch.
 
 `GeoJSONOptions.popup` and `popupOptions` bind content per feature and are also forwarded by `VectorTileLayer`. Calling `WebGLPointLayer.bindPopup` enables nearest-point hit testing and provides `event.index` plus the original input through `context.data`.
@@ -164,16 +206,20 @@ Orihon ships three product tiers plus convenience builds:
 | **Standard** | `orihon/standard` | Core + markers, vectors, GeoJSON, popups, overlays, controls, locales |
 | **Advanced** | `orihon` | Standard + WebGL, MVT, ObjectManager, routing, traffic, offline, workers, heatmap, adapters |
 
+These tiers describe package capability and gzip size. API complexity is a separate axis: `orihon/easy` provides beginner-oriented composition over Standard, the normal factories form the Layer API, and renderer/backend-specific controls form the Rendering API.
+
 Also available:
 
+- `orihon/easy` — Standard-powered `createMap()` adapter with declarative `basemap`, a discriminated `map.add({ type: "marker" | "polyline" | "polygon" | "geojson" | "raster", ... })` contract, and discoverable `map.addMarker()`, `map.addTileLayer()`, `map.addPolyline()`, `map.addPolygon()` and `map.addGeoJSON()` methods; see [Easy API](EASY.md). Descriptions return ordinary Standard layers and are suitable for component props/configuration. `addSource()` is reserved for a future named, independently managed, reusable source abstraction and is not an alias for a layer.
 - `orihon/bundle` — single-file complete ESM bundle
 - `orihon/global` — standalone IIFE exposing `Orihon` and resolved `OrihonReady`
 - `orihon/orihon.css` — required map styles
 - `orihon/draw` / `orihon/draw.css` — optional drawing, editing and snapping
 - `orihon/react` — React 18+ components and hooks (React/ReactDOM are peer dependencies)
 - `orihon/pmtiles` — optional zero-dependency PMTiles v3 reader. `createPMTilesProvider(url, decodeOptions)` feeds vector archives to `vectorTileLayer`; `createPMTilesRasterSource(url)` exposes async `getTile()` / object-URL `getTileUrl()` helpers for raster adapters. Range requests accept the tile provider's abort signal. Tests read the committed `test/fixtures/tiny.pmtiles` archive and decode its embedded MVT feature.
-- `orihon/mlt` — MLT **encoder** (`encodePackedMLT`) and a standalone decoder for apps that do not use the Advanced entry. Advanced `createMVTProvider` / `decodePackedMVT` already accept Orihon MLT subset 1 (plain / varint / little-endian vertices, no FastPFOR / FSST / Morton).
-- `orihon/mvt-wasm` — standalone WASM MVT geometry decoder for Standard-only apps. Advanced `decodePackedMVT` registers it automatically.
+- `orihon/mlt` — MLT **encoder** (`encodePackedMLT`) and a standalone decoder for apps that do not use the Advanced entry.
+- `orihon/mvt` — low-level packed MVT/MLT API: `decodePackedMVT`, non-blocking `decodePackedMVTAsync` and `packedToGeoJSON`. Use it only for custom renderers, transcoding and preprocessing.
+- `orihon/mvt-wasm` — standalone WASM MVT geometry decoder for Standard-only apps. The Advanced root and `orihon/mvt` register it automatically.
 - `orihon/webgpu` — standalone WebGPU raster tiles for Standard-only apps (`import "orihon/webgpu"` then keep using `tileLayer`). Advanced `tileLayer({ renderer: "auto" | "webgpu" })` registers the factory automatically when `navigator.gpu` exists. Node / missing GPU reports `renderer: "none"`.
 - `orihon/controls` — optional fullscreen, measurement, mini-map and graticule UI/layers.
 - `orihon/geo` — small geography entry with `distance`, `destination`, `geodesicInterpolate` and `bufferPoint`.
@@ -208,7 +254,7 @@ Import `drawControl` or the headless `DrawHandler` from `orihon/draw`, plus `ori
 
 This section is the compact index of the supported surface. Factory functions use lower camel case and return the corresponding class (`marker()` → `Marker`, `objectManager()` → `ObjectManager`). Factories and classes are equivalent; factories are convenient in JavaScript, while classes are useful for extension and `instanceof` checks.
 
-Coordinates passed to Orihon are `[latitude, longitude]`. GeoJSON coordinates remain the GeoJSON-standard `[longitude, latitude]`. Methods returning `Point`, `LatLng`, `Bounds` or `LatLngBounds` return value objects; mutating a returned value does not reconfigure the map.
+Coordinates passed to Orihon are `[latitude, longitude]`. Use `latLng(latitude, longitude)` to make that order explicit. At a MapLibre, GeoJSON or other longitude-first boundary, use `lngLat(longitude, latitude)`; it returns the same `LatLng` value with named `lat` and `lng` fields, so it can be passed directly to `marker()`, `setView()` and other Orihon APIs. GeoJSON coordinate arrays themselves remain the standard `[longitude, latitude]`. Methods returning `Point`, `LatLng`, `Bounds` or `LatLngBounds` return value objects; mutating a returned value does not reconfigure the map.
 
 ### Events and base layers
 
@@ -240,7 +286,7 @@ Every `Layer` supports the following lifecycle and content methods:
 | `fitBounds`, `fitWorld`, `flyTo`, `flyToBounds`, `stop` | Fit/animated navigation |
 | `setMaxBounds`, `getMaxBounds`, `panInsideBounds` | Restrict and correct the camera |
 | `latLngToLayerPoint`, `latLngToContainerPoint`, `containerPointToLatLng` | Convert geographic and screen coordinates |
-| `addLayer`, `removeLayer`, `hasLayer`, `eachLayer` | Manage layers |
+| `add`, `addLayer`, `removeLayer`, `hasLayer`, `eachLayer` | Add and manage layers; `add` is the short map-centric alias |
 | `query(point, options?)`, `queryLatLng(latlng, options?)` | Return top-to-bottom renderer-independent hit results |
 | `addControl`, `removeControl` | Manage UI controls |
 | `createPane`, `getPane`, `getPanes`, `removePane` | Manage rendering panes |
@@ -255,9 +301,9 @@ Every `Layer` supports the following lifecycle and content methods:
 
 | Export | Description |
 | --- | --- |
-| `point`, `bounds`, `pointBounds` | Construct pixel/cartesian value objects |
-| `latLng`, `latLngBounds` | Parse geographic tuples/objects and bounds |
-| `extendBounds` | Return bounds extended with a point/bounds value |
+| `point`, `pointBounds` | Construct pixel/cartesian points and bounds |
+| `latLng`, `bounds` | Parse geographic coordinates and geographic bounds |
+| `bounds(existing, value)` / `bounds(points)` | Create or extend geographic bounds with coordinates or another bounds object |
 | `project`, `unproject` | Web Mercator pixel conversion at a zoom |
 | `distance` | Great-circle distance in metres |
 | `destination` | Destination from origin, bearing and distance |
@@ -273,9 +319,8 @@ Every `Layer` supports the following lifecycle and content methods:
 
 | Factory | Purpose / important options |
 | --- | --- |
-| `gridLayer(options?)` | Base tiled layer; subclass/override tile creation |
+| `GridLayer` | Base tiled class for subclassing; there is no empty factory |
 | `tileLayer(template, options?)` | URL/function raster tiles; supports TMS, Retina, bounds, cache limits and `renderer` |
-| `webglTileLayer(template, options?)` | Explicit WebGL raster tile renderer |
 | `wmsTileLayer(url, options?)` | WMS GetMap requests with version/CRS/parameter handling |
 | `wmtsTileLayer(template, options?)` | WMTS KVP or REST-template tiles |
 | `createWMTSFromCapabilities(xml, options?)` | Parse capabilities and construct WMTS configuration |
@@ -287,11 +332,10 @@ Every `Layer` supports the following lifecycle and content methods:
 | Factory | Created object |
 | --- | --- |
 | `marker(latlng, options?)` | DOM marker with title, built-in appearance or custom `Icon`; `interactive:false` omits pointer listeners |
-| `icon(options?)`, `divIcon(options?)` | Image icon / text-or-Node DivIcon |
-| `markerCollection(points, options?)` | `dom`: recycled HTML markers; `svg`: every point remains DOM, using lightweight `<circle>` nodes plus spatially distributed HTML Marker buttons; `webgl`; `auto`; or `hybrid` (`domLimit` HTML markers over WebGL). |
+| `icon({ iconUrl })`, `icon({ content })` | Image icon or safe text/Node DivIcon through one discriminated function |
+| `objectManager({ points, ...options })` | Coordinate collection with `dom`, `svg`, `webgl`, `auto` or `hybrid` renderer |
 | `polyline`, `polygon`, `rectangle`, `circle`, `circleMarker` | Mutable SVG/canvas vector shapes |
 | `geoJSON(data, options?)` | Feature group from GeoJSON, with filter/style/renderer/popup hooks; `retainFeatures:false` packs write-once canvas/WebGL paths without retaining source features |
-| `canvasBaseLayer(options?)` | Custom single-canvas layer base |
 | `textLayer(features, options)` | Batched labels with collision and halo |
 | `imageOverlay`, `videoOverlay`, `svgOverlay` | Georeferenced media overlays |
 
@@ -299,7 +343,7 @@ For a large DOM collection with a bounded interactive surface, keep the
 priority points as normal Marker buttons and render the remainder as SVG DOM:
 
 ```ts
-const pointsLayer = markerCollection(points, {
+const pointsLayer = objectManager({ points,
   renderer: "svg",
   htmlButtonLimit: 500,
   // Optional override; otherwise derived from pointSize.
@@ -331,7 +375,7 @@ Standard factories are `zoomControl`, `scaleControl`, `geolocationControl`, `att
 
 ### ObjectManager full method index
 
-Create with `objectManager(options?)`; `remoteObjectManager(options)` adds viewport loading and the same collection API.
+Create with `objectManager(options?)`; pass `loader` for viewport loading or `points` for the optimized DOM/SVG/WebGL/hybrid coordinate collection.
 
 | Method | Behavior |
 | --- | --- |
@@ -370,14 +414,16 @@ Create with `objectManager(options?)`; `remoteObjectManager(options)` adds viewp
 | --- | --- |
 | `webglPointLayer` | Packed high-volume points; `setData`, cooperative `setDataAsync`, `setPackedData`, per-point colors/sizes and optional picking |
 | `webglSymbolLayer` | Atlas-backed rotated symbols |
-| `webglPathBatch`, `webglStyledPathBatch`, `webglPolygonBatch` | Batched GPU paths/polygons |
-| `heatLayer`, `webglHeatLayer` | Canvas/GPU density or value heatmaps; WebGL supports cooperative `setDataAsync` |
-| `heatIsolineLayer`, `buildHeatIsolines` | Render/build marching-squares isolines |
-| `heatRadiusScale`, `heatIntensityScale`, `heatKernelAtZoom` | Shared heat scaling calculations |
+| `pathBatch({ mode:"uniform" | "feature" })`, `webglPolygonBatch` | Uniform WebGL paths, individually styled/pickable paths, and GPU polygons |
+| `heatLayer`, `buildHeat` | One scalar field → continuous heatmap, WASM isolines, or both; WASM/WebGPU backend policy and timing profile |
+| `heatSupport` | Asynchronously reports `{ wasm, webgpu }` availability |
+| `buildHeatFieldWebGpu` (`orihon/webgpu`) | Explicit low-level WebGPU entry for custom compute/A/B measurement; the normal layer should use `backend:"auto"` |
 | `geometryWorkerPool`, `preparePointBatch` | Worker/fallback packed point preparation |
 | `buildClusterLayout`, `buildClusterIndex`, `queryClusterLayout` | Public clustering primitives for custom renderers |
 
-WebGL layer `getStats()` methods report renderer-specific counts/capabilities. Synchronous `setData()` remains the lowest-wall-time path for bounded inputs. Point/heat `setDataAsync(input, options)` defaults to 50,000 items per chunk and accepts `yieldMode`, `signal` and `onProgress`; the previous live dataset remains unchanged if preparation is cancelled. `setPackedData(..., { adopt:true })` transfers ownership of compatible typed arrays and must only be used when the caller will not mutate them. `webglPathBatch` scales its exact-redraw interval for batches above 15,000 segments so a slow submit cannot trigger another full submit on the immediately following animation frame.
+GPU layer `getStats()` methods report renderer-specific counts/capabilities. Synchronous `setData()` remains the lowest-wall-time path for bounded inputs. Point/heat `setDataAsync(input, options)` defaults to 50,000 items per chunk and accepts `yieldMode`, `signal` and `onProgress`; the previous live dataset remains unchanged if preparation is cancelled. Large heat callers can use `setPackedMercator(mercator, count, weights)` to avoid allocating LatLng objects. `webglPointLayer.setPackedData(..., { adopt:true })` transfers ownership of compatible typed arrays and must only be used when the caller will not mutate them.
+
+The browser A/B matrix is in `examples/heat-bench`: 10k / 100k / 1M sources, 256² / 512² / 1024² grids, WASM / WebGPU, and field / heatmap / isolines / both timings. Rows report the field model and selected isoline step; WebGPU reports readback separately and visibly marks backend fallbacks. `examples/bench-compare` additionally exposes `Static · full dataset` versus `Refine on zoom` for interactive camera stress.
 
 `GeometryWorkerPool.preparePoints(input, options)` also accepts sync/async iterables and cooperatively serializes them before worker transfer. When workers are unavailable, `preparePointBatchAsync()` provides the same chunking, progress and cancellation contract on the main thread; use synchronous `preparePointBatch()` only for bounded inputs.
 
@@ -385,8 +431,7 @@ WebGL layer `getStats()` methods report renderer-specific counts/capabilities. S
 
 | Factory/class | Main methods and contract |
 | --- | --- |
-| `createArraySearchProvider(items, options?)` | In-memory search adapter |
-| `createSearchProvider(adapter, options?)` / `SearchProvider` | `search`, `geocode`, `reverse` |
+| `searchProvider(itemsOrAdapter, options?)` / `SearchProvider` | Local array or adapter-backed `search`, `geocode`, `reverse` |
 | `createSuggestProvider(fetcher, options?)` / `SuggestProvider` | Debounced `suggest`, `cancel`, `destroy` |
 | `createSuggestWidget(options)` / `SuggestWidget` | `attach`, `select`, `cancel`, `destroy` |
 | `routingLayer(options)` | `route`, `select`, `getRoutes`, `cancel` |
@@ -401,7 +446,7 @@ WebGL layer `getStats()` methods report renderer-specific counts/capabilities. S
 
 ### Vector tiles and optional package entries
 
-`vectorTileLayer(options)` renders provider results. `createMVTProvider(urlTemplate, decodeOptions?)` fetches and decodes Mapbox MVT or supported MLT. `decodePackedMVT` preserves tile-local packed geometry; `packedToGeoJSON` converts it; `decodeMVT` is the direct compatibility function with byte/feature/string limits.
+`vectorTileLayer(options)` renders provider results. `createMVTProvider(urlTemplate, decodeOptions?)` fetches and decodes Mapbox MVT or supported MLT without exposing packed internals. `decodeMVT` is the direct GeoJSON-compatible function with byte/feature/string limits. Custom GPU renderers and transcoders can explicitly import `decodePackedMVT`, `decodePackedMVTAsync` and `packedToGeoJSON` from `orihon/mvt`.
 
 Optional entry functions:
 
@@ -410,7 +455,8 @@ Optional entry functions:
 | `orihon/pmtiles` | `PMTilesArchive`, `createPMTilesProvider`, `createPMTilesRasterSource`, `deserializePMTilesDirectory`, `findPMTilesEntry`, `zxyToTileId` |
 | `orihon/mlt` | `encodePackedMLT`, `decodePackedMLT`, `decodeMLT`, `looksLikeMLT`, `createMLTProvider` |
 | `orihon/mvt-wasm` | `mvtGeometryWasmSupported`, `mvtGeometryWasmError`, `decodeMvtGeometryWasm`, `decodePackedMVTWasm`, `createMVTWasmProvider` |
-| `orihon/webgpu` | `WebGPUTileLayer`, `webgpuTileLayer` |
+| `orihon/mvt` | Advanced packed tile decoding and conversion for custom renderers and preprocessing |
+| `orihon/webgpu` | Registers GPU support for `tileLayer`; exports `GPUTileLayer` for subclassing/diagnostics |
 | `orihon/controls` | `fullscreenControl`, `measureControl`, `miniMap`, `graticuleLayer` and their classes/options |
 | `orihon/geo` | Geography helpers plus `bufferPoint` |
 | `orihon/popup-content` | `popupContent`, `sanitizePopupHtml`, `popupConditionMatches`, `createEChartsPopupRenderer` |

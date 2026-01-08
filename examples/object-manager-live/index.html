@@ -144,7 +144,7 @@
         tileLayer,
         objectManager,
         geodesicInterpolate,
-        heatIsolineLayer
+        heatLayer
       } = await import("/dist/index.js").catch(() => import("/dist/orihon.esm.js"));
 
       const HUBS = [
@@ -394,8 +394,8 @@
           if (object.properties?.featured) {
             return {
               line: {
-                width: selected ? 5 : 3,
-                opacity: 0.85,
+                strokeWidth: selected ? 5 : 3,
+                strokeOpacity: 0.85,
                 gradient: [
                   { offset: 0, color: "#22c55e" },
                   { offset: 0.55, color: "#eab308" },
@@ -406,9 +406,9 @@
           }
           return {
             line: {
-              width: selected ? 3 : 1.35,
-              opacity: selected ? 0.85 : 0.38,
-              color: "#38bdf8"
+              strokeWidth: selected ? 3 : 1.35,
+              strokeOpacity: selected ? 0.85 : 0.38,
+              stroke: "#38bdf8"
             }
           };
         }
@@ -1141,7 +1141,7 @@
             ? `temp tick ${Math.round(lastPatchMs)} ms / ${lastPatchBatch} · live ${pulseOn ? "on" : "paused"}`
             : "temp idle",
           isoStats
-            ? `isolines ${isoStats.rings} rings · ${Math.round(isoStats.buildMs)} ms`
+            ? `isolines ${isoStats.rings} rings · ${Math.round(isoStats.totalMs)} ms`
             : "isolines off",
           `fps ${fpsValue.toFixed(0)}`
         ].filter(Boolean).join("\n");
@@ -1279,7 +1279,11 @@
           return;
         }
         if (!isolineLayer) {
-          isolineLayer = heatIsolineLayer(pts, {
+          isolineLayer = heatLayer(pts, {
+            mode: "isolines",
+            backend: "auto",
+            evaluation: "static",
+            bands: false,
             levels: [0.28, 0.42, 0.55, 0.7, 0.85],
             radius: 16,
             blur: 12,
@@ -1287,13 +1291,12 @@
             cols: 72,
             rows: 54,
             gradient: TEMP_ISOLINE_GRADIENT,
-            colorByLevel: true,
-            strokeWidth: 1.45,
-            opacity: 0.92,
+            isolineWidth: 1.45,
+            isolineOpacity: 0.92,
             labels: true,
-            labelFont: "600 11px ui-sans-serif, system-ui, sans-serif",
-            labelColor: "#0f172a",
-            labelFormat: (ring) =>
+            isolineLabelFont: "600 11px ui-sans-serif, system-ui, sans-serif",
+            isolineLabelColor: "#0f172a",
+            isolineLabelFormat: (ring) =>
               `${Math.round(TEMP_MIN + ring.t * (TEMP_MAX - TEMP_MIN))}°`
           }).addTo(map);
           return;

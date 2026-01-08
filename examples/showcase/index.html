@@ -497,8 +497,7 @@ let polygon;
 let geoJSON;
 let zoomControl;
 let webglPointLayer;
-let webglHeatLayer;
-let heatIsolineLayer;
+let heatLayer;
 let objectManager;
 let performanceInspector;
 let featureGroup;
@@ -513,7 +512,6 @@ const state = {
   renderer: "—",
   pointsLayer: null,
   heatLayer: null,
-  isolineLayer: null,
   manager: null,
   routes: null,
   motionData: null
@@ -636,7 +634,6 @@ function clearOverlayLayers() {
   state.layers = [];
   state.pointsLayer = null;
   state.heatLayer = null;
-  state.isolineLayer = null;
   state.manager = null;
   state.routes = null;
 }
@@ -1017,32 +1014,23 @@ async function loadIncidents(map) {
     });
   });
 
-  const heat = webglHeatLayer(points, {
+  const heat = heatLayer(points, {
+    mode: "heatmap",
+    backend: "auto",
     radius: 20,
     blur: 18,
     scaleZoom: 10,
-    intensity: 0.32,
     opacity: 0.75,
-    maxDpr: 1.5,
-    gradient: HEAT_GRADIENT
+    gradient: HEAT_GRADIENT,
+    levels: 5,
+    labels: true,
+    isolineWidth: 1.5,
+    isolineOpacity: 0.9,
+    isolineLabelFont: "700 13px IBM Plex Sans, system-ui, sans-serif",
+    isolineLabelColor: "#0f172a"
   }).addTo(map);
   track(heat);
   state.heatLayer = heat;
-
-  const isolines = heatIsolineLayer(points, {
-    levels: 5,
-    radius: 20,
-    blur: 18,
-    scaleZoom: 10,
-    gradient: HEAT_GRADIENT,
-    colorByLevel: true,
-    strokeWidth: 1.5,
-    opacity: 0.9,
-    labels: true,
-    labelFont: "700 13px IBM Plex Sans, system-ui, sans-serif",
-    labelColor: "#0f172a"
-  });
-  state.isolineLayer = isolines;
   els.heatToggle.classList.add("is-on");
   els.isolines.checked = false;
   setObjectMetrics(points.length, "webgl-heat");
@@ -1103,8 +1091,7 @@ const orihon = await loadOrihon();
   geoJSON,
   zoomControl,
   webglPointLayer,
-  webglHeatLayer,
-  heatIsolineLayer,
+  heatLayer,
   objectManager,
   performanceInspector,
   featureGroup
@@ -1137,7 +1124,7 @@ inspector.on("sample", ({ snapshot }) => {
     setObjectMetrics(stats.points, stats.renderer);
   } else if (state.heatLayer) {
     const stats = state.heatLayer.getStats();
-    setObjectMetrics(stats.points, "webgl-heat");
+    setObjectMetrics(stats.points, `heat:${stats.mode}`);
   } else if (state.manager) {
     const stats = state.manager.getStats();
     setObjectMetrics(stats.objects, stats.renderer === "webgl" ? "clusters" : stats.renderer);
@@ -1161,14 +1148,7 @@ for (const button of els.scenarios) {
 }
 
 els.isolines.addEventListener("change", () => {
-  if (!state.isolineLayer) return;
-  if (els.isolines.checked) {
-    state.isolineLayer.addTo(map);
-    if (!state.layers.includes(state.isolineLayer)) state.layers.push(state.isolineLayer);
-    state.isolineLayer.rebuild();
-  } else {
-    state.isolineLayer.remove();
-  }
+  state.heatLayer?.setMode(els.isolines.checked ? "both" : "heatmap");
 });
 
 window.addEventListener("hashchange", () => {

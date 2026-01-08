@@ -1,4 +1,4 @@
-import { LatLngBounds, latLngBounds, type LatLngBoundsLike, type LatLngLike } from "./geo.js";
+import { LatLngBounds, bounds, type LatLngBoundsLike, type LatLngLike } from "./geo.js";
 import { Layer, type LayerOptions } from "./layer.js";
 import type { Orihon } from "./map.js";
 
@@ -100,7 +100,7 @@ export class FeatureGroup extends LayerGroup {
   }
 
   getBounds(): LatLngBounds {
-    const result = latLngBounds();
+    const result = bounds();
     for (const layer of this.groupLayers) {
       if (hasBounds(layer)) result.extend(layer.getBounds());
       else if (hasLatLng(layer)) result.extend(layer.getLatLng());

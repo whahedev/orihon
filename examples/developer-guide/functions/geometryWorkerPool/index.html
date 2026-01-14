@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Создаёт переиспользуемый пул Web Workers для подготовки больших массивов геометрии вне main thread." />
+  <meta name="description" content="Устаревший alias createGeometryWorkerPool; создаёт отдельный пул, принадлежащий вызывающему." />
   <title>geometryWorkerPool() · Orihon Developer Guide</title>
   <link rel="icon" href="/assets/brand/svg/orihon-favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/examples/developer-guide/assets/guide.css" />
@@ -23,7 +23,7 @@
     <span class="version">v1.0.6</span>
   </header>
   <aside class="sidebar" data-sidebar>
-    <div class="sidebar-intro"><a href="/examples/developer-guide/">Все функции</a><span>72 страниц</span></div>
+    <div class="sidebar-intro"><a href="/examples/developer-guide/">Все функции</a><span>73 страниц</span></div>
     <nav aria-label="Функции Orihon"><section class="nav-group" data-nav-group>
       <h2>Карта и камера</h2>
       <div class="nav-links"><a data-api-link data-search="createmap создаёт карту orihon внутри указанного html-контейнера и настраивает начальный центр, масштаб и элементы управления." href="/examples/developer-guide/functions/createMap/"><code>createMap</code></a><a data-api-link data-search="featuregroup объединяет несколько интерактивных слоёв: события, добавление на карту и вычисление общей области выполняются как для одного объекта." href="/examples/developer-guide/functions/featureGroup/"><code>featureGroup</code></a></div>
@@ -53,7 +53,7 @@
       <div class="nav-links"><a data-api-link data-search="heatlayer создаёт единый интерактивный слой тепловой поверхности, изолиний или их комбинации." href="/examples/developer-guide/functions/heatLayer/"><code>heatLayer</code></a><a data-api-link data-search="heatsupport асинхронно сообщает, доступны ли ускоренные wasm и webgpu backend’ы в текущей среде." href="/examples/developer-guide/functions/heatSupport/"><code>heatSupport</code></a></div>
     </section><section class="nav-group" data-nav-group>
       <h2>Производительность и инфраструктура</h2>
-      <div class="nav-links"><a data-api-link data-search="createmapadapter оборачивает жизненный цикл карты в небольшой adapter для интеграции с ui-фреймворками." href="/examples/developer-guide/functions/createMapAdapter/"><code>createMapAdapter</code></a><a data-api-link data-search="defineorihonelement регистрирует web component, позволяющий создавать карту декларативным html-тегом." href="/examples/developer-guide/functions/defineOrihonElement/"><code>defineOrihonElement</code></a><a data-api-link data-search="geometryworkerpool создаёт переиспользуемый пул web workers для подготовки больших массивов геометрии вне main thread." href="/examples/developer-guide/functions/geometryWorkerPool/"><code>geometryWorkerPool</code></a><a data-api-link data-search="offlinetilecache управляет предварительной загрузкой тайлов в cache storage для последующей работы без сети." href="/examples/developer-guide/functions/offlineTileCache/"><code>offlineTileCache</code></a><a data-api-link data-search="pathbatch создаёт единый пакетный слой линий с выбором реализации по требуемому стилю." href="/examples/developer-guide/functions/pathBatch/"><code>pathBatch</code></a><a data-api-link data-search="performanceinspector собирает и показывает fps, задержки кадров, количество слоёв и другие показатели работающей карты." href="/examples/developer-guide/functions/performanceInspector/"><code>performanceInspector</code></a></div>
+      <div class="nav-links"><a data-api-link data-search="creategeometryworkerpool создаёт принадлежащий вызывающему пул web workers для подготовки больших массивов геометрии вне main thread." href="/examples/developer-guide/functions/createGeometryWorkerPool/"><code>createGeometryWorkerPool</code></a><a data-api-link data-search="createmapadapter оборачивает жизненный цикл карты в небольшой adapter для интеграции с ui-фреймворками." href="/examples/developer-guide/functions/createMapAdapter/"><code>createMapAdapter</code></a><a data-api-link data-search="defineorihonelement регистрирует web component, позволяющий создавать карту декларативным html-тегом." href="/examples/developer-guide/functions/defineOrihonElement/"><code>defineOrihonElement</code></a><a data-api-link data-search="geometryworkerpool устаревший alias creategeometryworkerpool; создаёт отдельный пул, принадлежащий вызывающему." href="/examples/developer-guide/functions/geometryWorkerPool/"><code>geometryWorkerPool</code></a><a data-api-link data-search="offlinetilecache управляет предварительной загрузкой тайлов в cache storage для последующей работы без сети." href="/examples/developer-guide/functions/offlineTileCache/"><code>offlineTileCache</code></a><a data-api-link data-search="pathbatch создаёт единый пакетный слой линий с выбором реализации по требуемому стилю." href="/examples/developer-guide/functions/pathBatch/"><code>pathBatch</code></a><a data-api-link data-search="performanceinspector собирает и показывает fps, задержки кадров, количество слоёв и другие показатели работающей карты." href="/examples/developer-guide/functions/performanceInspector/"><code>performanceInspector</code></a></div>
     </section><section class="nav-group" data-nav-group>
       <h2>Локализация</h2>
       <div class="nav-links"><a data-api-link data-search="ensurelocalepacks асинхронно загружает дополнительные встроенные переводы перед использованием языка, отличного от английского." href="/examples/developer-guide/functions/ensureLocalePacks/"><code>ensureLocalePacks</code></a><a data-api-link data-search="registerlocalepacks регистрирует встроенные или пользовательские таблицы переводов, доступные всем новым картам." href="/examples/developer-guide/functions/registerLocalePacks/"><code>registerLocalePacks</code></a><a data-api-link data-search="resolvelocale преобразует имя языка или частичный словарь переводов в полный набор текстов интерфейса." href="/examples/developer-guide/functions/resolveLocale/"><code>resolveLocale</code></a></div>
@@ -63,17 +63,16 @@
   <main class="content"><article>
     <nav class="breadcrumbs"><a href="/examples/developer-guide/">Функции</a><span>/</span><a href="/examples/developer-guide/#производительность-и-инфраструктура">Производительность и инфраструктура</a></nav>
     <header class="api-header">
-      <div><p class="eyebrow">orihon</p><h1><code>geometryWorkerPool()</code></h1><p class="lede">Создаёт переиспользуемый пул Web Workers для подготовки больших массивов геометрии вне main thread.</p></div>
-      <a class="source-link" href="https://github.com/whahedev/orihon/blob/main/src/services/geometry-worker.ts#L482" target="_blank" rel="noreferrer">Исходник · L482</a>
+      <div><p class="eyebrow">orihon</p><h1><code>geometryWorkerPool()</code></h1><p class="lede">Устаревший alias createGeometryWorkerPool; создаёт отдельный пул, принадлежащий вызывающему.</p></div>
+      <a class="source-link" href="https://github.com/whahedev/orihon/blob/main/src/services/geometry-worker.ts#L512" target="_blank" rel="noreferrer">Исходник · L512</a>
     </header>
-    <section class="doc-section purpose"><h2>Для чего нужна</h2><p>Создаёт переиспользуемый пул Web Workers для подготовки больших массивов геометрии вне main thread.</p><p>Большие партии точек и тяжелая нормализация перед рендером.</p></section>
+    <section class="doc-section purpose"><h2>Для чего нужна</h2><p>Устаревший alias createGeometryWorkerPool; создаёт отдельный пул, принадлежащий вызывающему.</p><p>Функция относится к разделу «Производительность и инфраструктура». Workers, offline-кэш, адаптеры, инспекция и служебные структуры.</p></section>
     <section class="doc-section"><h2>Импорт</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>import { geometryWorkerPool } from &quot;orihon&quot;;</code></pre></div></section>
-    <section class="doc-section"><h2>Сигнатура и результат</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>function geometryWorkerPool(options?: GeometryWorkerOptions): GeometryWorkerPool</code></pre></div><p class="returns"><strong>Возвращает:</strong> <code>GeometryWorkerPool</code> — значение типа GeometryWorkerPool, описанное в сигнатуре выше</p></section>
-    <section class="doc-section"><h2>Параметры</h2><div class="table-wrap"><table><thead><tr><th>Параметр</th><th>Тип</th><th>Обязателен</th><th>По умолчанию</th><th>Описание</th></tr></thead><tbody><tr><td><code>options</code></td><td><code>GeometryWorkerOptions | undefined</code></td><td>нет</td><td>—</td><td>Необязательные настройки поведения. Все поддерживаемые поля, их единицы и назначение перечислены в таблице ниже.</td></tr></tbody></table></div><div class="option-detail"><h3>Состав <code>options</code></h3><p>Объект <code>GeometryWorkerOptions | undefined</code> поддерживает следующие поля:</p><div class="table-wrap"><table><thead><tr><th>Поле</th><th>Тип</th><th>Обязательное</th><th>Назначение</th></tr></thead><tbody><tr><td><code>useWorker</code></td><td><code>boolean | undefined</code></td><td>нет</td><td>Включает или отключает поведение «use worker».</td></tr></tbody></table></div></div></section>
+    <section class="doc-section"><h2>Сигнатура и результат</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>function geometryWorkerPool(options: GeometryWorkerOptions = {}): GeometryWorkerPool</code></pre></div><p class="returns"><strong>Возвращает:</strong> <code>GeometryWorkerPool</code> — значение типа GeometryWorkerPool, описанное в сигнатуре выше</p></section>
+    <section class="doc-section"><h2>Параметры</h2><div class="table-wrap"><table><thead><tr><th>Параметр</th><th>Тип</th><th>Обязателен</th><th>По умолчанию</th><th>Описание</th></tr></thead><tbody><tr><td><code>options</code></td><td><code>GeometryWorkerOptions</code></td><td>нет</td><td><code>{}</code></td><td>Необязательные настройки поведения. Все поддерживаемые поля, их единицы и назначение перечислены в таблице ниже.</td></tr></tbody></table></div><div class="option-detail"><h3>Состав <code>options</code></h3><p>Объект <code>GeometryWorkerOptions</code> поддерживает следующие поля:</p><div class="table-wrap"><table><thead><tr><th>Поле</th><th>Тип</th><th>Обязательное</th><th>Назначение</th></tr></thead><tbody><tr><td><code>useWorker</code></td><td><code>boolean | undefined</code></td><td>нет</td><td>Включает или отключает поведение «use worker».</td></tr></tbody></table></div></div></section>
     <section class="doc-section"><h2>Пример</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>import { geometryWorkerPool } from &quot;orihon&quot;;
-const pool = geometryWorkerPool({ workers: 2 });
-const prepared = await pool.preparePoints(rawPoints);
-pool.destroy();</code></pre></div></section>
+
+const result = geometryWorkerPool();</code></pre></div></section>
     <section class="doc-section playground-section" data-playground data-function="geometryWorkerPool">
       <div class="playground-heading"><div><h2>Интерактивный пример</h2><p>Измените код слева и запустите его. Карта справа создаётся заново перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v1.0.6</span></div>
       <div class="playground-shell">
@@ -91,8 +90,8 @@ showResult(result);</textarea>
         <div class="playground-preview"><iframe data-playground-frame title="Карта для примера geometryWorkerPool" sandbox="allow-scripts" src="/examples/developer-guide/playground.html"></iframe></div>
       </div>
     </section>
-    <aside class="note"><strong>Важно</strong><div><p>Большие партии точек и тяжелая нормализация перед рендером.</p></div></aside>
-    
+
+
     <footer class="page-footer">
       <a href="/examples/developer-guide/functions/defineOrihonElement/"><span>← Предыдущая</span><code>defineOrihonElement()</code></a>
       <a class="next" href="/examples/developer-guide/functions/offlineTileCache/"><span>Следующая →</span><code>offlineTileCache()</code></a>

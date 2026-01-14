@@ -23,7 +23,7 @@ Object.defineProperty(globalThis, "navigator", {
 });
 dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 
-const [{ createMap }, { GeoJSONLayer, Marker, Polygon, Polyline, TileLayer, marker }] = await Promise.all([
+const [{ createMap }, { GeoJSONLayer, Layer, Marker, Polygon, Polyline, TileLayer, marker, wmtsTileLayer }] = await Promise.all([
   import("orihon/easy"),
   import("orihon/standard")
 ]);
@@ -63,6 +63,38 @@ test("orihon/easy creates a Standard map with an owned basemap", () => {
   assert.match(map.getBasemap().getTileUrl(1, 2, 3), /^https:\/\/example\.test/);
 
   map.setBasemap(false);
+  assert.equal(map.getBasemap(), null);
+  map.remove();
+});
+
+test("orihon/easy accepts any ready Layer as its basemap", () => {
+  const wmts = wmtsTileLayer("https://example.test/{TileMatrix}/{TileCol}/{TileRow}.png", {
+    layer: "basemap",
+    tileMatrixSet: "EPSG:3857"
+  });
+  const map = createMap(container(), {
+    center: { lat: 55.751244, lng: 37.618423 },
+    zoom: 12,
+    basemap: wmts
+  });
+
+  assert.equal(map.getBasemap(), wmts);
+  assert.equal(map.hasLayer(wmts), true);
+
+  class CustomBasemap extends Layer {}
+  const custom = new CustomBasemap({ attribution: "Custom data" });
+  map.setBasemap(custom);
+
+  assert.equal(wmts.map, null);
+  assert.equal(map.getBasemap(), custom);
+  assert.equal(map.hasLayer(custom), true);
+
+  map.setBasemap(custom);
+  assert.equal(map.getBasemap(), custom);
+  assert.equal(map.hasLayer(custom), true);
+
+  map.setBasemap(null);
+  assert.equal(custom.map, null);
   assert.equal(map.getBasemap(), null);
   map.remove();
 });

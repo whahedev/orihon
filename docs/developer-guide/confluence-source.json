@@ -173,9 +173,9 @@
     },
     {
       "id": "8716343",
-      "title": "Orihon API - geometryWorkerPool",
+      "title": "Orihon API - createGeometryWorkerPool",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716343",
-      "markdown": "geometryWorkerPool\n==================\n\nНазначение\n----------\n\nСоздает пул workers для подготовки геометрии вне main thread.\n\nПример\n------\n\nDefaultnoneimport { geometryWorkerPool } from \"orihon\";\nconst pool = geometryWorkerPool({ workers: 2 });\nconst prepared = await pool.preparePoints(rawPoints);\npool.destroy();\n\nГде применять\n-------------\n\nБольшие партии точек и тяжелая нормализация перед рендером."
+      "markdown": "createGeometryWorkerPool\n========================\n\nНазначение\n----------\n\nСоздает отдельный пул workers, принадлежащий вызывающему, для подготовки геометрии вне main thread. После `destroy()` пул нельзя использовать повторно.\n\nПример\n------\n\nDefaultnoneimport { createGeometryWorkerPool } from \"orihon\";\nconst pool = createGeometryWorkerPool();\ntry {\n  const prepared = await pool.preparePoints(rawPoints);\n  // use prepared\n} finally {\n  pool.destroy();\n}\n\nГде применять\n-------------\n\nБольшие партии точек и тяжелая нормализация перед рендером."
     },
     {
       "id": "8716299",

@@ -11,11 +11,25 @@ import * as WebGPU from "orihon/webgpu";
 import * as Controls from "orihon/controls";
 import * as Geo from "orihon/geo";
 import * as PopupContent from "orihon/popup-content";
+import * as Source from "orihon/source";
 
 test("public API exports stage one additions", () => {
   assert.equal(typeof Orihon.AttributionControl, "function");
   assert.equal(typeof Orihon.attributionControl, "function");
   assert.equal(typeof Orihon.metersToPixels, "function");
+});
+
+test("geometry worker ownership is explicit in the public API", () => {
+  assert.equal(typeof Orihon.createGeometryWorkerPool, "function");
+  assert.equal("getSharedGeometryWorkerPool" in Orihon, false);
+});
+
+test("feature source is isolated in its optional entry", () => {
+  assert.equal(typeof Source.FeatureSource, "function");
+  assert.equal(typeof Source.featureSource, "function");
+  assert.equal(Source.createFeatureSource, Source.featureSource);
+  assert.equal("featureSource" in Standard, false);
+  assert.equal("featureSource" in Orihon, false);
 });
 
 test("public API does not expose renderer wiring helpers", () => {

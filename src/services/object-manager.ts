@@ -1,9 +1,11 @@
 import { Evented, type OrihonEvent, type EventHandler } from "../events.js";
+import type { FeatureSourceChange, ReadonlyFeatureSource } from "../source-types.js";
 import { CRSCompatibilityError } from "../crs.js";
 import { rafThrottle } from "../dom.js";
 import { ClusterCanvasLayer, clusterCanvasLayer } from "../layers/cluster-canvas-layer.js";
 import { DivIcon, type MarkerIcon } from "../layers/icon.js";
 import { Marker, type MarkerOptions } from "../layers/marker.js";
+import type { GeoJSONFeature } from "../layers/geojson.js";
 import { Polyline, polyline } from "../layers/vector.js";
 import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js";
 import { LatLng, LatLngBounds, Point, clampLat, latLng, bounds, wrapLng, type LatLngBoundsLike, type LatLngLike, type PointLike } from "../geo.js";
@@ -23,7 +25,7 @@ import {
   type ClusterIndex,
   type ClusterLayoutResult
 } from "./cluster-layout.js";
-import { GeometryWorkerPool, geometryWorkerPool } from "./geometry-worker.js";
+import { GeometryWorkerPool, getSharedGeometryWorkerPool } from "./geometry-worker.js";
 import { SpatialGridIndex, type SpatialRecord } from "./spatial-grid-index.js";
 import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 import { parseCssColor } from "../webgl-utils.js";
@@ -166,6 +168,8 @@ const PALETTE_HEX = {
 } as const;
 
 export interface ObjectManagerOptions {
+  /** Optional reactive GeoJSON source shared with GeoJSON and text layers. */
+  source?: ReadonlyFeatureSource<GeoJSONFeature> | null;
   minZoom?: number;
   marker?: MarkerOptions;
   clusterize?: boolean;
@@ -493,6 +497,7 @@ export class ObjectManager extends Evented {
   private _spiderMarkers: Marker[] = [];
   private _spiderLegs: Polyline[] = [];
   private _spiderClusterId: string | null = null;
+  private _sourceUnsubscribe: (() => void) | null = null;
   private readonly _unspiderfyOnMapClick = (): void => { this.unspiderfy(); };
 
   constructor(options: ObjectManagerOptions = {}) {
@@ -536,6 +541,7 @@ export class ObjectManager extends Evented {
       clusterStyle: null,
       sceneFeatures: true,
       maxVerticesPerGeometry: DEFAULT_MAX_VERTICES_PER_GEOMETRY,
+      source: null,
       ...options
     };
     this.options.clusterGridSize = Math.max(20, Number(this.options.clusterGridSize));
@@ -584,7 +590,11 @@ export class ObjectManager extends Evented {
     this._render = () => this.render();
     this._scheduleRender = rafThrottle(() => this.render());
     this._scheduleLabelRedraw = rafThrottle(() => this.#redrawLabelsDuringMove());
-    this._workerPool = geometryWorkerPool();
+    this._workerPool = getSharedGeometryWorkerPool();
+    if (this.options.source) {
+      this.add(this.options.source.getSnapshot().features.map((feature) => this.#sourceObject(feature)));
+      this._sourceUnsubscribe = this.options.source.subscribe((change) => this.#applySourceChange(change));
+    }
   }
 
   addTo(map: ObjectManagerMap): this {
@@ -630,13 +640,53 @@ export class ObjectManager extends Evented {
   }
 
   destroy(): this {
+    this._sourceUnsubscribe?.();
+    this._sourceUnsubscribe = null;
     this.remove();
     this.clear();
     this.#drainClusterPool();
     this._layoutGeneration++;
-    // Shared geometry worker pool stays alive across managers (avoids recompiling the worker blob).
+    // The library-owned shared pool outlives individual managers.
     this.off();
     return this;
+  }
+
+  #applySourceChange(change: FeatureSourceChange<GeoJSONFeature>): void {
+    if (change.type === "add") {
+      this.add(change.features.map((feature) => this.#sourceObject(feature)));
+      return;
+    }
+    if (change.type === "update") {
+      this.update(change.features.map((feature) => this.#sourceObject(feature)));
+      return;
+    }
+    if (change.type === "remove") {
+      this.removeObjects([...change.ids]);
+      return;
+    }
+    const features = this.options.source?.getSnapshot().features ?? [];
+    const objects = features.map((feature) => this.#sourceObject(feature));
+    const nextIds = new Set(objects.map((object) => object.id).filter((id): id is ObjectId => id != null));
+    const removed = [...this.items.keys()].filter((id) => !nextIds.has(id));
+    const added = objects.filter((object) => object.id != null && !this.items.has(object.id));
+    const updated = objects.filter((object) => object.id != null && this.items.has(object.id));
+    this.beginBulk();
+    try {
+      if (removed.length) this.removeObjects(removed);
+      if (updated.length) this.update(updated);
+      if (added.length) this.add(added);
+    } finally {
+      this.endBulk();
+    }
+  }
+
+  #sourceObject(feature: GeoJSONFeature): ManagedObject {
+    return {
+      ...feature,
+      id: feature.id,
+      geometry: (feature.geometry ?? undefined) as ManagedObject["geometry"],
+      properties: feature.properties ?? undefined
+    };
   }
 
   add(features: ManagedObject | ManagedObject[]): this {

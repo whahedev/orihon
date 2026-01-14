@@ -1,6 +1,6 @@
 {
   "name": "orihon",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "A free, open-source browser map engine. Apache 2.0. Use it anywhere.",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,6 +22,10 @@
     "./easy": {
       "types": "./dist/easy-entry.d.ts",
       "import": "./dist/easy-entry.js"
+    },
+    "./source": {
+      "types": "./dist/feature-source.d.ts",
+      "import": "./dist/feature-source.js"
     },
     "./draw": {
       "types": "./dist/draw/index.d.ts",

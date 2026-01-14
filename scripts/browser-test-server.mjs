@@ -61,6 +61,10 @@ function landingHtml() {
     <h1>Orihon test server</h1>
     <p>Локальные страницы для скорости ObjectManager, визуальных контрактов и демо.</p>
     <div class="grid">
+      <a class="card" href="/examples/feature-source/">
+        <strong>FeatureSource live fleet</strong>
+        <div class="muted">One source → GeoJSON + labels + ObjectManager</div>
+      </a>
       <a class="card" href="/test/object-manager-speed.html">
         <strong>ObjectManager speed</strong>
         <div class="muted">Ingest / layout / animate subset · 25k–1M</div>

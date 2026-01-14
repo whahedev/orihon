@@ -104,7 +104,13 @@ export { HeatLayer, heatLayer } from "./layers/heat.js";
 export { WebGLPathBatch } from "./layers/webgl-path-batch.js";
 export { pathBatch } from "./layers/path-batch.js";
 export { buildHeat, heatSupport } from "./services/heat.js";
-export { GeometryWorkerPool, geometryWorkerPool, preparePointBatch, preparePointBatchAsync } from "./services/geometry-worker.js";
+export {
+  GeometryWorkerPool,
+  createGeometryWorkerPool,
+  geometryWorkerPool,
+  preparePointBatch,
+  preparePointBatchAsync
+} from "./services/geometry-worker.js";
 export { OfflineTileCache, offlineTileCache } from "./services/offline-cache.js";
 export { PerformanceInspector, performanceInspector } from "./services/performance.js";
 export { createMapAdapter, defineOrihonElement } from "./services/framework-adapters.js";
@@ -154,6 +160,7 @@ export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";
 export type { PathOptions, CircleMarkerOptions } from "./layers/vector.js";
 export type {
+  GeoJSONInput,
   GeoJSONAsyncInput,
   GeoJSONAsyncOptions,
   GeoJSONData,

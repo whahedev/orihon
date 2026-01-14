@@ -1,6 +1,11 @@
 import { LatLng, LatLngBounds, latLng, type LatLngLike } from "../geo.js";
 import { FeatureGroup } from "../layer-group.js";
 import { Layer, type LayerOptions } from "../layer.js";
+import type { Orihon } from "../map.js";
+import {
+  isReadonlyFeatureSource
+} from "../source-protocol.js";
+import type { ReadonlyFeatureSource } from "../source-types.js";
 import {
   asyncAbortError,
   isAsyncIterable,
@@ -114,6 +119,7 @@ export interface GeoJSONFeatureCollection {
 }
 
 export type GeoJSONData = GeoJSONGeometry | GeoJSONFeature | GeoJSONFeatureCollection | GeoJSONData[];
+export type GeoJSONInput = GeoJSONData | ReadonlyFeatureSource<GeoJSONFeature>;
 export type GeoJSONAsyncInput = GeoJSONData | string | Blob | AsyncIterable<GeoJSONData>;
 export type GeoJSONStyleFunction = (feature: GeoJSONFeature) => PathOptions;
 export type GeoJSONPointToLayer = (feature: GeoJSONFeature, latlng: LatLng) => Layer;
@@ -349,13 +355,18 @@ export class GeoJSONLayer extends FeatureGroup {
   private _pathBatch: GeoJSONPathBatch | null = null;
   private _featureCount = 0;
   private _pathBatchFeatureCount = 0;
+  private readonly _source: ReadonlyFeatureSource<GeoJSONFeature> | null;
+  private _sourceUnsubscribe: (() => void) | null = null;
+  private readonly _sourceChanged = (): void => { this.#syncSource(); };
 
-  constructor(data?: GeoJSONData | null, options: GeoJSONOptions = {}) {
+  constructor(data?: GeoJSONInput | null, options: GeoJSONOptions = {}) {
     super();
     this.geoJSONOptions = options;
+    this._source = isReadonlyFeatureSource<GeoJSONFeature>(data) ? data : null;
+    const initialData = this._source ? [...this._source.getSnapshot().features] : data;
     const requested = options.renderer ?? "auto";
     const threshold = options.canvasThreshold ?? 250;
-    const large = countPathFeatures(data) >= threshold;
+    const large = countPathFeatures(initialData as GeoJSONData | null | undefined) >= threshold;
     if (requested === "svg" || (requested === "auto" && !large)) {
       this.rendererMode = "svg";
     } else if (requested === "webgl" || (requested === "auto" && large)) {
@@ -364,7 +375,21 @@ export class GeoJSONLayer extends FeatureGroup {
     } else {
       this.rendererMode = "canvas";
     }
-    if (data) this.addData(data);
+    if (initialData) this.addData(initialData as GeoJSONData);
+  }
+
+  override onAdd(map: Orihon): void {
+    if (this._source) {
+      this.#syncSource();
+      this._sourceUnsubscribe = this._source.subscribe(this._sourceChanged);
+    }
+    super.onAdd(map);
+  }
+
+  override onRemove(): void {
+    this._sourceUnsubscribe?.();
+    this._sourceUnsubscribe = null;
+    super.onRemove();
   }
 
   get data(): GeoJSONFeatureCollection {
@@ -530,6 +555,13 @@ export class GeoJSONLayer extends FeatureGroup {
         return clone;
       })
     };
+  }
+
+  #syncSource(): void {
+    if (!this._source) return;
+    this.clearLayers();
+    const features = this._source.getSnapshot().features;
+    if (features.length) this.addData([...features]);
   }
 
   #geometryToLayer(geometry: GeoJSONGeometry, feature: GeoJSONFeature): Layer | null {
@@ -725,6 +757,6 @@ export class GeoJSONLayer extends FeatureGroup {
   }
 }
 
-export function geoJSON(data?: GeoJSONData | null, options?: GeoJSONOptions): GeoJSONLayer {
+export function geoJSON(data?: GeoJSONInput | null, options?: GeoJSONOptions): GeoJSONLayer {
   return new GeoJSONLayer(data, options);
 }

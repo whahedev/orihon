@@ -73,7 +73,7 @@ Orihon is built as three intentional surfaces. Start narrow; grow only when the 
 | **Standard** | `orihon/standard` | Core + markers, SVG/canvas vectors, GeoJSON (`svg`/`canvas`), popups, controls, overlays, locales — **no WebGL** |
 | **Advanced** | `orihon` | Standard + WebGL (points, heat, path batch, raster tiles), MVT, ObjectManager, routing, traffic, offline, workers, adapters |
 
-Optional entries keep product-specific integrations outside those tier budgets: `orihon/easy`, `orihon/draw`, `orihon/react`, `orihon/pmtiles`, `orihon/mlt` (MLT **encoder**), `orihon/mvt-wasm` / `orihon/webgpu` (Standard-only opt-in), `orihon/controls`, `orihon/geo` and `orihon/popup-content`.
+Optional entries keep product-specific integrations outside those tier budgets: `orihon/easy`, `orihon/source`, `orihon/draw`, `orihon/react`, `orihon/pmtiles`, `orihon/mlt` (MLT **encoder**), `orihon/mvt-wasm` / `orihon/webgpu` (Standard-only opt-in), `orihon/controls`, `orihon/geo` and `orihon/popup-content`.
 
 ## API complexity
 
@@ -115,7 +115,9 @@ const routeLayer = map.add({
 });
 ```
 
-`orihon/easy` supports one discriminated `map.add(description)` contract for `marker`, `polyline`, `polygon`, `geojson` and `raster`, which maps naturally to React/Vue/Svelte props and configuration. The returned layers are normal Standard objects. Every map also accepts an already-created layer through `map.add(layer)`, while `layer.addTo(map)` remains unchanged. A MapLibre-style `addSource()` is deliberately deferred until Orihon has a real named, reusable source lifecycle instead of disguising a layer as a source. See the [Easy API guide](./docs/EASY.md).
+`orihon/easy` supports one discriminated `map.add(description)` contract for `marker`, `polyline`, `polygon`, `geojson` and `raster`, which maps naturally to React/Vue/Svelte props and configuration. The returned layers are normal Standard objects. `basemap` / `setBasemap()` accept either raster configuration or any ready `Layer`, including WMS, WMTS and custom implementations. Every map also accepts an already-created layer through `map.add(layer)`, while `layer.addTo(map)` remains unchanged. A MapLibre-style `addSource()` is deliberately deferred until Orihon has a real named, reusable source lifecycle instead of disguising a layer as a source. See the [Easy API guide](./docs/EASY.md).
+
+For data reused by several renderers, `orihon/source` provides a small reactive `FeatureSource`. One source can drive `geoJSON`, `textLayer` and `ObjectManager`, so an application can change rendering strategy without replacing its update model. Consumers depend only on the read-only structural protocol exported from Core; mutation, batching and storage remain optional. See the [FeatureSource guide](./docs/FEATURE_SOURCE.md).
 
 **GPU policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `heatLayer({ backend: "auto" })`, `tileLayer({ renderer: "webgl"|"webgpu"|"auto" })`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets). `tileLayer({ renderer: "auto" })` uses the unified GPU tile pipeline: WebGPU when available, then WebGL, then DOM. Normal vector-tile applications use `createMVTProvider` / `decodeMVT`; low-level packed decoding is isolated in `orihon/mvt`.
 

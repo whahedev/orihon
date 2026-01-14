@@ -2,6 +2,10 @@ import { createEl } from "../dom.js";
 import { latLng, type LatLng } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
+import {
+  isReadonlyFeatureSource
+} from "../source-protocol.js";
+import type { ReadonlyFeatureSource } from "../source-types.js";
 import { pickLabelAnchor } from "../services/label-layout.js";
 import type { GeoJSONFeature, GeoJSONFeatureCollection, GeoJSONPosition } from "./geojson.js";
 
@@ -32,11 +36,16 @@ interface Box { left: number; top: number; right: number; bottom: number }
 
 export class TextLayer extends Layer<Required<TextLayerOptions>> {
   private features: GeoJSONFeature[];
+  private readonly source: ReadonlyFeatureSource<GeoJSONFeature> | null;
+  private sourceUnsubscribe: (() => void) | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private visible: VisibleLabel[] = [];
   private readonly rebuildOnSettle = (): void => { this.rebuild(); };
+  private readonly sourceChanged = (): void => {
+    if (this.source) this.setData([...this.source.getSnapshot().features]);
+  };
 
-  constructor(features: GeoJSONFeature[] | GeoJSONFeatureCollection, options: TextLayerOptions) {
+  constructor(features: GeoJSONFeature[] | GeoJSONFeatureCollection | ReadonlyFeatureSource<GeoJSONFeature>, options: TextLayerOptions) {
     if (typeof options?.text !== "function") throw new TypeError("TextLayer requires a text(feature) function");
     super({
       pane: "overlay",
@@ -56,7 +65,12 @@ export class TextLayer extends Layer<Required<TextLayerOptions>> {
       maxDpr: 2,
       ...options
     } as Required<TextLayerOptions>);
-    this.features = Array.isArray(features) ? [...features] : [...features.features];
+    this.source = isReadonlyFeatureSource<GeoJSONFeature>(features) ? features : null;
+    this.features = this.source
+      ? [...this.source.getSnapshot().features]
+      : Array.isArray(features)
+        ? [...features]
+        : [...(features as GeoJSONFeatureCollection).features];
   }
 
   setData(features: GeoJSONFeature[] | GeoJSONFeatureCollection): this {
@@ -70,6 +84,10 @@ export class TextLayer extends Layer<Required<TextLayerOptions>> {
 
   override onAdd(map: Orihon): void {
     super.onAdd(map);
+    if (this.source) {
+      this.setData([...this.source.getSnapshot().features]);
+      this.sourceUnsubscribe = this.source.subscribe(this.sourceChanged);
+    }
     const pane = this.getPane();
     if (!pane) throw new Error(`Orihon pane not found: ${this.options.pane}`);
     this.canvas = createEl("canvas", "oh-text-layer", pane);
@@ -84,6 +102,8 @@ export class TextLayer extends Layer<Required<TextLayerOptions>> {
   }
 
   override onRemove(): void {
+    this.sourceUnsubscribe?.();
+    this.sourceUnsubscribe = null;
     this.map?.off("moveend", this.rebuildOnSettle);
     this.map?.off("zoomend", this.rebuildOnSettle);
     this.map?.off("resize", this.rebuildOnSettle);
@@ -203,7 +223,7 @@ export class TextLayer extends Layer<Required<TextLayerOptions>> {
 }
 
 export function textLayer(
-  features: GeoJSONFeature[] | GeoJSONFeatureCollection,
+  features: GeoJSONFeature[] | GeoJSONFeatureCollection | ReadonlyFeatureSource<GeoJSONFeature>,
   options: TextLayerOptions
 ): TextLayer {
   return new TextLayer(features, options);

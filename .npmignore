@@ -32,7 +32,5 @@ dist/services/heat-pipeline-worker.*
 dist/layers/webgl-tile-layer.*
 dist/layers/webgpu-tile-layer.*
 *.tgz
-tmp-debug-*.mjs
-.codex-confluence-attachments-dom.txt
 docs/developer-guide/confluence-source.json
 docs/developer-guide/playground-examples.json

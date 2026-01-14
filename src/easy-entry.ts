@@ -5,11 +5,11 @@ import {
   polygon,
   polyline,
   tileLayer,
-  type GeoJSONData,
+  type GeoJSONInput,
   type GeoJSONLayer,
   type GeoJSONOptions,
   type LatLngLike,
-  type Layer,
+  Layer,
   type MapOptions,
   type Marker,
   type MarkerOptions,
@@ -30,10 +30,11 @@ export type EasyBasemapOptions = Omit<TileLayerOptions, "attribution"> & {
   attribution?: string;
 };
 
-export type EasyBasemap = TileTemplate | EasyBasemapOptions;
+/** A ready layer, raster URL/template, or raster options used as the map basemap. */
+export type EasyBasemap = Layer | TileTemplate | EasyBasemapOptions;
 
 export interface EasyMapOptions extends MapOptions {
-  /** Optional raster basemap created and added with the map. */
+  /** Optional ready layer or raster basemap created and added with the map. */
   basemap?: EasyBasemap | false | null;
 }
 
@@ -78,7 +79,7 @@ export interface EasyPolygonDescription extends Omit<EasyPathDescription, "coord
 
 export interface EasyGeoJSONDescription {
   type: "geojson";
-  data?: GeoJSONData | null;
+  data?: GeoJSONInput | null;
   options?: GeoJSONOptions;
 }
 
@@ -116,11 +117,11 @@ export interface EasyMap extends Orihon {
   /** Create and add a polygon, including optional inner rings. */
   addPolygon(points: LatLngLike[] | LatLngLike[][], options?: PathOptions): Polygon;
   /** Create and add a GeoJSON layer. */
-  addGeoJSON(data?: GeoJSONData | null, options?: GeoJSONOptions): GeoJSONLayer;
+  addGeoJSON(data?: GeoJSONInput | null, options?: GeoJSONOptions): GeoJSONLayer;
   /** Replace the convenience basemap without affecting other map layers. */
   setBasemap(basemap: EasyBasemap | false | null): this;
-  /** Return the basemap owned by the Easy adapter, if one is active. */
-  getBasemap(): TileLayer | null;
+  /** Return the basemap managed by the Easy adapter, if one is active. */
+  getBasemap(): Layer | null;
 }
 
 /**
@@ -131,7 +132,7 @@ export function createMap(container: string | HTMLElement, options: EasyMapOptio
   const { basemap, ...mapOptions } = options;
   const map = createStandardMap(container, mapOptions) as EasyMap;
   const addExistingLayer = map.add.bind(map);
-  let activeBasemap: TileLayer | null = null;
+  let activeBasemap: Layer | null = null;
 
   Object.defineProperties(map, {
     add: {
@@ -207,16 +208,21 @@ export function createMap(container: string | HTMLElement, options: EasyMapOptio
     },
     addGeoJSON: {
       configurable: true,
-      value(data?: GeoJSONData | null, geojsonOptions: GeoJSONOptions = {}): GeoJSONLayer {
+      value(data?: GeoJSONInput | null, geojsonOptions: GeoJSONOptions = {}): GeoJSONLayer {
         return geoJSON(data, geojsonOptions).addTo(map);
       }
     },
     setBasemap: {
       configurable: true,
       value(next: EasyBasemap | false | null): EasyMap {
+        if (next === activeBasemap) return map;
         activeBasemap?.remove();
         activeBasemap = null;
         if (!next) return map;
+        if (next instanceof Layer) {
+          activeBasemap = next.addTo(map);
+          return map;
+        }
         if (typeof next === "string" || typeof next === "function") {
           activeBasemap = tileLayer(next, { renderer: "dom" }).addTo(map);
           return map;
@@ -229,7 +235,7 @@ export function createMap(container: string | HTMLElement, options: EasyMapOptio
     },
     getBasemap: {
       configurable: true,
-      value(): TileLayer | null {
+      value(): Layer | null {
         return activeBasemap;
       }
     }

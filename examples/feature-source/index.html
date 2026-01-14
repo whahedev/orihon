@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Orihon — FeatureSource в работе</title>
+  <link rel="stylesheet" href="/dist/orihon.css" />
+  <style>
+    :root{color-scheme:dark;--ink:#f5f7fb;--muted:#9aa8b8;--panel:rgba(8,15,25,.94);--card:rgba(255,255,255,.055);--line:rgba(255,255,255,.12);--accent:#55e6c1;--busy:#ffbf69;--late:#ff6b7a}*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#0b1621;color:var(--ink);font:14px/1.4 Inter,system-ui,sans-serif}#map{position:absolute;inset:0 0 0 410px;background:radial-gradient(circle at 55% 40%,#1c3545,#0b1621 72%)}#map:before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:32px 32px}.panel{position:absolute;z-index:1000;inset:0 auto 0 0;width:410px;padding:24px;overflow:auto;border-right:1px solid var(--line);background:var(--panel);backdrop-filter:blur(16px)}.eyebrow{color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}h1{margin:7px 0 6px;font-size:26px;line-height:1.05;letter-spacing:-.045em}.lead{margin:0 0 18px;color:var(--muted)}.flow{display:flex;align-items:center;gap:7px;margin:0 0 17px;color:var(--muted);font:11px/1.2 ui-monospace,monospace}.flow b{padding:5px 7px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:7px}.flow i{color:var(--accent);font-style:normal}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px}.stat{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}.stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums}.stat span{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em}.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:18px}button{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#162535;color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:.15s}button:hover{border-color:var(--accent);background:#1b3042}button:active{transform:translateY(1px)}button.primary{color:#05271f;border-color:var(--accent);background:var(--accent);font-weight:750}button.danger:hover{border-color:var(--late)}.section-title{margin:0 0 7px;color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.fleet{display:grid;gap:6px;margin-bottom:18px}.courier{display:grid;grid-template-columns:9px 1fr auto;align-items:center;gap:9px;width:100%;padding:9px 10px}.courier.selected{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}.dot{width:9px;height:9px;border-radius:99px;background:var(--accent);box-shadow:0 0 11px currentColor}.dot.busy{background:var(--busy)}.dot.late{background:var(--late)}.courier strong,.courier small{display:block}.courier small{color:var(--muted)}.courier em{color:var(--muted);font-size:11px;font-style:normal;font-variant-numeric:tabular-nums}.log{min-height:94px;max-height:130px;overflow:auto;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#07111b;color:#adbbca;font:11px/1.55 ui-monospace,monospace}.log div:first-child{color:var(--accent)}.hint{margin:9px 0 0;color:var(--muted);font-size:11px}code{color:#dce7f3}.fallback{position:absolute;z-index:1;right:14px;bottom:12px;color:rgba(255,255,255,.45);font-size:11px}@media(max-width:760px){html,body{overflow:auto}.panel{position:relative;width:100%;height:auto;min-height:52vh}#map{position:relative;inset:auto;height:48vh}}
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <div class="eyebrow">Практический тест API</div><h1>Курьеры Москвы</h1>
+    <p class="lead">Меняем один источник — карта, подписи и менеджер объектов синхронизируются сами.</p>
+    <div class="flow"><b>FeatureSource</b><i>→</i><b>GeoJSON</b><i>+</i><b>TextLayer</b><i>+</i><b>ObjectManager</b></div>
+    <div class="stats"><div class="stat"><b id="version">0</b><span>версия</span></div><div class="stat"><b id="features">0</b><span>объектов</span></div><div class="stat"><b id="events">0</b><span>событий</span></div></div>
+    <div class="actions"><button id="step" class="primary">Один шаг</button><button id="auto">Запустить поток</button><button id="add">+ Новый курьер</button><button id="remove" class="danger">− Удалить выбранного</button><button id="sync">Полная синхронизация</button><button id="reset">Сбросить пример</button></div>
+    <div class="section-title">Флот · выберите объект</div><div id="fleet" class="fleet"></div>
+    <div class="section-title">События источника</div><div id="log" class="log" aria-live="polite"></div>
+    <p class="hint"><code>Один шаг</code> обновляет все координаты внутри <code>batch()</code>, поэтому потребители получают только один <code>reset</code>.</p>
+  </main>
+  <div id="map"><span class="fallback">Подложка зависит от доступа к openstreetmap.org</span></div>
+  <script type="module">
+    import { createFeatureSource } from "/dist/feature-source.js";
+    import {
+      createMap, tileLayer, geoJSON, textLayer, circleMarker, objectManager
+    } from "/dist/index.js";
+
+    const palette = { ready: "#55e6c1", busy: "#ffbf69", late: "#ff6b7a" };
+    const courier = (id, name, lng, lat, status, speed) => ({
+      type: "Feature",
+      id,
+      geometry: { type: "Point", coordinates: [lng, lat] },
+      properties: { name, status, speed }
+    });
+    const initial = [
+      courier("courier-1", "Аня", 37.6173, 55.7558, "ready", 18),
+      courier("courier-2", "Марат", 37.6427, 55.7487, "busy", 27),
+      courier("courier-3", "Лена", 37.5862, 55.7694, "late", 12),
+      courier("courier-4", "Дима", 37.6611, 55.7791, "busy", 31)
+    ];
+    const clone = (feature) => structuredClone(feature);
+    const source = createFeatureSource(initial.map(clone));
+
+    const map = createMap("map", { center: [55.759, 37.625], zoom: 12, controls: true });
+    tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+      maxZoom: 19
+    }).addTo(map);
+
+    // Three independent consumers subscribe to the same source.
+    const halos = geoJSON(source, {
+      pointToLayer(feature, position) {
+        const color = palette[feature.properties?.status] ?? palette.ready;
+        return circleMarker(position, {
+          radius: 16, fill: color, fillOpacity: 0.13, stroke: color, strokeWidth: 2
+        });
+      }
+    }).addTo(map);
+    const labels = textLayer(source, {
+      text: (feature) => String(feature.properties?.name ?? feature.id),
+      fill: "#f8fafc", halo: "#102030", haloWidth: 4,
+      offset: [0, -21], font: "700 12px system-ui"
+    }).addTo(map);
+    const manager = objectManager({
+      source,
+      clusterize: false,
+      style(object, _state, context) {
+        const color = context.selected
+          ? "#ffffff"
+          : (palette[object.properties?.status] ?? palette.ready);
+        return { fill: color, fillOpacity: 1, size: context.selected ? 15 : 10 };
+      }
+    }).addTo(map);
+    manager.bindPopup((object) =>
+      `${object.properties?.name ?? object.id}: ${object.properties?.speed ?? 0} км/ч`
+    );
+
+    let selectedId = "courier-1";
+    let eventCount = 0;
+    let serial = initial.length;
+    let timer = null;
+    const logLines = [];
+    manager.setSelected(selectedId);
+
+    const $ = (selector) => document.querySelector(selector);
+    const versionEl = $("#version");
+    const featuresEl = $("#features");
+    const eventsEl = $("#events");
+    const fleetEl = $("#fleet");
+    const logEl = $("#log");
+    const autoEl = $("#auto");
+    const statusLabel = (status) => status === "late"
+      ? "опаздывает"
+      : status === "busy" ? "на заказе" : "свободен";
+
+    function render() {
+      const snapshot = source.getSnapshot();
+      versionEl.textContent = String(snapshot.version);
+      featuresEl.textContent = String(snapshot.features.length);
+      eventsEl.textContent = String(eventCount);
+      fleetEl.replaceChildren();
+      for (const feature of snapshot.features) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `courier${feature.id === selectedId ? " selected" : ""}`;
+        button.dataset.id = String(feature.id);
+        const dot = document.createElement("span");
+        dot.className = `dot ${feature.properties.status}`;
+        const copy = document.createElement("span");
+        const name = document.createElement("strong");
+        const status = document.createElement("small");
+        const speed = document.createElement("em");
+        name.textContent = feature.properties.name;
+        status.textContent = statusLabel(feature.properties.status);
+        copy.append(name, status);
+        speed.textContent = `${feature.properties.speed} км/ч`;
+        button.append(dot, copy, speed);
+        button.addEventListener("click", () => select(feature.id));
+        fleetEl.append(button);
+      }
+      logEl.replaceChildren(...logLines.map((line) => {
+        const element = document.createElement("div");
+        element.textContent = line;
+        return element;
+      }));
+    }
+
+    function select(id) {
+      if (!source.has(id)) return;
+      selectedId = id;
+      manager.setSelected(id);
+      const feature = source.get(id);
+      map.panTo([feature.geometry.coordinates[1], feature.geometry.coordinates[0]]);
+      render();
+    }
+
+    source.subscribe((change) => {
+      eventCount += 1;
+      const detail = "features" in change
+        ? ` (${change.features.length})`
+        : "ids" in change ? ` (${change.ids.length})` : "";
+      logLines.unshift(`v${change.version}  ${change.type}${detail}`);
+      logLines.splice(6);
+      if (selectedId != null && !source.has(selectedId)) {
+        selectedId = source.getSnapshot().features[0]?.id ?? null;
+        manager.setSelected(selectedId);
+      }
+      requestAnimationFrame(render);
+    });
+
+    function step() {
+      const statuses = ["ready", "busy", "late"];
+      source.batch(() => {
+        source.getSnapshot().features.forEach((feature, index) => {
+          const [lng, lat] = feature.geometry.coordinates;
+          source.update(feature.id, {
+            geometry: {
+              type: "Point",
+              coordinates: [lng + (index % 2 ? -0.0031 : 0.0024), lat + (index % 3 - 1) * 0.0017]
+            },
+            properties: {
+              ...feature.properties,
+              speed: 10 + ((feature.properties.speed + 7 + index * 3) % 31),
+              status: statuses[(statuses.indexOf(feature.properties.status) + 1) % statuses.length]
+            }
+          });
+        });
+      });
+    }
+
+    $("#step").addEventListener("click", step);
+    autoEl.addEventListener("click", () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        autoEl.textContent = "Запустить поток";
+        autoEl.classList.remove("primary");
+      } else {
+        step();
+        timer = setInterval(step, 1200);
+        autoEl.textContent = "Остановить поток";
+        autoEl.classList.add("primary");
+      }
+    });
+    $("#add").addEventListener("click", () => {
+      serial += 1;
+      const id = `courier-${serial}`;
+      source.add(courier(
+        id, `Курьер ${serial}`, 37.61 + serial * 0.007,
+        55.735 + (serial % 5) * 0.009, "ready", 16
+      ));
+      select(id);
+    });
+    $("#remove").addEventListener("click", () => {
+      if (selectedId != null) source.remove(selectedId);
+    });
+    $("#sync").addEventListener("click", () => {
+      const before = manager.getSelectedId();
+      source.replace(source.getSnapshot().features.map((feature) => ({
+        ...clone(feature),
+        properties: { ...feature.properties, speed: Math.max(0, feature.properties.speed - 2) }
+      })));
+      const kept = before != null && manager.getSelectedId() === before;
+      logLines.unshift(kept ? `✓ selection ${before} сохранён` : "selection отсутствовал");
+      logLines.splice(6);
+      render();
+    });
+    $("#reset").addEventListener("click", () => {
+      if (timer) autoEl.click();
+      source.replace(initial.map(clone));
+      selectedId = initial[0].id;
+      manager.setSelected(selectedId);
+      map.setView([55.759, 37.625], 12);
+      render();
+    });
+
+    render();
+    window.featureSourceDemo = { source, map, halos, labels, manager, step };
+  </script>
+</body>
+</html>

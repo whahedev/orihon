@@ -37,3 +37,10 @@ export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
 export type { TileCoordinates, TileTemplate, TileLayerOptions } from "./layers/tile-layer.js";
 export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
+export type {
+  FeatureId,
+  FeatureSourceChange,
+  FeatureSourceListener,
+  ReadonlyFeatureSource,
+  SourceSnapshot
+} from "./source-types.js";

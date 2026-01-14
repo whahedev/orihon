@@ -70,6 +70,7 @@ export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";
 export type { PathOptions, CircleMarkerOptions } from "./layers/vector.js";
 export type {
+  GeoJSONInput,
   GeoJSONAsyncInput,
   GeoJSONAsyncOptions,
   GeoJSONData,

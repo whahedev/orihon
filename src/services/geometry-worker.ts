@@ -57,7 +57,7 @@ type ClusterDatasetTagged = { __datasetVersion?: number };
 type ClusterGreedyWorkerRequest = ClusterLayoutRequest & ClusterDatasetTagged;
 type ClusterIndexWorkerRequest = Omit<ClusterLayoutRequest, "zoomBucket"> & ClusterDatasetTagged;
 
-type PendingResolve =
+type PendingResolve = (
   | { type: "preparePoints"; resolve: (value: PreparedPointBatch) => void }
   | { type: "clusterLayout"; resolve: (value: ClusterLayoutResult) => void }
   | { type: "clusterDatasetInstall"; datasetId: number; resolve: (ok: boolean) => void }
@@ -66,7 +66,23 @@ type PendingResolve =
       type: "clusterIndex";
       request: ClusterIndexWorkerRequest;
       resolve: (value: ClusterIndex) => void;
-    };
+    }
+) & { reject: (reason?: unknown) => void };
+
+function geometryWorkerAbortError(): Error {
+  if (typeof DOMException !== "undefined") {
+    return new DOMException("Geometry worker pool was destroyed", "AbortError");
+  }
+  const error = new Error("Geometry worker pool was destroyed");
+  error.name = "AbortError";
+  return error;
+}
+
+function geometryWorkerFailureError(message: string, cause?: unknown): Error {
+  const error = new Error(message, cause === undefined ? undefined : { cause });
+  error.name = "GeometryWorkerError";
+  return error;
+}
 
 export class GeometryWorkerPool {
   readonly useWorker: boolean;
@@ -96,6 +112,7 @@ export class GeometryWorkerPool {
   private _clusterDataset: { workerEpoch: number; version: number; datasetId: number; count: number } | null = null;
   private _clusterDatasetInstallKey = "";
   private _clusterDatasetInstallPromise: Promise<number | null> | null = null;
+  private _destroyed = false;
 
   constructor(options: GeometryWorkerOptions = {}) {
     this.useWorker = options.useWorker !== false && typeof Worker !== "undefined" && typeof URL !== "undefined";
@@ -105,26 +122,30 @@ export class GeometryWorkerPool {
     points: Iterable<GeometryPointInput> | AsyncIterable<GeometryPointInput>,
     options: GeometryPrepareOptions = {}
   ): Promise<PreparedPointBatch> {
+    this.#throwIfDestroyed();
     if (!this.useWorker) return preparePointBatchAsync(points, options);
     const serialized = await collectPointInput(points, options);
     const worker = this.#worker();
     if (!worker) return preparePointBatchAsync(serialized, options);
     const id = ++requestId;
-    return new Promise<PreparedPointBatch>((resolve) => {
-      this.pending.set(id, { type: "preparePoints", resolve });
-      worker.postMessage({ id, type: "preparePoints", points: serialized });
+    return new Promise<PreparedPointBatch>((resolve, reject) => {
+      this.pending.set(id, { type: "preparePoints", resolve, reject });
+      this.#postMessage(worker, id, { id, type: "preparePoints", points: serialized });
     });
   }
 
   async clusterLayout(request: ClusterLayoutRequest): Promise<ClusterLayoutResult> {
+    this.#throwIfDestroyed();
     if (!this.useWorker) return buildClusterLayout(request);
     const worker = this.#worker();
     if (!worker) return buildClusterLayout(request);
     const id = ++requestId;
     const coordsCopy = request.coords.slice();
-    return new Promise<ClusterLayoutResult>((resolve) => {
-      this.pending.set(id, { type: "clusterLayout", resolve });
-      worker.postMessage(
+    return new Promise<ClusterLayoutResult>((resolve, reject) => {
+      this.pending.set(id, { type: "clusterLayout", resolve, reject });
+      this.#postMessage(
+        worker,
+        id,
         {
           id,
           type: "clusterLayout",
@@ -144,12 +165,15 @@ export class GeometryWorkerPool {
 
   /** Build one zoom in a worker without cloning arbitrary ids or retransferring persistent coords. */
   async greedyClusterLayout(request: ClusterGreedyWorkerRequest): Promise<ClusterLayoutResult> {
+    this.#throwIfDestroyed();
     if (!this.useWorker) return buildGreedyClusterLayout(request);
     const worker = this.#worker();
     if (!worker) return buildGreedyClusterLayout(request);
     const datasetId = await this.#ensureClusterDataset(worker, request);
+    this.#throwIfDestroyed();
+    if (this.worker !== worker) return this.greedyClusterLayout(request);
     const id = ++requestId;
-    return new Promise<ClusterLayoutResult>((resolve) => {
+    return new Promise<ClusterLayoutResult>((resolve, reject) => {
       this.pending.set(id, {
         type: "greedyClusterLayout",
         request,
@@ -163,12 +187,11 @@ export class GeometryWorkerPool {
             }
           }
           resolve(result);
-        }
+        },
+        reject
       });
       if (datasetId != null) {
-        this.clusterWasmStats.datasetReuses += 1;
-        this.clusterWasmStats.avoidedCoordTransferBytes += request.coords.byteLength;
-        worker.postMessage({
+        const posted = this.#postMessage(worker, id, {
           id,
           type: "greedyClusterLayoutDataset",
           datasetId,
@@ -180,6 +203,10 @@ export class GeometryWorkerPool {
           clusterMinZoom: request.clusterMinZoom,
           simple: request.simple
         });
+        if (posted) {
+          this.clusterWasmStats.datasetReuses += 1;
+          this.clusterWasmStats.avoidedCoordTransferBytes += request.coords.byteLength;
+        }
         return;
       }
       this.#postLegacyGreedy(worker, id, request);
@@ -188,13 +215,16 @@ export class GeometryWorkerPool {
 
   /** Build transferable hierarchical index once; persistent worker dataset avoids repeated coord copies. */
   async clusterIndex(request: ClusterIndexWorkerRequest): Promise<ClusterIndex> {
+    this.#throwIfDestroyed();
     if (!this.useWorker) return buildClusterIndex(request);
     const worker = this.#worker();
     if (!worker) return buildClusterIndex(request);
     const datasetId = await this.#ensureClusterDataset(worker, request);
+    this.#throwIfDestroyed();
+    if (this.worker !== worker) return this.clusterIndex(request);
     const id = ++requestId;
     this.clusterIndexIds.set(id, request.ids);
-    return new Promise<ClusterIndex>((resolve) => {
+    return new Promise<ClusterIndex>((resolve, reject) => {
       this.clusterWasmStats.attempts += 1;
       this.pending.set(id, {
         type: "clusterIndex",
@@ -202,12 +232,11 @@ export class GeometryWorkerPool {
         resolve: (index: ClusterIndex) => {
           index.ids = request.ids;
           resolve(index);
-        }
+        },
+        reject
       });
       if (datasetId != null) {
-        this.clusterWasmStats.datasetReuses += 1;
-        this.clusterWasmStats.avoidedCoordTransferBytes += request.coords.byteLength;
-        worker.postMessage({
+        const posted = this.#postMessage(worker, id, {
           id,
           type: "clusterIndexDataset",
           datasetId,
@@ -218,6 +247,10 @@ export class GeometryWorkerPool {
           clusterMinZoom: request.clusterMinZoom,
           simple: request.simple
         });
+        if (posted) {
+          this.clusterWasmStats.datasetReuses += 1;
+          this.clusterWasmStats.avoidedCoordTransferBytes += request.coords.byteLength;
+        }
         return;
       }
       this.#postLegacyClusterIndex(worker, id, request);
@@ -228,6 +261,7 @@ export class GeometryWorkerPool {
     worker: Worker,
     request: { coords: Float64Array | Float32Array; __datasetVersion?: number }
   ): Promise<number | null> {
+    this.#throwIfDestroyed();
     const version = Number(request.__datasetVersion);
     if (!Number.isFinite(version)) return null;
     if (
@@ -248,13 +282,16 @@ export class GeometryWorkerPool {
     const datasetId = ++this._nextClusterDatasetId;
     const coordsCopy = request.coords.slice();
     const workerEpoch = this._workerEpoch;
-    const promise = new Promise<number | null>((resolve) => {
+    const promise = new Promise<number | null>((resolve, reject) => {
       this.pending.set(installRequestId, {
         type: "clusterDatasetInstall",
         datasetId,
-        resolve: (ok) => resolve(ok ? datasetId : null)
+        resolve: (ok) => resolve(ok ? datasetId : null),
+        reject
       });
-      worker.postMessage(
+      this.#postMessage(
+        worker,
+        installRequestId,
         { id: installRequestId, type: "clusterDatasetInstall", datasetId, coords: coordsCopy },
         [coordsCopy.buffer]
       );
@@ -284,7 +321,9 @@ export class GeometryWorkerPool {
 
   #postLegacyGreedy(worker: Worker, id: number, request: ClusterGreedyWorkerRequest): void {
     const coordsCopy = request.coords.slice();
-    worker.postMessage(
+    this.#postMessage(
+      worker,
+      id,
       {
         id,
         type: "greedyClusterLayout",
@@ -303,7 +342,9 @@ export class GeometryWorkerPool {
 
   #postLegacyClusterIndex(worker: Worker, id: number, request: ClusterIndexWorkerRequest): void {
     const coordsCopy = request.coords.slice();
-    worker.postMessage(
+    this.#postMessage(
+      worker,
+      id,
       {
         id,
         type: "clusterIndex",
@@ -319,31 +360,37 @@ export class GeometryWorkerPool {
     );
   }
 
+  #postMessage(worker: Worker, id: number, message: unknown, transfer: Transferable[] = []): boolean {
+    try {
+      worker.postMessage(message, transfer);
+      return true;
+    } catch (cause) {
+      const pending = this.pending.get(id);
+      if (pending) {
+        this.pending.delete(id);
+        this.clusterIndexIds.delete(id);
+        pending.reject(geometryWorkerFailureError(`Failed to send ${pending.type} request to geometry worker`, cause));
+        this.#recycleWorkerIfIdle();
+      }
+      return false;
+    }
+  }
+
   getClusterWasmStats(): Readonly<ClusterWasmWorkerStats> {
     return { ...this.clusterWasmStats };
   }
 
   destroy(): void {
+    if (this._destroyed) return;
+    this._destroyed = true;
     this.worker?.terminate();
     this.worker = null;
     if (this.workerUrl) {
       URL.revokeObjectURL(this.workerUrl);
       this.workerUrl = null;
     }
-    for (const pending of this.pending.values()) {
-      if (pending.type === "preparePoints") pending.resolve({ points: new Float32Array(), count: 0, skipped: 0 });
-      else if (pending.type === "clusterDatasetInstall") pending.resolve(false);
-      else if (pending.type === "clusterIndex") {
-        pending.resolve(buildClusterIndex({
-          ids: [],
-          coords: new Float64Array(),
-          gridSize: 50,
-          minPoints: 2,
-          clusterize: false,
-          clusterMaxZoom: 0
-        }));
-      } else pending.resolve({ clusters: [], singles: [] });
-    }
+    const error = geometryWorkerAbortError();
+    for (const pending of this.pending.values()) pending.reject(error);
     this.pending.clear();
     this.clusterIndexIds.clear();
     this._recycleWorkerWhenIdle = false;
@@ -354,7 +401,7 @@ export class GeometryWorkerPool {
   }
 
   #recycleWorkerIfIdle(): void {
-    if (!this._recycleWorkerWhenIdle || this.pending.size !== 0) return;
+    if (this._destroyed || !this._recycleWorkerWhenIdle || this.pending.size !== 0) return;
     this.worker?.terminate();
     this.worker = null;
     if (this.workerUrl) {
@@ -370,98 +417,32 @@ export class GeometryWorkerPool {
   }
 
   #worker(): Worker | null {
+    this.#throwIfDestroyed();
     if (this.worker) return this.worker;
     try {
       const blob = new Blob([WORKER_SOURCE], { type: "text/javascript" });
       this.workerUrl = URL.createObjectURL(blob);
       this.worker = new Worker(this.workerUrl);
+      const activeWorker = this.worker;
       this._workerEpoch += 1;
       this._clusterDataset = null;
       this._clusterDatasetInstallKey = "";
       this._clusterDatasetInstallPromise = null;
-      this.worker.onmessage = (event) => {
-        const data = event.data || {};
-        const pending = this.pending.get(data.id);
-        if (!pending) return;
-        if (data.type === "clusterDatasetMissing") {
-          this.clusterWasmStats.datasetMisses += 1;
-          this._clusterDataset = null;
-          if (pending.type === "greedyClusterLayout" || pending.type === "clusterIndex") {
-            this.clusterWasmStats.datasetReuses = Math.max(0, this.clusterWasmStats.datasetReuses - 1);
-            this.clusterWasmStats.avoidedCoordTransferBytes = Math.max(
-              0,
-              this.clusterWasmStats.avoidedCoordTransferBytes - pending.request.coords.byteLength
-            );
-          }
-          if (pending.type === "greedyClusterLayout") {
-            this.#postLegacyGreedy(this.worker!, Number(data.id), pending.request);
-          } else if (pending.type === "clusterIndex") {
-            this.#postLegacyClusterIndex(this.worker!, Number(data.id), pending.request);
-          }
-          return;
-        }
-        this.pending.delete(data.id);
-        if (pending.type === "clusterDatasetInstall" && data.type === "clusterDatasetReady") {
-          pending.resolve(Boolean(data.ok) && Number(data.datasetId) === pending.datasetId);
-          return;
-        }
-        if (pending.type === "preparePoints" && data.type === "preparePoints") {
-          pending.resolve({ points: new Float32Array(data.points), count: data.count, skipped: data.skipped });
-          this.#recycleWorkerIfIdle();
-          return;
-        }
-        if (pending.type === "clusterLayout" && data.type === "clusterLayout") {
-          pending.resolve({ clusters: data.clusters || [], singles: data.singles || [] });
-          this.#recycleWorkerIfIdle();
-          return;
-        }
-        if (pending.type === "greedyClusterLayout" && data.type === "greedyClusterLayout") {
-          pending.resolve({ clusters: data.clusters || [], singles: data.singles || [] });
-          this.#recycleWorkerIfIdle();
-          return;
-        }
-        if (pending.type === "clusterIndex" && data.type === "clusterIndexWasm") {
-          const blob = data.blob instanceof ArrayBuffer ? data.blob : null;
-          const index = blob ? decodeClusterIndexWasmBlob(blob) : null;
-          if (index) {
-            this.clusterWasmStats.successes += 1;
-            this.clusterWasmStats.lastWasmMemoryBytes = Number(data.wasmMemoryBytes) || 0;
-            this.clusterWasmStats.lastOutputBytes = Number(data.outputBytes) || blob!.byteLength;
-            this.clusterWasmStats.lastScratchBytes = Number(data.scratchBytes) || 0;
-            const ids = this.clusterIndexIds.get(data.id);
-            this.clusterIndexIds.delete(data.id);
-            if (ids) {
-              index.ids = ids.length === index.leafCount
-                ? ids
-                : ids.slice(0, index.leafCount);
-            }
-            pending.resolve(index);
-          } else {
-            this.clusterWasmStats.fallbacks += 1;
-            this.clusterIndexIds.delete(data.id);
-            pending.resolve(buildClusterIndex(pending.request));
-          }
-          if (data.recycleRecommended) this._recycleWorkerWhenIdle = true;
-          this.#recycleWorkerIfIdle();
-          return;
-        }
-        if (pending.type === "clusterIndex" && data.type === "clusterIndex") {
-          this.clusterWasmStats.fallbacks += 1;
-          const index = decodeClusterIndex(data.index || data);
-          const ids = this.clusterIndexIds.get(data.id);
-          this.clusterIndexIds.delete(data.id);
-
-          if (ids) {
-            index.ids = ids.length === index.leafCount
-              ? ids
-              : ids.slice(0, index.leafCount);
-          }
-
-          pending.resolve(index);
-          this.#recycleWorkerIfIdle();
-        }
+      activeWorker.onmessage = (event) => {
+        this.#handleWorkerMessage(activeWorker, event);
       };
-      return this.worker;
+      activeWorker.onerror = (event) => {
+        event.preventDefault();
+        const detail = event.message ? `: ${event.message}` : "";
+        this.#failWorker(activeWorker, geometryWorkerFailureError(`Geometry worker failed${detail}`, event.error ?? event));
+      };
+      activeWorker.onmessageerror = (event) => {
+        this.#failWorker(
+          activeWorker,
+          geometryWorkerFailureError("Geometry worker returned an unreadable message", event)
+        );
+      };
+      return activeWorker;
     } catch {
       if (this.workerUrl) {
         URL.revokeObjectURL(this.workerUrl);
@@ -475,19 +456,152 @@ export class GeometryWorkerPool {
       return null;
     }
   }
+
+  #handleWorkerMessage(worker: Worker, event: MessageEvent): void {
+    if (this.worker !== worker) return;
+    const data = event.data || {};
+    const pending = this.pending.get(data.id);
+    if (!pending) return;
+    if (data.type === "clusterDatasetMissing") {
+      this.clusterWasmStats.datasetMisses += 1;
+      this._clusterDataset = null;
+      if (pending.type === "greedyClusterLayout" || pending.type === "clusterIndex") {
+        this.clusterWasmStats.datasetReuses = Math.max(0, this.clusterWasmStats.datasetReuses - 1);
+        this.clusterWasmStats.avoidedCoordTransferBytes = Math.max(
+          0,
+          this.clusterWasmStats.avoidedCoordTransferBytes - pending.request.coords.byteLength
+        );
+      }
+      if (pending.type === "greedyClusterLayout") {
+        this.#postLegacyGreedy(this.worker!, Number(data.id), pending.request);
+      } else if (pending.type === "clusterIndex") {
+        this.#postLegacyClusterIndex(this.worker!, Number(data.id), pending.request);
+      } else {
+        this.#rejectUnexpectedResponse(data, pending);
+      }
+      return;
+    }
+
+    this.pending.delete(data.id);
+    try {
+      if (pending.type === "clusterDatasetInstall" && data.type === "clusterDatasetReady") {
+        pending.resolve(Boolean(data.ok) && Number(data.datasetId) === pending.datasetId);
+        return;
+      }
+      if (pending.type === "preparePoints" && data.type === "preparePoints") {
+        pending.resolve({ points: new Float32Array(data.points), count: data.count, skipped: data.skipped });
+        this.#recycleWorkerIfIdle();
+        return;
+      }
+      if (pending.type === "clusterLayout" && data.type === "clusterLayout") {
+        pending.resolve({ clusters: data.clusters || [], singles: data.singles || [] });
+        this.#recycleWorkerIfIdle();
+        return;
+      }
+      if (pending.type === "greedyClusterLayout" && data.type === "greedyClusterLayout") {
+        pending.resolve({ clusters: data.clusters || [], singles: data.singles || [] });
+        this.#recycleWorkerIfIdle();
+        return;
+      }
+      if (pending.type === "clusterIndex" && data.type === "clusterIndexWasm") {
+        const blob = data.blob instanceof ArrayBuffer ? data.blob : null;
+        const index = blob ? decodeClusterIndexWasmBlob(blob) : null;
+        if (index) {
+          this.clusterWasmStats.successes += 1;
+          this.clusterWasmStats.lastWasmMemoryBytes = Number(data.wasmMemoryBytes) || 0;
+          this.clusterWasmStats.lastOutputBytes = Number(data.outputBytes) || blob!.byteLength;
+          this.clusterWasmStats.lastScratchBytes = Number(data.scratchBytes) || 0;
+          const ids = this.clusterIndexIds.get(data.id);
+          this.clusterIndexIds.delete(data.id);
+          if (ids) {
+            index.ids = ids.length === index.leafCount
+              ? ids
+              : ids.slice(0, index.leafCount);
+          }
+          pending.resolve(index);
+        } else {
+          this.clusterWasmStats.fallbacks += 1;
+          this.clusterIndexIds.delete(data.id);
+          pending.resolve(buildClusterIndex(pending.request));
+        }
+        if (data.recycleRecommended) this._recycleWorkerWhenIdle = true;
+        this.#recycleWorkerIfIdle();
+        return;
+      }
+      if (pending.type === "clusterIndex" && data.type === "clusterIndex") {
+        this.clusterWasmStats.fallbacks += 1;
+        const index = decodeClusterIndex(data.index || data);
+        const ids = this.clusterIndexIds.get(data.id);
+        this.clusterIndexIds.delete(data.id);
+        if (ids) {
+          index.ids = ids.length === index.leafCount
+            ? ids
+            : ids.slice(0, index.leafCount);
+        }
+        pending.resolve(index);
+        this.#recycleWorkerIfIdle();
+        return;
+      }
+      this.#rejectUnexpectedResponse(data, pending);
+    } catch (cause) {
+      this.clusterIndexIds.delete(data.id);
+      pending.reject(geometryWorkerFailureError(`Failed to process ${pending.type} worker response`, cause));
+      this.#recycleWorkerIfIdle();
+    }
+  }
+
+  #rejectUnexpectedResponse(data: { id?: unknown; type?: unknown }, pending: PendingResolve): void {
+    this.pending.delete(Number(data.id));
+    this.clusterIndexIds.delete(Number(data.id));
+    const responseType = typeof data.type === "string" ? data.type : "unknown";
+    pending.reject(geometryWorkerFailureError(
+      `Unexpected geometry worker response "${responseType}" for ${pending.type} request`
+    ));
+    this.#recycleWorkerIfIdle();
+  }
+
+  #failWorker(worker: Worker, error: Error): void {
+    if (this.worker !== worker) return;
+    this.worker = null;
+    worker.terminate();
+    if (this.workerUrl) {
+      URL.revokeObjectURL(this.workerUrl);
+      this.workerUrl = null;
+    }
+    const pending = [...this.pending.values()];
+    this.pending.clear();
+    this.clusterIndexIds.clear();
+    this._recycleWorkerWhenIdle = false;
+    this._clusterDataset = null;
+    this._clusterDatasetInstallKey = "";
+    this._clusterDatasetInstallPromise = null;
+    this._workerEpoch += 1;
+    for (const request of pending) request.reject(error);
+  }
+
+  #throwIfDestroyed(): void {
+    if (this._destroyed) throw geometryWorkerAbortError();
+  }
 }
 
 let sharedGeometryWorkerPool: GeometryWorkerPool | null = null;
 
-export function geometryWorkerPool(options?: GeometryWorkerOptions): GeometryWorkerPool {
-  // Dedicated pool when workers are explicitly disabled (tests / sync-only).
-  if (options && options.useWorker === false) {
-    return new GeometryWorkerPool(options);
-  }
+/** Creates a caller-owned pool. The caller must eventually call destroy(). */
+export function createGeometryWorkerPool(options: GeometryWorkerOptions = {}): GeometryWorkerPool {
+  return new GeometryWorkerPool(options);
+}
+
+/** @internal Shared infrastructure for library-managed services. */
+export function getSharedGeometryWorkerPool(): GeometryWorkerPool {
   if (!sharedGeometryWorkerPool) {
-    sharedGeometryWorkerPool = new GeometryWorkerPool(options);
+    sharedGeometryWorkerPool = createGeometryWorkerPool();
   }
   return sharedGeometryWorkerPool;
+}
+
+/** @deprecated Use createGeometryWorkerPool(). This alias now creates a caller-owned pool. */
+export function geometryWorkerPool(options: GeometryWorkerOptions = {}): GeometryWorkerPool {
+  return createGeometryWorkerPool(options);
 }
 
 export function preparePointBatch(points: Iterable<GeometryPointInput>): PreparedPointBatch {

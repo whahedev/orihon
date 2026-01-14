@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Evented } from "../dist/events.js";
 import { clusterLayoutWorkerSource, encodeClusterIndex, decodeClusterIndex } from "../dist/services/cluster-layout.js";
+import { getSharedGeometryWorkerPool } from "../dist/services/geometry-worker.js";
 import {
   OfflineTileCache,
   PerformanceInspector,
@@ -11,6 +12,7 @@ import {
   buildClusterIndex,
   createMVTProvider,
   createMapAdapter,
+  createGeometryWorkerPool,
   decodeMVT,
   defineOrihonElement,
   geometryWorkerPool,
@@ -410,6 +412,275 @@ test("GeometryWorkerPool prepares typed point batches with fallback", async () =
   assert.equal(prepared.count, 3);
   assert.deepEqual(progress, [[2, 3], [3, 3]]);
   pool.destroy();
+});
+
+test("geometry worker pool factories return caller-owned instances", () => {
+  const first = createGeometryWorkerPool({ useWorker: false });
+  const second = createGeometryWorkerPool({ useWorker: false });
+  const deprecatedFirst = geometryWorkerPool({ useWorker: false });
+  const deprecatedSecond = geometryWorkerPool({ useWorker: false });
+
+  assert.notEqual(first, second);
+  assert.notEqual(deprecatedFirst, deprecatedSecond);
+
+  first.destroy();
+  second.destroy();
+  deprecatedFirst.destroy();
+  deprecatedSecond.destroy();
+});
+
+test("destroying an owned geometry pool does not affect the library shared pool", async () => {
+  const shared = getSharedGeometryWorkerPool();
+  const owned = createGeometryWorkerPool({ useWorker: false });
+  assert.notEqual(owned, shared);
+
+  owned.destroy();
+
+  const prepared = await shared.preparePoints([[1, 2]]);
+  assert.equal(prepared.count, 1);
+});
+
+test("GeometryWorkerPool.destroy is terminal and idempotent", async () => {
+  const pool = createGeometryWorkerPool({ useWorker: false });
+  const layoutRequest = {
+    ids: [1],
+    coords: new Float64Array([1, 2]),
+    zoomBucket: 1,
+    gridSize: 256,
+    minPoints: 2,
+    clusterize: true,
+    clusterMaxZoom: 18
+  };
+  pool.destroy();
+  pool.destroy();
+
+  await assert.rejects(pool.preparePoints([[1, 2]]), { name: "AbortError" });
+  await assert.rejects(pool.clusterLayout(layoutRequest), { name: "AbortError" });
+  await assert.rejects(pool.greedyClusterLayout(layoutRequest), { name: "AbortError" });
+  await assert.rejects(pool.clusterIndex(layoutRequest), { name: "AbortError" });
+});
+
+test("GeometryWorkerPool.destroy rejects pending worker work with AbortError", async () => {
+  const originalWorker = globalThis.Worker;
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  let workerInstance;
+
+  class FakeWorker {
+    onmessage = null;
+    terminated = false;
+    constructor() { workerInstance = this; }
+    postMessage() {}
+    terminate() { this.terminated = true; }
+  }
+
+  globalThis.Worker = FakeWorker;
+  URL.createObjectURL = () => "blob:geometry-worker-test";
+  URL.revokeObjectURL = () => {};
+
+  try {
+    const pool = createGeometryWorkerPool();
+    const operation = pool.preparePoints([[1, 2]]);
+    await Promise.resolve();
+    assert.equal(pool.pending.size, 1);
+
+    pool.destroy();
+
+    await assert.rejects(operation, { name: "AbortError" });
+    assert.equal(workerInstance.terminated, true);
+    assert.equal(pool.pending.size, 0);
+  } finally {
+    if (originalWorker === undefined) delete globalThis.Worker;
+    else globalThis.Worker = originalWorker;
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  }
+});
+
+test("GeometryWorkerPool rejects all pending work on worker failure and can recover", async () => {
+  const originalWorker = globalThis.Worker;
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  const workers = [];
+
+  class FakeWorker {
+    onmessage = null;
+    onerror = null;
+    onmessageerror = null;
+    messages = [];
+    terminated = false;
+    constructor() { workers.push(this); }
+    postMessage(message) { this.messages.push(message); }
+    terminate() { this.terminated = true; }
+  }
+
+  globalThis.Worker = FakeWorker;
+  URL.createObjectURL = () => `blob:geometry-worker-${workers.length}`;
+  URL.revokeObjectURL = () => {};
+
+  try {
+    const pool = createGeometryWorkerPool();
+    const first = pool.preparePoints([[1, 2]]);
+    const second = pool.preparePoints([[3, 4]]);
+    const cause = new Error("worker crashed");
+    const firstRejected = assert.rejects(first, (error) =>
+      error?.name === "GeometryWorkerError" && error.cause === cause && /worker crashed/.test(error.message)
+    );
+    const secondRejected = assert.rejects(second, { name: "GeometryWorkerError" });
+    await Promise.resolve();
+    assert.equal(pool.pending.size, 2);
+
+    let prevented = false;
+    workers[0].onerror({
+      message: "worker crashed",
+      error: cause,
+      preventDefault() { prevented = true; }
+    });
+
+    await Promise.all([firstRejected, secondRejected]);
+    assert.equal(prevented, true);
+    assert.equal(workers[0].terminated, true);
+    assert.equal(pool.pending.size, 0);
+
+    const recovered = pool.preparePoints([[5, 6]]);
+    await Promise.resolve();
+    assert.equal(workers.length, 2);
+    workers[0].onerror({
+      message: "late stale worker error",
+      error: new Error("late stale worker error"),
+      preventDefault() {}
+    });
+    assert.equal(pool.pending.size, 1);
+    assert.equal(workers[1].terminated, false);
+    const request = workers[1].messages[0];
+    workers[1].onmessage({
+      data: {
+        id: request.id,
+        type: "preparePoints",
+        points: new Float32Array([5, 6]).buffer,
+        count: 1,
+        skipped: 0
+      }
+    });
+    assert.equal((await recovered).count, 1);
+    pool.destroy();
+  } finally {
+    if (originalWorker === undefined) delete globalThis.Worker;
+    else globalThis.Worker = originalWorker;
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  }
+});
+
+test("GeometryWorkerPool rejects pending work on message deserialization failure", async () => {
+  const originalWorker = globalThis.Worker;
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  let workerInstance;
+
+  class FakeWorker {
+    onmessage = null;
+    onerror = null;
+    onmessageerror = null;
+    constructor() { workerInstance = this; }
+    postMessage() {}
+    terminate() {}
+  }
+
+  globalThis.Worker = FakeWorker;
+  URL.createObjectURL = () => "blob:geometry-worker-messageerror";
+  URL.revokeObjectURL = () => {};
+
+  try {
+    const pool = createGeometryWorkerPool();
+    const operation = pool.preparePoints([[1, 2]]);
+    const rejected = assert.rejects(operation, (error) =>
+      error?.name === "GeometryWorkerError" && /unreadable message/.test(error.message)
+    );
+    await Promise.resolve();
+    workerInstance.onmessageerror({ data: null });
+    await rejected;
+    assert.equal(pool.pending.size, 0);
+    pool.destroy();
+  } finally {
+    if (originalWorker === undefined) delete globalThis.Worker;
+    else globalThis.Worker = originalWorker;
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  }
+});
+
+test("GeometryWorkerPool rejects a request when postMessage throws", async () => {
+  const originalWorker = globalThis.Worker;
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  const cause = new Error("cannot clone input");
+
+  class FakeWorker {
+    onmessage = null;
+    onerror = null;
+    onmessageerror = null;
+    postMessage() { throw cause; }
+    terminate() {}
+  }
+
+  globalThis.Worker = FakeWorker;
+  URL.createObjectURL = () => "blob:geometry-worker-post-error";
+  URL.revokeObjectURL = () => {};
+
+  try {
+    const pool = createGeometryWorkerPool();
+    const operation = pool.preparePoints([[1, 2]]);
+    await assert.rejects(operation, (error) =>
+      error?.name === "GeometryWorkerError" && error.cause === cause && /Failed to send/.test(error.message)
+    );
+    assert.equal(pool.pending.size, 0);
+    pool.destroy();
+  } finally {
+    if (originalWorker === undefined) delete globalThis.Worker;
+    else globalThis.Worker = originalWorker;
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  }
+});
+
+test("GeometryWorkerPool rejects an unexpected worker response", async () => {
+  const originalWorker = globalThis.Worker;
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  let workerInstance;
+  let request;
+
+  class FakeWorker {
+    onmessage = null;
+    onerror = null;
+    onmessageerror = null;
+    constructor() { workerInstance = this; }
+    postMessage(message) { request = message; }
+    terminate() {}
+  }
+
+  globalThis.Worker = FakeWorker;
+  URL.createObjectURL = () => "blob:geometry-worker-unexpected-response";
+  URL.revokeObjectURL = () => {};
+
+  try {
+    const pool = createGeometryWorkerPool();
+    const operation = pool.preparePoints([[1, 2]]);
+    const rejected = assert.rejects(operation, (error) =>
+      error?.name === "GeometryWorkerError" && /unexpectedResult/.test(error.message)
+    );
+    await Promise.resolve();
+    workerInstance.onmessage({ data: { id: request.id, type: "unexpectedResult" } });
+    await rejected;
+    assert.equal(pool.pending.size, 0);
+    pool.destroy();
+  } finally {
+    if (originalWorker === undefined) delete globalThis.Worker;
+    else globalThis.Worker = originalWorker;
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  }
 });
 
 test("GeometryWorkerPool.clusterLayout matches sync buildClusterLayout", async () => {

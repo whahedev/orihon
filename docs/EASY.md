@@ -36,7 +36,7 @@ API complexity describes how directly an application controls those capabilities
 - **Rendering API** — applications select GPU backends, packed inputs, workers and renderer-specific diagnostics.
 
 Easy therefore sits on top of Standard. It does not change the Core/Standard/Advanced gzip budgets.
-String basemaps use the Standard DOM tile renderer by default. An explicit `renderer` option remains available when an application deliberately registers or imports an accelerated backend.
+String basemaps use the Standard DOM tile renderer by default. An explicit `renderer` option remains available when an application deliberately registers or imports an accelerated backend. A ready `Layer` is added unchanged, so WMS, WMTS and custom layer implementations can also be used as the basemap.
 
 ## Map options
 
@@ -44,7 +44,7 @@ String basemaps use the Standard DOM tile renderer by default. An explicit `rend
 
 | Field | Type | Purpose |
 | --- | --- | --- |
-| `basemap` | `string \| TileTemplate \| EasyBasemapOptions \| false \| null` | Creates one raster tile layer and adds it to the map. |
+| `basemap` | `Layer \| TileTemplate \| EasyBasemapOptions \| false \| null` | Adds a ready layer or creates one raster tile layer and manages it as the basemap. |
 | `basemap.url` | `TileTemplate` | URL template or tile URL function. |
 | `basemap.attribution` | `string` | Data attribution displayed by the map. |
 | remaining basemap fields | `TileLayerOptions` | The normal tile cache, zoom, bounds, opacity and request settings. |
@@ -100,7 +100,7 @@ Supported descriptions:
 | `marker` | `position` | Normal marker fields plus `popup`, `popupOptions`, `tooltip`, `tooltipOptions` | `Marker` |
 | `polyline` | `coordinates` | `style`, popup and tooltip fields | `Polyline` |
 | `polygon` | `coordinates` (one ring or rings with holes) | `style`, popup and tooltip fields | `Polygon` |
-| `geojson` | `data` | `options: GeoJSONOptions` | `GeoJSONLayer` |
+| `geojson` | `data` (`GeoJSONData` or `FeatureSource`) | `options: GeoJSONOptions` | `GeoJSONLayer` |
 | `raster` | `url` | `options: TileLayerOptions` | `TileLayer` |
 
 Polyline and polygon styles use the normal `stroke`, `strokeWidth`, `strokeOpacity`, `fill` and `fillOpacity` vocabulary. Inside Easy descriptions, `width` and `opacity` are concise aliases for `strokeWidth` and `strokeOpacity`; canonical fields win if both forms are supplied.
@@ -142,6 +142,9 @@ const places = map.addGeoJSON(featureCollection, {
   pointToLayer: (feature, position) => marker(position)
 });
 
+// A shared reactive source from `orihon/source` is accepted too.
+const livePlaces = map.addGeoJSON(placeSource);
+
 const labels = map.addTileLayer("https://example.test/{z}/{x}/{y}.png", {
   opacity: 0.8
 });
@@ -164,9 +167,29 @@ The overload is intentional: `map.add(existingLayer)` returns the map, preservin
 
 Replaces only the basemap owned by the Easy adapter. Other layers are not removed. Pass `false` or `null` to remove it.
 
+A ready Standard or custom layer is accepted unchanged. This keeps provider-specific methods available on the original object:
+
+```ts
+import { createMap } from "orihon/easy";
+import { wmtsTileLayer } from "orihon/standard";
+
+const basemap = wmtsTileLayer(url, {
+  layer: "basemap",
+  tileMatrixSet: "EPSG:3857"
+});
+
+const map = createMap("map", {
+  center: { lat: 55.751244, lng: 37.618423 },
+  zoom: 12,
+  basemap
+});
+
+map.getBasemap() === basemap; // true
+```
+
 ### `map.getBasemap()`
 
-Returns the active Easy basemap as a normal `TileLayer`, or `null`.
+Returns the active Easy basemap as the original `Layer`, or `null`. URL/template basemaps return the `TileLayer` created by Easy.
 
 ## Moving between API levels
 

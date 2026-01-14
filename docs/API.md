@@ -51,11 +51,11 @@ Factories are `marker`, `polyline`, `polygon`, `rectangle`, `circle`, `circleMar
 
 Markers accept `rotation` in degrees and `rotationOrigin` as a CSS transform-origin value. Runtime dragging can be toggled without recreating a layer via `marker.setDraggable(boolean)` and inspected with `marker.isDraggable()`.
 
-`geoJSON(data, options)` supports all GeoJSON geometry types plus `style`, `filter`, `pointToLayer` and `onEachFeature`. Use `addData`, `addDataAsync`, `setStyle`, `resetStyle` and `toGeoJSON` to mutate or export the layer. `addDataAsync(input, options)` accepts parsed GeoJSON, a raw JSON `string`/`Blob`, or `AsyncIterable<GeoJSONData>`. Raw data is parsed in a Blob Worker when available; parsed objects are ingested cooperatively without cloning the complete object graph. Options are `chunkSize` (default 5000), `useWorker` (default `true`), `yieldMode` (`"frame"` or `"task"`), `maxBytes` (raw inputs, default 256 MiB), `signal` and `onProgress(processed, total)`. A CSP that rejects Blob workers causes a safe main-thread parse fallback, followed by chunked ingestion.
+`geoJSON(data, options)` supports all GeoJSON geometry types plus `style`, `filter`, `pointToLayer` and `onEachFeature`. It also accepts a reactive `FeatureSource` from `orihon/source`; source changes rebuild the rendered collection while the layer is attached. Use `addData`, `addDataAsync`, `setStyle`, `resetStyle` and `toGeoJSON` to mutate or export an application-owned layer. `addDataAsync(input, options)` accepts parsed GeoJSON, a raw JSON `string`/`Blob`, or `AsyncIterable<GeoJSONData>`. Raw data is parsed in a Blob Worker when available; parsed objects are ingested cooperatively without cloning the complete object graph. Options are `chunkSize` (default 5000), `useWorker` (default `true`), `yieldMode` (`"frame"` or `"task"`), `maxBytes` (raw inputs, default 256 MiB), `signal` and `onProgress(processed, total)`. A CSP that rejects Blob workers causes a safe main-thread parse fallback, followed by chunked ingestion.
 
 The WebGL path backend uses camera warping between throttled exact GPU frames and redraws exactly after movement settles. `WebGLPathBatchOptions.cameraRedrawInterval` is the base cadence (250 ms; `0` disables throttling), and `cameraSettleDelay` controls the final redraw delay (120 ms).
 
-`textLayer(features, options)` is available from `orihon/standard`. It renders point or line labels to one canvas with priority-ordered greedy collision, zoom limits, halo, offset and RTL alignment. Required option: `text(feature)`. Use `setData()` to replace features, `rebuild()` after application-owned label inputs change, and `getVisibleLabels()` to inspect the accepted layout.
+`textLayer(features, options)` is available from `orihon/standard`. It renders point or line labels to one canvas with priority-ordered greedy collision, zoom limits, halo, offset and RTL alignment. `features` may also be a shared `FeatureSource`. Required option: `text(feature)`. Use `setData()` to replace application-owned features, `rebuild()` after their inputs change, and `getVisibleLabels()` to inspect the accepted layout.
 
 For large line sets in **Standard**, use `renderer: "canvas"` (or `"auto"`, which batches at ≥250 path features). Canvas batches support feature-aware hit testing, click events and popups; popup factories receive the clicked source feature. **WebGL** path batches (`renderer: "webgl"` / Advanced `auto`) are registered only from the full `orihon` entry — Core/Standard stay CPU/DOM.
 
@@ -141,7 +141,7 @@ There are intentionally no compatibility aliases: `webglHeatLayer`, `heatIsoline
 - `HeatLayer`, `heatLayer()` and `buildHeat()` are the only public heat surface. The former Canvas heat, point-splat WebGL heat and standalone isoline layers were removed; their duplicate field calculation and incompatible option vocabularies are no longer shipped. ObjectManager still accepts its existing `heatmapDisplay`, `heatmapIsolineLabels`, `heatmapBackend`, `heatmapEvaluation`, and `heatmapIsolineStep` bridge until the dedicated manager integration is revised in the next stage.
 - `vectorTileLayer` accepts GeoJSON tile providers; `createMVTProvider` adds binary decoding (`decodeMVT` defaults: 2 MiB / 16384 features / 8192 string bytes). The Advanced entry routes Mapbox MVT through a WASM geometry decoder when WebAssembly is available and also recognizes supported Orihon MLT tiles. `decodeMVT()` is the public direct-decoding path. Its optional `paint` array supports source `layer`, geometry `type` (`fill`, `line`, `circle`), zoom limits, a predicate `filter`, and normal path/circle options. A `style` callback overrides `paint` when both are present.
 - `geoJSON` accepts optional `maxFeatures`.
-- `geometryWorkerPool` prepares point batches off the main thread when workers are available.
+- `createGeometryWorkerPool` creates a caller-owned pool that prepares point batches off the main thread when workers are available. Always release it with `destroy()`.
 - `offlineTileCache` manages Cache Storage and can generate/register a Service Worker. Instance `urlPrefixes` also filter `prefetch()`.
 - `performanceInspector` reports frame, tile, DOM and optional memory statistics.
 
@@ -210,7 +210,8 @@ These tiers describe package capability and gzip size. API complexity is a separ
 
 Also available:
 
-- `orihon/easy` — Standard-powered `createMap()` adapter with declarative `basemap`, a discriminated `map.add({ type: "marker" | "polyline" | "polygon" | "geojson" | "raster", ... })` contract, and discoverable `map.addMarker()`, `map.addTileLayer()`, `map.addPolyline()`, `map.addPolygon()` and `map.addGeoJSON()` methods; see [Easy API](EASY.md). Descriptions return ordinary Standard layers and are suitable for component props/configuration. `addSource()` is reserved for a future named, independently managed, reusable source abstraction and is not an alias for a layer.
+- `orihon/source` — renderer-independent reactive GeoJSON storage with canonical `feature.id`, versioned snapshots, delta subscriptions, batching and `add` / `addMany` / `update` / `remove` / `replace` / `clear`; accepted structurally by `geoJSON`, `textLayer`, Easy `addGeoJSON` and Advanced `objectManager({ source })`; see [FeatureSource](FEATURE_SOURCE.md). The read-only `ReadonlyFeatureSource` protocol is exported as a Core type; Standard does not depend on the source implementation.
+- `orihon/easy` — Standard-powered `createMap()` adapter with declarative `basemap`, a discriminated `map.add({ type: "marker" | "polyline" | "polygon" | "geojson" | "raster", ... })` contract, and discoverable `map.addMarker()`, `map.addTileLayer()`, `map.addPolyline()`, `map.addPolygon()` and `map.addGeoJSON()` methods; see [Easy API](EASY.md). `basemap` and `setBasemap()` accept raster configuration or any ready `Layer` (for example WMS, WMTS or a custom layer) and `getBasemap()` returns that original layer. Descriptions return ordinary Standard layers and are suitable for component props/configuration. `addSource()` is reserved for a future named, independently managed, reusable source abstraction and is not an alias for a layer.
 - `orihon/bundle` — single-file complete ESM bundle
 - `orihon/global` — standalone IIFE exposing `Orihon` and resolved `OrihonReady`
 - `orihon/orihon.css` — required map styles
@@ -418,14 +419,26 @@ Create with `objectManager(options?)`; pass `loader` for viewport loading or `po
 | `heatLayer`, `buildHeat` | One scalar field → continuous heatmap, WASM isolines, or both; WASM/WebGPU backend policy and timing profile |
 | `heatSupport` | Asynchronously reports `{ wasm, webgpu }` availability |
 | `buildHeatFieldWebGpu` (`orihon/webgpu`) | Explicit low-level WebGPU entry for custom compute/A/B measurement; the normal layer should use `backend:"auto"` |
-| `geometryWorkerPool`, `preparePointBatch` | Worker/fallback packed point preparation |
+| `createGeometryWorkerPool`, `preparePointBatch` | Caller-owned worker/fallback packed point preparation |
 | `buildClusterLayout`, `buildClusterIndex`, `queryClusterLayout` | Public clustering primitives for custom renderers |
 
 GPU layer `getStats()` methods report renderer-specific counts/capabilities. Synchronous `setData()` remains the lowest-wall-time path for bounded inputs. Point/heat `setDataAsync(input, options)` defaults to 50,000 items per chunk and accepts `yieldMode`, `signal` and `onProgress`; the previous live dataset remains unchanged if preparation is cancelled. Large heat callers can use `setPackedMercator(mercator, count, weights)` to avoid allocating LatLng objects. `webglPointLayer.setPackedData(..., { adopt:true })` transfers ownership of compatible typed arrays and must only be used when the caller will not mutate them.
 
 The browser A/B matrix is in `examples/heat-bench`: 10k / 100k / 1M sources, 256² / 512² / 1024² grids, WASM / WebGPU, and field / heatmap / isolines / both timings. Rows report the field model and selected isoline step; WebGPU reports readback separately and visibly marks backend fallbacks. `examples/bench-compare` additionally exposes `Static · full dataset` versus `Refine on zoom` for interactive camera stress.
 
-`GeometryWorkerPool.preparePoints(input, options)` also accepts sync/async iterables and cooperatively serializes them before worker transfer. When workers are unavailable, `preparePointBatchAsync()` provides the same chunking, progress and cancellation contract on the main thread; use synchronous `preparePointBatch()` only for bounded inputs.
+`GeometryWorkerPool.preparePoints(input, options)` also accepts sync/async iterables and cooperatively serializes them before worker transfer. When workers are unavailable, `preparePointBatchAsync()` provides the same chunking, progress and cancellation contract on the main thread; use synchronous `preparePointBatch()` only for bounded inputs. `destroy()` is terminal and idempotent: it rejects pending work with `AbortError`, and the pool cannot be reused. Worker crashes, unreadable messages, malformed responses and request serialization failures reject affected operations with an `Error` named `"GeometryWorkerError"`; a failed worker is recreated by the next operation. The deprecated `geometryWorkerPool()` alias has the same caller-owned factory behavior.
+
+```ts
+import { createGeometryWorkerPool } from "orihon";
+
+const pool = createGeometryWorkerPool();
+try {
+  const prepared = await pool.preparePoints(rawPoints);
+  // use prepared
+} finally {
+  pool.destroy();
+}
+```
 
 ### Providers and operational services
 

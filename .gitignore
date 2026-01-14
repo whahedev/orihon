@@ -23,6 +23,10 @@ install-p0-bench.ps1
 _legacy_root/
 _local/
 _publish_stage/
+
+# Local diagnostic scratch files belong outside the repository root.
+/tmp-*
+/.codex-*.txt
 # Local-only CDN HTML sketches — not published; keep showcase + bench in git.
 examples/common.css
 examples/index.html

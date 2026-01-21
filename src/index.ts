@@ -106,6 +106,7 @@ export { pathBatch } from "./layers/path-batch.js";
 export { buildHeat, heatSupport } from "./services/heat.js";
 export {
   GeometryWorkerPool,
+  GeometryWorkerError,
   createGeometryWorkerPool,
   geometryWorkerPool,
   preparePointBatch,
@@ -278,6 +279,11 @@ export type {
   ClusterLayoutSingle
 } from "./services/cluster-layout.js";
 export type { GeometryPointInput, GeometryPrepareOptions, GeometryWorkerOptions, PreparedPointBatch } from "./services/geometry-worker.js";
-export type { OfflineServiceWorkerOptions, OfflineTileCacheOptions, OfflineTileCacheStats } from "./services/offline-cache.js";
+export type {
+  OfflineServiceWorkerOptions,
+  OfflineTileCacheOptions,
+  OfflineTileCacheStats,
+  PrefetchTileLayerOptions
+} from "./services/offline-cache.js";
 export type { PerformanceInspectorOptions, PerformanceSnapshot } from "./services/performance.js";
 export type { OrihonElementOptions, MapAdapter } from "./services/framework-adapters.js";

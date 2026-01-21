@@ -9,6 +9,7 @@ import {
   VectorTileLayer,
   WebGLPointLayer,
   MarkerCollection,
+  GeometryWorkerError,
   buildClusterIndex,
   createMVTProvider,
   createMapAdapter,
@@ -524,7 +525,7 @@ test("GeometryWorkerPool rejects all pending work on worker failure and can reco
     const second = pool.preparePoints([[3, 4]]);
     const cause = new Error("worker crashed");
     const firstRejected = assert.rejects(first, (error) =>
-      error?.name === "GeometryWorkerError" && error.cause === cause && /worker crashed/.test(error.message)
+      error instanceof GeometryWorkerError && error.cause === cause && /worker crashed/.test(error.message)
     );
     const secondRejected = assert.rejects(second, { name: "GeometryWorkerError" });
     await Promise.resolve();

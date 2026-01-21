@@ -12,12 +12,13 @@ test("SuggestProvider settles a superseded request", async () => {
   assert.deepEqual(await second, ["second"]);
 });
 
-test("SuggestProvider destroy settles pending work and disables new requests", async () => {
+test("SuggestProvider destroy aborts pending work and is terminal", async () => {
   const provider = new SuggestProvider(async (query) => [query], { debounceMs: 50 });
   const pending = provider.suggest("pending");
   provider.destroy();
-  assert.deepEqual(await pending, []);
-  assert.deepEqual(await provider.suggest("ignored"), []);
+  provider.destroy();
+  await assert.rejects(pending, { name: "AbortError" });
+  await assert.rejects(provider.suggest("ignored"), { name: "AbortError" });
 });
 
 test("ObjectManager detaches map listeners on remove", () => {

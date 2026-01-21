@@ -2,6 +2,8 @@
 
 This reference describes the stable Orihon 1.x surface. Named ESM imports are preferred because consumers can remove unused exports during bundling.
 
+Public naming, ownership, lifecycle, error and configuration conventions are defined in [API-DESIGN.md](./API-DESIGN.md).
+
 ## Map
 
 `createMap(container, options)` and `new Orihon(container, options)` create a map. `container` can be an element or an element id.
@@ -426,7 +428,7 @@ GPU layer `getStats()` methods report renderer-specific counts/capabilities. Syn
 
 The browser A/B matrix is in `examples/heat-bench`: 10k / 100k / 1M sources, 256² / 512² / 1024² grids, WASM / WebGPU, and field / heatmap / isolines / both timings. Rows report the field model and selected isoline step; WebGPU reports readback separately and visibly marks backend fallbacks. `examples/bench-compare` additionally exposes `Static · full dataset` versus `Refine on zoom` for interactive camera stress.
 
-`GeometryWorkerPool.preparePoints(input, options)` also accepts sync/async iterables and cooperatively serializes them before worker transfer. When workers are unavailable, `preparePointBatchAsync()` provides the same chunking, progress and cancellation contract on the main thread; use synchronous `preparePointBatch()` only for bounded inputs. `destroy()` is terminal and idempotent: it rejects pending work with `AbortError`, and the pool cannot be reused. Worker crashes, unreadable messages, malformed responses and request serialization failures reject affected operations with an `Error` named `"GeometryWorkerError"`; a failed worker is recreated by the next operation. The deprecated `geometryWorkerPool()` alias has the same caller-owned factory behavior.
+`GeometryWorkerPool.preparePoints(input, options)` also accepts sync/async iterables and cooperatively serializes them before worker transfer. When workers are unavailable, `preparePointBatchAsync()` provides the same chunking, progress and cancellation contract on the main thread; use synchronous `preparePointBatch()` only for bounded inputs. `destroy()` is terminal and idempotent: it rejects pending work with `AbortError`, and the pool cannot be reused. Worker crashes, unreadable messages, malformed responses and request serialization failures reject affected operations with `GeometryWorkerError`; a failed worker is recreated by the next operation. The deprecated `geometryWorkerPool()` alias has the same caller-owned factory behavior.
 
 ```ts
 import { createGeometryWorkerPool } from "orihon";
@@ -445,12 +447,14 @@ try {
 | Factory/class | Main methods and contract |
 | --- | --- |
 | `searchProvider(itemsOrAdapter, options?)` / `SearchProvider` | Local array or adapter-backed `search`, `geocode`, `reverse` |
-| `createSuggestProvider(fetcher, options?)` / `SuggestProvider` | Debounced `suggest`, `cancel`, `destroy` |
+| `createSuggestProvider(fetcher, options?)` / `SuggestProvider` | Debounced `suggest`; reusable `cancel`; terminal, idempotent `destroy` rejects pending and future requests with `AbortError` |
 | `createSuggestWidget(options)` / `SuggestWidget` | `attach`, `select`, `cancel`, `destroy` |
 | `routingLayer(options)` | `route`, `select`, `getRoutes`, `cancel` |
 | `createStraightLineRoutingProvider()` | Dependency-free fallback route provider |
 | `trafficLayer(options?)` | Provider-owned traffic state/refresh layer |
 | `offlineTileCache(options?)` | `prefetch`, `prefetchTileLayer`, `match`, `clear`, Service Worker generation/registration |
+
+`PrefetchTileLayerOptions` requires either geographic `bounds` or both `xRange` and `yRange`; TypeScript rejects a single explicit axis without bounds before the request can reach runtime validation.
 | `performanceInspector(map, options?)` | `snapshot`, `measureFrames`, `start`, `stop` |
 | `createMapAdapter(container, options?)` | Framework-neutral create/update/destroy adapter |
 | `defineOrihonElement(name?, options?)` | Registers the optional custom element |

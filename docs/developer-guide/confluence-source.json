@@ -7,7 +7,7 @@
       "id": "8716326",
       "title": "Orihon API - attributionControl",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716326",
-      "markdown": "attributionControl\n==================\n\nНазначение\n----------\n\n`attributionControl(options)` создает контрол атрибуции источников данных. Контрол показывает `prefix` и attribution активных слоев карты.\n\nИмпорт\n------\n\nDefaultnoneimport { attributionControl } from \"orihon/standard\";\nimport \"orihon/orihon.css\";\n\nБазовый пример\n--------------\n\nDefaultnoneconst attribution = attributionControl({\nposition: \"bottom-right\",\nprefix: \"Orihon\"\n}).addTo(map);\n\nЧто должно происходить на карте\n-------------------------------\n\n* `attributionControl(...).addTo(map)` добавляет подпись в правый нижний угол.\n* Слой с опцией `attribution` автоматически добавляет источник в подпись.\n* Удаление слоя убирает его attribution из списка.\n* Изменение `prefix` меняет левую часть строки.\n\nCDN-пример без локального сервера\n---------------------------------\n\nЭтот пример можно вставить в HTML-страницу, CodePen, Storybook, iframe-host или Confluence HTML macro, если HTML/iframe разрешены администратором Confluence.\n\nDefaulthtml<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.css\" />\n<div id=\"map\" style=\"height: 420px\"></div>\n<script type=\"module\">\nimport {\nattributionControl,\ncanvasBaseLayer,\ncreateMap,\nmarker\n} from \"https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.esm.js\";\nconst map = createMap(\"map\", {\ncenter: [55.751244, 37.618423],\nzoom: 12,\ncontrols: false,\nlocale: \"ru\"\n});\nconst sourceLayer = canvasBaseLayer({\ngrid: true,\nlabel: \"Orihon CDN demo\",\nattribution: \"Demo canvas source\"\n}).addTo(map);\nmarker([55.751244, 37.618423], {\ntitle: \"Orihon\",\nattribution: \"Demo marker dataset\"\n}).addTo(map);\nconst attribution = attributionControl({\nposition: \"bottom-right\",\nprefix: \"Orihon\"\n}).addTo(map);\nconsole.log(map.getAttributions());\n// Команды для проверки:\n// map.removeControl(attribution);\n// attribution.addTo(map);\n// map.removeLayer(sourceLayer);\n// sourceLayer.addTo(map);\n// attribution.options.prefix = \"Docs demo\";\n// attribution.render();\n</script>\n\nОграничение текущего Confluence\n-------------------------------\n\nЯ попробовал два способа встроить живую карту прямо на эту страницу:\n\n* `HTML macro` со встроенным iframe и CDN import;\n* прямой `iframe` в Confluence storage.\n\nОба варианта были заблокированы/очищены текущей конфигурацией Confluence API: HTML macro сохранился пустым, а прямой iframe не прошел валидацию storage. Поэтому для настоящей встроенной карты нужно одно из двух:\n\n1. Включить HTML/iframe macro в Confluence.\n2. Разрешить загрузку HTML/JS/CSS attachments и вставку iframe на attachment.\n\nПосле этого этот же CDN-пример можно будет разместить справа сверху как живой виджет."
+      "markdown": "attributionControl\n==================\n\nНазначение\n----------\n\n`attributionControl(options)` создает контрол атрибуции источников данных. Контрол показывает `prefix` и attribution активных слоев карты.\n\nИмпорт\n------\n\nDefaultnoneimport { attributionControl } from \"orihon/standard\";\nimport \"orihon/orihon.css\";\n\nБазовый пример\n--------------\n\nDefaultnoneconst attribution = attributionControl({\nposition: \"bottom-right\",\nprefix: \"Orihon\"\n}).addTo(map);\n\nЧто должно происходить на карте\n-------------------------------\n\n* `attributionControl(...).addTo(map)` добавляет подпись в правый нижний угол.\n* Слой с опцией `attribution` автоматически добавляет источник в подпись.\n* Удаление слоя убирает его attribution из списка.\n* Изменение `prefix` меняет левую часть строки.\n"
     },
     {
       "id": "8716353",
@@ -28,18 +28,6 @@
       "markdown": "buildClusterLayout\n==================\n\nНазначение\n----------\n\nСтроит layout кластеров для объектных коллекций.\n\nПример\n------\n\nDefaultnoneimport { buildClusterLayout } from \"orihon\";\nconst layout = buildClusterLayout(objects, {\nzoom: map.getZoom(),\nradius: 50\n});\nconsole.log(layout.clusters.length);\n\nГде применять\n-------------\n\nКастомная кластеризация, worker preprocessing, диагностика ObjectManager."
     },
     {
-      "id": "9240652",
-      "title": "Orihon API - buildHeatIsolines",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=9240652",
-      "markdown": "buildHeatIsolines\n=================\n\nНазначение\n----------\n\nНизкоуровневая функция построения isolines по heat input без создания слоя карты.\n\nПример\n------\n\nDefaultnoneimport { buildHeatIsolines } from \"orihon\";\nconst result = buildHeatIsolines(points, {\nwidth: 800,\nheight: 500,\nradius: 32,\nthresholds: [0.25, 0.5, 0.75]\n});\nconsole.log(result.rings);\n\nГде применять\n-------------\n\nТесты, preprocessing, собственные renderer-ы и аналитические pipelines."
-    },
-    {
-      "id": "8716305",
-      "title": "Orihon API - canvasBaseLayer",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716305",
-      "markdown": "canvasBaseLayer\n===============\n\nНазначение\n----------\n\nСоздает легкую canvas-подложку без сетевых тайлов.\n\nПример\n------\n\nDefaultnoneimport { canvasBaseLayer } from \"orihon/standard\";\ncanvasBaseLayer({\ngrid: true,\nlabel: \"Orihon offline canvas\"\n}).addTo(map);\n\nГде применять\n-------------\n\nДемо, offline preview, fallback и визуальная подложка без сети."
-    },
-    {
       "id": "8716311",
       "title": "Orihon API - circle",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716311",
@@ -58,12 +46,6 @@
       "markdown": "clampLat\n========\n\nНазначение\n----------\n\nОграничивает широту допустимым диапазоном Web Mercator.\n\nПример\n------\n\nDefaultnoneimport { clampLat } from \"orihon/core\";\nconst safeLat = clampLat(91);\n\nГде применять\n-------------\n\nИмпорт пользовательских координат, внешние API, ручной ввод и защита проекции около полюсов."
     },
     {
-      "id": "8716339",
-      "title": "Orihon API - createArraySearchProvider",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716339",
-      "markdown": "createArraySearchProvider\n=========================\n\nНазначение\n----------\n\nСоздает search provider по локальному массиву результатов.\n\nПример\n------\n\nDefaultnoneimport { createArraySearchProvider } from \"orihon\";\nconst provider = createArraySearchProvider([\n{ name: \"Moscow\", center: [55.751, 37.618] },\n{ name: \"Kazan\", center: [55.796, 49.106] }\n]);\nconst results = await provider.search(\"mos\");\nmap.panTo(results[0].center);\n\nГде применять\n-------------\n\nДемо, offline-поиск, небольшие справочники."
-    },
-    {
       "id": "8716296",
       "title": "Orihon API - createMap",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716296",
@@ -80,12 +62,6 @@
       "title": "Orihon API - createMVTProvider",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716330",
       "markdown": "createMVTProvider\n=================\n\nНазначение\n----------\n\nСоздает provider для binary MVT tiles.\n\nПример\n------\n\nDefaultnoneimport { createMVTProvider, vectorTileLayer } from \"orihon\";\nconst provider = createMVTProvider(\"/mvt/{z}/{x}/{y}.pbf\", {\nlayer: [\"roads\", \"water\"]\n});\nvectorTileLayer({ provider }).addTo(map);\n\nГде применять\n-------------\n\nPBF/Mapbox Vector Tile источники."
-    },
-    {
-      "id": "8716338",
-      "title": "Orihon API - createSearchProvider",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716338",
-      "markdown": "createSearchProvider\n====================\n\nНазначение\n----------\n\nСоздает search provider из пользовательского adapter.\n\nПример\n------\n\nDefaultnoneimport { createSearchProvider } from \"orihon\";\nconst provider = createSearchProvider({\nsearch: async (query, context) => {\nconst response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);\nreturn response.json();\n}\n});\nconst results = await provider.search(\"Москва\", { map });\n\nОсобенности\n-----------\n\nOrihon не привязан к конкретному поисковому backend."
     },
     {
       "id": "8716337",
@@ -130,18 +106,6 @@
       "markdown": "distance\n========\n\nНазначение\n----------\n\nСчитает расстояние между двумя географическими координатами в метрах.\n\nПример\n------\n\nDefaultnoneimport { distance } from \"orihon/core\";\nconst meters = distance([55.751244, 37.618423], [55.796127, 49.106414]);\nconsole.log(Math.round(meters / 1000), \"км\");\n\nОсобенности\n-----------\n\nДля маршрутов по дорогам используйте routing provider."
     },
     {
-      "id": "8716304",
-      "title": "Orihon API - divIcon",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716304",
-      "markdown": "divIcon\n=======\n\nНазначение\n----------\n\nСоздает HTML/CSS-иконку для маркера.\n\nПример\n------\n\nDefaultnoneimport { divIcon, marker } from \"orihon/standard\";\nconst statusIcon = divIcon({\nclassName: \"status-marker status-marker--ok\",\nhtml: \"12\",\niconSize: [28, 28],\niconAnchor: [14, 14]\n});\nmarker([55.75, 37.62], { icon: statusIcon }).addTo(map);\n\nГде применять\n-------------\n\nСтатусы, счетчики, компактные HTML-маркеры и cluster badges."
-    },
-    {
-      "id": "8716354",
-      "title": "Orihon API - extendBounds",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716354",
-      "markdown": "extendBounds\n============\n\nНазначение\n----------\n\nРасширяет bounds так, чтобы он включал новую точку или область.\n\nПример\n------\n\nDefaultnoneimport { extendBounds, latLngBounds } from \"orihon/core\";\nlet area = latLngBounds([55.75, 37.62], [55.75, 37.62]);\narea = extendBounds(area, [55.80, 37.70]);\nmap.fitBounds(area);\n\nГде применять\n-------------\n\nНакопительный расчет области для набора объектов."
-    },
-    {
       "id": "8716301",
       "title": "Orihon API - featureGroup",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716301",
@@ -154,18 +118,6 @@
       "markdown": "geoJSON\n=======\n\nНазначение\n----------\n\nСоздает слой из GeoJSON Feature, FeatureCollection или Geometry.\n\nПример\n------\n\nDefaultnoneimport { geoJSON, circleMarker } from \"orihon/standard\";\nconst layer = geoJSON(collection, {\nfilter: (feature) => feature.properties?.visible !== false,\nstyle: (feature) => ({ stroke: feature.properties?.color ?? \"#334155\" }),\npointToLayer: (feature, latlng) => circleMarker(latlng, { radius: 6 }),\npopup: (feature) => feature.properties?.title ?? \"Объект\"\n}).addTo(map);\nlayer.addData(nextFeature);\n\nОсобенности Orihon 1.0.2\n------------------------\n\nВ Standard доступны SVG/canvas. В Advanced (`orihon`) можно использовать WebGL path batches через `renderer: \"webgl\"` или `\"auto\"` для больших линий."
     },
     {
-      "id": "8716314",
-      "title": "Orihon API - geoJSONAsFeature (legacy)",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716314",
-      "markdown": "geoJSONAsFeature (legacy)\n=========================\n\nСтатус\n------\n\nЭта helper-функция была в старой документации AeroMap. В текущем публичном `orihon@1.0.2` она не экспортируется из основного `src/index.ts`.\n\nЧто использовать сейчас\n-----------------------\n\nПередавайте GeoJSON напрямую в `geoJSON(...)`:\n\nDefaultnoneimport { geoJSON } from \"orihon/standard\";\ngeoJSON({\ntype: \"Feature\",\nproperties: { title: \"Точка\" },\ngeometry: { type: \"Point\", coordinates: [37.618423, 55.751244] }\n}).addTo(map);\n\nПримечание\n----------\n\nСтраница оставлена для миграции старых ссылок."
-    },
-    {
-      "id": "8716315",
-      "title": "Orihon API - geoJSONCoordsToLatLng (legacy)",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716315",
-      "markdown": "geoJSONCoordsToLatLng (legacy)\n==============================\n\nСтатус\n------\n\nВ текущем `orihon@1.0.2` эта функция не экспортируется как публичный helper из основного entry.\n\nКак делать сейчас\n-----------------\n\nGeoJSON использует порядок `[lng, lat]`, а API карты - `[lat, lng]`. Для ручной конвертации используйте явное преобразование в коде приложения:\n\nDefaultnoneconst [lng, lat] = feature.geometry.coordinates;\nmarker([lat, lng]).addTo(map);\n\nПримечание\n----------\n\nСтраница оставлена для миграции старой документации AeroMap."
-    },
-    {
       "id": "8716325",
       "title": "Orihon API - geolocationControl",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716325",
@@ -176,18 +128,6 @@
       "title": "Orihon API - createGeometryWorkerPool",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716343",
       "markdown": "createGeometryWorkerPool\n========================\n\nНазначение\n----------\n\nСоздает отдельный пул workers, принадлежащий вызывающему, для подготовки геометрии вне main thread. После `destroy()` пул нельзя использовать повторно.\n\nПример\n------\n\nDefaultnoneimport { createGeometryWorkerPool } from \"orihon\";\nconst pool = createGeometryWorkerPool();\ntry {\n  const prepared = await pool.preparePoints(rawPoints);\n  // use prepared\n} finally {\n  pool.destroy();\n}\n\nГде применять\n-------------\n\nБольшие партии точек и тяжелая нормализация перед рендером."
-    },
-    {
-      "id": "8716299",
-      "title": "Orihon API - gridLayer",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716299",
-      "markdown": "gridLayer\n=========\n\nНазначение\n----------\n\nБазовый grid/tile layer для собственной генерации тайлов.\n\nПример\n------\n\nDefaultnoneimport { gridLayer } from \"orihon/core\";\ngridLayer({\ntileSize: 256,\ncreateTile(coords) {\nconst tile = document.createElement(\"div\");\ntile.textContent = `${coords.z}/${coords.x}/${coords.y}`;\ntile.style.border = \"1px solid #94a3b8\";\nreturn tile;\n}\n}).addTo(map);\n\nГде применять\n-------------\n\nDebug-сетки, generated tiles, placeholders, легкие DOM/canvas tile overlays."
-    },
-    {
-      "id": "9240651",
-      "title": "Orihon API - heatIsolineLayer",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=9240651",
-      "markdown": "heatIsolineLayer\n================\n\nНазначение\n----------\n\nСтроит isolines/contours по плотности точек.\n\nПример\n------\n\nDefaultnoneimport { heatIsolineLayer } from \"orihon\";\nheatIsolineLayer(points, {\nradius: 32,\nthresholds: [0.2, 0.4, 0.6, 0.8],\ngradient: [\"#bae6fd\", \"#0ea5e9\", \"#e11d48\"]\n}).addTo(map);\n\nГде применять\n-------------\n\nКонтуры плотности, аналитические зоны, heat-to-isoline визуализации."
     },
     {
       "id": "9240649",
@@ -214,34 +154,10 @@
       "markdown": "latLng\n======\n\nНазначение\n----------\n\nСоздает нормализованный объект географической координаты.\n\nПример\n------\n\nDefaultnoneimport { latLng, marker } from \"orihon/standard\";\nconst center = latLng(55.751244, 37.618423);\nmarker(center).addTo(map);\n\nОсобенности\n-----------\n\nПорядок координат Orihon/Leaflet-style: latitude, longitude."
     },
     {
-      "id": "8716316",
-      "title": "Orihon API - latLngToGeoJSONCoords (legacy)",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716316",
-      "markdown": "latLngToGeoJSONCoords (legacy)\n==============================\n\nСтатус\n------\n\nВ текущем `orihon@1.0.2` эта функция не экспортируется как публичный helper из основного entry.\n\nКак делать сейчас\n-----------------\n\nДля GeoJSON вручную меняйте порядок координат:\n\nDefaultnoneconst [lat, lng] = [55.751244, 37.618423];\nconst coordinates = [lng, lat];\n\nПримечание\n----------\n\nСтраница оставлена для миграции старых ссылок."
-    },
-    {
-      "id": "8716300",
-      "title": "Orihon API - layerGroup (legacy)",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716300",
-      "markdown": "layerGroup (legacy)\n===================\n\nСтатус\n------\n\nВ старом справочнике AeroMap была фабрика `layerGroup`. В текущем публичном `orihon@1.0.2` из `src/index.ts` экспортируются `LayerGroup`, `FeatureGroup` и `featureGroup`, но отдельная фабрика `layerGroup` больше не входит в основной экспорт.\n\nЧто использовать сейчас\n-----------------------\n\nИспользуйте `featureGroup(...)`, если нужна группа объектов с bounds и распространением событий.\n\nDefaultnoneimport { featureGroup, marker, circle } from \"orihon/standard\";\nconst group = featureGroup([\nmarker([55.75, 37.62]),\ncircle([55.77, 37.64], 700)\n]).addTo(map);\nmap.fitBounds(group.getBounds());\n\nПримечание\n----------\n\nЭта страница оставлена для миграции старой документации AeroMap."
-    },
-    {
       "id": "8716327",
       "title": "Orihon API - layersControl",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716327",
       "markdown": "layersControl\n=============\n\nНазначение\n----------\n\nСоздает переключатель базовых и overlay-слоев.\n\nПример\n------\n\nDefaultnoneimport { layersControl, tileLayer, geoJSON } from \"orihon/standard\";\nconst osm = tileLayer(\"https://tile.openstreetmap.org/{z}/{x}/{y}.png\").addTo(map);\nconst routes = geoJSON(routesData);\nlayersControl(\n{ OSM: osm },\n{ \"Маршруты\": routes },\n{ collapsed: false }\n).addTo(map);\n\nОсобенности\n-----------\n\nBase layers переключаются взаимоисключающе, overlays включаются независимо."
-    },
-    {
-      "id": "8716364",
-      "title": "Orihon API - leaflet (legacy)",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716364",
-      "markdown": "leaflet (legacy)\n================\n\nСтатус\n------\n\nЭта страница относится к старой документации AeroMap. В текущем `orihon@1.0.2` отдельный package entry `orihon/leaflet` не указан в `package.json` и не является актуальной публичной поверхностью.\n\nЧто использовать сейчас\n-----------------------\n\nИспользуйте named imports из уровней Orihon:\n\nDefaultnoneimport { createMap, tileLayer, marker } from \"orihon/standard\";\nimport \"orihon/orihon.css\";\nconst map = createMap(\"map\", { center: [55.75, 37.62], zoom: 10 });\ntileLayer(\"https://tile.openstreetmap.org/{z}/{x}/{y}.png\").addTo(map);\nmarker([55.75, 37.62]).addTo(map);\n\nПримечание\n----------\n\nOrihon сохраняет близкий к Leaflet стиль `addTo`, `fitBounds`, слои и controls, но миграционный фасад `L.*` больше не описывается как основной API."
-    },
-    {
-      "id": "8716365",
-      "title": "Orihon API - L (legacy)",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716365",
-      "markdown": "L (legacy)\n==========\n\nСтатус\n------\n\n`L` был Leaflet-style facade в старом AeroMap-справочнике. В текущем `orihon@1.0.2` основной публичный стиль - named imports из `orihon/core`, `orihon/standard` и `orihon`.\n\nАктуальный пример\n-----------------\n\nDefaultnoneimport { createMap, circle } from \"orihon/standard\";\nconst map = createMap(\"map\", { center: [55.75, 37.62], zoom: 10 });\ncircle([55.75, 37.62], 1000).addTo(map);\n\nПримечание\n----------\n\nСтраница оставлена для старых ссылок и миграционного контекста."
     },
     {
       "id": "9240656",
@@ -253,13 +169,7 @@
       "id": "8716302",
       "title": "Orihon API - marker",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716302",
-      "markdown": "marker\n======\n\nНазначение\n----------\n\nСоздает DOM-маркер в географической точке.\n\nПример\n------\n\nDefaultnoneimport { marker } from \"orihon/standard\";\nmarker([55.751244, 37.618423], {\ntitle: \"Москва\",\nopacity: 0.9,\nzIndexOffset: 100\n})\n.bindPopup(\"Центр Москвы\")\n.addTo(map);\n\nОсобенности\n-----------\n\nПоддерживает `icon`, `divIcon`, popup, tooltip, opacity и z-index."
-    },
-    {
-      "id": "9240648",
-      "title": "Orihon API - markerCollection",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=9240648",
-      "markdown": "markerCollection\n================\n\nНазначение\n----------\n\nРендерит коллекцию маркеров с viewport culling и renderer strategy.\n\nПример\n------\n\nDefaultnoneimport { markerCollection } from \"orihon\";\nconst collection = markerCollection(points, {\nrenderer: \"auto\",\nmaxDomMarkers: 5000,\nicon: (item) => item.active ? activeIcon : inactiveIcon\n}).addTo(map);\ncollection.setFilter((item) => item.visible !== false);\n\nГде применять\n-------------\n\nБольшие наборы DOM-маркеров, где нужны привычные markers, но нельзя держать весь набор в DOM."
+      "markdown": "marker\n======\n\nНазначение\n----------\n\nСоздает DOM-маркер в географической точке.\n\nПример\n------\n\nDefaultnoneimport { marker } from \"orihon/standard\";\nmarker([55.751244, 37.618423], {\ntitle: \"Москва\",\nopacity: 0.9,\nzIndexOffset: 100\n})\n.bindPopup(\"Центр Москвы\")\n.addTo(map);\n\nОсобенности\n-----------\n\nПоддерживает `icon`, popup, tooltip, opacity и z-index."
     },
     {
       "id": "8716358",
@@ -295,7 +205,7 @@
       "id": "8716350",
       "title": "Orihon API - pointBounds",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716350",
-      "markdown": "pointBounds\n===========\n\nНазначение\n----------\n\nСоздает bounds в пиксельных координатах.\n\nПример\n------\n\nDefaultnoneimport { point, pointBounds } from \"orihon/core\";\nconst box = pointBounds(point(10, 10), point(200, 160));\nconsole.log(box.contains(point(40, 40)));\n\nОсобенности\n-----------\n\nДля географических bounds используйте `latLngBounds`."
+      "markdown": "pointBounds\n===========\n\nНазначение\n----------\n\nСоздает bounds в пиксельных координатах.\n\nПример\n------\n\nDefaultnoneimport { point, pointBounds } from \"orihon/core\";\nconst box = pointBounds(point(10, 10), point(200, 160));\nconsole.log(box.contains(point(40, 40)));\n\nОсобенности\n-----------\n\nДля географических bounds используйте `bounds`."
     },
     {
       "id": "8716309",
@@ -319,7 +229,7 @@
       "id": "8716344",
       "title": "Orihon API - preparePointBatch",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716344",
-      "markdown": "preparePointBatch\n=================\n\nНазначение\n----------\n\nПодготавливает массив точек к быстрому отображению.\n\nПример\n------\n\nDefaultnoneimport { preparePointBatch, webglPointLayer } from \"orihon\";\nconst batch = preparePointBatch(rawPoints, {\ngetLat: (item) => item.lat,\ngetLng: (item) => item.lng\n});\nwebglPointLayer(batch.points).addTo(map);\n\nОсобенности\n-----------\n\nМожно использовать синхронно или через `geometryWorkerPool`."
+      "markdown": "preparePointBatch\n=================\n\nНазначение\n----------\n\nПодготавливает массив точек к быстрому отображению.\n\nПример\n------\n\nDefaultnoneimport { preparePointBatch, webglPointLayer } from \"orihon\";\nconst batch = preparePointBatch(rawPoints, {\ngetLat: (item) => item.lat,\ngetLng: (item) => item.lng\n});\nwebglPointLayer(batch.points).addTo(map);\n\nОсобенности\n-----------\n\nМожно использовать синхронно или через `createGeometryWorkerPool`."
     },
     {
       "id": "8716355",
@@ -338,12 +248,6 @@
       "title": "Orihon API - rectangle",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716310",
       "markdown": "rectangle\n=========\n\nНазначение\n----------\n\nСоздает прямоугольник по географическим bounds.\n\nПример\n------\n\nDefaultnoneimport { rectangle } from \"orihon/standard\";\nrectangle([[55.735, 37.56], [55.785, 37.67]], {\nstroke: \"#f97316\",\nstrokeWidth: 2,\nfillOpacity: 0.12\n}).bindPopup(\"Ограниченная область\").addTo(map);\n\nГде применять\n-------------\n\nBbox, области WMS/RemoteObjectManager, выделение зоны анализа."
-    },
-    {
-      "id": "8716333",
-      "title": "Orihon API - remoteObjectManager",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=8716333",
-      "markdown": "remoteObjectManager\n===================\n\nНазначение\n----------\n\nЗагружает объекты по текущему viewport/zoom и отменяет устаревшие запросы.\n\nПример\n------\n\nDefaultnoneimport { remoteObjectManager } from \"orihon\";\nremoteObjectManager({\nclusterize: true,\ndebounceMs: 120,\nloader: async ({ bounds, zoom, signal }) => {\nconst url = `/api/objects?bbox=${bounds.toBBoxString()}&z=${zoom}`;\nreturn fetch(url, { signal }).then((r) => r.json());\n}\n}).addTo(map);\n\nОсобенности\n-----------\n\nНаследует основные objectManager-возможности, но данные приходят через provider приложения."
     },
     {
       "id": "8716363",
@@ -418,22 +322,10 @@
       "markdown": "videoOverlay\n============\n\nНазначение\n----------\n\nРазмещает видео в заданных географических границах.\n\nПример\n------\n\nDefaultnoneimport { videoOverlay } from \"orihon/standard\";\nvideoOverlay(\"/media/traffic.mp4\", [[55.735, 37.56], [55.785, 37.67]], {\ncontrols: true,\nmuted: true,\nloop: true,\nopacity: 0.8\n}).addTo(map);\n\nГде применять\n-------------\n\nКамеры, трансляции, time-lapse, погодные и транспортные animated overlays."
     },
     {
-      "id": "9240650",
-      "title": "Orihon API - webglHeatLayer",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=9240650",
-      "markdown": "webglHeatLayer\n==============\n\nНазначение\n----------\n\nСоздает WebGL heatmap layer для больших наборов точек.\n\nПример\n------\n\nDefaultnoneimport { webglHeatLayer } from \"orihon\";\nwebglHeatLayer(points, {\nradius: 30,\nintensity: 0.8,\ncolorRamp: \"classic\"\n}).addTo(map);\n\nГде применять\n-------------\n\nHigh-volume heatmap, где canvas heatmap уже недостаточно быстрая."
-    },
-    {
       "id": "8716342",
       "title": "Orihon API - webglPointLayer",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716342",
       "markdown": "webglPointLayer\n===============\n\nНазначение\n----------\n\nСоздает WebGL-слой для большого количества точек.\n\nПример\n------\n\nDefaultnoneimport { webglPointLayer } from \"orihon\";\nconst points = data.map((item) => ({\nlat: item.lat,\nlng: item.lng,\nvalue: item.value,\ndata: item\n}));\nwebglPointLayer(points, {\npointSize: 4,\ncolor: \"#e11d48\"\n})\n.bindPopup(({ data }) => data?.name ?? \"Точка\")\n.addTo(map);\n\nОсобенности\n-----------\n\nOrihon 1.0.2 использует precomputed Web Mercator buffer + uniforms для быстрых per-frame обновлений."
-    },
-    {
-      "id": "9240647",
-      "title": "Orihon API - webglTileLayer",
-      "url": "http://confluence.home/pages/viewpage.action?pageId=9240647",
-      "markdown": "webglTileLayer\n==============\n\nНазначение\n----------\n\nСоздает raster tile layer с WebGL-рендерингом для более плавной камеры и тяжелых basemap-сценариев.\n\nПример\n------\n\nDefaultnoneimport { webglTileLayer } from \"orihon\";\nwebglTileLayer(\"https://tile.openstreetmap.org/{z}/{x}/{y}.png\", {\nattribution: \"© OpenStreetMap contributors\",\nmaxRequests: 8,\ncacheSize: 160\n}).addTo(map);\n\nГде применять\n-------------\n\nContinuous camera stress, benchmark-сценарии, тяжелые raster basemaps, где DOM tiles становятся узким местом."
     },
     {
       "id": "8716298",
@@ -457,7 +349,7 @@
       "id": "8716362",
       "title": "Orihon API - zoomForBounds",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716362",
-      "markdown": "zoomForBounds\n=============\n\nНазначение\n----------\n\nПодбирает zoom, на котором bounds помещаются в заданный viewport.\n\nПример\n------\n\nDefaultnoneimport { latLngBounds, point, zoomForBounds } from \"orihon/core\";\nconst area = latLngBounds([55.735, 37.56], [55.785, 37.67]);\nconst zoom = zoomForBounds(point(800, 500), area, 32, 18);\nmap.setView(area.getCenter(), zoom);\n\nОсобенности\n-----------\n\nДля обычной карты чаще проще вызвать `map.fitBounds(bounds)`."
+      "markdown": "zoomForBounds\n=============\n\nНазначение\n----------\n\nПодбирает zoom, на котором bounds помещаются в заданный viewport.\n\nПример\n------\n\nDefaultnoneimport { bounds, point, zoomForBounds } from \"orihon/core\";\nconst area = bounds([55.735, 37.56], [55.785, 37.67]);\nconst zoom = zoomForBounds(point(800, 500), area, 32, 18);\nmap.setView(area.getCenter(), zoom);\n\nОсобенности\n-----------\n\nДля обычной карты чаще проще вызвать `map.fitBounds(bounds)`."
     }
   ]
 }

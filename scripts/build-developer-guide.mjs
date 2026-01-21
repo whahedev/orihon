@@ -456,10 +456,10 @@ function findFunctionDeclaration(source, name) {
     if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return statement;
     if (!ts.isVariableStatement(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
-      if (ts.isIdentifier(declaration.name) && declaration.name.text === name &&
-          declaration.initializer && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) {
-        return declaration;
-      }
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== name || !declaration.initializer) continue;
+      if (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer)) return declaration;
+      const type = checker.getTypeAtLocation(declaration.name);
+      if (checker.getSignaturesOfType(type, ts.SignatureKind.Call).length) return declaration;
     }
   }
   return null;
@@ -467,15 +467,26 @@ function findFunctionDeclaration(source, name) {
 
 function toRecord(name, declaration, source, sourcePath) {
   const line = source.getLineAndCharacterOfPosition(declaration.getStart(source)).line + 1;
-  const functionNode = ts.isVariableDeclaration(declaration) ? declaration.initializer : declaration;
+  const declaredType = checker.getTypeAtLocation(declaration.name ?? declaration);
+  const callableSignature = checker.getSignaturesOfType(declaredType, ts.SignatureKind.Call)[0];
+  const functionNode = ts.isVariableDeclaration(declaration) &&
+    declaration.initializer &&
+    (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))
+      ? declaration.initializer
+      : ts.isFunctionDeclaration(declaration)
+        ? declaration
+        : callableSignature?.getDeclaration();
+  if (!functionNode || !("parameters" in functionNode)) {
+    throw new Error(`Callable declaration not found for exported function ${name}`);
+  }
   const parameters = functionNode.parameters.map((parameter) => {
-    const rawName = parameter.name.getText(source);
+    const rawName = parameter.name.getText();
     const parameterType = checker.getTypeAtLocation(parameter);
     return {
       name: rawName,
       type: typeText(parameterType, parameter),
       required: !parameter.questionToken && !parameter.initializer && !parameter.dotDotDotToken,
-      default: parameter.initializer?.getText(source) ?? "",
+      default: parameter.initializer?.getText() ?? "",
       description: documentationFor(parameter.name),
       properties: expandParameterProperties(parameter, parameterType)
     };
@@ -484,8 +495,8 @@ function toRecord(name, declaration, source, sourcePath) {
     ? `<${functionNode.typeParameters.map((item) => item.getText(source)).join(", ")}>`
     : "";
   const asyncPrefix = functionNode.modifiers?.some((item) => item.kind === ts.SyntaxKind.AsyncKeyword) ? "async " : "";
-  const paramsText = functionNode.parameters.map((item) => item.getText(source)).join(", ");
-  const signatureObject = checker.getSignatureFromDeclaration(functionNode);
+  const paramsText = functionNode.parameters.map((item) => item.getText()).join(", ");
+  const signatureObject = checker.getSignatureFromDeclaration(functionNode) ?? callableSignature;
   const returnType = signatureObject ? typeText(checker.getReturnTypeOfSignature(signatureObject), functionNode) : functionNode.type?.getText(source) ?? "inferred";
   return {
     name,
@@ -675,10 +686,11 @@ function requireText(path) {
 function groupFor(path, name) {
   const p = path.replaceAll("\\", "/");
   const computationFunctions = new Set([
+    "buildClusterIndex", "buildClusterLayout",
     "bounds", "clampLat", "destination", "distance", "geodesicInterpolate",
     "latLng", "lngLat", "metersToPixels", "point", "pointBounds", "project", "scale",
     "unproject", "wrapLng", "zoomForBounds", "buildHeat", "createWMTSFromCapabilities",
-    "decodeMVT", "markerShapeMetrics",
+    "decodeMVT", "markerShapeMetrics", "queryClusterLayout",
     "preparePointBatch", "preparePointBatchAsync"
   ]);
   if (computationFunctions.has(name)) return "Вычисления без отрисовки";
@@ -807,7 +819,6 @@ for (let index = 0; index < functions.length; index++) {
 await writeFile(join(guideRoot, "index.html"), renderHome(functions, navigation), "utf8");
 await writeFile(join(guideRoot, "manifest.json"), JSON.stringify({
   version: pkg.version,
-  generatedAt: new Date().toISOString(),
   source: "src/index.ts",
   confluenceSource: confluence.source,
   functions: functions.map(({ name, group, entry, summary }) => ({
@@ -966,7 +977,7 @@ function renderFunctionPage(item, previous, next, navigation) {
     content,
     pageClass: "function-page",
     canonicalPath: `/examples/developer-guide/functions/${item.name}/`
-  });
+  }).replace(/^[\t ]+$/gm, "");
 }
 
 function describeParameter(functionName, parameter) {

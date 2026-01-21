@@ -30,13 +30,25 @@ export interface OfflineServiceWorkerOptions {
   urlPrefixes?: string[];
 }
 
-export interface PrefetchTileLayerOptions {
-  bounds?: LatLngBoundsLike;
+interface PrefetchTileLayerBaseOptions {
   zooms: number[];
-  xRange?: [number, number];
-  yRange?: [number, number];
   maxTiles?: number;
 }
+
+export type PrefetchTileLayerOptions = PrefetchTileLayerBaseOptions & (
+  | {
+      bounds: LatLngBoundsLike;
+      /** Optional override for the X range derived from bounds. */
+      xRange?: [number, number];
+      /** Optional override for the Y range derived from bounds. */
+      yRange?: [number, number];
+    }
+  | {
+      bounds?: never;
+      xRange: [number, number];
+      yRange: [number, number];
+    }
+);
 
 export class OfflineTileCache {
   readonly cacheName: string;

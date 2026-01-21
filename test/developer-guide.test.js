@@ -30,7 +30,10 @@ test("developer guide has one physical page per catalogued public function", asy
   ]) {
     assert.equal(manifest.functions.some((item) => item.name === internalName), false, `${internalName} is internal`);
   }
-  for (const publicName of ["tileLayer", "objectManager", "searchProvider", "pathBatch", "icon", "bounds"]) {
+  for (const publicName of [
+    "tileLayer", "objectManager", "searchProvider", "pathBatch", "icon", "bounds",
+    "buildClusterIndex", "buildClusterLayout", "queryClusterLayout"
+  ]) {
     assert.equal(manifest.functions.some((item) => item.name === publicName), true, `${publicName} must be documented`);
   }
 
@@ -42,6 +45,37 @@ test("developer guide has one physical page per catalogued public function", asy
     assert.match(html, /data-playground[\s\S]*data-playground-code[\s\S]*data-playground-frame/, `${item.name} has no live playground`);
     assert.match(html, /sandbox="allow-scripts"/, `${item.name} playground is not isolated`);
   }));
+});
+
+test("developer guide source contains only current public APIs", async () => {
+  const [sourceText, manifestText] = await Promise.all([
+    readFile(new URL("docs/developer-guide/confluence-source.json", root), "utf8"),
+    readFile(new URL("examples/developer-guide/manifest.json", root), "utf8")
+  ]);
+  const source = JSON.parse(sourceText);
+  const manifest = JSON.parse(manifestText);
+  const currentNames = new Set(manifest.functions.map((item) => item.name));
+  for (const supplementalName of ["locales"]) {
+    currentNames.add(supplementalName);
+  }
+
+  for (const page of source.pages) {
+    const name = page.title.replace(/^Orihon API - /, "");
+    assert.equal(currentNames.has(name), true, `${name} is stale or missing from the public API catalog`);
+  }
+
+  for (const removedName of [
+    "canvasBaseLayer",
+    "extendBounds",
+    "gridLayer",
+    "heatIsolineLayer",
+    "latLngBounds",
+    "webglHeatLayer",
+    "webglTileLayer"
+  ]) {
+    assert.doesNotMatch(sourceText, new RegExp(`\\b${removedName}\\b`), `${removedName} remains in guide source`);
+  }
+  assert.doesNotMatch(sourceText, /through `geometryWorkerPool`|через `geometryWorkerPool`/);
 });
 
 test("developer guide exposes only the unified current heat API", async () => {
@@ -76,6 +110,7 @@ test("developer guide separates render-free computation functions", async () => 
     .map((item) => item.name);
   for (const expected of [
     "bounds", "distance", "project", "zoomForBounds", "buildHeat",
+    "buildClusterIndex", "buildClusterLayout", "queryClusterLayout",
     "decodeMVT",
     "preparePointBatch", "preparePointBatchAsync", "createWMTSFromCapabilities"
   ]) {
@@ -136,7 +171,11 @@ test("developer guide uses concrete purpose and parameter explanations", async (
 test("developer guide generator is wired to the local docs server", async () => {
   const pkg = JSON.parse(await readFile(new URL("package.json", root), "utf8"));
   assert.equal(pkg.scripts["docs:build"], "node scripts/build-developer-guide.mjs");
+  assert.equal(pkg.scripts["docs:check"], "node scripts/check-developer-guide.mjs");
+  assert.match(pkg.scripts.check, /docs:check/);
   assert.match(pkg.scripts["demo:docs"], /docs:build[\s\S]*developer-guide-server\.mjs/);
+  const checker = await readFile(new URL("scripts/check-developer-guide.mjs", root), "utf8");
+  assert.match(checker, /build-developer-guide\.mjs[\s\S]*git[\s\S]*diff[\s\S]*--exit-code/);
   const server = await readFile(new URL("scripts/developer-guide-server.mjs", root), "utf8");
   assert.match(server, /ORIHON_DOCS_PORT[\s\S]*4179/);
   assert.match(server, /candidate !== root[\s\S]*startsWith\(root \+ sep\)/);

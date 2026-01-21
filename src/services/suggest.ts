@@ -21,6 +21,13 @@ interface Pending<TResult> {
   controller: AbortController;
 }
 
+function suggestAbortError(): Error {
+  if (typeof DOMException !== "undefined") return new DOMException("SuggestProvider was destroyed", "AbortError");
+  const error = new Error("SuggestProvider was destroyed");
+  error.name = "AbortError";
+  return error;
+}
+
 export class SuggestProvider<TResult = unknown> {
   readonly fetcher: SuggestFetcher<TResult>;
   readonly options: Required<SuggestOptions>;
@@ -35,8 +42,9 @@ export class SuggestProvider<TResult = unknown> {
   }
 
   suggest(query: string, context: SuggestContext = {}): Promise<TResult[]> {
+    if (this._destroyed) return Promise.reject(suggestAbortError());
     this.cancel();
-    if (this._destroyed || !query || query.trim().length < this.options.minLength) return Promise.resolve([]);
+    if (!query || query.trim().length < this.options.minLength) return Promise.resolve([]);
     const controller = new AbortController();
     this._controller = controller;
     return new Promise<TResult[]>((resolve, reject) => {
@@ -70,8 +78,14 @@ export class SuggestProvider<TResult = unknown> {
   }
 
   destroy(): void {
-    this.cancel();
+    if (this._destroyed) return;
     this._destroyed = true;
+    if (this._timer) clearTimeout(this._timer);
+    this._timer = null;
+    this._controller?.abort();
+    this._controller = null;
+    this._pending?.reject(suggestAbortError());
+    this._pending = null;
   }
 }
 

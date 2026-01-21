@@ -21,6 +21,7 @@ test("public API exports stage one additions", () => {
 
 test("geometry worker ownership is explicit in the public API", () => {
   assert.equal(typeof Orihon.createGeometryWorkerPool, "function");
+  assert.equal(typeof Orihon.GeometryWorkerError, "function");
   assert.equal("getSharedGeometryWorkerPool" in Orihon, false);
 });
 

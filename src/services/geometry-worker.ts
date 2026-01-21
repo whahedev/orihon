@@ -78,10 +78,15 @@ function geometryWorkerAbortError(): Error {
   return error;
 }
 
-function geometryWorkerFailureError(message: string, cause?: unknown): Error {
-  const error = new Error(message, cause === undefined ? undefined : { cause });
-  error.name = "GeometryWorkerError";
-  return error;
+export class GeometryWorkerError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "GeometryWorkerError";
+  }
+}
+
+function geometryWorkerFailureError(message: string, cause?: unknown): GeometryWorkerError {
+  return new GeometryWorkerError(message, cause === undefined ? undefined : { cause });
 }
 
 export class GeometryWorkerPool {

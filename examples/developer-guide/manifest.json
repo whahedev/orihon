@@ -1,6 +1,5 @@
 {
   "version": "1.0.6",
-  "generatedAt": "2026-08-26T17:38:25.649Z",
   "source": "src/index.ts",
   "confluenceSource": "http://confluence.home",
   "functions": [
@@ -24,6 +23,20 @@
       "entry": "orihon/core",
       "summary": "Создаёт расширяемую географическую область по двум углам, массиву координат или существующему объекту границ.",
       "url": "./functions/bounds/"
+    },
+    {
+      "name": "buildClusterIndex",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon",
+      "summary": "Создает индекс кластерного layout для быстрых запросов.",
+      "url": "./functions/buildClusterIndex/"
+    },
+    {
+      "name": "buildClusterLayout",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon",
+      "summary": "Строит layout кластеров для объектных коллекций.",
+      "url": "./functions/buildClusterLayout/"
     },
     {
       "name": "buildHeat",
@@ -136,6 +149,13 @@
       "entry": "orihon/core",
       "summary": "Переводит географическую координату в мировые пиксели Web Mercator на указанном zoom.",
       "url": "./functions/project/"
+    },
+    {
+      "name": "queryClusterLayout",
+      "group": "Вычисления без отрисовки",
+      "entry": "orihon",
+      "summary": "Возвращает видимые элементы cluster layout для текущих bounds/zoom.",
+      "url": "./functions/queryClusterLayout/"
     },
     {
       "name": "scale",

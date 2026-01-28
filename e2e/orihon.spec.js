@@ -5,28 +5,27 @@ async function loadVisualMap(page) {
   await page.waitForFunction(() => window.__orihonVisual?.ready === true);
 }
 
-test("standalone IIFE renders canvas, vectors and markers", async ({ page }) => {
+test("standalone IIFE renders styled vectors and markers", async ({ page }) => {
   await loadVisualMap(page);
   await expect(page.locator("#map")).toBeVisible();
-  await expect(page.locator(".oh-canvas-base")).toHaveCount(1);
+  await expect(page.locator(".oh-svg-layer")).toHaveCount(3);
   await expect(page.locator(".oh-svg-layer path")).toHaveCount(2);
   await expect(page.locator(".oh-svg-layer circle")).toHaveCount(1);
   await expect(page.locator(".oh-marker")).toHaveCount(1);
 
-  const canvas = await page.locator(".oh-canvas-base").evaluate((element) => {
-    const context = element.getContext("2d");
-    const data = context.getImageData(0, 0, element.width, element.height).data;
-    const colors = new Set();
-    let opaque = 0;
-    const stride = Math.max(4, Math.floor(data.length / 20_000 / 4) * 4);
-    for (let index = 0; index < data.length; index += stride) {
-      if (data[index + 3] > 0) opaque += 1;
-      colors.add(`${data[index]},${data[index + 1]},${data[index + 2]},${data[index + 3]}`);
-    }
-    return { colors: colors.size, opaque };
-  });
-  expect(canvas.colors).toBeGreaterThan(5);
-  expect(canvas.opaque).toBeGreaterThan(1000);
+  // The current fixture renders SVG directly; CanvasBaseLayer is no longer public.
+  const line = page.locator(".oh-svg-layer path").nth(0);
+  const polygon = page.locator(".oh-svg-layer path").nth(1);
+  const circle = page.locator(".oh-svg-layer circle");
+  await expect(line).toBeVisible();
+  await expect(line).toHaveAttribute("stroke", "#e11d48");
+  await expect(line).toHaveAttribute("stroke-width", "5");
+  await expect(polygon).toBeVisible();
+  await expect(polygon).toHaveAttribute("fill", "#14b8a6");
+  await expect(polygon).toHaveAttribute("fill-opacity", "0.25");
+  await expect(circle).toBeVisible();
+  await expect(circle).toHaveAttribute("fill", "#f59e0b");
+  await expect(page.locator(".oh-marker")).toBeVisible();
 
   const mapBox = await page.locator("#map").boundingBox();
   const markerBox = await page.locator(".oh-marker").boundingBox();
@@ -211,4 +210,3 @@ test("opens mountable chart popup and destroys chart on close", async ({ page })
   await expect(page.locator(".oh-popup")).toHaveCount(0);
   expect(await page.evaluate(() => window.__chartPopup.destroyed)).toBe(1);
 });
-

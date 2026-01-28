@@ -30,13 +30,13 @@ test("published SVG artwork has no active or remote content", async () => {
 });
 
 test("main documentation and examples render the packaged logo", async () => {
-  const [readme, examples, bench] = await Promise.all([
+  const [readme, showcase, bench] = await Promise.all([
     readFile(new URL("README.md", root), "utf8"),
-    readFile(new URL("examples/index.html", root), "utf8"),
+    readFile(new URL("examples/showcase/index.html", root), "utf8"),
     readFile(new URL("examples/bench-compare/index.html", root), "utf8")
   ]);
   assert.match(readme, /assets\/brand\/svg\/orihon-logo-horizontal\.svg/);
-  assert.match(examples, /assets\/brand\/svg\/orihon-logo-horizontal\.svg/);
+  assert.match(showcase, /assets\/brand\/svg\/orihon-logo-horizontal\.svg/);
   assert.match(bench, /assets\/brand\/svg\/orihon-logo-reversed\.svg/);
   assert.match(bench, /assets\/brand\/svg\/orihon-favicon\.svg/);
 });

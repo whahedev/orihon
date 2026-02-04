@@ -106,7 +106,7 @@
   <script type="module">
     const { createMap, heatLayer, textLayer, tileLayer, webglPointLayer } = await import(`/dist/orihon.esm.js?temperature-demo=${Date.now().toString(36)}`);
 
-    const EUROPE_VIEW = { center:[51.2, 14.5], zoom:4 };
+    const EUROPE_VIEW = { center:({ lat: 51.2, lng: 14.5 }), zoom:4 };
     const HOTSPOTS = [
       [40.42,-3.7,8.0], [41.9,12.5,7.2], [37.98,23.73,7.5], [47.5,19.04,6.4], [44.43,26.1,6.2]
     ];

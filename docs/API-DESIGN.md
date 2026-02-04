@@ -29,6 +29,8 @@ These rules describe the conventions used by the public Orihon API. New APIs mus
 
 ## Values and return shapes
 
+- Geographic and CRS positions use named `{ lat, lng }` values, never untagged numeric pairs. GeoJSON remains `[longitude, latitude]` and crosses the boundary through `fromGeoJSONPosition()` / `toGeoJSONPosition()`.
+
 - Collection reads return an empty collection rather than `null`.
 - Optional singular values use `null` when absence is an expected result and an exception when the operation itself failed.
 - Mutation methods return `this` when chaining is already the local convention; computation functions return their computed value.

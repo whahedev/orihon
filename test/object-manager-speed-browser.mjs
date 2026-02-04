@@ -43,6 +43,8 @@ try {
   assert.ok(result && !result.error, result?.error || "speed run returned no result");
   assert.equal(result.objects, count);
   assert.equal(result.moving, moving);
+  assert.equal(result.validCoordinates, true, "animated updates must retain finite named coordinates");
+  assert.equal(result.positionChanged, true, "the benchmark must actually move its objects");
   assert.ok(result.ingestMs < 4_000, `ingest too slow: ${result.ingestMs}ms`);
   assert.ok(result.layoutMs < 1_500, `layout too slow: ${result.layoutMs}ms`);
   assert.ok(result.animateAvgMs < 80, `animate subset too slow: ${result.animateAvgMs}ms`);

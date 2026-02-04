@@ -50,11 +50,11 @@ function installDom() {
 
 test("styled path batch pans with CSS translate instead of repainting", () => {
   const el = installDom();
-  const map = createMap(el, { center: [55.75, 37.62], zoom: 10, controls: false });
+  const map = createMap(el, { center: { lat: 55.75, lng: 37.62 }, zoom: 10, controls: false });
   const batch = webglStyledPathBatch();
   batch.addTo(map);
   const positions = [];
-  for (let i = 0; i < 5000; i++) positions.push([55 + i * 0.0001, 37 + Math.sin(i / 20) * 0.02]);
+  for (let i = 0; i < 5000; i++) positions.push({ lat: 55 + i * 0.0001, lng: 37 + Math.sin(i / 20) * 0.02 });
   batch.setPaths([{ id: 1, positions }]);
   const ctx = batch.canvas.getContext("2d");
   const paintsAfterSet = ctx.paints;
@@ -73,7 +73,7 @@ test("styled path batch pans with CSS translate instead of repainting", () => {
 
 test("polygon batch pans with CSS translate instead of repainting", () => {
   const el = installDom();
-  const map = createMap(el, { center: [55.75, 37.62], zoom: 10, controls: false });
+  const map = createMap(el, { center: { lat: 55.75, lng: 37.62 }, zoom: 10, controls: false });
   const batch = webglPolygonBatch();
   batch.addTo(map);
   const ring = new Float64Array(2000);

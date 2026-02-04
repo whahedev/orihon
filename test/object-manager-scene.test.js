@@ -29,8 +29,8 @@ function createFakeMap(zoom = 12) {
     };
     getBounds() {
       return [
-        [50, 10],
-        [55, 15]
+        ({ lat: 50, lng: 10 }),
+        ({ lat: 55, lng: 15 })
       ];
     }
     getPane(name) {
@@ -68,7 +68,7 @@ function createFakeMap(zoom = 12) {
 }
 
 test("ManagedGeometry normalizes legacy [lat,lng] and GeoJSON Point", () => {
-  const legacy = tryNormalizeManagedGeometry({ id: 1, coordinates: [55.75, 37.61] });
+  const legacy = tryNormalizeManagedGeometry({ id: 1, coordinates: ({ lat: 55.75, lng: 37.61 }) });
   assert.equal(legacy?.kind, "Point");
   assert.equal(legacy?.lat, 55.75);
   assert.equal(legacy?.lng, 37.61);
@@ -81,7 +81,7 @@ test("ManagedGeometry normalizes legacy [lat,lng] and GeoJSON Point", () => {
   assert.equal(geo.lat, 55.75);
   assert.equal(geo.lng, 37.61);
 
-  assert.equal(tryNormalizeManagedGeometry({ id: 3, coordinates: [Number.NaN, 0] }), null);
+  assert.equal(tryNormalizeManagedGeometry({ id: 3, coordinates: ({ lat: Number.NaN, lng: 0 }) }), null);
 
   const line = normalizeManagedGeometry({
     id: 4,
@@ -170,12 +170,12 @@ test("ObjectManager icon API and search/time helpers", () => {
   manager.add([
     {
       id: "truck-42",
-      coordinates: [55.75, 37.61],
+      coordinates: { lat: 55.75, lng: 37.61 },
       properties: { name: "Truck 42", vehicleNumber: "A482", timestamp: 1000 }
     },
     {
       id: "truck-7",
-      coordinates: [55.76, 37.62],
+      coordinates: { lat: 55.76, lng: 37.62 },
       properties: { name: "Truck 7", vehicleNumber: "B001", timestamp: 2000 }
     }
   ]);
@@ -202,7 +202,7 @@ test("ObjectManager icon API and search/time helpers", () => {
 test("search index ignores coordinate-only updates", () => {
   const index = new ObjectSearchIndex({ fields: ["properties.name"] });
   const objects = new Map();
-  const a = { id: 1, properties: { name: "Berlin Hub" }, coordinates: [52.5, 13.4] };
+  const a = { id: 1, properties: { name: "Berlin Hub" }, coordinates: ({ lat: 52.5, lng: 13.4 }) };
   objects.set(1, a);
   index.upsert(1, a);
   assert.equal(index.search("berlin", objects).length, 1);
@@ -343,7 +343,7 @@ test("cluster aggregations count/sum/min/max", () => {
 test("ObjectManager accepts mixed geometry and preserves legacy points", () => {
   const manager = objectManager();
   manager.add([
-    { id: 1, coordinates: [55.75, 37.61], properties: { type: "point" } },
+    { id: 1, coordinates: { lat: 55.75, lng: 37.61 }, properties: { type: "point" } },
     {
       id: "line-1",
       geometry: {
@@ -373,7 +373,7 @@ test("ObjectManager accepts mixed geometry and preserves legacy points", () => {
     }
   ]);
   assert.equal(manager.getStats().objects, 3);
-  assert.deepEqual(manager.getObject(1)?.coordinates, [55.75, 37.61]);
+  assert.deepEqual(manager.getObject(1)?.coordinates, { lat: 55.75, lng: 37.61 });
   manager.setObjectState("line-1", { selected: true });
   assert.equal(manager.getObjectState("line-1").selected, true);
   manager.removeObjects(["line-1"]);
@@ -387,7 +387,7 @@ test("rotation normalizes degrees in style resolution", () => {
   const manager = objectManager({
     style: () => ({ rotation: 450, icon: null, size: 12, color: "#fff" })
   });
-  manager.add({ id: 1, coordinates: [55, 37] });
+  manager.add({ id: 1, coordinates: { lat: 55, lng: 37 } });
   const map = createFakeMap(14);
   manager.addTo(map);
   manager.render();
@@ -405,8 +405,8 @@ test("sceneFeatures false skips scene geometries; beginBulk defers layout invali
   });
   manager.beginBulk();
   manager.add([
-    { id: 1, coordinates: [55.75, 37.61] },
-    { id: 2, coordinates: [55.76, 37.62] }
+    { id: 1, coordinates: { lat: 55.75, lng: 37.61 } },
+    { id: 2, coordinates: { lat: 55.76, lng: 37.62 } }
   ]);
   assert.equal(manager.scene.geometries.size, 0);
   assert.equal(manager.getStats().objects, 2);
@@ -429,17 +429,17 @@ test("sceneFeatures false keeps property and animated point updates", async () =
     clusterize: false,
     webglThreshold: 1
   });
-  manager.add({ id: 1, coordinates: [55.75, 37.61], properties: { name: "a" } });
+  manager.add({ id: 1, coordinates: { lat: 55.75, lng: 37.61 }, properties: { name: "a" } });
   const map = createFakeMap(6);
   manager.addTo(map);
   await manager.prepareLayout(6);
 
-  manager.updateObjects([{ id: 1, coordinates: [55.75, 37.61], properties: { name: "b" } }]);
+  manager.updateObjects([{ id: 1, coordinates: { lat: 55.75, lng: 37.61 }, properties: { name: "b" } }]);
   assert.equal(manager.getObject(1)?.properties?.name, "b");
   assert.equal(manager.index.has(1), true);
 
   manager.updateObjects(
-    [{ id: 1, coordinates: [55.8, 37.7], properties: manager.getObject(1).properties }],
+    [{ id: 1, coordinates: { lat: 55.8, lng: 37.7 }, properties: manager.getObject(1).properties }],
     { animate: true, duration: 50 }
   );
   const rec = manager.index.records.get(1);
@@ -457,8 +457,8 @@ test("flat WebGL time range compacts visible objects", async () => {
     time: { value: (object) => Number(object.properties?.timestamp ?? 0) }
   });
   manager.add([
-    { id: 1, coordinates: [55.75, 37.61], properties: { timestamp: 100 } },
-    { id: 2, coordinates: [55.76, 37.62], properties: { timestamp: 500 } }
+    { id: 1, coordinates: { lat: 55.75, lng: 37.61 }, properties: { timestamp: 100 } },
+    { id: 2, coordinates: { lat: 55.76, lng: 37.62 }, properties: { timestamp: 500 } }
   ]);
   const map = createFakeMap(6);
   manager.addTo(map);
@@ -480,7 +480,7 @@ test("mixed scene does not pack LineString/Polygon as WebGL points", async () =>
     style: () => ({ color: "#fff", size: 8 })
   });
   manager.add([
-    { id: "pt", coordinates: [55.75, 37.61] },
+    { id: "pt", coordinates: { lat: 55.75, lng: 37.61 } },
     {
       id: "ln",
       geometry: { type: "LineString", coordinates: [[37.61, 55.75], [37.72, 55.82]] }

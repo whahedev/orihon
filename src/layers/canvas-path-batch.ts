@@ -145,8 +145,8 @@ export class CanvasPathBatch extends Layer<CanvasPathBatchOptions> {
   getBounds(): LatLngBounds {
     const bounds = new LatLngBounds();
     for (const record of this.records) {
-      bounds.extend([record.minLat, record.minLng]);
-      bounds.extend([record.maxLat, record.maxLng]);
+      bounds.extend({ lat: record.minLat, lng: record.minLng });
+      bounds.extend({ lat: record.maxLat, lng: record.maxLng });
     }
     return bounds;
   }
@@ -168,7 +168,7 @@ export class CanvasPathBatch extends Layer<CanvasPathBatchOptions> {
       const record = this.records[recordIndex];
       const rings = record.geodesicRings && this.map.crs.code === "EPSG:3857" ? record.geodesicRings : record.rings;
       const projected = rings.map((ring) => Array.from({ length: ring.lat.length }, (_, index) =>
-        this.map!.latLngToContainerPoint([ring.lat[index], ring.lng[index]])
+        this.map!.latLngToContainerPoint({ lat: ring.lat[index], lng: ring.lng[index] })
       ));
       let inside = false;
       if (record.closed && record.fill !== "none" && record.fillOpacity > 0) {
@@ -289,7 +289,7 @@ export class CanvasPathBatch extends Layer<CanvasPathBatchOptions> {
         if (n < 2) continue;
         const projected: Array<{ x: number; y: number }> = [];
         for (let i = 0; i < n; i++) {
-          const pt = this.map.latLngToContainerPoint([ring.lat[i], ring.lng[i]]);
+          const pt = this.map.latLngToContainerPoint({ lat: ring.lat[i], lng: ring.lng[i] });
           projected.push(pt);
           if (i === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);

@@ -404,7 +404,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     this._latlngBuf[i + 1] = lng;
     this._merc64[i] = m.x;
     this._merc64[i + 1] = m.y;
-    if (this.options.interactive) this._pickIndex.set(index, [lat, lng], index);
+    if (this.options.interactive) this._pickIndex.set(index, { lat: lat, lng: lng }, index);
     if (this._drawMerc.length >= i + 2 && Number.isFinite(this._refMx)) {
       this._drawMerc[i] = m.x - this._refMx;
       this._drawMerc[i + 1] = m.y - this._refMy;
@@ -581,7 +581,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
   addData(points: Iterable<WebGLPointInput>): this {
     const existing: WebGLPointInput[] = [];
     for (let i = 0; i < this.points.length; i += 2) {
-      existing.push([this.points[i], this.points[i + 1]]);
+      existing.push({ lat: this.points[i], lng: this.points[i + 1] });
     }
     for (const item of points) existing.push(item);
     return this.setData(existing);
@@ -1294,7 +1294,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     if (!this.options.interactive) return;
     const pts = this.points;
     const n = pts.length;
-    for (let i = 0; i < n; i += 2) this._pickIndex.set(i / 2, [pts[i], pts[i + 1]], i / 2);
+    for (let i = 0; i < n; i += 2) this._pickIndex.set(i / 2, { lat: pts[i], lng: pts[i + 1] }, i / 2);
   }
 
   #hitTest(clientX: number, clientY: number, hitTolerance = this.options.hitTolerance): {
@@ -1341,7 +1341,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     } else {
       const ll = this.map.containerPointToLatLng({ x: targetX, y: targetY });
       const pad = Math.max(0.002, (maxRadius / scale) * 360);
-      for (const i of this._pickIndex.searchIds([[ll.lat - pad, ll.lng - pad], [ll.lat + pad, ll.lng + pad]])) {
+      for (const i of this._pickIndex.searchIds([{ lat: ll.lat - pad, lng: ll.lng - pad }, { lat: ll.lat + pad, lng: ll.lng + pad }])) {
         const point = this.#mercatorToScreen(merc[i * 2], merc[i * 2 + 1], scale, originX, originY);
         consider(i, point);
       }
@@ -1349,7 +1349,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
     if (nearest < 0) return null;
     return {
       index: nearest,
-      latlng: [this.points[nearest * 2], this.points[nearest * 2 + 1]],
+      latlng: { lat: this.points[nearest * 2], lng: this.points[nearest * 2 + 1] },
       containerPoint: nearestPoint
     };
   }
@@ -1475,6 +1475,7 @@ function normalizePoint(value: WebGLPointInput): { lat: number; lng: number } | 
     ? value as LatLngLike
     : (value as { coordinates?: LatLngLike; latlng?: LatLngLike }).coordinates ?? (value as { latlng?: LatLngLike }).latlng;
   if (!source) return null;
+  if (!Array.isArray(source) && (!Number.isFinite(source.lat) || !Number.isFinite(source.lng))) return null;
   const point = latLng(source);
   if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
   return point;

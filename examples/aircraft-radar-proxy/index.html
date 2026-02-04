@@ -419,6 +419,10 @@
   <script src="https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.global.js"></script>
 
   <script>
+// Demo datasets use latitude-first pairs internally; name coordinates at the API boundary.
+function mapPosition(value) { return Array.isArray(value) ? { lat: value[0], lng: value[1] } : value; }
+function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] === "number" ? mapPosition(value) : value.map(mapPositions)) : value; }
+
     (() => {
       "use strict";
 
@@ -1608,9 +1612,9 @@
 
       function fitEurope() {
         if (typeof map.fitBounds === "function") {
-          map.fitBounds([[34, -15], [72, 40]]);
+          map.fitBounds(mapPositions([[34, -15], [72, 40]]));
         } else {
-          map.setView([53, 12], 4.5);
+          map.setView(({ lat: 53, lng: 12 }), 4.5);
         }
         scheduleMoveRefresh();
       }
@@ -1625,7 +1629,7 @@
 
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            map.setView([position.coords.latitude, position.coords.longitude], 7);
+            map.setView(({ lat: position.coords.latitude, lng: position.coords.longitude }), 7);
             locateButton.disabled = false;
             scheduleMoveRefresh();
           },
@@ -1648,7 +1652,7 @@
         }
 
         map = Orihon.createMap("map", {
-          center: [52, 10],
+          center: ({ lat: 52, lng: 10 }),
           zoom: 5,
           locale: "ru",
           ariaLabel: "Карта движения самолётов и судов Европы"

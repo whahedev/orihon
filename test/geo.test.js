@@ -16,7 +16,7 @@ test("wrapLng normalizes longitudes", () => {
 });
 
 test("distance returns meters", () => {
-  const meters = distance([52.520008, 13.404954], [53.551086, 9.993682]);
+  const meters = distance({ lat: 52.520008, lng: 13.404954 }, { lat: 53.551086, lng: 9.993682 });
   assert.ok(meters > 250000 && meters < 270000);
 });
 
@@ -27,10 +27,10 @@ test("metersToPixels accounts for latitude", () => {
 });
 
 test("destination and geodesic interpolation follow a great circle", () => {
-  const east = destination([0, 0], 111_319.49, 90);
+  const east = destination({ lat: 0, lng: 0 }, 111_319.49, 90);
   assert.ok(Math.abs(east.lat) < 1e-6);
   assert.ok(Math.abs(east.lng - 1) < 1e-5);
-  const points = geodesicInterpolate([0, 0], [0, 3], 100_000);
+  const points = geodesicInterpolate({ lat: 0, lng: 0 }, { lat: 0, lng: 3 }, 100_000);
   assert.ok(points.length >= 5);
-  assert.ok(points.at(-1).equals([0, 3]));
+  assert.ok(points.at(-1).equals({ lat: 0, lng: 3 }));
 });

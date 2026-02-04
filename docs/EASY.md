@@ -155,10 +155,10 @@ const labels = map.addTileLayer("https://example.test/{z}/{x}/{y}.png", {
 Use `add()` when a layer already exists or comes from another function. It returns the map, like `addLayer()`, so both composition styles remain equivalent:
 
 ```ts
-const place = marker([52.52, 13.405]);
+const place = marker(({ lat: 52.52, lng: 13.405 }));
 
 map.add(place);                    // map-centric
-marker([52.52, 13.405]).addTo(map); // object-centric
+marker(({ lat: 52.52, lng: 13.405 })).addTo(map); // object-centric
 ```
 
 The overload is intentional: `map.add(existingLayer)` returns the map, preserving the normal layer lifecycle; `map.add(description)` returns the newly created layer so an application can subscribe to it, update it or remove it later.
@@ -199,7 +199,7 @@ Easy and Layer API can be mixed because they use the same objects:
 import { createMap } from "orihon/easy";
 import { polygon } from "orihon/standard";
 
-const map = createMap("map", { center: [52.52, 13.405], zoom: 10 });
+const map = createMap("map", { center: ({ lat: 52.52, lng: 13.405 }), zoom: 10 });
 
 map.addMarker({ position: [52.52, 13.405] });
 map.add(polygon(area));

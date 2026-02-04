@@ -19,7 +19,7 @@ try {
     const host = document.createElement("div");
     host.style.cssText = "width:512px;height:320px";
     document.body.appendChild(host);
-    const map = api.createMap(host, { center: [50.08, 14.42], zoom: 5, controls: false });
+    const map = api.createMap(host, { center: ({ lat: 50.08, lng: 14.42 }), zoom: 5, controls: false });
     const webgl = api.tileLayer("/assets/brand/png/orihon-mark-256.png", {
       renderer: "webgl",
       maxDpr: 1.25,

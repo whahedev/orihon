@@ -156,7 +156,7 @@ import { createMap, tileLayer, marker, polyline } from "orihon";
 import "orihon/orihon.css";
 
 const map = createMap("map", {
-  center: [52.520008, 13.404954],
+  center: ({ lat: 52.520008, lng: 13.404954 }),
   zoom: 10
 });
 
@@ -164,12 +164,12 @@ tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "\u00a9 OpenStreetMap contributors"
 }).addTo(map);
 
-marker([52.520008, 13.404954], { title: "Berlin" }).addTo(map);
+marker(({ lat: 52.520008, lng: 13.404954 }), { title: "Berlin" }).addTo(map);
 
 polyline([
-  [52.51, 13.37],
-  [52.53, 13.41],
-  [52.50, 13.44]
+  ({ lat: 52.51, lng: 13.37 }),
+  ({ lat: 52.53, lng: 13.41 }),
+  ({ lat: 52.50, lng: 13.44 })
 ], { stroke: "#0f766e", strokeWidth: 4 }).addTo(map);
 ```
 
@@ -224,12 +224,12 @@ Use named imports:
 import { createMap, tileLayer, marker, featureGroup, circle, rectangle, layersControl } from "orihon";
 import "orihon/orihon.css";
 
-const map = createMap("map", { center: [52.52, 13.405], zoom: 10 });
+const map = createMap("map", { center: ({ lat: 52.52, lng: 13.405 }), zoom: 10 });
 const streets = tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 const places = featureGroup([
-  marker([52.52, 13.405]).bindPopup("Berlin"),
-  circle([52.54, 13.43], 750),
-  rectangle([[52.49, 13.35], [52.54, 13.45]])
+  marker(({ lat: 52.52, lng: 13.405 })).bindPopup("Berlin"),
+  circle(({ lat: 52.54, lng: 13.43 }), 750),
+  rectangle([({ lat: 52.49, lng: 13.35 }), ({ lat: 52.54, lng: 13.45 })])
 ]).addTo(map);
 
 map.fitBounds(places.getBounds());
@@ -244,7 +244,7 @@ Render and manage 100,000+ map objects without keeping 100,000 DOM markers alive
 import { createMap, objectManager, tileLayer } from "orihon";
 import "orihon/orihon.css";
 
-const map = createMap("map", { center: [55.75, 37.62], zoom: 11 });
+const map = createMap("map", { center: ({ lat: 55.75, lng: 37.62 }), zoom: 11 });
 tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
 const manager = objectManager({
@@ -299,7 +299,7 @@ Point styles use the same vocabulary as vector fills: `fill`, `fillOpacity`, `si
 
 ### Managed geometries, icons, labels, and scene modes
 
-Legacy points (`coordinates: [lat, lng]`) keep working. GeoJSON-style `geometry` also accepts `Point` (`[lng, lat]`), `LineString`, and `Polygon` in one manager.
+Points use `coordinates: { lat, lng }`. GeoJSON-style `geometry` accepts `Point` (`[lng, lat]`), `LineString`, and `Polygon` in one manager. Bare coordinate tuples are no longer accepted outside GeoJSON; see [next-major migration](docs/MIGRATION-NEXT-MAJOR.md).
 
 ```js
 const manager = objectManager({
@@ -362,7 +362,7 @@ manager.add([
     properties: { type: "truck", name: "Truck 42", heading: 90, timestamp: Date.now() }
   }
 ]);
-manager.updateObject("truck-42", { coordinates: [55.76, 37.63] }, { animate: true, duration: 800 });
+manager.updateObject("truck-42", { coordinates: ({ lat: 55.76, lng: 37.63 }) }, { animate: true, duration: 800 });
 manager.search("truck 42", { limit: 10 });
 manager.setTimeRange(Date.now() - 3600_000, Date.now());
 ```
@@ -439,8 +439,8 @@ Custom tile grids use the `GridLayer` extension class; media overlays expose the
 
 ```js
 class CustomTiles extends GridLayer {}
-videoOverlay("traffic.mp4", [[52.48, 13.30], [52.55, 13.45]], { poster: "preview.png" }).addTo(map);
-svgOverlay(document.querySelector("svg"), [[52.48, 13.30], [52.55, 13.45]]).addTo(map);
+videoOverlay("traffic.mp4", [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })], { poster: "preview.png" }).addTo(map);
+svgOverlay(document.querySelector("svg"), [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })]).addTo(map);
 ```
 
 ## Rich Popup Content
@@ -448,7 +448,7 @@ svgOverlay(document.querySelector("svg"), [[52.48, 13.30], [52.55, 13.45]]).addT
 Every interactive layer accepts text, numbers, DOM nodes, async factories or mountable component objects. Mountable content is useful for charts and framework roots because Orihon calls its cleanup when the popup closes:
 
 ```js
-marker([52.52, 13.405])
+marker(({ lat: 52.52, lng: 13.405 }))
   .bindPopup(({ data }) => ({
     mount(container) {
       const canvas = document.createElement("canvas");
@@ -487,7 +487,7 @@ Built-in UI locales (English is the default): `en`, `ru`, `ar`, `tr`, `zh`, `de`
 
 ```js
 const map = createMap("map", {
-  center: [52.52, 13.405],
+  center: ({ lat: 52.52, lng: 13.405 }),
   zoom: 10,
   locale: "de",
   ariaLabel: "Objektkarte"
@@ -499,7 +499,7 @@ customControl((currentMap) => `z${currentMap.getZoom()}`, {
   ariaLabel: "Aktueller Zoom"
 }).addTo(map);
 
-const place = marker([52.52, 13.405], { opacity: 0.8, zIndexOffset: 100 })
+const place = marker(({ lat: 52.52, lng: 13.405 }), { opacity: 0.8, zIndexOffset: 100 })
   .bindPopup("Objekt", { autoPan: true, keepInView: true })
   .addTo(map);
 ```
@@ -510,8 +510,8 @@ The services layer stays provider-based: Orihon owns orchestration, cancellation
 
 ```js
 const search = searchProvider([
-  { name: "Berlin", center: [52.520, 13.405] },
-  { name: "Hamburg", center: [53.551, 9.994] }
+  { name: "Berlin", center: ({ lat: 52.520, lng: 13.405 }) },
+  { name: "Hamburg", center: ({ lat: 53.551, lng: 9.994 }) }
 ]);
 
 createSuggestWidget({
@@ -526,7 +526,7 @@ const routes = routingLayer({
   alternatives: true
 }).addTo(map);
 
-await routes.route([[52.52, 13.40], [52.55, 13.45]]);
+await routes.route([({ lat: 52.52, lng: 13.40 }), ({ lat: 52.55, lng: 13.45 })]);
 routes.select(1);
 
 const traffic = trafficLayer("/traffic/{z}/{x}/{y}.png").addTo(map);

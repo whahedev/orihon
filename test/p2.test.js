@@ -54,18 +54,18 @@ function createContainer() {
 }
 
 test("orihon/geo bufferPoint creates a closed geodesic polygon", () => {
-  const feature = geo.bufferPoint([60, 30], 10_000, { steps: 16, properties: { id: 1 } });
+  const feature = geo.bufferPoint({ lat: 60, lng: 30 }, 10_000, { steps: 16, properties: { id: 1 } });
   assert.equal(feature.geometry.type, "Polygon");
   assert.equal(feature.geometry.coordinates[0].length, 17);
   assert.deepEqual(feature.geometry.coordinates[0][0], feature.geometry.coordinates[0].at(-1));
   assert.deepEqual(feature.properties, { id: 1 });
-  assert.throws(() => geo.bufferPoint([0, 0], -1), /non-negative/);
-  assert.throws(() => geo.bufferPoint([0, 0], 1, { steps: Number.NaN }), /finite/);
+  assert.throws(() => geo.bufferPoint({ lat: 0, lng: 0 }, -1), /non-negative/);
+  assert.throws(() => geo.bufferPoint({ lat: 0, lng: 0 }, 1, { steps: Number.NaN }), /finite/);
 });
 
 test("marker rotation composes with positioning for DivIcon markers", () => {
   const map = new Orihon(createContainer(), { controls: false });
-  const layer = marker([10, 20], {
+  const layer = marker({ lat: 10, lng: 20 }, {
     icon: icon({ content: "A" }),
     rotation: 45,
     rotationOrigin: "center bottom",
@@ -73,7 +73,7 @@ test("marker rotation composes with positioning for DivIcon markers", () => {
   }).addTo(map);
   assert.match(layer.el.style.transform, /translate3d\(.+\) rotate\(45deg\)/);
   assert.equal(layer.el.style.transformOrigin, "center bottom");
-  layer.setLatLng([11, 21]);
+  layer.setLatLng({ lat: 11, lng: 21 });
   assert.match(layer.el.style.transform, /rotate\(45deg\)/);
   map.destroy();
 });
@@ -94,8 +94,8 @@ test("measureControl accumulates map distance and restores behaviors", () => {
   const map = new Orihon(createContainer(), { controls: false });
   const control = controls.measureControl().addTo(map).start();
   assert.equal(map.behaviors.isEnabled("drag"), false);
-  map.emit("click", { latlng: [0, 0] });
-  map.emit("click", { latlng: [0, 1] });
+  map.emit("click", { latlng: ({ lat: 0, lng: 0 }) });
+  map.emit("click", { latlng: ({ lat: 0, lng: 1 }) });
   assert.ok(control.getDistance() > 111_000);
   document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   assert.equal(map.behaviors.isEnabled("drag"), true);
@@ -104,16 +104,16 @@ test("measureControl accumulates map distance and restores behaviors", () => {
 });
 
 test("measureControl uses projected length when geodesic is false and owns document shortcuts", () => {
-  const map = new Orihon(createContainer(), { controls: false, center: [60, 0], zoom: 5 });
+  const map = new Orihon(createContainer(), { controls: false, center: { lat: 60, lng: 0 }, zoom: 5 });
   const geographic = controls.measureControl({ geodesic: true }).addTo(map).start();
-  map.emit("click", { latlng: [60, 0] });
-  map.emit("click", { latlng: [60, 1] });
+  map.emit("click", { latlng: ({ lat: 60, lng: 0 }) });
+  map.emit("click", { latlng: ({ lat: 60, lng: 1 }) });
   const geographicDistance = geographic.getDistance();
   geographic.finish().remove();
 
   const projected = controls.measureControl({ geodesic: false }).addTo(map).start();
-  map.emit("click", { latlng: [60, 0] });
-  map.emit("click", { latlng: [60, 1] });
+  map.emit("click", { latlng: ({ lat: 60, lng: 0 }) });
+  map.emit("click", { latlng: ({ lat: 60, lng: 1 }) });
   assert.ok(projected.getDistance() > geographicDistance * 1.9);
 
   const input = document.createElement("input");
@@ -127,7 +127,7 @@ test("measureControl uses projected length when geodesic is false and owns docum
 });
 
 test("graticule skips Simple CRS unless map units are requested", () => {
-  const map = new Orihon(createContainer(), { controls: false, crs: CRS.Simple, center: [50, 50], zoom: 0 });
+  const map = new Orihon(createContainer(), { controls: false, crs: CRS.Simple, center: { lat: 50, lng: 50 }, zoom: 0 });
   const geographic = controls.graticuleLayer().addTo(map);
   assert.equal(geographic.svg.style.display, "none");
   const planar = controls.graticuleLayer({ units: "map", step: 10 }).addTo(map);
@@ -137,7 +137,7 @@ test("graticule skips Simple CRS unless map units are requested", () => {
 });
 
 test("graticule accepts kilometer and mile distance steps", () => {
-  const map = new Orihon(createContainer(), { controls: false, center: [55.75, 37.62], zoom: 10 });
+  const map = new Orihon(createContainer(), { controls: false, center: { lat: 55.75, lng: 37.62 }, zoom: 10 });
   const km = controls.graticuleLayer({ units: "kilometers", step: 10 }).addTo(map);
   assert.equal(km.svg.style.display, "");
   assert.ok(km.path.getAttribute("d").length > 0);
@@ -148,7 +148,7 @@ test("graticule accepts kilometer and mile distance steps", () => {
 });
 
 test("fine kilometer graticule draws both axes across the view", () => {
-  const map = new Orihon(createContainer(), { controls: false, center: [55.75, 37.62], zoom: 12 });
+  const map = new Orihon(createContainer(), { controls: false, center: { lat: 55.75, lng: 37.62 }, zoom: 12 });
   const layer = controls.graticuleLayer({ units: "kilometers", step: 0.1, maxLines: 80 }).addTo(map);
   const d = layer.path.getAttribute("d") || "";
   const segments = d.match(/M[\d.\-]+ [\d.\-]+L[\d.\-]+ [\d.\-]+/g) || [];
@@ -167,7 +167,7 @@ test("fine kilometer graticule draws both axes across the view", () => {
 });
 
 test("miniMap owns and releases its secondary map", () => {
-  const map = new Orihon(createContainer(), { controls: false, center: [52, 13], zoom: 8 });
+  const map = new Orihon(createContainer(), { controls: false, center: { lat: 52, lng: 13 }, zoom: 8 });
   const layer = controls.graticuleLayer();
   const control = controls.miniMap(layer).addTo(map);
   assert.ok(control.miniMap);

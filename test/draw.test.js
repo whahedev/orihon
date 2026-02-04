@@ -23,7 +23,7 @@ test("draw mode icons are visible SVGs and remain presentation-only", () => {
 });
 
 test("rectangle accepts LatLng drag endpoints and produces editable vertices", () => {
-  const shape = rectangle([latLng([55.7, 37.5]), latLng([55.8, 37.7])]);
+  const shape = rectangle([latLng({ lat: 55.7, lng: 37.5 }), latLng({ lat: 55.8, lng: 37.7 })]);
   assert.equal(shape.getBounds().isValid(), true);
   assert.deepEqual(shape.getLatLngs()[0].map(({ lat, lng }) => [lat, lng]), [
     [55.8, 37.5],
@@ -34,7 +34,7 @@ test("rectangle accepts LatLng drag endpoints and produces editable vertices", (
 });
 
 test("edit handles suppress the default map-pin content", () => {
-  const handle = drawHandle([55.75, 37.62], "vertex", 0, 0);
+  const handle = drawHandle({ lat: 55.75, lng: 37.62 }, "vertex", 0, 0);
   assert.equal(handle.marker.options.content, "\u200b");
   assert.match(handle.marker.options.className, /oh-draw-vertex-handle/);
 });

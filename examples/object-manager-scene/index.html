@@ -145,7 +145,7 @@
       } = await import("/dist/index.js").catch(() => import("/dist/orihon.esm.js"));
 
       const map = createMap("map", {
-        center: [55.7558, 37.6173],
+        center: ({ lat: 55.7558, lng: 37.6173 }),
         zoom: 12,
         zoomControl: true
       });
@@ -509,7 +509,7 @@
         fillPropsEditor(id);
         const obj = manager.getObject(id);
         if (obj?.geometry?.type === "Point") {
-          map.setView([obj.geometry.coordinates[1], obj.geometry.coordinates[0]], Math.max(map.zoom, 13));
+          map.setView(({ lat: obj.geometry.coordinates[1], lng: obj.geometry.coordinates[0] }), Math.max(map.zoom, 13));
         } else if (obj?.coordinates) {
           map.setView(obj.coordinates, Math.max(map.zoom, 13));
         }
@@ -821,7 +821,7 @@
               const v = ((id * 1597334677) >>> 0) / 4294967296;
               batch[i] = {
                 id,
-                coordinates: [lat0 + u * latSpan, lng0 + v * lngSpan],
+                coordinates: ({ lat: lat0 + u * latSpan, lng: lng0 + v * lngSpan }),
                 properties: { alert: id % 97 === 0 }
               };
             }
@@ -839,7 +839,7 @@
           manager.endBulk({ render: false });
 
           const zoom = useClusters ? 8 : 6;
-          map.setView([55.75, 37.62], zoom);
+          map.setView(({ lat: 55.75, lng: 37.62 }), zoom);
           document.getElementById("zoom").value = String(zoom);
 
           const l0 = performance.now();
@@ -884,7 +884,7 @@
           manager.registerIcon("truck", iconCanvas("#2563eb", "T"), { pixelRatio: 2, anchor: [0.5, 0.85] });
           manager.registerIcon("warehouse", iconCanvas("#0f766e", "W"), { pixelRatio: 2, anchor: [0.5, 0.85] });
           manager.add([...zones, ...routes, ...warehouses, ...trucks]);
-          map.setView([55.7558, 37.6173], 12);
+          map.setView(({ lat: 55.7558, lng: 37.6173 }), 12);
           document.getElementById("zoom").value = "12";
           for (const btn of document.querySelectorAll("#viz-buttons button")) {
             btn.classList.toggle("active", btn.dataset.viz === "auto");
@@ -931,17 +931,14 @@
             const obj = manager.getObject(id);
             if (!obj) continue;
             const coords = obj.coordinates
-              ? [obj.coordinates[0], obj.coordinates[1]]
+              ? [obj.coordinates.lat, obj.coordinates.lng]
               : obj.geometry?.type === "Point"
                 ? [obj.geometry.coordinates[1], obj.geometry.coordinates[0]]
                 : null;
             if (!coords) continue;
             updates[i] = {
               id,
-              coordinates: [
-                coords[0] + (((id * 1103515245) & 0xffff) / 0xffff - 0.5) * 0.01,
-                coords[1] + (((id * 12345) & 0xffff) / 0xffff - 0.5) * 0.01
-              ],
+              coordinates: ({ lat: coords[0] + (((id * 1103515245) & 0xffff) / 0xffff - 0.5) * 0.01, lng: coords[1] + (((id * 12345) & 0xffff) / 0xffff - 0.5) * 0.01 }),
               properties: obj.properties
             };
           }
@@ -985,10 +982,7 @@
             const rad = ((i * 17 + phase * 40) % 360) * (Math.PI / 180);
             updates[i] = {
               id: i,
-              coordinates: [
-                obj.coordinates[0] + Math.cos(rad) * step,
-                obj.coordinates[1] + Math.sin(rad) * step
-              ],
+              coordinates: { lat: obj.coordinates.lat + Math.cos(rad) * step, lng: obj.coordinates.lng + Math.sin(rad) * step },
               properties: obj.properties
             };
           }

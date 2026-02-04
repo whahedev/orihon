@@ -6,13 +6,13 @@
 import { createMap, tileLayer, marker } from "orihon/standard";
 import "orihon/orihon.css";
 
-const map = createMap("map", { center: [52.52, 13.405], zoom: 11 });
+const map = createMap("map", { center: ({ lat: 52.52, lng: 13.405 }), zoom: 11 });
 tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "© OpenStreetMap contributors",
   maxRequests: 8,
   cacheSize: 160
 }).addTo(map);
-marker([52.52, 13.405]).bindPopup("Center").addTo(map);
+marker(({ lat: 52.52, lng: 13.405 })).bindPopup("Center").addTo(map);
 ```
 
 ## A Bounded WMS Dataset
@@ -26,7 +26,7 @@ wmsTileLayer("/wms", {
   crs: "EPSG:3857",
   format: "image/png",
   transparent: true,
-  bounds: [[52.50, 13.35], [52.54, 13.45]]
+  bounds: [({ lat: 52.50, lng: 13.35 }), ({ lat: 52.54, lng: 13.45 })]
 }).addTo(map);
 ```
 

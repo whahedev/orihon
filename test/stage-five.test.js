@@ -212,10 +212,10 @@ test("WebGLPathBatch keeps vertex buffer large enough for many segments", () => 
     batch.addPath(
       [
         [
-          [52 + i * 0.01, 13],
-          [52.1 + i * 0.01, 13.2],
-          [52.05 + i * 0.01, 13.4],
-          [52.15 + i * 0.01, 13.6]
+          { lat: 52 + i * 0.01, lng: 13 },
+          { lat: 52.1 + i * 0.01, lng: 13.2 },
+          { lat: 52.05 + i * 0.01, lng: 13.4 },
+          { lat: 52.15 + i * 0.01, lng: 13.6 }
         ]
       ],
       false
@@ -254,7 +254,7 @@ test("GeoJSON creates point, multi-point and path feature layers", () => {
   assert.equal(layer.getLayers().length, 3);
   assert.ok(layer.getLayers()[0] instanceof CircleMarker);
   assert.ok(layer.getLayers()[1] instanceof FeatureGroup);
-  assert.equal(layer.getBounds().contains([52.52, 13.405]), true);
+  assert.equal(layer.getBounds().contains({ lat: 52.52, lng: 13.405 }), true);
   assert.equal(layer.toGeoJSON().features.length, 3);
 });
 
@@ -283,7 +283,7 @@ test("GeoJSON propagates feature events and updates point round-trips", () => {
   point.emit("click");
   assert.equal(clicked, true);
   assert.ok(point instanceof Marker);
-  point.setLatLng([61, 31]);
+  point.setLatLng(({ lat: 61, lng: 31 }));
   assert.deepEqual(layer.toGeoJSON(4).features[0].geometry.coordinates, [31, 61]);
 
   layer.addData({
@@ -300,8 +300,8 @@ test("GeoJSON propagates feature events and updates point round-trips", () => {
 
 test("Polygon supports nested rings for holes", () => {
   const area = polygon([
-    [[0, 0], [0, 4], [4, 4], [4, 0]],
-    [[1, 1], [2, 1], [2, 2], [1, 1]]
+    [{ lat: 0, lng: 0 }, { lat: 0, lng: 4 }, { lat: 4, lng: 4 }, { lat: 4, lng: 0 }],
+    [{ lat: 1, lng: 1 }, { lat: 2, lng: 1 }, { lat: 2, lng: 2 }, { lat: 1, lng: 1 }]
   ]);
 
   assert.ok(area instanceof Polygon);

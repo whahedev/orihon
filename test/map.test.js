@@ -78,7 +78,7 @@ globalThis.window = new FakeElement();
 globalThis.requestAnimationFrame = () => 1;
 
 test("setZoomAround keeps its anchor stable before a render frame", () => {
-  const map = new Orihon(new FakeElement(), { center: [52.52, 13.405], zoom: 8, controls: false });
+  const map = new Orihon(new FakeElement(), { center: { lat: 52.52, lng: 13.405 }, zoom: 8, controls: false });
   const anchor = { x: 125, y: 90 };
   const original = map.containerPointToLatLng(anchor);
 
@@ -92,7 +92,7 @@ test("setZoomAround keeps its anchor stable before a render frame", () => {
 });
 
 test("programmatic zoom emits one complete view lifecycle", () => {
-  const map = new Orihon(new FakeElement(), { center: [0, 0], zoom: 2, controls: false });
+  const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });
   const events = [];
   for (const type of ["movestart", "zoomstart", "zoom", "move", "zoomend", "moveend"]) {
     map.on(type, () => events.push(type));
@@ -108,17 +108,17 @@ test("programmatic zoom emits one complete view lifecycle", () => {
 });
 
 test("setView settle:false pans without moveend until settled", () => {
-  const map = new Orihon(new FakeElement(), { center: [0, 0], zoom: 2, controls: false });
+  const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });
   const events = [];
   for (const type of ["movestart", "move", "moveend"]) {
     map.on(type, () => events.push(type));
   }
 
-  map.setView([1, 1], 2, { settle: false });
+  map.setView({ lat: 1, lng: 1 }, 2, { settle: false });
   assert.deepEqual(events, ["movestart", "move"]);
 
   events.length = 0;
-  map.setView([2, 2], 2, { settle: false });
+  map.setView({ lat: 2, lng: 2 }, 2, { settle: false });
   assert.deepEqual(events, ["move"]);
 
   events.length = 0;
@@ -128,7 +128,7 @@ test("setView settle:false pans without moveend until settled", () => {
 });
 
 test("layer coordinates remain viewport-local after panBy", () => {
-  const map = new Orihon(new FakeElement(), { center: [52.52, 13.405], zoom: 10, controls: false });
+  const map = new Orihon(new FakeElement(), { center: { lat: 52.52, lng: 13.405 }, zoom: 10, controls: false });
   const before = map.latLngToLayerPoint(map.getCenter());
   map.panBy([120, -45]);
   const after = map.latLngToLayerPoint(map.getCenter());
@@ -138,9 +138,9 @@ test("layer coordinates remain viewport-local after panBy", () => {
 });
 
 test("layer coordinates stay small and precise at maximum zoom", () => {
-  const map = new Orihon(new FakeElement(), { center: [52.52, 13.405], zoom: 19, controls: false });
+  const map = new Orihon(new FakeElement(), { center: { lat: 52.52, lng: 13.405 }, zoom: 19, controls: false });
   const center = map.latLngToLayerPoint(map.getCenter());
-  const nearby = map.latLngToLayerPoint([52.5201, 13.4051]);
+  const nearby = map.latLngToLayerPoint({ lat: 52.5201, lng: 13.4051 });
 
   assert.deepEqual(center.toArray(), [400, 300]);
   assert.ok(Math.abs(nearby.x) < 1000);
@@ -150,10 +150,10 @@ test("layer coordinates stay small and precise at maximum zoom", () => {
 
 test("navigation helpers and maxBounds are exposed", () => {
   const map = new Orihon(new FakeElement(), {
-    center: [0, 0],
+    center: { lat: 0, lng: 0 },
     zoom: 4,
     controls: false,
-    maxBounds: [[-10, -10], [10, 10]]
+    maxBounds: [{ lat: -10, lng: -10 }, { lat: 10, lng: 10 }]
   });
 
   map.zoomIn();
@@ -161,10 +161,10 @@ test("navigation helpers and maxBounds are exposed", () => {
   map.zoomOut(2);
   assert.equal(map.getZoom(), 3);
 
-  map.setView([80, 80], 8);
+  map.setView({ lat: 80, lng: 80 }, 8);
   assert.equal(map.getMaxBounds().contains(map.getCenter()), true);
 
-  map.flyTo([1, 1], 6, { duration: 0 });
+  map.flyTo({ lat: 1, lng: 1 }, 6, { duration: 0 });
   assert.equal(map.getZoom(), 6);
   assert.ok(Math.abs(map.getCenter().lat - 1) < 1e-9);
   assert.ok(Math.abs(map.getCenter().lng - 1) < 1e-9);
@@ -184,18 +184,18 @@ test("destroy cancels in-flight flyTo animation", () => {
   };
   globalThis.cancelAnimationFrame = () => {};
 
-  const map = new Orihon(new FakeElement(), { center: [0, 0], zoom: 2, controls: false });
-  map.flyTo([10, 10], 6, { duration: 1 });
+  const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });
+  map.flyTo({ lat: 10, lng: 10 }, 6, { duration: 1 });
   assert.equal(map._animationActive, true);
   map.destroy();
   assert.equal(map._destroyed, true);
   assert.equal(map._animationActive, false);
-  assert.equal(map.setView([20, 20], 8), map);
+  assert.equal(map.setView({ lat: 20, lng: 20 }, 8), map);
   assert.equal(map.getZoom(), 2);
 });
 
 test("box zoom centers the selected screen rectangle", () => {
-  const map = new Orihon(new FakeElement(), { center: [52.52, 13.405], zoom: 10, controls: false });
+  const map = new Orihon(new FakeElement(), { center: { lat: 52.52, lng: 13.405 }, zoom: 10, controls: false });
   const expectedCenter = map.containerPointToLatLng([200, 175]);
 
   map.container.dispatchEvent(pointerEvent("pointerdown", {

@@ -22,7 +22,7 @@ try {
       const radius = 0.02 + (index % 50) * 0.001;
       return [50.08 + Math.sin(angle) * radius, 14.42 + Math.cos(angle) * radius, 0.5 + (index % 9) / 9];
     });
-    const wasm = await buildHeat(points, [[49.8, 13.9], [50.4, 14.9]], {
+    const wasm = await buildHeat(points, [{ lat: 49.8, lng: 13.9 }, { lat: 50.4, lng: 14.9 }], {
       mode: "both",
       backend: "wasm",
       cols: 128,
@@ -33,7 +33,7 @@ try {
     });
     let webgpu = null;
     if (support.webgpu) {
-      webgpu = await buildHeat(points, [[49.8, 13.9], [50.4, 14.9]], {
+      webgpu = await buildHeat(points, [{ lat: 49.8, lng: 13.9 }, { lat: 50.4, lng: 14.9 }], {
         mode: "heatmap",
         backend: "webgpu",
         cols: 128,
@@ -78,7 +78,7 @@ try {
     const support = await heatSupport();
     const result = await buildHeat(
       [[50.08, 14.42, 1], [50.09, 14.43, 0.8]],
-      [[49.8, 13.9], [50.4, 14.9]],
+      [({ lat: 49.8, lng: 13.9 }), ({ lat: 50.4, lng: 14.9 })],
       { mode: "both", backend: "wasm", cols: 48, rows: 36, scaleZoom: 8, zoom: 8 }
     );
     return {
@@ -98,7 +98,7 @@ try {
     host.style.width = "480px";
     host.style.height = "320px";
     document.body.appendChild(host);
-    const map = createMap(host, { center: [50.08, 14.42], zoom: 8, controls: false });
+    const map = createMap(host, { center: ({ lat: 50.08, lng: 14.42 }), zoom: 8, controls: false });
     const points = Array.from({ length: 4000 }, (_, index) => [
       50.08 + Math.sin(index * 0.17) * 0.08,
       14.42 + Math.cos(index * 0.17) * 0.12,
@@ -111,7 +111,7 @@ try {
       scaleZoom: 8
     }).addTo(map);
     await layer.rebuildAsync();
-    map.setView([50.1, 14.5], 8.5);
+    map.setView(({ lat: 50.1, lng: 14.5 }), 8.5);
     await layer.rebuildAsync();
     const stats = layer.getStats();
     const frameDriven = layer.wantsFrameRender();

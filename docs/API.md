@@ -184,7 +184,7 @@ Style resolution order: base defaults → legacy `styleByCategory` palette (cate
 
 ### ObjectManager scene APIs
 
-- **Geometries:** legacy `{ coordinates: [lat, lng] }` or `geometry: Point | LineString | Polygon`. Invalid legacy points stay in the store but are not indexed.
+- **Geometries:** named `{ coordinates: { lat, lng } }` or GeoJSON `geometry: Point | LineString | Polygon`. Bare coordinate tuples are rejected; GeoJSON retains `[lng, lat]`. Invalid named points stay in the store but are not indexed.
 - **Icons:** `registerIcon` / `removeIcon` / `hasIcon` / `clearIcons` + `style.icon` / `iconTint` / `rotation`. Atlas rebuilds only when the icon set changes.
 - **Labels:** `style.label` (`text`, font, halo, offset, priority, minZoom/maxZoom). `declutter: true` enables label/icon collision; `collisionMode: "always" | "auto" | "hide"`.
 - **Visualization:** `visualization: "objects" | "clusters" | "heatmap" | "auto"` with `visualizationByZoom` thresholds; `setVisualization()`. State is preserved across mode switches.
@@ -257,7 +257,7 @@ Import `drawControl` or the headless `DrawHandler` from `orihon/draw`, plus `ori
 
 This section is the compact index of the supported surface. Factory functions use lower camel case and return the corresponding class (`marker()` → `Marker`, `objectManager()` → `ObjectManager`). Factories and classes are equivalent; factories are convenient in JavaScript, while classes are useful for extension and `instanceof` checks.
 
-Coordinates passed to Orihon are `[latitude, longitude]`. Use `latLng(latitude, longitude)` to make that order explicit. At a MapLibre, GeoJSON or other longitude-first boundary, use `lngLat(longitude, latitude)`; it returns the same `LatLng` value with named `lat` and `lng` fields, so it can be passed directly to `marker()`, `setView()` and other Orihon APIs. GeoJSON coordinate arrays themselves remain the standard `[longitude, latitude]`. Methods returning `Point`, `LatLng`, `Bounds` or `LatLngBounds` return value objects; mutating a returned value does not reconfigure the map.
+Coordinates passed to Orihon are named `{ lat, lng }` values or `LatLng` instances. Bare numeric tuples are rejected. Use `fromGeoJSONPosition([longitude, latitude])` at a GeoJSON boundary and `toGeoJSONPosition(position)` when exporting. `latLng(latitude, longitude)` and `lngLat(longitude, latitude)` remain explicit two-argument constructors. GeoJSON coordinate arrays retain their standard longitude-first order. See [next-major migration](MIGRATION-NEXT-MAJOR.md).
 
 ### Events and base layers
 

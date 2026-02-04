@@ -43,7 +43,7 @@ test("SVG sanitizer policy rejects scripts, style, external href and handlers", 
 });
 
 test("layers expose popup and tooltip binding API", () => {
-  const layer = marker([52.52, 13.405]);
+  const layer = marker({ lat: 52.52, lng: 13.405 });
   layer.bindPopup("Popup").bindTooltip("Tooltip");
 
   assert.ok(layer.getPopup() instanceof Popup);
@@ -58,11 +58,11 @@ test("layers expose popup and tooltip binding API", () => {
 
 test("all SVG geometry types accept popup click bindings", () => {
   const layers = [
-    polyline([[0, 0], [1, 1]]),
-    polygon([[0, 0], [0, 1], [1, 1]]),
-    rectangle([[0, 0], [1, 1]]),
-    circle([0, 0], 100),
-    circleMarker([0, 0])
+    polyline([{ lat: 0, lng: 0 }, { lat: 1, lng: 1 }]),
+    polygon([{ lat: 0, lng: 0 }, { lat: 0, lng: 1 }, { lat: 1, lng: 1 }]),
+    rectangle([{ lat: 0, lng: 0 }, { lat: 1, lng: 1 }]),
+    circle({ lat: 0, lng: 0 }, 100),
+    circleMarker({ lat: 0, lng: 0 })
   ];
   for (const layer of layers) {
     layer.bindPopup("Geometry popup");
@@ -112,14 +112,14 @@ test("Icon and DivIcon retain size and anchor semantics", () => {
   assert.ok(div instanceof DivIcon);
   assert.deepEqual(div.getAnchor().toArray(), [14, 14]);
 
-  const layer = new Marker([0, 0], { icon: div });
+  const layer = new Marker({ lat: 0, lng: 0 }, { icon: div });
   assert.equal(layer.getIcon(), div);
   layer.setIcon(image);
   assert.equal(layer.getIcon(), image);
 });
 
 test("Marker draggability can be changed without recreating the layer", () => {
-  const layer = marker([1, 2]);
+  const layer = marker({ lat: 1, lng: 2 });
   assert.equal(layer.isDraggable(), false);
   assert.equal(layer.setDraggable(true), layer);
   assert.equal(layer.isDraggable(), true);
@@ -128,33 +128,33 @@ test("Marker draggability can be changed without recreating the layer", () => {
 });
 
 test("Rectangle, Circle and CircleMarker expose mutable geometry", () => {
-  const box = bounds([10, 20], [12, 24]);
+  const box = bounds({ lat: 10, lng: 20 }, { lat: 12, lng: 24 });
   const area = rectangle(box);
-  const dot = circleMarker([11, 22], { radius: 12 });
-  const metric = circle([11, 22], 1000);
+  const dot = circleMarker({ lat: 11, lng: 22 }, { radius: 12 });
+  const metric = circle({ lat: 11, lng: 22 }, 1000);
 
   assert.ok(area instanceof Rectangle);
   assert.equal(area.getBounds().toBBoxString(), "20,10,24,12");
-  area.setBounds([[0, 1], [2, 3]]);
+  area.setBounds([{ lat: 0, lng: 1 }, { lat: 2, lng: 3 }]);
   assert.equal(area.getBounds().toBBoxString(), "1,0,3,2");
 
   assert.ok(dot instanceof CircleMarker);
   assert.equal(dot.getRadius(), 12);
-  dot.setRadius(18).setLatLng([5, 6]);
+  dot.setRadius(18).setLatLng({ lat: 5, lng: 6 });
   assert.equal(dot.getRadius(), 18);
   assert.deepEqual(dot.getLatLng().toArray(), [5, 6]);
   assert.equal(metric.getBounds().contains(metric.getLatLng()), true);
 });
 
 test("ImageOverlay and LayersControl factories expose lifecycle state", () => {
-  const overlay = imageOverlay("overlay.png", [[55, 37], [56, 38]], { opacity: 0.5 });
-  const base = marker([0, 0]);
+  const overlay = imageOverlay("overlay.png", [{ lat: 55, lng: 37 }, { lat: 56, lng: 38 }], { opacity: 0.5 });
+  const base = marker({ lat: 0, lng: 0 });
   const control = layersControl({ Base: base }, { Image: overlay }, { collapsed: false });
 
   assert.ok(overlay instanceof ImageOverlay);
   assert.equal(overlay.getBounds().toBBoxString(), "37,55,38,56");
   assert.equal(overlay.options.zIndex, 0);
-  overlay.setBounds([[1, 2], [3, 4]]).setOpacity(0.7).setZIndex(4).setUrl("next.png");
+  overlay.setBounds([{ lat: 1, lng: 2 }, { lat: 3, lng: 4 }]).setOpacity(0.7).setZIndex(4).setUrl("next.png");
   assert.equal(overlay.getBounds().toBBoxString(), "2,1,4,3");
   assert.equal(overlay.url, "next.png");
 
@@ -166,8 +166,8 @@ test("ImageOverlay and LayersControl factories expose lifecycle state", () => {
 
 test("GridLayer, VideoOverlay and SVGOverlay expose stage four factories", () => {
   const grid = new GridLayer({ tileSize: 512, opacity: 0.5 });
-  const video = videoOverlay(["a.webm", "a.mp4"], [[55, 37], [56, 38]], { controls: true });
-  const svg = svgOverlay("<svg viewBox=\"0 0 10 10\"></svg>", [[55, 37], [56, 38]], { opacity: 0.6 });
+  const video = videoOverlay(["a.webm", "a.mp4"], [{ lat: 55, lng: 37 }, { lat: 56, lng: 38 }], { controls: true });
+  const svg = svgOverlay("<svg viewBox=\"0 0 10 10\"></svg>", [{ lat: 55, lng: 37 }, { lat: 56, lng: 38 }], { opacity: 0.6 });
 
   assert.ok(grid instanceof GridLayer);
   assert.equal(grid.getTileSize(), 512);
@@ -184,7 +184,7 @@ test("GridLayer, VideoOverlay and SVGOverlay expose stage four factories", () =>
 });
 
 test("media overlays become interactive when a popup is bound", () => {
-  const overlayBounds = [[52.48, 13.30], [52.55, 13.45]];
+  const overlayBounds = [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })];
   const image = imageOverlay("image.png", overlayBounds).bindPopup("image");
   const video = videoOverlay("video.mp4", overlayBounds).bindPopup("video");
   const svg = svgOverlay("<svg xmlns='http://www.w3.org/2000/svg'/>", overlayBounds).bindPopup("svg");

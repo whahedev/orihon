@@ -15,22 +15,22 @@
     <script src="../../dist/orihon.global.js"></script>
     <script>
       const map = Orihon.createMap("map", {
-        center: [52.52, 13.405],
+        center: ({ lat: 52.52, lng: 13.405 }),
         zoom: 10,
         controls: false,
         inertia: false,
         zoomSnap: 0.25
       });
       Orihon.polyline([
-        [52.49, 13.35], [52.53, 13.41], [52.50, 13.440]
+        ({ lat: 52.49, lng: 13.35 }), ({ lat: 52.53, lng: 13.41 }), ({ lat: 52.50, lng: 13.440 })
       ], { stroke: "#e11d48", strokeWidth: 5 }).addTo(map);
       Orihon.polygon([[
-        [52.51, 13.38], [52.54, 13.39], [52.535, 13.44], [52.505, 13.43]
+        ({ lat: 52.51, lng: 13.38 }), ({ lat: 52.54, lng: 13.39 }), ({ lat: 52.535, lng: 13.44 }), ({ lat: 52.505, lng: 13.43 })
       ]], { stroke: "#0f766e", fill: "#14b8a6", fillOpacity: 0.25 }).addTo(map);
-      Orihon.circleMarker([52.52, 13.405], {
+      Orihon.circleMarker(({ lat: 52.52, lng: 13.405 }), {
         radius: 9, stroke: "#172026", fill: "#f59e0b", fillOpacity: 1
       }).addTo(map);
-      Orihon.marker([52.53, 13.42], { title: "Visual marker" }).addTo(map);
+      Orihon.marker(({ lat: 52.53, lng: 13.42 }), { title: "Visual marker" }).addTo(map);
       window.__orihonVisual = { map, ready: true };
     </script>
   </body>

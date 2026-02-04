@@ -259,8 +259,8 @@ export function tileRangeForBounds(
   tileSize = TILE_SIZE
 ): { xRange: [number, number]; yRange: [number, number] } {
   const max = 2 ** zoom - 1;
-  const nw = project([bounds.north, bounds.west], zoom);
-  const se = project([bounds.south, bounds.east], zoom);
+  const nw = project({ lat: bounds.north, lng: bounds.west }, zoom);
+  const se = project({ lat: bounds.south, lng: bounds.east }, zoom);
   const x0 = Math.floor(nw.x / tileSize);
   const x1 = Math.floor(Math.max(nw.x, se.x - 1e-9) / tileSize);
   const y0 = Math.floor(nw.y / tileSize);

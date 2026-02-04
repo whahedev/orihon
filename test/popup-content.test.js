@@ -174,7 +174,7 @@ test("mountable popup content receives context and is disposed on close", () => 
     unmount() { unmount += 1; }
   }), { autoPan: false, closeButton: false });
   popup.contentNode = new FakeContentNode();
-  popup.setLatLng([52.52, 13.405]);
+  popup.setLatLng({ lat: 52.52, lng: 13.405 });
   popup.setContentContext({ source, data: { value: 42 } });
 
   assert.equal(received.source, source);
@@ -215,8 +215,8 @@ test("GeoJSON popup factory binds to every feature layer", () => {
 
 test("SVG polygon opens its popup from a real path DOM click", () => {
   installDom();
-  const map = createMap(new FakeElement("div"), { center: [0, 0], zoom: 4, controls: false });
-  const layer = polygon([[-5, -5], [-5, 5], [5, 5], [5, -5]])
+  const map = createMap(new FakeElement("div"), { center: { lat: 0, lng: 0 }, zoom: 4, controls: false });
+  const layer = polygon([{ lat: -5, lng: -5 }, { lat: -5, lng: 5 }, { lat: 5, lng: 5 }, { lat: 5, lng: -5 }])
     .bindPopup("Polygon popup", { autoPan: false })
     .addTo(map);
 
@@ -233,13 +233,13 @@ test("SVG polygon opens its popup from a real path DOM click", () => {
 
 test("all SVG geometry popups open from a pointer tap without a click event", async () => {
   installDom();
-  const map = createMap(new FakeElement("div"), { center: [0, 0], zoom: 4, controls: false });
+  const map = createMap(new FakeElement("div"), { center: { lat: 0, lng: 0 }, zoom: 4, controls: false });
   const layers = [
-    polyline([[0, -5], [0, 5]], { interactive: false }),
-    polygon([[-5, -5], [-5, 5], [5, 5], [5, -5]], { interactive: false }),
-    rectangle([[-4, -4], [4, 4]], { interactive: false }),
-    circle([0, 0], 100_000, { interactive: false, geodesic: true }),
-    circleMarker([0, 0], { interactive: false, radius: 14 })
+    polyline([{ lat: 0, lng: -5 }, { lat: 0, lng: 5 }], { interactive: false }),
+    polygon([{ lat: -5, lng: -5 }, { lat: -5, lng: 5 }, { lat: 5, lng: 5 }, { lat: 5, lng: -5 }], { interactive: false }),
+    rectangle([{ lat: -4, lng: -4 }, { lat: 4, lng: 4 }], { interactive: false }),
+    circle({ lat: 0, lng: 0 }, 100_000, { interactive: false, geodesic: true }),
+    circleMarker({ lat: 0, lng: 0 }, { interactive: false, radius: 14 })
   ];
 
   for (const [index, layer] of layers.entries()) {
@@ -274,7 +274,7 @@ test("all SVG geometry popups open from a pointer tap without a click event", as
 
 test("bindTooltip enables interaction for an initially non-interactive SVG path", () => {
   installDom();
-  const layer = polyline([[0, -5], [0, 5]], { interactive: false });
+  const layer = polyline([{ lat: 0, lng: -5 }, { lat: 0, lng: 5 }], { interactive: false });
 
   layer.bindTooltip("Line tooltip");
 
@@ -283,13 +283,13 @@ test("bindTooltip enables interaction for an initially non-interactive SVG path"
 
 test("geodesic circle queryHit follows its projected ring at high latitude", () => {
   installDom();
-  const map = createMap(new FakeElement("div"), { center: [70, 0], zoom: 4, controls: false });
-  const layer = circle([70, 0], 500_000, {
+  const map = createMap(new FakeElement("div"), { center: { lat: 70, lng: 0 }, zoom: 4, controls: false });
+  const layer = circle({ lat: 70, lng: 0 }, 500_000, {
     fill: "#2563eb",
     fillOpacity: 0.2,
     geodesic: true
   }).addTo(map);
-  const insideNorth = destination([70, 0], 450_000, 0);
+  const insideNorth = destination({ lat: 70, lng: 0 }, 450_000, 0);
 
   const hits = map.queryLatLng(insideNorth, { layers: [layer], tolerance: 0 });
 
@@ -299,9 +299,9 @@ test("geodesic circle queryHit follows its projected ring at high latitude", () 
 
 test("an unfilled circle remains hittable across its interior", () => {
   installDom();
-  const map = createMap(new FakeElement("div"), { center: [0, 0], zoom: 4, controls: false });
-  const layer = circle([0, 0], 100_000).bindPopup("circle").addTo(map);
-  const center = map.latLngToContainerPoint([0, 0]);
+  const map = createMap(new FakeElement("div"), { center: { lat: 0, lng: 0 }, zoom: 4, controls: false });
+  const layer = circle({ lat: 0, lng: 0 }, 100_000).bindPopup("circle").addTo(map);
+  const center = map.latLngToContainerPoint({ lat: 0, lng: 0 });
 
   assert.equal(layer.options.fill, "none");
   assert.equal(layer.path.style.pointerEvents, "all");
@@ -311,8 +311,8 @@ test("an unfilled circle remains hittable across its interior", () => {
 
 test("marker popup opens from a pointer tap without a click event", async () => {
   installDom();
-  const map = createMap(new FakeElement("div"), { center: [0, 0], zoom: 4, controls: false });
-  const layer = marker([0, 0], { interactive: false }).bindPopup("marker", { autoPan: false }).addTo(map);
+  const map = createMap(new FakeElement("div"), { center: { lat: 0, lng: 0 }, zoom: 4, controls: false });
+  const layer = marker({ lat: 0, lng: 0 }, { interactive: false }).bindPopup("marker", { autoPan: false }).addTo(map);
   assert.equal(layer.options.interactive, true);
   layer.el.dispatchEvent({ type: "pointerdown", button: 0, pointerId: 2, clientX: 400, clientY: 300 });
   layer.el.dispatchEvent({
@@ -348,7 +348,7 @@ test("canvas GeoJSON polygon emits feature clicks and opens its popup", () => {
     },
     popupOptions: { autoPan: false }
   });
-  const map = createMap(new FakeElement("div"), { center: [0, 0], zoom: 4, controls: false });
+  const map = createMap(new FakeElement("div"), { center: { lat: 0, lng: 0 }, zoom: 4, controls: false });
   layer.addTo(map);
   const batch = layer.featureEntries[0].layer;
 
@@ -390,14 +390,14 @@ test("openPopup mounts a chart widget and destroys it on close", () => {
   }
 
   const map = createMap(new FakeElement("div"), {
-    center: [52.52, 13.405],
+    center: { lat: 52.52, lng: 13.405 },
     zoom: 10,
     controls: false
   });
   map.on("popupopen", () => { opened += 1; });
   map.on("popupclose", () => { closed += 1; });
 
-  const layer = marker([52.52, 13.405])
+  const layer = marker({ lat: 52.52, lng: 13.405 })
     .bindPopup(({ data }) => ({
       mount(container, context) {
         assert.ok(context.latlng);

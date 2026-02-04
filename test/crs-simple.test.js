@@ -21,17 +21,17 @@ globalThis.window = new FakeElement();
 globalThis.requestAnimationFrame = () => 1;
 
 test("CRS.Simple projects map units without Mercator clamping", () => {
-  const projected = CRS.Simple.project([4000, 1500], 2);
+  const projected = CRS.Simple.project({ lat: 4000, lng: 1500 }, 2);
   assert.deepEqual(projected.toArray(), [6000, -16000]);
-  assert.ok(CRS.Simple.unproject(projected, 2).equals([4000, 1500]));
+  assert.ok(CRS.Simple.unproject(projected, 2).equals({ lat: 4000, lng: 1500 }));
   assert.equal(CRS.Simple.scale(2), 4);
 });
 
 test("Simple maps use Euclidean units and viewport-local projection", () => {
-  const map = new Orihon(new FakeElement(), { crs: "Simple", center: [200, 300], zoom: 0, minZoom: -5, controls: false });
+  const map = new Orihon(new FakeElement(), { crs: "Simple", center: { lat: 200, lng: 300 }, zoom: 0, minZoom: -5, controls: false });
   assert.equal(map.crs, CRS.Simple);
-  assert.deepEqual(map.latLngToContainerPoint([200, 300]).toArray(), [400, 300]);
-  assert.equal(map.distance([0, 0], [3, 4]), 5);
+  assert.deepEqual(map.latLngToContainerPoint({ lat: 200, lng: 300 }).toArray(), [400, 300]);
+  assert.equal(map.distance({ lat: 0, lng: 0 }, { lat: 3, lng: 4 }), 5);
   map.fitWorld({ padding: 0 });
   assert.deepEqual(map.getCenter().toArray(), [128, 128]);
   map.remove();

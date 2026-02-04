@@ -22,7 +22,7 @@
     <script>
       const TARGET = [52.52, 13.405];
       const map = Orihon.createMap("map", {
-        center: TARGET,
+        center: { lat: TARGET[0], lng: TARGET[1] },
         zoom: 12,
         zoomSnap: 0,
         wheelZoomStep: 0.25,
@@ -32,14 +32,14 @@
 
       // Geographic crosshair drawn every frame via SVG at the same LatLng as the marker.
       const cross = Orihon.polyline([
-        [TARGET[0] - 0.01, TARGET[1]],
-        [TARGET[0] + 0.01, TARGET[1]]
+        ({ lat: TARGET[0] - 0.01, lng: TARGET[1] }),
+        ({ lat: TARGET[0] + 0.01, lng: TARGET[1] })
       ], { stroke: "#0f766e", strokeWidth: 2 }).addTo(map);
       Orihon.polyline([
-        [TARGET[0], TARGET[1] - 0.015],
-        [TARGET[0], TARGET[1] + 0.015]
+        ({ lat: TARGET[0], lng: TARGET[1] - 0.015 }),
+        ({ lat: TARGET[0], lng: TARGET[1] + 0.015 })
       ], { stroke: "#0f766e", strokeWidth: 2 }).addTo(map);
-      Orihon.circleMarker(TARGET, {
+      Orihon.circleMarker({ lat: TARGET[0], lng: TARGET[1] }, {
         radius: 4, stroke: "#0f766e", fill: "#99f6e4", fillOpacity: 1, strokeWidth: 2
       }).addTo(map);
 
@@ -48,7 +48,7 @@
         { renderer: "dom", detectRetina: false, opacity: 0.15 }
       ).addTo(map);
 
-      const pin = Orihon.marker(TARGET, {
+      const pin = Orihon.marker({ lat: TARGET[0], lng: TARGET[1] }, {
         shape: "circle",
         size: 18,
         color: "#e11d48",
@@ -69,7 +69,7 @@
             cancelable: true
           }));
           await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-          const expected = map.latLngToContainerPoint(TARGET);
+          const expected = map.latLngToContainerPoint({ lat: TARGET[0], lng: TARGET[1] });
           const box = pin.el.getBoundingClientRect();
           const mapBox = map.container.getBoundingClientRect();
           const anchor = pin.options.anchor;

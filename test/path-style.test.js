@@ -10,21 +10,21 @@ test("dash arrays accept strings, arrays and clearing values", () => {
 });
 
 test("geodesic circle bounds widen in longitude at high latitude", () => {
-  const geodesic = new Circle([60, 10], 50_000, { geodesic: true });
+  const geodesic = new Circle({ lat: 60, lng: 10 }, 50_000, { geodesic: true });
   const bounds = geodesic.getBounds();
   assert.ok(bounds.east - bounds.west > bounds.north - bounds.south);
 });
 
 test("polyline geodesic option remains mutable through setStyle", () => {
-  const line = new Polyline([[0, 0], [1, 1]], { dashArray: "6 4", arrow: "end", geodesic: true });
+  const line = new Polyline([{ lat: 0, lng: 0 }, { lat: 1, lng: 1 }], { dashArray: "6 4", arrow: "end", geodesic: true });
   line.setStyle({ dashArray: null });
   assert.equal(line.options.dashArray, null);
   assert.equal(line.options.arrow, "end");
 });
 
 test("geodesic line and polygon bounds include great-circle bulges", () => {
-  const line = new Polyline([[60, -60], [60, 60]], { geodesic: true });
-  const area = new Polygon([[60, -60], [60, 60], [20, 0]], { geodesic: true });
+  const line = new Polyline([{ lat: 60, lng: -60 }, { lat: 60, lng: 60 }], { geodesic: true });
+  const area = new Polygon([{ lat: 60, lng: -60 }, { lat: 60, lng: 60 }, { lat: 20, lng: 0 }], { geodesic: true });
   assert.ok(line.getBounds().north > 60);
   assert.ok(area.getBounds().north > 60);
 });
@@ -34,19 +34,19 @@ test("setStyle redraws when geodesic changes", () => {
     renders = 0;
     render() { this.renders++; super.render(); }
   }
-  const line = new CountingPolyline([[0, 0], [1, 1]]);
+  const line = new CountingPolyline([{ lat: 0, lng: 0 }, { lat: 1, lng: 1 }]);
   line.setStyle({ geodesic: true });
   assert.equal(line.renders, 1);
 });
 
 test("CanvasPathBatch densifies geodesic paths", () => {
   const batch = new CanvasPathBatch();
-  batch.addPath([[[60, -60], [60, 60]]], false, { geodesic: true });
+  batch.addPath([[{ lat: 60, lng: -60 }, { lat: 60, lng: 60 }]], false, { geodesic: true });
   assert.ok(batch.records[0].geodesicRings[0].lat.length > 2);
 });
 
 test("Circle uses map units for bounds on Simple CRS", () => {
-  const shape = new Circle([200, 300], 50, { geodesic: true });
+  const shape = new Circle({ lat: 200, lng: 300 }, 50, { geodesic: true });
   shape.map = { crs: { code: "Simple" } };
   assert.deepEqual(shape.getBounds().getSouthWest().toArray(), [150, 250]);
   assert.deepEqual(shape.getBounds().getNorthEast().toArray(), [250, 350]);

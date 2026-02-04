@@ -487,6 +487,13 @@
       "url": "./functions/defineOrihonElement/"
     },
     {
+      "name": "fromGeoJSONPosition",
+      "group": "Производительность и инфраструктура",
+      "entry": "orihon",
+      "summary": "Явно преобразует GeoJSON-пару [долгота, широта] в именованную координату Orihon.",
+      "url": "./functions/fromGeoJSONPosition/"
+    },
+    {
       "name": "geometryWorkerPool",
       "group": "Производительность и инфраструктура",
       "entry": "orihon",
@@ -513,6 +520,13 @@
       "entry": "orihon",
       "summary": "Собирает и показывает FPS, задержки кадров, количество слоёв и другие показатели работающей карты.",
       "url": "./functions/performanceInspector/"
+    },
+    {
+      "name": "toGeoJSONPosition",
+      "group": "Производительность и инфраструктура",
+      "entry": "orihon",
+      "summary": "Преобразует именованную координату Orihon в новую GeoJSON-пару [долгота, широта].",
+      "url": "./functions/toGeoJSONPosition/"
     },
     {
       "name": "ensureLocalePacks",

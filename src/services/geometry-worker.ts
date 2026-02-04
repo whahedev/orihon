@@ -721,6 +721,7 @@ function normalizePoint(value: GeometryPointInput): [number, number] | null {
     ? value as LatLngLike
     : (value as { coordinates?: LatLngLike; latlng?: LatLngLike }).coordinates ?? (value as { latlng?: LatLngLike }).latlng;
   if (!source) return null;
+  if (!Array.isArray(source) && (!Number.isFinite(source.lat) || !Number.isFinite(source.lng))) return null;
   const point = latLng(source);
   if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
   return [point.lat, point.lng];

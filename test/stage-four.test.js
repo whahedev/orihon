@@ -15,38 +15,38 @@ import {
 test("SpatialGridIndex updates cells and searches only matching records", () => {
   const index = spatialGridIndex(0.5);
   index
-    .set("berlin", [52.520, 13.405], { city: "Berlin" })
-    .set("munich", [48.137, 11.576], { city: "Munich" })
-    .set("east", [0, 179], { city: "East" });
+    .set("berlin", { lat: 52.520, lng: 13.405 }, { city: "Berlin" })
+    .set("munich", { lat: 48.137, lng: 11.576 }, { city: "Munich" })
+    .set("east", { lat: 0, lng: 179 }, { city: "East" });
 
   assert.ok(index instanceof SpatialGridIndex);
   assert.equal(index.size, 3);
   assert.deepEqual(
-    index.search([[52.3, 13.2], [52.7, 13.6]]).map((record) => record.id),
+    index.search([{ lat: 52.3, lng: 13.2 }, { lat: 52.7, lng: 13.6 }]).map((record) => record.id),
     ["berlin"]
   );
   assert.deepEqual(
-    index.search([[-1, 178], [1, 180]], (record) => record.value.city === "East").map((record) => record.id),
+    index.search([{ lat: -1, lng: 178 }, { lat: 1, lng: 180 }], (record) => record.value.city === "East").map((record) => record.id),
     ["east"]
   );
 
-  index.set("berlin", [50.938, 6.960], { city: "Cologne" });
-  assert.equal(index.search([[52.3, 13.2], [52.7, 13.6]]).length, 0);
-  assert.deepEqual(index.searchIds([[-1, 178], [1, 180]]), ["east"]);
+  index.set("berlin", { lat: 50.938, lng: 6.960 }, { city: "Cologne" });
+  assert.equal(index.search([{ lat: 52.3, lng: 13.2 }, { lat: 52.7, lng: 13.6 }]).length, 0);
+  assert.deepEqual(index.searchIds([{ lat: -1, lng: 178 }, { lat: 1, lng: 180 }]), ["east"]);
   assert.equal(index.delete("munich"), true);
   assert.equal(index.size, 2);
 });
 
 test("SpatialGridIndex same-cell moves keep the record object", () => {
   const index = spatialGridIndex(1);
-  index.set("berlin", [52.52, 13.4], { n: 1 });
+  index.set("berlin", { lat: 52.52, lng: 13.4 }, { n: 1 });
   const first = index.records.get("berlin");
-  index.set("berlin", [52.6, 13.5], { n: 2 });
+  index.set("berlin", { lat: 52.6, lng: 13.5 }, { n: 2 });
   const second = index.records.get("berlin");
   assert.equal(first, second);
   assert.equal(second?.value.n, 2);
   assert.equal(index.cellCount, 1);
-  assert.deepEqual(index.searchIds([[52.4, 13.3], [52.8, 13.7]]), ["berlin"]);
+  assert.deepEqual(index.searchIds([{ lat: 52.4, lng: 13.3 }, { lat: 52.8, lng: 13.7 }]), ["berlin"]);
 });
 
 test("SpatialGridIndex keeps a compact index for a large point set", () => {
@@ -54,32 +54,32 @@ test("SpatialGridIndex keeps a compact index for a large point set", () => {
   for (let i = 0; i < 5000; i++) {
     const lat = 52 + (i % 100) / 100;
     const lng = 13 + (Math.floor(i / 100) % 50) / 50;
-    index.set(i, [lat, lng], i);
+    index.set(i, { lat: lat, lng: lng }, i);
   }
 
   assert.equal(index.size, 5000);
   assert.ok(index.cellCount < 30);
-  assert.equal(index.search([[52, 13], [52.1, 13.1]]).length, 66);
+  assert.equal(index.search([{ lat: 52, lng: 13 }, { lat: 52.1, lng: 13.1 }]).length, 66);
 });
 
 test("ObjectManager maxObjects caps ingest", () => {
   const manager = objectManager({ maxObjects: 2 });
   manager.add([
-    { id: 1, coordinates: [52.52, 13.40] },
-    { id: 2, coordinates: [52.53, 13.45] },
-    { id: 3, coordinates: [52.54, 13.50] }
+    { id: 1, coordinates: { lat: 52.52, lng: 13.40 } },
+    { id: 2, coordinates: { lat: 52.53, lng: 13.45 } },
+    { id: 3, coordinates: { lat: 52.54, lng: 13.50 } }
   ]);
   assert.equal(manager.items.size, 2);
-  manager.add({ id: 2, coordinates: [52.55, 13.51] });
+  manager.add({ id: 2, coordinates: { lat: 52.55, lng: 13.51 } });
   assert.equal(manager.items.size, 2);
-  assert.deepEqual(manager.getObject(2)?.coordinates, [52.55, 13.51]);
+  assert.deepEqual(manager.getObject(2)?.coordinates, { lat: 52.55, lng: 13.51 });
 });
 
 test("ObjectManager addAsync chunks iterable ingest and flushes bulk state", async () => {
   const manager = objectManager({ clusterize: false, sceneFeatures: false });
   function* objects() {
     for (let index = 0; index < 5; index++) {
-      yield { id: index, coordinates: [52 + index, 13], properties: {} };
+      yield { id: index, coordinates: ({ lat: 52 + index, lng: 13 }), properties: {} };
     }
   }
   const progress = [];
@@ -97,9 +97,9 @@ test("ObjectManager addAsync chunks iterable ingest and flushes bulk state", asy
 test("ObjectManager exposes indexed collection and filter lifecycle", () => {
   const manager = objectManager({ clusterize: true, clusterGridSize: 64 });
   manager.add([
-    { id: 1, coordinates: [52.52, 13.40], properties: { side: "west" } },
-    { id: 2, coordinates: [52.53, 13.45], properties: { side: "east" } },
-    { id: 3, coordinates: [Number.NaN, 0] }
+    { id: 1, coordinates: { lat: 52.52, lng: 13.40 }, properties: { side: "west" } },
+    { id: 2, coordinates: { lat: 52.53, lng: 13.45 }, properties: { side: "east" } },
+    { id: 3, coordinates: { lat: Number.NaN, lng: 0 } }
   ]);
 
   assert.ok(manager instanceof ObjectManager);
@@ -135,7 +135,7 @@ test("ObjectManager cluster centers stay near source points", () => {
     zoom = 10;
     layers = new Set();
     getBounds() {
-      return [[52.48, 13.30], [52.55, 13.45]];
+      return [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })];
     }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
@@ -171,8 +171,8 @@ test("ObjectManager cluster centers stay near source points", () => {
     clusterMaxZoom: 18
   });
   manager.add([
-    { id: "a", coordinates: [52.520, 13.405] },
-    { id: "b", coordinates: [52.521, 13.406] }
+    { id: "a", coordinates: { lat: 52.520, lng: 13.405 } },
+    { id: "b", coordinates: { lat: 52.521, lng: 13.406 } }
   ]);
   manager.addTo(map);
 
@@ -190,7 +190,7 @@ test("ObjectManager spiderfies at max zoom even when clusterZoomOnClick is disab
   class FakeMap extends Evented {
     zoom = 10;
     layers = new Set();
-    getBounds() { return [[52.48, 13.30], [52.55, 13.45]]; }
+    getBounds() { return [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })]; }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
       const lng = Array.isArray(value) ? value[1] : value.lng;
@@ -219,7 +219,7 @@ test("ObjectManager spiderfies at max zoom even when clusterZoomOnClick is disab
   });
   manager.add(Array.from({ length: 12 }, (_, index) => ({
     id: `spider-${index}`,
-    coordinates: [52.52 + index * 0.000001, 13.405 + index * 0.000001]
+    coordinates: ({ lat: 52.52 + index * 0.000001, lng: 13.405 + index * 0.000001 })
   })));
   let spiderfied = [];
   manager.on("spiderfy", (event) => { spiderfied = event.objectIds; });
@@ -238,7 +238,7 @@ test("ObjectManager webgl renderer uses canvas cluster badges (no DOM Markers)",
     zoom = 10;
     layers = new Set();
     getBounds() {
-      return [[52.48, 13.30], [52.55, 13.45]];
+      return [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })];
     }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
@@ -275,8 +275,8 @@ test("ObjectManager webgl renderer uses canvas cluster badges (no DOM Markers)",
     layoutWorker: false
   });
   manager.add([
-    { id: "a", coordinates: [52.520, 13.405] },
-    { id: "b", coordinates: [52.521, 13.406] }
+    { id: "a", coordinates: { lat: 52.520, lng: 13.405 } },
+    { id: "b", coordinates: { lat: 52.521, lng: 13.406 } }
   ]);
   manager.addTo(map);
 
@@ -293,7 +293,7 @@ test("ObjectManager canvas clusters do not accumulate clusterMembers across zoom
     zoom = 6;
     layers = new Set();
     getBounds() {
-      return [[50, 10], [55, 20]];
+      return [({ lat: 50, lng: 10 }), ({ lat: 55, lng: 20 })];
     }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
@@ -335,7 +335,7 @@ test("ObjectManager canvas clusters do not accumulate clusterMembers across zoom
   });
   const points = [];
   for (let i = 0; i < 40; i++) {
-    points.push({ id: `p${i}`, coordinates: [52.5 + (i % 8) * 0.01, 13.4 + Math.floor(i / 8) * 0.01] });
+    points.push({ id: `p${i}`, coordinates: ({ lat: 52.5 + (i % 8) * 0.01, lng: 13.4 + Math.floor(i / 8) * 0.01 }) });
   }
   manager.add(points);
   manager.addTo(map);
@@ -362,7 +362,7 @@ test("ObjectManager webgl + custom clusterIcon keeps DOM cluster badges", () => 
     zoom = 10;
     layers = new Set();
     getBounds() {
-      return [[52.48, 13.30], [52.55, 13.45]];
+      return [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })];
     }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
@@ -405,8 +405,8 @@ test("ObjectManager webgl + custom clusterIcon keeps DOM cluster badges", () => 
     })
   });
   manager.add([
-    { id: "a", coordinates: [52.520, 13.405] },
-    { id: "b", coordinates: [52.521, 13.406] }
+    { id: "a", coordinates: { lat: 52.520, lng: 13.405 } },
+    { id: "b", coordinates: { lat: 52.521, lng: 13.406 } }
   ]);
   manager.addTo(map);
 
@@ -422,7 +422,7 @@ test("ObjectManager keeps layout across pan at the same zoom", () => {
   class FakeMap extends Evented {
     zoom = 8;
     layers = new Set();
-    bounds = [[50, 10], [55, 20]];
+    bounds = [{ lat: 50, lng: 10 }, { lat: 55, lng: 20 }];
     getBounds() { return this.bounds; }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
@@ -458,14 +458,14 @@ test("ObjectManager keeps layout across pan at the same zoom", () => {
   });
   const points = [];
   for (let i = 0; i < 40; i++) {
-    points.push({ id: i, coordinates: [52.5 + i * 0.001, 13.4 + i * 0.001] });
+    points.push({ id: i, coordinates: ({ lat: 52.5 + i * 0.001, lng: 13.4 + i * 0.001 }) });
   }
   manager.add(points);
   manager.addTo(map);
   const firstZoom = manager.getStats().layoutZoom;
   const firstClusters = manager.clusters.size;
   const firstMarkers = [...manager.clusters.values()];
-  map.bounds = [[51, 11], [54, 18]];
+  map.bounds = [{ lat: 51, lng: 11 }, { lat: 54, lng: 18 }];
   manager.render();
   assert.equal(manager.getStats().layoutZoom, firstZoom);
   assert.equal(manager.clusters.size, firstClusters);
@@ -478,7 +478,7 @@ test("ObjectManager reuses pooled cluster badges across zoom rebuilds", () => {
     zoom = 8;
     layers = new Set();
     getBounds() {
-      return [[50, 10], [55, 20]];
+      return [({ lat: 50, lng: 10 }), ({ lat: 55, lng: 20 })];
     }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
@@ -515,7 +515,7 @@ test("ObjectManager reuses pooled cluster badges across zoom rebuilds", () => {
   });
   const points = [];
   for (let i = 0; i < 40; i++) {
-    points.push({ id: i, coordinates: [52.5 + i * 0.001, 13.4 + i * 0.001] });
+    points.push({ id: i, coordinates: ({ lat: 52.5 + i * 0.001, lng: 13.4 + i * 0.001 }) });
   }
   manager.add(points);
   manager.addTo(map);
@@ -601,7 +601,7 @@ test("ObjectManager.prepareLayout builds clusters off the hot path", async () =>
     zoom = 10;
     layers = new Set();
     getBounds() {
-      return [[52.48, 13.30], [52.55, 13.45]];
+      return [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })];
     }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
@@ -638,8 +638,8 @@ test("ObjectManager.prepareLayout builds clusters off the hot path", async () =>
     layoutWorker: false
   });
   manager.add([
-    { id: "a", coordinates: [52.520, 13.405] },
-    { id: "b", coordinates: [52.521, 13.406] }
+    { id: "a", coordinates: { lat: 52.520, lng: 13.405 } },
+    { id: "b", coordinates: { lat: 52.521, lng: 13.406 } }
   ]);
   await manager.prepareLayout(10);
   manager.addTo(map);
@@ -657,9 +657,9 @@ test("ObjectManager caps the all-zoom hierarchy for mass clustering", async () =
     layoutWorker: false
   });
   manager.add([
-    { id: "a", coordinates: [52.520, 13.405] },
-    { id: "b", coordinates: [52.521, 13.406] },
-    { id: "c", coordinates: [52.522, 13.407] }
+    { id: "a", coordinates: { lat: 52.520, lng: 13.405 } },
+    { id: "b", coordinates: { lat: 52.521, lng: 13.406 } },
+    { id: "c", coordinates: { lat: 52.522, lng: 13.407 } }
   ]);
   await manager.prepareLayout(10);
   assert.equal(manager.getStats().clusterStrategy, "greedy");
@@ -673,9 +673,9 @@ test("ObjectManager caps the all-zoom hierarchy for mass clustering", async () =
     layoutWorker: false
   });
   unlimited.add([
-    { id: "a", coordinates: [52.520, 13.405] },
-    { id: "b", coordinates: [52.521, 13.406] },
-    { id: "c", coordinates: [52.522, 13.407] }
+    { id: "a", coordinates: { lat: 52.520, lng: 13.405 } },
+    { id: "b", coordinates: { lat: 52.521, lng: 13.406 } },
+    { id: "c", coordinates: { lat: 52.522, lng: 13.407 } }
   ]);
   await unlimited.prepareLayout(10);
   assert.equal(unlimited.getStats().clusterStrategy, "hierarchy");

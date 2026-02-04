@@ -65,7 +65,7 @@ await msAsync(`ingest ${N.toLocaleString("en-US")} points (chunk ${CHUNK})`, asy
       const v = ((id * 1597334677) >>> 0) / 4294967296;
       batch[i] = {
         id,
-        coordinates: [35 + u * 28, -15 + v * 55],
+        coordinates: ({ lat: 35 + u * 28, lng: -15 + v * 55 }),
         properties: { alert: id % 97 === 0 }
       };
     }
@@ -92,7 +92,7 @@ ms("5k position updates (batch)", () => {
     const prev = manager.getObject(i);
     updates.push({
       id: i,
-      coordinates: [55.1 + (i % 100) * 0.001, 37.1],
+      coordinates: ({ lat: 55.1 + (i % 100) * 0.001, lng: 37.1 }),
       properties: prev?.properties
     });
   }
@@ -117,7 +117,7 @@ ms(`search-index ingest ${searchN.toLocaleString("en-US")}`, () => {
   for (let i = 0; i < searchN; i++) {
     batch.push({
       id: i,
-      coordinates: [55 + (i % 1000) * 0.001, 37 + ((i / 1000) | 0) * 0.001],
+      coordinates: ({ lat: 55 + (i % 1000) * 0.001, lng: 37 + ((i / 1000) | 0) * 0.001 }),
       properties: { name: `obj-${i}`, timestamp: i }
     });
     if (batch.length === 5000) {
@@ -134,7 +134,7 @@ ms("5k search/time property updates (public API)", () => {
   for (let i = 0; i < limit; i++) {
     updates.push({
       id: i,
-      coordinates: [55 + (i % 1000) * 0.001, 37 + ((i / 1000) | 0) * 0.001],
+      coordinates: ({ lat: 55 + (i % 1000) * 0.001, lng: 37 + ((i / 1000) | 0) * 0.001 }),
       properties: { name: `updated-${i}`, timestamp: searchN + i }
     });
   }

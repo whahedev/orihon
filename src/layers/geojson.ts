@@ -238,7 +238,7 @@ function topLevelGeoJSONCount(data: GeoJSONData): number | null {
 const GEOJSON_PARSE_WORKER_SOURCE = `let a=null,i=0,n=0,t=0;function s(){if(!a)return;let e=Math.min(t,i+n),c=a.slice(i,e);for(;i<e;)a[i++]=null;postMessage([c,i,t,i>=t]);if(i>=t)a=null}onmessage=async e=>{let d=e.data;if(d===0)return s();try{let p=JSON.parse(await d[0].text());a=Array.isArray(p)?p:p&&p.type==="FeatureCollection"?p.features:[p];i=0;t=a.length;n=Math.max(1,d[1]|0);s()}catch(e){postMessage([null,String(e&&e.message||e)])}}`;
 
 function geoJSONCoordsToLatLng(coordinates: GeoJSONPosition): LatLng {
-  return latLng([Number(coordinates[1]), Number(coordinates[0])]);
+  return latLng({ lat: Number(coordinates[1]), lng: Number(coordinates[0]) });
 }
 
 function latLngToGeoJSONCoords(value: LatLngLike, precision = 6): GeoJSONPosition {

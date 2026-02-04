@@ -124,6 +124,8 @@ export {
   pointBounds,
   latLng,
   lngLat,
+  fromGeoJSONPosition,
+  toGeoJSONPosition,
   bounds,
   project,
   unproject,

@@ -24,12 +24,12 @@ test("geometry classes keep value semantics", () => {
   assert.deepEqual(pixels.getCenter().toArray(), [50, 25]);
   assert.equal(pixels.contains([10, 10]), true);
 
-  const position = latLng([52.52, 13.405]);
+  const position = latLng({ lat: 52.52, lng: 13.405 });
   const mapLibrePosition = lngLat(13.405, 52.52);
   assert.ok(mapLibrePosition.equals(position));
   assert.deepEqual(mapLibrePosition.toArray(), [52.52, 13.405]);
   assert.equal(position.clone().equals(position), true);
-  const geographic = bounds([52, 13], [53, 14]);
+  const geographic = bounds({ lat: 52, lng: 13 }, { lat: 53, lng: 14 });
   assert.ok(geographic instanceof LatLngBounds);
   assert.equal(geographic.contains(position), true);
   assert.equal(geographic.toBBoxString(), "13,52,14,53");
@@ -46,8 +46,8 @@ test("FeatureGroup propagates child events and combines bounds", () => {
     }
   }
 
-  const first = new BoundedLayer(bounds([10, 20], [11, 21]));
-  const second = new BoundedLayer(bounds([-2, 5], [3, 30]));
+  const first = new BoundedLayer(bounds({ lat: 10, lng: 20 }, { lat: 11, lng: 21 }));
+  const second = new BoundedLayer(bounds({ lat: -2, lng: 5 }, { lat: 3, lng: 30 }));
   const group = featureGroup([first, second]);
   assert.ok(group instanceof FeatureGroup);
   assert.equal(group.getLayers().length, 2);

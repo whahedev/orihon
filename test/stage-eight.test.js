@@ -130,7 +130,7 @@ test("MarkerCollection auto picks webgl above threshold", () => {
     pixelOrigin = { x: 0, y: 0 };
     panes = { overlay: new FakeElement(), marker: new FakeElement() };
     layers = new Set();
-    bounds = [[40, 0], [70, 30]];
+    bounds = [{ lat: 40, lng: 0 }, { lat: 70, lng: 30 }];
     getZoom() { return this.zoom; }
     getSize() { return { x: 800, y: 600 }; }
     getBounds() { return this.bounds; }
@@ -158,7 +158,7 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   }
 
   const points = [];
-  for (let i = 0; i < 30; i++) points.push([52.5 + i * 0.01, 13.4 + i * 0.01]);
+  for (let i = 0; i < 30; i++) points.push({ lat: 52.5 + i * 0.01, lng: 13.4 + i * 0.01 });
 
   const small = objectManager({ points, renderer: "auto", webglThreshold: 100 });
   assert.ok(small instanceof MarkerCollection);
@@ -175,10 +175,10 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   assert.equal(collectionPane.children[0].children.length, 0, "non-interactive dots use the one-node fast path");
   assert.equal(collectionPane.children[0].getAttribute("aria-hidden"), "true");
   const mounted = [...collectionPane.children];
-  map.bounds = [[-1, -1], [1, 1]];
+  map.bounds = [{ lat: -1, lng: -1 }, { lat: 1, lng: 1 }];
   small.redraw();
   assert.equal(collectionPane.children.length, 30, "culled markers stay in the bounded recycle pool");
-  map.bounds = [[40, 0], [70, 30]];
+  map.bounds = [{ lat: 40, lng: 0 }, { lat: 70, lng: 30 }];
   small.redraw();
   assert.deepEqual(collectionPane.children, mounted, "viewport return reuses existing DOM nodes");
   small.remove();
@@ -221,7 +221,7 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   svgDom.remove();
 
   const largePts = [];
-  for (let i = 0; i < 120; i++) largePts.push([52 + (i % 10) * 0.1, 13 + Math.floor(i / 10) * 0.1]);
+  for (let i = 0; i < 120; i++) largePts.push({ lat: 52 + (i % 10) * 0.1, lng: 13 + Math.floor(i / 10) * 0.1 });
   const large = objectManager({ points: largePts, renderer: "auto", webglThreshold: 50 });
   large.addTo(map);
   assert.equal(large.renderer, "webgl");
@@ -245,7 +245,7 @@ test("MarkerCollection auto picks webgl above threshold", () => {
 
 test("MarkerCollection points prefer fill vocabulary over color aliases", () => {
   const collection = objectManager({
-    points: [[55.75, 37.61]],
+    points: [{ lat: 55.75, lng: 37.61 }],
     renderer: "svg",
     fill: "#2563eb",
     fillOpacity: 0.4,
@@ -262,15 +262,15 @@ test("MarkerCollection points prefer fill vocabulary over color aliases", () => 
 
 test("WebGLPointLayer stores large point batches compactly", () => {
   const layer = webglPointLayer([
-    [52.52, 13.405],
-    { coordinates: [52.53, 13.41] },
+    { lat: 52.52, lng: 13.405 },
+    { coordinates: { lat: 52.53, lng: 13.41 } },
     { lat: Number.NaN, lng: 1 }
   ]);
 
   assert.ok(layer instanceof WebGLPointLayer);
   assert.equal(layer.getStats().points, 2);
   assert.equal(layer.getStats().bufferBytes, 64);
-  layer.addData([{ latlng: [52.54, 13.42] }]);
+  layer.addData([{ latlng: { lat: 52.54, lng: 13.42 } }]);
   assert.equal(layer.getStats().points, 3);
   assert.equal(layer.mercator.length, 6);
   layer.setViewTransform({ rotation: 25, pitch: 35 });
@@ -285,8 +285,8 @@ test("WebGLPointLayer setDataAsync projects chunks and adopts packed buffers", a
   const layer = webglPointLayer([], { interactive: false });
   const progress = [];
   const returned = await layer.setDataAsync([
-    [52.52, 13.405],
-    { coordinates: [52.53, 13.41] },
+    { lat: 52.52, lng: 13.405 },
+    { coordinates: { lat: 52.53, lng: 13.41 } },
     { lat: Number.NaN, lng: 1 }
   ], {
     chunkSize: 2,
@@ -300,14 +300,14 @@ test("WebGLPointLayer setDataAsync projects chunks and adopts packed buffers", a
 });
 
 test("WebGLPointLayer reuses CPU buffers on repeated setData", () => {
-  const layer = webglPointLayer([[1, 2], [3, 4]], { interactive: false });
+  const layer = webglPointLayer([{ lat: 1, lng: 2 }, { lat: 3, lng: 4 }], { interactive: false });
   const firstLat = layer.points.buffer;
   const firstMerc = layer.mercator.buffer;
-  layer.setData([[5, 6], [7, 8]]);
+  layer.setData([{ lat: 5, lng: 6 }, { lat: 7, lng: 8 }]);
   assert.equal(layer.getStats().points, 2);
   assert.equal(layer.points.buffer, firstLat);
   assert.equal(layer.mercator.buffer, firstMerc);
-  layer.setData([[9, 10], [11, 12], [13, 14]]);
+  layer.setData([{ lat: 9, lng: 10 }, { lat: 11, lng: 12 }, { lat: 13, lng: 14 }]);
   assert.equal(layer.getStats().points, 3);
 });
 
@@ -328,9 +328,9 @@ test("WebGLPointLayer skips pick-index when not interactive and can adopt packed
 test("WebGLPointLayer accepts per-point RGBA colors", () => {
   const layer = webglPointLayer(
     [
-      [52.5, 13.4],
-      [52.51, 13.41],
-      [52.52, 13.42]
+      { lat: 52.5, lng: 13.4 },
+      { lat: 52.51, lng: 13.41 },
+      { lat: 52.52, lng: 13.42 }
     ],
     { pointSize: 4, fallbackCanvas: true }
   );
@@ -341,9 +341,9 @@ test("WebGLPointLayer accepts per-point RGBA colors", () => {
   ]);
   layer.setData(
     [
-      [52.5, 13.4],
-      [52.51, 13.41],
-      [52.52, 13.42]
+      { lat: 52.5, lng: 13.4 },
+      { lat: 52.51, lng: 13.41 },
+      { lat: 52.52, lng: 13.42 }
     ],
     { colors }
   );
@@ -384,7 +384,7 @@ test("WebGLPointLayer keeps distinct screen positions at high zoom", () => {
   const map = new FakeMap();
   const points = [];
   for (let i = 0; i < 40; i++) {
-    points.push([52.52 + i * 0.00002, 13.405 + i * 0.00003]);
+    points.push({ lat: 52.52 + i * 0.00002, lng: 13.405 + i * 0.00003 });
   }
   const layer = webglPointLayer(points, { pointSize: 4, fallbackCanvas: true });
   layer.addTo(map);
@@ -398,14 +398,14 @@ test("WebGLPointLayer keeps distinct screen positions at high zoom", () => {
 });
 
 test("GeometryWorkerPool prepares typed point batches with fallback", async () => {
-  const batch = preparePointBatch([[1, 2], { lat: 3, lng: 4 }, { coordinates: [Number.NaN, 0] }]);
+  const batch = preparePointBatch([{ lat: 1, lng: 2 }, { lat: 3, lng: 4 }, { coordinates: { lat: Number.NaN, lng: 0 } }]);
   assert.equal(batch.count, 2);
   assert.equal(batch.skipped, 1);
   assert.ok(batch.points instanceof Float32Array);
 
   const pool = geometryWorkerPool({ useWorker: false });
   const progress = [];
-  const prepared = await pool.preparePoints([[5, 6], [7, 8], [9, 10]], {
+  const prepared = await pool.preparePoints([{ lat: 5, lng: 6 }, { lat: 7, lng: 8 }, { lat: 9, lng: 10 }], {
     chunkSize: 2,
     yieldMode: "task",
     onProgress: (processed, total) => progress.push([processed, total])
@@ -437,7 +437,7 @@ test("destroying an owned geometry pool does not affect the library shared pool"
 
   owned.destroy();
 
-  const prepared = await shared.preparePoints([[1, 2]]);
+  const prepared = await shared.preparePoints([{ lat: 1, lng: 2 }]);
   assert.equal(prepared.count, 1);
 });
 
@@ -455,7 +455,7 @@ test("GeometryWorkerPool.destroy is terminal and idempotent", async () => {
   pool.destroy();
   pool.destroy();
 
-  await assert.rejects(pool.preparePoints([[1, 2]]), { name: "AbortError" });
+  await assert.rejects(pool.preparePoints([{ lat: 1, lng: 2 }]), { name: "AbortError" });
   await assert.rejects(pool.clusterLayout(layoutRequest), { name: "AbortError" });
   await assert.rejects(pool.greedyClusterLayout(layoutRequest), { name: "AbortError" });
   await assert.rejects(pool.clusterIndex(layoutRequest), { name: "AbortError" });
@@ -481,7 +481,7 @@ test("GeometryWorkerPool.destroy rejects pending worker work with AbortError", a
 
   try {
     const pool = createGeometryWorkerPool();
-    const operation = pool.preparePoints([[1, 2]]);
+    const operation = pool.preparePoints([{ lat: 1, lng: 2 }]);
     await Promise.resolve();
     assert.equal(pool.pending.size, 1);
 
@@ -521,8 +521,8 @@ test("GeometryWorkerPool rejects all pending work on worker failure and can reco
 
   try {
     const pool = createGeometryWorkerPool();
-    const first = pool.preparePoints([[1, 2]]);
-    const second = pool.preparePoints([[3, 4]]);
+    const first = pool.preparePoints([{ lat: 1, lng: 2 }]);
+    const second = pool.preparePoints([{ lat: 3, lng: 4 }]);
     const cause = new Error("worker crashed");
     const firstRejected = assert.rejects(first, (error) =>
       error instanceof GeometryWorkerError && error.cause === cause && /worker crashed/.test(error.message)
@@ -543,7 +543,7 @@ test("GeometryWorkerPool rejects all pending work on worker failure and can reco
     assert.equal(workers[0].terminated, true);
     assert.equal(pool.pending.size, 0);
 
-    const recovered = pool.preparePoints([[5, 6]]);
+    const recovered = pool.preparePoints([{ lat: 5, lng: 6 }]);
     await Promise.resolve();
     assert.equal(workers.length, 2);
     workers[0].onerror({
@@ -594,7 +594,7 @@ test("GeometryWorkerPool rejects pending work on message deserialization failure
 
   try {
     const pool = createGeometryWorkerPool();
-    const operation = pool.preparePoints([[1, 2]]);
+    const operation = pool.preparePoints([{ lat: 1, lng: 2 }]);
     const rejected = assert.rejects(operation, (error) =>
       error?.name === "GeometryWorkerError" && /unreadable message/.test(error.message)
     );
@@ -631,7 +631,7 @@ test("GeometryWorkerPool rejects a request when postMessage throws", async () =>
 
   try {
     const pool = createGeometryWorkerPool();
-    const operation = pool.preparePoints([[1, 2]]);
+    const operation = pool.preparePoints([{ lat: 1, lng: 2 }]);
     await assert.rejects(operation, (error) =>
       error?.name === "GeometryWorkerError" && error.cause === cause && /Failed to send/.test(error.message)
     );
@@ -667,7 +667,7 @@ test("GeometryWorkerPool rejects an unexpected worker response", async () => {
 
   try {
     const pool = createGeometryWorkerPool();
-    const operation = pool.preparePoints([[1, 2]]);
+    const operation = pool.preparePoints([{ lat: 1, lng: 2 }]);
     const rejected = assert.rejects(operation, (error) =>
       error?.name === "GeometryWorkerError" && /unexpectedResult/.test(error.message)
     );
@@ -886,7 +886,7 @@ test("prefetchTileLayer requires bounds and respects maxTiles", async () => {
 
   await assert.rejects(
     () => cache.prefetchTileLayer(layer, {
-      bounds: [[-85, -180], [85, 180]],
+      bounds: [{ lat: -85, lng: -180 }, { lat: 85, lng: 180 }],
       zooms: [4],
       maxTiles: 16
     }),
@@ -894,7 +894,7 @@ test("prefetchTileLayer requires bounds and respects maxTiles", async () => {
   );
 
   const stats = await cache.prefetchTileLayer(layer, {
-    bounds: [[52.52, 13.40], [52.53, 13.41]],
+    bounds: [{ lat: 52.52, lng: 13.40 }, { lat: 52.53, lng: 13.41 }],
     zooms: [12],
     xRange: [2476, 2477],
     yRange: [1280, 1281]
@@ -938,8 +938,8 @@ test("decodeMVT honors maxBytes and maxFeatures", () => {
 });
 
 test("Framework adapter creates, updates and destroys a map", () => {
-  const adapter = createMapAdapter(new FakeElement(), { controls: false, center: [1, 2], zoom: 3 });
-  adapter.update({ center: [4, 5], zoom: 6, behaviors: { scrollZoom: false } });
+  const adapter = createMapAdapter(new FakeElement(), { controls: false, center: { lat: 1, lng: 2 }, zoom: 3 });
+  adapter.update({ center: { lat: 4, lng: 5 }, zoom: 6, behaviors: { scrollZoom: false } });
   assert.deepEqual(adapter.map.getCenter().toArray(), [4, 5]);
   assert.equal(adapter.map.behaviors.isEnabled("scrollZoom"), false);
   adapter.destroy();

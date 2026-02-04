@@ -74,7 +74,7 @@ test("world heat field is invariant to current zoom when scaleZoom is fixed", ()
     [55.72, 37.58, 0.7],
     [55.79, 37.66, 0.2]
   ];
-  const bounds = [[55.65, 37.45], [55.9, 37.8]];
+  const bounds = [({ lat: 55.65, lng: 37.45 }), ({ lat: 55.9, lng: 37.8 })];
   const a = buildHeatFieldGrid(points, bounds, { cols: 96, rows: 72, radius: 22, blur: 12, scaleZoom: 6, zoom: 6 });
   const b = buildHeatFieldGrid(points, bounds, { cols: 96, rows: 72, radius: 22, blur: 12, scaleZoom: 6, zoom: 10 });
   assert.ok(a && b);
@@ -87,7 +87,7 @@ test("fixed referenceMax keeps contour values stable across zoom", () => {
   for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
     points.push([55.70 + y * 0.01, 37.52 + x * 0.012, 0.9]);
   }
-  const bounds = [[55.65, 37.45], [55.85, 37.75]];
+  const bounds = [({ lat: 55.65, lng: 37.45 }), ({ lat: 55.85, lng: 37.75 })];
   const opts = { cols: 96, rows: 72, radius: 20, blur: 10, scaleZoom: 6, referenceMax: 1, levels: [0.2, 0.4, 0.6] };
   const a = buildHeatIsolines(points, bounds, { ...opts, zoom: 6 });
   const b = buildHeatIsolines(points, bounds, { ...opts, zoom: 9 });

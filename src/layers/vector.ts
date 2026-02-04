@@ -217,7 +217,7 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
   }
 
   #eventLatLng(event: PointerEvent | MouseEvent): LatLng {
-    if (!this.map) return latLng([0, 0]);
+    if (!this.map) return latLng({ lat: 0, lng: 0 });
     const rect = this.map.container.getBoundingClientRect();
     return this.map.containerPointToLatLng([event.clientX - rect.left, event.clientY - rect.top]);
   }
@@ -414,7 +414,7 @@ export class Polyline extends PathLayer {
 function normalizeRings(points: LatLngLike[] | LatLngLike[][]): LatLng[][] {
   const source = points as unknown[];
   const first = source[0] as unknown;
-  const nested = Array.isArray(first) && first.length > 0 && Array.isArray(first[0]);
+  const nested = Array.isArray(first);
   return (nested ? points as LatLngLike[][] : [points as LatLngLike[]])
     .map((ring) => ring.map((value) => latLng(value)));
 }
@@ -540,8 +540,8 @@ export class Circle extends PathLayer {
   getBounds(): LatLngBounds {
     if (this.map?.crs.code === "Simple") {
       return new LatLngBounds(
-        [this.center.lat - this.radiusMeters, this.center.lng - this.radiusMeters],
-        [this.center.lat + this.radiusMeters, this.center.lng + this.radiusMeters]
+        { lat: this.center.lat - this.radiusMeters, lng: this.center.lng - this.radiusMeters },
+        { lat: this.center.lat + this.radiusMeters, lng: this.center.lng + this.radiusMeters }
       );
     }
     if (this.options.geodesic) {
@@ -553,8 +553,8 @@ export class Circle extends PathLayer {
     const lngScale = Math.max(1e-6, Math.cos((this.center.lat * Math.PI) / 180));
     const lngDelta = latDelta / lngScale;
     return new LatLngBounds(
-      [this.center.lat - latDelta, this.center.lng - lngDelta],
-      [this.center.lat + latDelta, this.center.lng + lngDelta]
+      { lat: this.center.lat - latDelta, lng: this.center.lng - lngDelta },
+      { lat: this.center.lat + latDelta, lng: this.center.lng + lngDelta }
     );
   }
 

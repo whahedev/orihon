@@ -1,4 +1,4 @@
-import type { LatLngLike } from "../geo.js";
+import { latLng, type LatLngLike } from "../geo.js";
 import { Marker, marker } from "../layers/marker.js";
 
 export type DrawHandleKind = "vertex" | "midpoint";
@@ -29,8 +29,8 @@ export function drawHandle(position: LatLngLike, kind: DrawHandleKind, ring: num
   };
 }
 
-export function midpoint(a: LatLngLike, b: LatLngLike): [number, number] {
-  const first = Array.isArray(a) ? { lat: a[0], lng: a[1] } : a;
-  const second = Array.isArray(b) ? { lat: b[0], lng: b[1] } : b;
-  return [(first.lat + second.lat) / 2, (first.lng + second.lng) / 2];
+export function midpoint(a: LatLngLike, b: LatLngLike): LatLngLike {
+  const first = latLng(a);
+  const second = latLng(b);
+  return { lat: (first.lat + second.lat) / 2, lng: (first.lng + second.lng) / 2 };
 }

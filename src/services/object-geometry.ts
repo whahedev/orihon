@@ -67,6 +67,13 @@ export interface GeometryInputObject {
   [key: string]: unknown;
 }
 
+/** Reject removed tuple syntax before callers mutate a store or index. */
+export function assertManagedCoordinateFormat(input: GeometryInputObject): void {
+  if (Array.isArray(input.coordinates)) {
+    throw new TypeError("ObjectManager: use coordinates: { lat, lng } or geometry: { type: 'Point', coordinates: [lng, lat] }.");
+  }
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -110,13 +117,14 @@ export function approxHaversineMeters(lat1: number, lng1: number, lat2: number, 
 
 /**
  * Normalize ManagedObject geometry.
- * Legacy `{ coordinates: [lat, lng] }` becomes Point with GeoJSON [lng, lat] internally.
+ * Named `{ coordinates: {lat, lng} }` becomes a Point.
  * Also accepts GeoJSON `geometry.coordinates` for Point ([lng, lat]).
  */
 export function normalizeManagedGeometry(
   input: GeometryInputObject,
   options: NormalizeGeometryOptions = {}
 ): NormalizedGeometry {
+  assertManagedCoordinateFormat(input);
   const maxVertices = Number.isFinite(Number(options.maxVertices))
     ? Math.max(0, Math.floor(Number(options.maxVertices)))
     : DEFAULT_MAX_VERTICES_PER_GEOMETRY;
@@ -138,17 +146,9 @@ export function normalizeManagedGeometry(
     throw new TypeError(`ObjectManager: unsupported geometry type "${geometry.type}"`);
   }
 
-  // Legacy point: coordinates as [lat, lng] or {lat,lng}
+  // Named point coordinates cannot be confused with GeoJSON positions.
   const legacy = input.coordinates;
   if (legacy == null) throw new TypeError("ObjectManager: object requires geometry or coordinates");
-  if (Array.isArray(legacy)) {
-    const lat = Number(legacy[0]);
-    const lng = Number(legacy[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      throw new TypeError("ObjectManager: coordinates must be finite [lat, lng]");
-    }
-    return { kind: "Point", lat, lng, bbox: bboxFromLatLng(lat, lng) };
-  }
   if (typeof legacy === "object") {
     const lat = Number((legacy as { lat?: unknown }).lat);
     const lng = Number((legacy as { lng?: unknown }).lng);
@@ -271,6 +271,7 @@ export function bboxIntersects(
  * Returns null for non-points and invalid coordinates.
  */
 export function readManagedPoint(input: GeometryInputObject): { lat: number; lng: number } | null {
+  assertManagedCoordinateFormat(input);
   const geometry = input.geometry as { type?: string; coordinates?: unknown } | undefined;
   if (geometry && typeof geometry.type === "string") {
     if (geometry.type !== "Point") return null;
@@ -280,12 +281,6 @@ export function readManagedPoint(input: GeometryInputObject): { lat: number; lng
   }
   const legacy = input.coordinates;
   if (legacy == null) return null;
-  if (Array.isArray(legacy)) {
-    const lat = Number(legacy[0]);
-    const lng = Number(legacy[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng };
-  }
   if (typeof legacy === "object") {
     const lat = Number((legacy as { lat?: unknown }).lat);
     const lng = Number((legacy as { lng?: unknown }).lng);
@@ -303,18 +298,13 @@ export function tryNormalizeManagedGeometry(
   input: GeometryInputObject,
   options: NormalizeGeometryOptions = {}
 ): NormalizedGeometry | null {
+  assertManagedCoordinateFormat(input);
   const geometry = input.geometry as { type?: string; coordinates?: unknown } | undefined;
   if (geometry && typeof geometry.type === "string") {
     return normalizeManagedGeometry(input, options);
   }
   const legacy = input.coordinates;
   if (legacy == null) return null;
-  if (Array.isArray(legacy)) {
-    const lat = Number(legacy[0]);
-    const lng = Number(legacy[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { kind: "Point", lat, lng, bbox: bboxFromLatLng(lat, lng) };
-  }
   if (typeof legacy === "object") {
     const lat = Number((legacy as { lat?: unknown }).lat);
     const lng = Number((legacy as { lng?: unknown }).lng);

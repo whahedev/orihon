@@ -214,7 +214,7 @@ export class GeolocationControl extends Control<GeolocationControlOptions> {
       navigator.geolocation.getCurrentPosition((position) => {
         this.#settle();
         if (!this._active || !this.map) return;
-        const latlng: [number, number] = [position.coords.latitude, position.coords.longitude];
+        const latlng = { lat: position.coords.latitude, lng: position.coords.longitude };
         this.map.setView(latlng, Math.max(this.map.zoom, Number(this.options.zoom ?? 14)));
         this.map.emit("locationfound", { latlng, accuracy: position.coords.accuracy, position });
       }, (error) => {

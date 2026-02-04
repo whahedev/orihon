@@ -222,7 +222,7 @@
       const now0 = Date.now();
 
       const map = createMap("map", {
-        center: [50.1, 14.4],
+        center: ({ lat: 50.1, lng: 14.4 }),
         zoom: 5,
         zoomControl: true
       });
@@ -672,7 +672,7 @@
           const to = hubById(f.to);
           return {
             id: f.id,
-            coordinates: [pos.lat, pos.lng],
+            coordinates: ({ lat: pos.lat, lng: pos.lng }),
             properties: {
               type: "plane",
               callsign: f.id,
@@ -696,14 +696,14 @@
         if (slim) {
           return {
             id: i,
-            coordinates: [lat, lng],
+            coordinates: ({ lat: lat, lng: lng }),
             properties: { type: "iot", kind: "temp", hub: hub.id, seed: i }
           };
         }
         const temp = Math.round(tempFromSeed(i) * 10) / 10;
         return {
           id: i,
-          coordinates: [lat, lng],
+          coordinates: ({ lat: lat, lng: lng }),
           properties: {
             type: "iot",
             kind: "temp",
@@ -1015,7 +1015,7 @@
           if (!prev) continue;
           updates.push({
             id: f.id,
-            coordinates: [pos.lat, pos.lng],
+            coordinates: ({ lat: pos.lat, lng: pos.lng }),
             properties: { ...prev.properties, heading: pos.heading }
           });
         }
@@ -1030,7 +1030,7 @@
         const u = Math.max(0, Math.min(1, (now - f.animStart) / span));
         const lat = f.fromPos.lat + (f.toPos.lat - f.fromPos.lat) * u;
         const lng = f.fromPos.lng + (f.toPos.lng - f.fromPos.lng) * u;
-        map.setView([lat, lng], map.zoom, { settle: false });
+        map.setView(({ lat: lat, lng: lng }), map.zoom, { settle: false });
       }
 
       function collectAlarmIds() {
@@ -1040,10 +1040,10 @@
       function objectLatLng(object) {
         if (!object) return null;
         const coords = object.coordinates;
-        if (Array.isArray(coords) && typeof coords[0] === "number") return [coords[0], coords[1]];
+        if (coords && Number.isFinite(coords.lat)) return coords;
         const g = object.geometry;
         if (g?.type === "Point" && Array.isArray(g.coordinates)) {
-          return [g.coordinates[1], g.coordinates[0]];
+          return { lat: g.coordinates[1], lng: g.coordinates[0] };
         }
         return null;
       }
@@ -1090,7 +1090,7 @@
             ops.openPopup(plane.id);
             if (!followOn) {
               const pos = along(plane.path, plane.t);
-              map.setView([pos.lat, pos.lng], Math.max(map.zoom, 5));
+              map.setView(({ lat: pos.lat, lng: pos.lng }), Math.max(map.zoom, 5));
             }
             return;
           }
@@ -1248,7 +1248,7 @@
           if (!pos) continue;
           const w = tempToHeatWeight(sensorTemps[id]);
           if (w <= 1e-6) continue;
-          out.push([pos[0], pos[1], w]);
+          out.push([pos.lat, pos.lng, w]);
         }
         // Enrich with a denser hot sample so 2–20% alarms still draw warm contours.
         if (alarmIds.size && out.length < budget) {
@@ -1260,7 +1260,7 @@
             const obj = sensors.items.get(id);
             const pos = objectLatLng(obj);
             if (!pos) continue;
-            out.push([pos[0], pos[1], tempToHeatWeight(sensorTemps[id])]);
+            out.push([pos.lat, pos.lng, tempToHeatWeight(sensorTemps[id])]);
             if (out.length >= budget) break;
           }
         }
@@ -1364,7 +1364,7 @@
         const f = flightState.find((item) => item.id === followId);
         const pos = f ? along(f.path, f.t) : null;
         if (followOn && pos) {
-          map.setView([pos.lat, pos.lng], Math.max(map.zoom, 6));
+          map.setView(({ lat: pos.lat, lng: pos.lng }), Math.max(map.zoom, 6));
         } else {
           map.setView(map.getCenter(), map.getZoom());
         }
@@ -1415,7 +1415,7 @@
             mgr.setSelected(hit.id);
             const obj = mgr.getObject(hit.id);
             const pos = obj?.coordinates || (obj?.geometry?.coordinates
-              ? [obj.geometry.coordinates[1], obj.geometry.coordinates[0]]
+              ? { lat: obj.geometry.coordinates[1], lng: obj.geometry.coordinates[0] }
               : null);
             if (pos) map.setView(pos, Math.max(map.zoom, 8));
           });

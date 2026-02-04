@@ -70,6 +70,8 @@ const clearSummaries = {
   distance: "Вычисляет кратчайшее геодезическое расстояние между двумя координатами в метрах.",
   ensureLocalePacks: "Асинхронно загружает дополнительные встроенные переводы перед использованием языка, отличного от английского.",
   featureGroup: "Объединяет несколько интерактивных слоёв: события, добавление на карту и вычисление общей области выполняются как для одного объекта.",
+  fromGeoJSONPosition: "Явно преобразует GeoJSON-пару [долгота, широта] в именованную координату Orihon.",
+  toGeoJSONPosition: "Преобразует именованную координату Orihon в новую GeoJSON-пару [долгота, широта].",
   geodesicInterpolate: "Добавляет промежуточные точки вдоль дуги большого круга, чтобы длинная линия корректно следовала кривизне Земли.",
   geoJSON: "Создаёт отображаемый слой из GeoJSON Geometry, Feature или FeatureCollection.",
   geolocationControl: "Добавляет кнопку определения текущего положения пользователя и перемещения карты к найденной координате.",
@@ -125,6 +127,18 @@ const clearSummaries = {
 };
 
 const special = {
+  fromGeoJSONPosition: {
+    example: `import { fromGeoJSONPosition, marker } from "orihon";
+const position = fromGeoJSONPosition([37.618423, 55.751244]);
+marker(position).addTo(map);`,
+    note: "GeoJSON хранит долготу первой. Altitude игнорируется; первые два компонента должны быть конечными числами."
+  },
+  toGeoJSONPosition: {
+    example: `import { toGeoJSONPosition } from "orihon";
+const coordinates = toGeoJSONPosition({ lat: 55.751244, lng: 37.618423 });
+console.log(coordinates); // [37.618423, 55.751244]`,
+    note: "Возвращает новый массив: изменение результата не изменяет исходную координату."
+  },
   bounds: {
     signature: `function bounds(): LatLngBounds
 function bounds(value: LatLngBoundsExpression): LatLngBounds
@@ -133,9 +147,9 @@ function bounds(a: LatLngExpression, b: LatLngExpression): LatLngBounds`,
     example: `import { bounds, rectangle } from "orihon";
 
 const deliveryArea = bounds([
-  [55.55, 37.20],
-  [55.95, 38.05],
-  [55.72, 38.18]
+  { lat: 55.55, lng: 37.20 },
+  { lat: 55.95, lng: 38.05 },
+  { lat: 55.72, lng: 38.18 }
 ]);
 
 rectangle(deliveryArea).addTo(map);
@@ -153,7 +167,7 @@ marker(berlin).addTo(map);`
   latLng: {
     signature: `function latLng(value: LatLngLike): LatLng
 function latLng(latitude: number, longitude: number): LatLng`,
-    note: "Числовые аргументы и массивы Orihon используют порядок `latitude, longitude`. Для данных с обратным порядком используйте `lngLat(longitude, latitude)`.",
+    note: "Используйте объект `{ lat, lng }` или два числовых аргумента `latitude, longitude`. Массивы не принимаются. Для GeoJSON используйте `fromGeoJSONPosition(position)`.",
     example: `import { latLng, marker } from "orihon";
 
 const moscow = latLng(55.751244, 37.618423);
@@ -377,7 +391,7 @@ webglSymbolLayer({ atlas: imageBitmap })
   .addTo(map);`,
   textLayer: `import { textLayer } from "orihon";
 
-textLayer([55.751, 37.618], "Москва", {
+textLayer({ lat: 55.751, lng: 37.618 }, "Москва", {
   color: "#0f172a",
   font: "600 14px system-ui"
 }).addTo(map);`,
@@ -605,7 +619,7 @@ function describeOption(name, sourceDescription = "", propertyType = "") {
     stroke: "CSS-цвет линии или границы.",
     strokeWidth: "Толщина линии в CSS-пикселях.",
     strokeOpacity: "Непрозрачность линии от 0 до 1.",
-    center: "Начальный центр карты в географических координатах [широта, долгота].",
+    center: "Начальный центр карты: именованная координата { lat, lng }.",
     zoomSnap: "Шаг округления zoom; 1 разрешает только целые уровни, 0 отключает округление.",
     wheelZoomStep: "Изменение zoom за один нормализованный шаг колеса или trackpad.",
     maxBounds: "Географическая область, за пределы которой пользователю нельзя переместить центр карты; null снимает ограничение.",
@@ -1014,7 +1028,7 @@ function describeParameter(functionName, parameter) {
   if (/^options?$/.test(raw)) return "Необязательные настройки поведения. Все поддерживаемые поля, их единицы и назначение перечислены в таблице ниже.";
   if (/LatLngBoundsLike|LatLngBounds/.test(type)) return "Географические границы: пара юго-западной и северо-восточной координат либо совместимый объект LatLngBounds.";
   if (/PointLike|\bPoint\b|Bounds/.test(type) && !/LatLng/.test(type)) return "Точка или область в пиксельной системе координат карты; это не широта и долгота.";
-  if (/LatLngLike|\bLatLng\b/.test(type)) return "Географическая координата. Массив Orihon имеет порядок [широта, долгота]; также принимается совместимый объект LatLng.";
+  if (/LatLngLike|\bLatLng\b/.test(type)) return "Именованная координата { lat, lng } или LatLng. GeoJSON-пары преобразуйте через fromGeoJSONPosition().";
   if (/TileTemplate/.test(type)) return "Шаблон адреса тайла или функция, возвращающая адрес по координатам z/x/y.";
   if (/HTMLElement|string/.test(type) && /container|host|element/.test(raw)) return "DOM-элемент либо его строковый id в документе.";
   if (/Iterable|Array|\[\]/.test(type) || /points?|items?|objects?|features?|data/.test(raw)) return "Исходная коллекция элементов указанного типа. Для Iterable элементы читаются в порядке обхода.";

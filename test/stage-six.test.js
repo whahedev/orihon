@@ -12,7 +12,7 @@ import {
 } from "../dist/index.js";
 
 test("Marker exposes opacity and z-index controls", () => {
-  const layer = marker([52.52, 13.405], { opacity: 0.7, zIndexOffset: 20, keyboard: false });
+  const layer = marker({ lat: 52.52, lng: 13.405 }, { opacity: 0.7, zIndexOffset: 20, keyboard: false });
   assert.ok(layer instanceof Marker);
   assert.equal(layer.options.opacity, 0.7);
   assert.equal(layer.options.zIndexOffset, 20);
@@ -23,7 +23,7 @@ test("Marker exposes opacity and z-index controls", () => {
 });
 
 test("Marker built-in appearance supports shape color and size", () => {
-  const layer = marker([0, 0], {
+  const layer = marker({ lat: 0, lng: 0 }, {
     shape: "circle",
     color: "#0f766e",
     strokeColor: "#ecfeff",

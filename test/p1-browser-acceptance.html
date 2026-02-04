@@ -38,9 +38,9 @@
     };
 
     async function run() {
-      const map = createMap("map", { controls: false, center: [0, 0], zoom: 18, maxZoom: 18 });
+      const map = createMap("map", { controls: false, center: ({ lat: 0, lng: 0 }), zoom: 18, maxZoom: 18 });
 
-      const svg = polygon([[[-0.00035, -0.00035], [-0.00035, 0.00035], [0.00035, 0.00035], [0.00035, -0.00035]]], {
+      const svg = polygon([[({ lat: -0.00035, lng: -0.00035 }), ({ lat: -0.00035, lng: 0.00035 }), ({ lat: 0.00035, lng: 0.00035 }), ({ lat: 0.00035, lng: -0.00035 })]], {
         fill: "#22c55e",
         fillOpacity: 0.2,
         interactive: true
@@ -51,8 +51,8 @@
         geometry: { type: "Polygon", coordinates: [[[-0.0003, -0.0003], [0.0003, -0.0003], [0.0003, 0.0003], [-0.0003, 0.0003], [-0.0003, -0.0003]]] }
       }, { renderer: "canvas", interactive: true }).addTo(map);
       const canvas = canvasGroup.getLayers()[0];
-      const pin = marker([0, 0], { title: "top marker" }).addTo(map);
-      const hits = map.query(map.latLngToContainerPoint([0, 0]), { limit: Infinity });
+      const pin = marker(({ lat: 0, lng: 0 }), { title: "top marker" }).addTo(map);
+      const hits = map.query(map.latLngToContainerPoint(({ lat: 0, lng: 0 })), { limit: Infinity });
       assert(hits.length >= 3, `mixed query returned ${hits.length} hits`);
       assert(hits[0]?.layer === pin, "marker pane is not the topmost query result");
       assert(hits.some((hit) => hit.layer === svg), "SVG hit missing");

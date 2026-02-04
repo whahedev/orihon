@@ -208,7 +208,7 @@ function createFakeMap(zoom = 10) {
 
     getBounds() {
 
-      return [[50, 10], [60, 40]];
+      return [({ lat: 50, lng: 10 }), ({ lat: 60, lng: 40 })];
 
     }
 
@@ -288,7 +288,7 @@ test("ObjectState create merge delete and copy semantics", () => {
 
   const manager = objectManager({ clusterize: false, clusterRenderer: "dom" });
 
-  manager.add({ id: 42, coordinates: [55.75, 37.61] });
+  manager.add({ id: 42, coordinates: { lat: 55.75, lng: 37.61 } });
 
   manager.setObjectState(42, { alarm: true });
 
@@ -328,7 +328,7 @@ test("ObjectState invalid id and nested values", () => {
 
   const manager = objectManager();
 
-  manager.add({ id: 1, coordinates: [1, 2] });
+  manager.add({ id: 1, coordinates: { lat: 1, lng: 2 } });
 
   assert.throws(() => manager.setObjectState(999, { alarm: true }), RangeError);
 
@@ -346,9 +346,9 @@ test("clearObjectStates and remove/clear lifecycle", () => {
 
   manager.add([
 
-    { id: 1, coordinates: [55, 37] },
+    { id: 1, coordinates: { lat: 55, lng: 37 } },
 
-    { id: 2, coordinates: [56, 38] }
+    { id: 2, coordinates: { lat: 56, lng: 38 } }
 
   ]);
 
@@ -380,7 +380,7 @@ test("clearObjectStates and remove/clear lifecycle", () => {
 
   assert.equal(manager.getSelectedId(), null);
 
-  manager.add({ id: 2, coordinates: [56, 38] });
+  manager.add({ id: 2, coordinates: { lat: 56, lng: 38 } });
 
   assert.deepEqual(manager.getObjectState(2), {});
 
@@ -394,9 +394,9 @@ test("selected and hovered stay exclusive through convenience and state APIs", (
 
   manager.add([
 
-    { id: 1, coordinates: [55, 37] },
+    { id: 1, coordinates: { lat: 55, lng: 37 } },
 
-    { id: 2, coordinates: [56, 38] }
+    { id: 2, coordinates: { lat: 56, lng: 38 } }
 
   ]);
 
@@ -448,11 +448,11 @@ test("updateObject keeps ObjectState", () => {
 
   const manager = objectManager({ clusterize: false });
 
-  manager.add({ id: 42, coordinates: [55.75, 37.61], properties: { status: "online" } });
+  manager.add({ id: 42, coordinates: { lat: 55.75, lng: 37.61 }, properties: { status: "online" } });
 
   manager.setObjectState(42, { alarm: true });
 
-  manager.update({ id: 42, coordinates: [55.76, 37.62], properties: { status: "offline" } });
+  manager.update({ id: 42, coordinates: { lat: 55.76, lng: 37.62 }, properties: { status: "offline" } });
 
   assert.equal(manager.getObjectState(42).alarm, true);
 
@@ -506,7 +506,7 @@ test("custom style receives object state zoom selected hovered", () => {
 
   const map = createFakeMap(12);
 
-  manager.add({ id: 1, coordinates: [55.75, 37.61], properties: { status: "online" } });
+  manager.add({ id: 1, coordinates: { lat: 55.75, lng: 37.61 }, properties: { status: "online" } });
 
   manager.addTo(map);
 
@@ -540,7 +540,7 @@ test("DOM and WebGL style resolution stay aligned", () => {
 
   const mapGl = createFakeMap(11);
 
-  const feature = { id: 7, coordinates: [55.75, 37.61], properties: { status: "online" } };
+  const feature = { id: 7, coordinates: ({ lat: 55.75, lng: 37.61 }), properties: { status: "online" } };
 
   dom.add(feature);
 
@@ -594,9 +594,9 @@ test("legacy styleByCategory palette remains available", () => {
 
   manager.add([
 
-    { id: 1, coordinates: [55, 37], properties: { category: "beta" } },
+    { id: 1, coordinates: { lat: 55, lng: 37 }, properties: { category: "beta" } },
 
-    { id: 2, coordinates: [56, 38], properties: { alert: true } }
+    { id: 2, coordinates: { lat: 56, lng: 38 }, properties: { alert: true } }
 
   ]);
 
@@ -642,9 +642,9 @@ test("WebGL setObjectState patches styles without full setData rebuild", () => {
 
   manager.add([
 
-    { id: 42, coordinates: [55.75, 37.61] },
+    { id: 42, coordinates: { lat: 55.75, lng: 37.61 } },
 
-    { id: 43, coordinates: [55.76, 37.62] }
+    { id: 43, coordinates: { lat: 55.76, lng: 37.62 } }
 
   ]);
 
@@ -782,8 +782,8 @@ test("WebGL filtered hidden style stays synchronized in the canonical pack", () 
 
   const map = createFakeMap();
   manager.add([
-    { id: 42, coordinates: [55.75, 37.61] },
-    { id: 43, coordinates: [55.76, 37.62] }
+    { id: 42, coordinates: { lat: 55.75, lng: 37.61 } },
+    { id: 43, coordinates: { lat: 55.76, lng: 37.62 } }
   ]);
   manager.addTo(map);
 
@@ -823,8 +823,8 @@ test("WebGL pass-all filter reuses the active full pack", () => {
   });
   const map = createFakeMap();
   manager.add([
-    { id: 1, coordinates: [55.75, 37.61] },
-    { id: 2, coordinates: [55.76, 37.62] }
+    { id: 1, coordinates: { lat: 55.75, lng: 37.61 } },
+    { id: 2, coordinates: { lat: 55.76, lng: 37.62 } }
   ]);
   manager.addTo(map);
 
@@ -877,7 +877,7 @@ test("setObjectStates batch triggers a single WebGL render", () => {
 
     id,
 
-    coordinates: [55 + (id % 50) * 0.01, 37 + Math.floor(id / 50) * 0.01]
+    coordinates: ({ lat: 55 + (id % 50) * 0.01, lng: 37 + Math.floor(id / 50) * 0.01 })
 
   }));
 
@@ -941,7 +941,7 @@ test("zoom-dependent style updates size without rebuilding spatial index", () =>
 
   const map = createFakeMap(8);
 
-  manager.add({ id: 1, coordinates: [55.75, 37.61] });
+  manager.add({ id: 1, coordinates: { lat: 55.75, lng: 37.61 } });
 
   manager.addTo(map);
 
@@ -984,7 +984,7 @@ test("temporal WebGL filtering evaluates custom filter only for indexed candidat
   manager.add(
     Array.from({ length: 64 }, (_, id) => ({
       id,
-      coordinates: [55 + id * 0.001, 37 + id * 0.001],
+      coordinates: ({ lat: 55 + id * 0.001, lng: 37 + id * 0.001 }),
       properties: { time: id }
     }))
   );
@@ -1022,7 +1022,7 @@ test("full temporal WebGL range bypasses the system bitset", () => {
   manager.add(
     Array.from({ length: 64 }, (_, id) => ({
       id,
-      coordinates: [55 + id * 0.001, 37 + id * 0.001],
+      coordinates: ({ lat: 55 + id * 0.001, lng: 37 + id * 0.001 }),
       properties: { time: id }
     }))
   );
@@ -1053,9 +1053,9 @@ test("initial flat WebGL sync keeps a zero-copy canonical pack", () => {
   const map = createFakeMap();
 
   manager.add([
-    { id: 1, coordinates: [55.1, 37.1] },
-    { id: 2, coordinates: [55.2, 37.2] },
-    { id: 3, coordinates: [55.3, 37.3] }
+    { id: 1, coordinates: { lat: 55.1, lng: 37.1 } },
+    { id: 2, coordinates: { lat: 55.2, lng: 37.2 } },
+    { id: 3, coordinates: { lat: 55.3, lng: 37.3 } }
   ]);
   manager.addTo(map);
 
@@ -1079,9 +1079,9 @@ test("dense numeric WebGL ids use zero-storage slot indexing with sparse fallbac
   });
   const denseMap = createFakeMap();
   dense.add([
-    { id: 0, coordinates: [55.1, 37.1] },
-    { id: 1, coordinates: [55.2, 37.2] },
-    { id: 2, coordinates: [55.3, 37.3] }
+    { id: 0, coordinates: { lat: 55.1, lng: 37.1 } },
+    { id: 1, coordinates: { lat: 55.2, lng: 37.2 } },
+    { id: 2, coordinates: { lat: 55.3, lng: 37.3 } }
   ]);
   dense.addTo(denseMap);
 
@@ -1105,9 +1105,9 @@ test("dense numeric WebGL ids use zero-storage slot indexing with sparse fallbac
   });
   const sparseMap = createFakeMap();
   sparse.add([
-    { id: 10, coordinates: [55.1, 37.1] },
-    { id: 20, coordinates: [55.2, 37.2] },
-    { id: "object-30", coordinates: [55.3, 37.3] }
+    { id: 10, coordinates: { lat: 55.1, lng: 37.1 } },
+    { id: 20, coordinates: { lat: 55.2, lng: 37.2 } },
+    { id: "object-30", coordinates: { lat: 55.3, lng: 37.3 } }
   ]);
   sparse.addTo(sparseMap);
 
@@ -1122,7 +1122,7 @@ test("objectstatechange skips no-op writes", () => {
 
   const manager = objectManager();
 
-  manager.add({ id: 1, coordinates: [1, 2] });
+  manager.add({ id: 1, coordinates: { lat: 1, lng: 2 } });
 
   let events = 0;
 
@@ -1144,9 +1144,9 @@ test("WebGLPointLayer setSizes and patchSize", () => {
 
     [
 
-      [52.5, 13.4],
+      { lat: 52.5, lng: 13.4 },
 
-      [52.51, 13.41]
+      { lat: 52.51, lng: 13.41 }
 
     ],
 
@@ -1218,11 +1218,11 @@ test("setVisibleIds subsets WebGL draw list from the packed buffer", async () =>
 
   manager.add([
 
-    { id: 0, coordinates: [52.5, 13.4] },
+    { id: 0, coordinates: { lat: 52.5, lng: 13.4 } },
 
-    { id: 1, coordinates: [52.6, 13.5] },
+    { id: 1, coordinates: { lat: 52.6, lng: 13.5 } },
 
-    { id: 2, coordinates: [52.7, 13.6] }
+    { id: 2, coordinates: { lat: 52.7, lng: 13.6 } }
 
   ]);
 
@@ -1257,8 +1257,8 @@ test("point fill vocabulary overrides legacy color aliases in DOM and WebGL", ()
   const mapDom = createFakeMap();
   const mapGl = createFakeMap();
 
-  dom.add({ id: 1, coordinates: [55.75, 37.61] }).addTo(mapDom);
-  webgl.add({ id: 1, coordinates: [55.75, 37.61] }).addTo(mapGl);
+  dom.add({ id: 1, coordinates: { lat: 55.75, lng: 37.61 } }).addTo(mapDom);
+  webgl.add({ id: 1, coordinates: { lat: 55.75, lng: 37.61 } }).addTo(mapGl);
 
   const marker = dom.markers.get(1);
   assert.equal(marker.el.style.getPropertyValue("--oh-om-color") || marker.el.style.getPropertyValue("--oh-marker-fill"), "#2563eb");

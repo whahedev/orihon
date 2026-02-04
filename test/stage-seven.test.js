@@ -90,7 +90,7 @@ test("RemoteObjectManager loads viewport objects and cancels stale work", async 
     loader: async ({ signal }) => {
       calls++;
       assert.equal(signal.aborted, false);
-      return [{ id: `remote-${calls}`, coordinates: [52.52, 13.405] }];
+      return [{ id: `remote-${calls}`, coordinates: { lat: 52.52, lng: 13.405 } }];
     }
   });
   const loads = [];
@@ -107,23 +107,23 @@ test("RemoteObjectManager loads viewport objects and cancels stale work", async 
 
 test("SearchProvider normalizes search, geocode and reverse APIs", async () => {
   const provider = searchProvider([
-    { name: "Berlin", center: [52.520, 13.405] },
-    { name: "Hamburg", center: [53.551, 9.994] }
+    { name: "Berlin", center: { lat: 52.520, lng: 13.405 } },
+    { name: "Hamburg", center: { lat: 53.551, lng: 9.994 } }
   ]);
   assert.ok(provider instanceof SearchProvider);
   assert.deepEqual((await provider.search("ber")).map((item) => item.name), ["Berlin"]);
   assert.equal((await provider.geocode("ham"))?.name, "Hamburg");
-  assert.equal((await provider.reverse([1, 2]))?.name, "1.000000, 2.000000");
+  assert.equal((await provider.reverse({ lat: 1, lng: 2 }))?.name, "1.000000, 2.000000");
 
   const custom = searchProvider({
-    search: () => [{ name: "Only", center: [0, 0] }]
+    search: () => [{ name: "Only", center: ({ lat: 0, lng: 0 }) }]
   });
   assert.equal((await custom.geocode("x"))?.name, "Only");
 });
 
 test("RoutingLayer displays alternatives and exposes selection", async () => {
   const layer = routingLayer({ provider: createStraightLineRoutingProvider(), alternatives: true });
-  const routes = await layer.route([[52.52, 13.40], [52.55, 13.45]]);
+  const routes = await layer.route([{ lat: 52.52, lng: 13.40 }, { lat: 52.55, lng: 13.45 }]);
 
   assert.equal(routes.length, 2);
   assert.equal(layer.getLayers().length, 2);

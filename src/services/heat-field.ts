@@ -163,7 +163,7 @@ export function packHeatMercator(
 export function packedHeatLatLngBounds(
   points: PackedHeatPoints,
   paddingMerc = 0
-): [[number, number], [number, number]] | null {
+): LatLngBoundsLike | null {
   const bounds = points.bounds ?? scanPackedBounds(points);
   if (!bounds) return null;
   const padding = Math.max(0, Number.isFinite(paddingMerc) ? paddingMerc : 0);
@@ -173,7 +173,7 @@ export function packedHeatLatLngBounds(
   const south = Math.min(1, bounds.southMerc + padding);
   const nw = unproject([west * TILE_SIZE, north * TILE_SIZE], 0);
   const se = unproject([east * TILE_SIZE, south * TILE_SIZE], 0);
-  return [[se.lat, nw.lng], [nw.lat, se.lng]];
+  return { south: se.lat, west: nw.lng, north: nw.lat, east: se.lng };
 }
 
 export function createHeatFieldRequest(

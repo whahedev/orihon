@@ -42,7 +42,7 @@ function mockMap(center, zoom, size = { width: 800, height: 600 }) {
 }
 
 test("CircleMarker keeps a constant pixel radius when zooming in", () => {
-  const center = [55.75, 37.62];
+  const center = ({ lat: 55.75, lng: 37.62 });
   const radius = 7;
   const layer = new CircleMarker(center, { radius });
   const attributes = new Map();

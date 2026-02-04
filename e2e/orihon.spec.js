@@ -43,7 +43,7 @@ test("vector screen geometry matches the visual regression contract", async ({ p
   const signature = await page.evaluate(() => {
     const map = window.__orihonVisual.map;
     const markerEl = document.querySelector(".oh-marker");
-    const expected = map.latLngToLayerPoint([52.53, 13.42]);
+    const expected = map.latLngToLayerPoint(({ lat: 52.53, lng: 13.42 }));
     // Default pin metrics: size 22 → width 24, height 36, anchor [12, 36]
     const transform = markerEl?.style.transform || "";
     const match = transform.match(/translate3d\(([-\d.]+)px,\s*([-\d.]+)px/);
@@ -51,7 +51,7 @@ test("vector screen geometry matches the visual regression contract", async ({ p
     const ty = match ? Number(match[2]) : NaN;
     const circle = document.querySelector(".oh-svg-layer circle");
     return {
-      center: map.latLngToContainerPoint([52.52, 13.405]).toArray(),
+      center: map.latLngToContainerPoint(({ lat: 52.52, lng: 13.405 })).toArray(),
       viewBox: document.querySelector(".oh-svg-layer")?.getAttribute("viewBox"),
       paths: [...document.querySelectorAll(".oh-svg-layer path")].map((path) => path.getAttribute("d")),
       circle: circle
@@ -93,7 +93,7 @@ test("tiles and overlays stay viewport-local at maximum zoom", async ({ page }) 
       "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
       { maxZoom: 19, buffer: 1, renderer: "dom" }
     ).addTo(window.__orihonVisual.map);
-    window.__orihonVisual.map.setView([52.52, 13.405], 19);
+    window.__orihonVisual.map.setView(({ lat: 52.52, lng: 13.405 }), 19);
   });
   await page.waitForFunction(() => {
     const mapRect = document.querySelector("#map")?.getBoundingClientRect();
@@ -168,7 +168,7 @@ test("opens mountable chart popup and destroys chart on close", async ({ page })
       labels: ["Mon", "Tue", "Wed", "Thu", "Fri"],
       datasets: [{ data: [18, 42, 31, 56, 47] }]
     };
-    const layer = Orihon.marker([52.52, 13.405])
+    const layer = Orihon.marker(({ lat: 52.52, lng: 13.405 }))
       .bindPopup(() => ({
         mount(container) {
           const canvas = document.createElement("canvas");

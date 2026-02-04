@@ -111,8 +111,8 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
   getBounds(): LatLngBounds {
     const bounds = new LatLngBounds();
     if (!Number.isFinite(this._minLat)) return bounds;
-    bounds.extend([this._minLat, this._minLng]);
-    bounds.extend([this._maxLat, this._maxLng]);
+    bounds.extend({ lat: this._minLat, lng: this._minLng });
+    bounds.extend({ lat: this._maxLat, lng: this._maxLng });
     return bounds;
   }
 

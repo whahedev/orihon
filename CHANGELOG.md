@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Breaking:** geographic/CRS inputs now require `{ lat, lng }` or `LatLng`. Bare tuples are rejected at runtime and by TypeScript, including ObjectManager's mass-point path. GeoJSON keeps `[lng, lat]`; explicit `fromGeoJSONPosition()` and `toGeoJSONPosition()` converters bridge the formats. See [next-major migration](docs/MIGRATION-NEXT-MAJOR.md).
+
 - Geometry worker lifecycle: caller-owned pools are isolated from ObjectManager's internal shared worker, `destroy()` is terminal and rejects pending work with `AbortError`, and worker crashes, message deserialization failures, malformed responses and `postMessage` exceptions now reject affected operations with a contextual `GeometryWorkerError` instead of leaving promises pending. A failed worker is discarded and recreated on the next operation.
 - Suggest lifecycle: `cancel()` remains a reusable supersession operation returning an empty result, while `destroy()` is now terminal and idempotent and rejects pending or future `suggest()` calls with `AbortError` instead of presenting shutdown as a successful empty search.
 - Type safety: exported `PrefetchTileLayerOptions` now represents only valid area inputs—either geographic bounds or both explicit tile axes—and compile-time API contract tests protect this union, the owned geometry-worker factory/error type, and the internal shared-worker boundary.

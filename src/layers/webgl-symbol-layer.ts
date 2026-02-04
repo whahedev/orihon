@@ -186,7 +186,7 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
     const hit = this.#hitTest(point.x, point.y, options.tolerance);
     return hit == null ? null : {
       layer: this,
-      latlng: latLng([this.instances[hit].lat, this.instances[hit].lng]),
+      latlng: latLng({ lat: this.instances[hit].lat, lng: this.instances[hit].lng }),
       source: "webgl",
       index: hit,
       id: this.instances[hit].id,
@@ -447,7 +447,7 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
     const atlasCanvas = this.atlas?.getCanvas();
     for (const inst of this.instances) {
       const packed = this.atlas?.getPacked(inst.icon);
-      const screen = this.map.latLngToContainerPoint([inst.lat, inst.lng]);
+      const screen = this.map.latLngToContainerPoint({ lat: inst.lat, lng: inst.lng });
       const size = Math.max(1, inst.size) * dpr;
       ctx.save();
       ctx.translate(screen.x * dpr, screen.y * dpr);
@@ -480,7 +480,7 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
       this.emit("click", {
         originalEvent: event,
         index: hit,
-        latlng: [this.instances[hit].lat, this.instances[hit].lng],
+        latlng: { lat: this.instances[hit].lat, lng: this.instances[hit].lng },
         data: this.instances[hit]
       });
     };
@@ -494,7 +494,7 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
     let bestDist = Infinity;
     for (let i = 0; i < this.instances.length; i++) {
       const inst = this.instances[i];
-      const screen = this.map.latLngToContainerPoint([inst.lat, inst.lng]);
+      const screen = this.map.latLngToContainerPoint({ lat: inst.lat, lng: inst.lng });
       const radius = Math.max(1, inst.size) / 2 + Math.max(0, tolerance);
       const dist = (screen.x - x) ** 2 + (screen.y - y) ** 2;
       if (dist <= radius * radius && dist < bestDist) {

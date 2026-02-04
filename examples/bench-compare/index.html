@@ -1217,6 +1217,13 @@ function createMapLibreRichPoints(map, objects, options = {}) {
   };
 }
 
+// The shared benchmark dataset is latitude-first. Convert only at the Orihon
+// boundary; Leaflet and MapLibre keep their native coordinate formats.
+function toOrihonPosition([lat, lng]) { return { lat, lng }; }
+function* toOrihonObjects(objects) {
+  for (const object of objects) yield { ...object, coordinates: toOrihonPosition(object.coordinates) };
+}
+
 async function loadOrihon() {
   const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.esm.js";
   const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.css";
@@ -2049,7 +2056,7 @@ async function stressCamera(applyView, durationMs = STRESS_MS, baseZoom = ZOOM) 
 /** Exercise Orihon's continuous-camera path, then commit one final layout. */
 async function stressOrihonCamera(map, durationMs = STRESS_MS, baseZoom = ZOOM) {
   const result = await stressCamera(
-    (lat, lng, zoom) => map.setView([lat, lng], zoom, { settle: false }),
+    (lat, lng, zoom) => map.setView({ lat, lng }, zoom, { settle: false }),
     durationMs,
     baseZoom
   );
@@ -2412,10 +2419,10 @@ function createOrihonRichDriver(manager, map) {
       return manager.getStats().visibleObjects;
     },
     setView(lat, lng, zoom) {
-      map.setView([lat, lng], zoom);
+      map.setView({ lat, lng }, zoom);
     },
     applyLive(updates) {
-      manager.update(updates);
+      manager.update(Array.from(toOrihonObjects(updates)));
     },
     selectAndPopup(id) {
       manager.setSelected(id);
@@ -2696,7 +2703,7 @@ async function pointsOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
   const map = createMap(host, {
-    center: CENTER,
+    center: { lat: CENTER[0], lng: CENTER[1] },
     zoom: ZOOM,
     minZoom: 2,
     maxZoom: 12,
@@ -2716,7 +2723,7 @@ async function pointsOrihon(points) {
   }).addTo(map);
 
   const loadStart = performance.now();
-  await layer.setDataAsync(points, { chunkSize: 50_000, yieldMode: "task" });
+  await layer.setDataAsync(points.map(toOrihonPosition), { chunkSize: 50_000, yieldMode: "task" });
   await waitFrames(4);
   const loadMs = performance.now() - loadStart;
 
@@ -2869,7 +2876,7 @@ async function pointsMapLibre(points) {
 async function clustersOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: ZOOM, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: ZOOM, controls: false });
   tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
@@ -2888,7 +2895,7 @@ async function clustersOrihon(points) {
   });
 
   const loadStart = performance.now();
-  await manager.addAsync(makeObjects(points), {
+  await manager.addAsync(toOrihonObjects(makeObjects(points)), {
     chunkSize: 10_000,
     yieldMode: "task",
     render: false
@@ -2899,7 +2906,7 @@ async function clustersOrihon(points) {
   const loadMs = performance.now() - loadStart;
   const stats = manager.getStats();
 
-  const pan = await stressClusters((lat, lng, zoom) => map.setView([lat, lng], zoom));
+  const pan = await stressClusters((lat, lng, zoom) => map.setView({ lat, lng }, zoom));
   await waitFrames(2);
   const heap = readHeap();
   active = {
@@ -3151,11 +3158,11 @@ async function clustersMapLibre(points) {
 async function liveOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: ZOOM, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: ZOOM, controls: false });
   tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
-  const layer = webglPointLayer(points, {
+  const layer = webglPointLayer(points.map(toOrihonPosition), {
     pointSize: 2.5,
     color: "#2dd4bf",
     opacity: 0.78,
@@ -3165,7 +3172,7 @@ async function liveOrihon(points) {
   await waitFrames(2);
   const loadMs = 0;
   const scratch = clonePoints(points);
-  const live = await measureLive((t) => layer.setData(jitterPoints(points, t, 0.2, scratch)));
+  const live = await measureLive((t) => layer.setData(jitterPoints(points, t, 0.2, scratch).map(toOrihonPosition)));
   await waitFrames(2);
   const heap = readHeap();
   active = {
@@ -3313,7 +3320,7 @@ async function liveMapLibre(points) {
 async function pickOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: ZOOM, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: ZOOM, controls: false });
   tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
@@ -3324,12 +3331,12 @@ async function pickOrihon(points) {
     color: "#2dd4bf",
     interactive: false
   });
-  await layer.setDataAsync(points, { chunkSize: 50_000, yieldMode: "task" });
+  await layer.setDataAsync(points.map(toOrihonPosition), { chunkSize: 50_000, yieldMode: "task" });
   layer.addTo(map);
   await waitFrames(3);
   const loadMs = performance.now() - loadStart;
 
-  const project = (ll) => map.latLngToContainerPoint(ll);
+  const project = (ll) => map.latLngToContainerPoint(toOrihonPosition(ll));
   const samples = pickSamplesFromPoints(points, project, PICK_SAMPLES);
   const times = measureProjectScan(points, project, samples);
   await waitFrames(1);
@@ -3508,7 +3515,7 @@ async function pickMapLibre(points) {
 async function heatOrihon(points, mode) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: HEAT_BENCH.zoom, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: HEAT_BENCH.zoom, controls: false });
   tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
@@ -3562,7 +3569,7 @@ async function heatOrihon(points, mode) {
   const loadStats = layer.getStats();
 
   const pan = await stressOrihonCamera(map, STRESS_MS, HEAT_BENCH.zoom);
-  map.setView(CENTER, HEAT_BENCH.zoom);
+  map.setView({ lat: CENTER[0], lng: CENTER[1] }, HEAT_BENCH.zoom);
   if (layer.options.evaluation === "zoom") await layer.rebuildAsync();
   else layer.render();
   await waitFrames(2);
@@ -3851,7 +3858,7 @@ const heatBothMapLibre = isolinesUnsupported(
 async function geojsonOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: ZOOM, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: ZOOM, controls: false });
   // DOM basemap + one GL overlay — two WebGL contexts (tiles+lines) regress drop% until shared runtime.
   tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(3);
@@ -4063,13 +4070,13 @@ async function geojsonMapLibre(points) {
 async function markersOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: ZOOM, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: ZOOM, controls: false });
   tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
 
   const loadStart = performance.now();
-  const layer = objectManager({ points,
+  const layer = objectManager({ points: points.map(toOrihonPosition),
     renderer: "svg",
     htmlButtonLimit: MARKER_DOM_CAP,
     viewportCull: true,
@@ -4254,7 +4261,7 @@ async function markersMapLibre(points) {
 async function filterOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: ZOOM, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: ZOOM, controls: false });
   tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
@@ -4273,7 +4280,7 @@ async function filterOrihon(points) {
   });
 
   const loadStart = performance.now();
-  await manager.addAsync(makeObjects(points), {
+  await manager.addAsync(toOrihonObjects(makeObjects(points)), {
     chunkSize: 10_000,
     yieldMode: "task",
     render: false
@@ -4285,7 +4292,7 @@ async function filterOrihon(points) {
   const stats = manager.getStats();
 
   const pan = await stressFilterCamera(
-    (lat, lng, zoom) => map.setView([lat, lng], zoom),
+    (lat, lng, zoom) => map.setView({ lat, lng }, zoom),
     (activeOnly) => {
       manager.setFilter(activeOnly ? objectIsActive : null);
     }
@@ -4552,7 +4559,7 @@ async function filterMapLibre(points) {
 async function basemapOrihon(_points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: ZOOM, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: ZOOM, controls: false });
   const layer = tileLayer(OSM, { renderer: "webgl", attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(4);
   const initMs = performance.now() - initStart;
@@ -4651,7 +4658,7 @@ async function basemapMapLibre(_points) {
 async function tileScrollOrihon(_points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: 5.25, zoomSnap: 0, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: 5.25, zoomSnap: 0, controls: false });
   const tracker = createTileRequestTracker();
   const layer = tileLayer(OSM, { renderer: "webgl", attribution: "© OpenStreetMap", maxZoom: 19 });
   layer.on("tileloadstart", (event) => tracker.record(event.url || `${event.z}:${event.x}:${event.y}`));
@@ -4668,7 +4675,7 @@ async function tileScrollOrihon(_points) {
   };
   const loadMs = await waitForTileSettle(ready);
   const pan = await stressTileScroll(
-    (lat, lng, zoom, settle = false) => map.setView([lat, lng], zoom, { settle }),
+    (lat, lng, zoom, settle = false) => map.setView({ lat, lng }, zoom, { settle }),
     ready,
     () => tracker.snapshot(),
     () => layer.getStats().coveragePct
@@ -4807,7 +4814,7 @@ async function tileScrollMapLibre(_points) {
 async function popupOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
-  const map = createMap(host, { center: CENTER, zoom: 11, controls: false });
+  const map = createMap(host, { center: { lat: CENTER[0], lng: CENTER[1] }, zoom: 11, controls: false });
   tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
@@ -4815,7 +4822,7 @@ async function popupOrihon(points) {
   const loadStart = performance.now();
   const layers = points.map(([lat, lng], index) => {
     const series = benchChartSeries(index + 1);
-    return marker([lat, lng], { title: `P${index}`, keyboard: false })
+    return marker({ lat, lng }, { title: `P${index}`, keyboard: false })
       .bindPopup(
         () => ({
           mount(container) {
@@ -4838,9 +4845,9 @@ async function popupOrihon(points) {
   const opens = await stressPopupSwitch(
     points,
     (index) => layers[index].openPopup(),
-    (lat, lng, zoom) => map.setView([lat, lng], zoom)
+    (lat, lng, zoom) => map.setView({ lat, lng }, zoom)
   );
-  map.setView(CENTER, 11);
+  map.setView({ lat: CENTER[0], lng: CENTER[1] }, 11);
   await waitFrames(2);
   const heap = readHeap();
   active = {
@@ -5064,7 +5071,7 @@ async function richOrihon(points) {
   const host = blankHost();
   const initStart = performance.now();
   const map = createMap(host, {
-    center: CENTER,
+    center: { lat: CENTER[0], lng: CENTER[1] },
     zoom: ZOOM,
     minZoom: 2,
     maxZoom: 14,
@@ -5091,7 +5098,7 @@ async function richOrihon(points) {
   });
 
   const loadStart = performance.now();
-  await manager.addAsync(objects, {
+  await manager.addAsync(toOrihonObjects(objects), {
     chunkSize: 10_000,
     yieldMode: "task",
     render: false

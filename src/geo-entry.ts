@@ -5,6 +5,8 @@ export {
   LatLngBounds,
   latLng,
   lngLat,
+  fromGeoJSONPosition,
+  toGeoJSONPosition,
   bounds,
   distance,
   destination,

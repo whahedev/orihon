@@ -505,7 +505,7 @@ export class DrawHandler extends Evented {
   #loadFeature(feature: GeoJSONFeature): void {
     const geometry = feature.geometry;
     if (!geometry) return;
-    const convert = (coordinate: number[]): [number, number] => [Number(coordinate[1]), Number(coordinate[0])];
+    const convert = (coordinate: number[]): LatLngLike => ({ lat: Number(coordinate[1]), lng: Number(coordinate[0]) });
     if (geometry.type === "Point") {
       const position = convert(geometry.coordinates);
       const radius = Number(feature.properties?.radius);

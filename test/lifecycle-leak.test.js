@@ -71,7 +71,7 @@ function runCycles(count) {
   for (let index = 0; index < count; index += 1) {
     const container = new FakeElement();
     const map = new Orihon(container, {
-      center: [52.52, 13.405],
+      center: { lat: 52.52, lng: 13.405 },
       zoom: index % 18,
       controls: false
     });

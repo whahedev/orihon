@@ -130,8 +130,8 @@ function appendMeridians(
   for (let i = 0; i < maxLines; i++) {
     const x = start + i * step;
     if (x > bounds.east) break;
-    const a = map.latLngToLayerPoint([bounds.south, x]);
-    const b = map.latLngToLayerPoint([bounds.north, x]);
+    const a = map.latLngToLayerPoint({ lat: bounds.south, lng: x });
+    const b = map.latLngToLayerPoint({ lat: bounds.north, lng: x });
     lines.push(`M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}`);
   }
 }
@@ -147,8 +147,8 @@ function appendParallels(
   for (let i = 0; i < maxLines; i++) {
     const y = start + i * step;
     if (y > bounds.north) break;
-    const a = map.latLngToLayerPoint([y, bounds.west]);
-    const b = map.latLngToLayerPoint([y, bounds.east]);
+    const a = map.latLngToLayerPoint({ lat: y, lng: bounds.west });
+    const b = map.latLngToLayerPoint({ lat: y, lng: bounds.east });
     lines.push(`M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}`);
   }
 }

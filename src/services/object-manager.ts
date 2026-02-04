@@ -32,6 +32,7 @@ import { parseCssColor } from "../webgl-utils.js";
 import {
   DEFAULT_MAX_VERTICES_PER_GEOMETRY,
   tryNormalizeManagedGeometry,
+  assertManagedCoordinateFormat,
   readManagedPoint,
   type ManagedGeometry,
   type ManagedLineStringGeometry,
@@ -111,7 +112,7 @@ function perfNow(): number {
 
 export interface ManagedObject {
   id?: ObjectId;
-  /** Legacy point position [lat, lng] or {lat,lng}. Prefer `geometry`. */
+  /** Named point position. GeoJSON tuples belong in `geometry.coordinates`. */
   coordinates?: LatLngLike;
   geometry?: ManagedGeometry | { coordinates?: number[]; type?: string };
   properties?: { title?: string; [key: string]: unknown };
@@ -691,6 +692,7 @@ export class ObjectManager extends Evented {
 
   add(features: ManagedObject | ManagedObject[]): this {
     const list = Array.isArray(features) ? features : [features];
+    for (const item of list) assertManagedCoordinateFormat(item);
     const cap = this.options.maxObjects;
     const skipDrop = this.markers.size === 0;
     const massPoints = !this.options.sceneFeatures;
@@ -710,7 +712,7 @@ export class ObjectManager extends Evented {
       }
       const normalized = this.#ingestObject(id, item);
       if (normalized?.kind === "Point") this.index.setLatLng(id, normalized.lat, normalized.lng, item);
-      else if (normalized) this.index.set(id, [normalized.bbox[0], normalized.bbox[1]], item);
+      else if (normalized) this.index.set(id, { lat: normalized.bbox[0], lng: normalized.bbox[1] }, item);
       else this.index.delete(id);
     }
     if (this._bulkDepth === 0) {
@@ -831,6 +833,7 @@ export class ObjectManager extends Evented {
     options?: { animate?: boolean; duration?: number }
   ): this {
     const list = [...features];
+    for (const item of list) assertManagedCoordinateFormat(item);
     const animate = Boolean(options?.animate);
     const duration = Math.max(0, Number(options?.duration) || 800);
 
@@ -868,7 +871,7 @@ export class ObjectManager extends Evented {
           this._scheduleRender();
           return this;
         }
-        this.index.set(id, [normalized.lat, normalized.lng], item);
+        this.index.set(id, { lat: normalized.lat, lng: normalized.lng }, item);
         if (
           this.options.sceneFeatures &&
           prevLat != null &&
@@ -912,7 +915,7 @@ export class ObjectManager extends Evented {
       const normalized = this.#ingestObject(id, item, { skipSearch: !propertiesChanged });
       this.index.delete(id);
       if (normalized?.kind === "Point") {
-        this.index.set(id, [normalized.lat, normalized.lng], item);
+        this.index.set(id, { lat: normalized.lat, lng: normalized.lng }, item);
         if (
           this.options.sceneFeatures &&
           prevLat != null &&
@@ -922,7 +925,7 @@ export class ObjectManager extends Evented {
           this.scene.trails.append(id, prevLat, prevLng);
         }
       } else if (normalized) {
-        this.index.set(id, [normalized.bbox[0], normalized.bbox[1]], item);
+        this.index.set(id, { lat: normalized.bbox[0], lng: normalized.bbox[1] }, item);
       }
       this.scene.markDirty(
         id,
@@ -1002,7 +1005,7 @@ export class ObjectManager extends Evented {
       this.items.set(id, item);
       const normalized = this.#ingestObject(id, item, { skipSearch: !propertiesChanged });
       if (!normalized || normalized.kind !== "Point") return false;
-      this.index.set(id, [normalized.lat, normalized.lng], item);
+      this.index.set(id, { lat: normalized.lat, lng: normalized.lng }, item);
       const record = this.index.records.get(id);
       if (record && this._layout?.singles.has(id)) this._layout.singles.set(id, record);
       if (this.options.sceneFeatures) {
@@ -1887,13 +1890,13 @@ export class ObjectManager extends Evented {
       if (!value) continue;
       singles.set(single.id, {
         id: single.id,
-        position: latLng([single.lat, single.lng]),
+        position: latLng({ lat: single.lat, lng: single.lng }),
         value
       });
     }
     for (const cluster of result.clusters) {
       clusters.set(cluster.key, {
-        position: latLng([cluster.lat, cluster.lng]),
+        position: latLng({ lat: cluster.lat, lng: cluster.lng }),
         ids: cluster.ids,
         count: cluster.count ?? cluster.ids.length,
         nodeId: cluster.nodeId ?? -1
@@ -3417,7 +3420,7 @@ export class ObjectManager extends Evented {
             const project =
               this.map.latLngToContainerPoint?.bind(this.map) ??
               ((value: LatLngLike) => this.map!.latLngToLayerPoint(value));
-            const screen = project([visual.lat, visual.lng]);
+            const screen = project({ lat: visual.lat, lng: visual.lng });
             labelCandidates.push({
               id,
               text: "",
@@ -3464,7 +3467,7 @@ export class ObjectManager extends Evented {
               const project =
                 this.map.latLngToContainerPoint?.bind(this.map) ??
                 ((value: LatLngLike) => this.map!.latLngToLayerPoint(value));
-              const screen = project([visual.lat, visual.lng]);
+              const screen = project({ lat: visual.lat, lng: visual.lng });
               labelCandidates.push({
                 id,
                 text: anchor.text,
@@ -3491,7 +3494,7 @@ export class ObjectManager extends Evented {
         ) continue;
         const positions: LatLngLike[] = [];
         for (let i = 0; i < geometry.pointCount; i++) {
-          positions.push([geometry.coords[i * 2], geometry.coords[i * 2 + 1]]);
+          positions.push({ lat: geometry.coords[i * 2], lng: geometry.coords[i * 2 + 1] });
         }
         paths.push({
           id,
@@ -3533,7 +3536,7 @@ export class ObjectManager extends Evented {
     // Trails batch
     for (const trail of this.scene.trails.list()) {
       paths.push({
-        positions: trail.points.map((point) => [point.lat, point.lng] as LatLngLike),
+        positions: trail.points.map((point) => ({ lat: point.lat, lng: point.lng })),
         style: {
           color: trail.style.color,
           width: trail.style.width,
@@ -3958,11 +3961,8 @@ export class ObjectManager extends Evented {
       maxVertices: this.options.maxVerticesPerGeometry
     });
     if (!geometry) return null;
-    if (geometry.kind === "Point") return [geometry.lat, geometry.lng];
-    return [
-      (geometry.bbox[0] + geometry.bbox[2]) / 2,
-      (geometry.bbox[1] + geometry.bbox[3]) / 2
-    ];
+    if (geometry.kind === "Point") return { lat: geometry.lat, lng: geometry.lng };
+    return { lat: (geometry.bbox[0] + geometry.bbox[2]) / 2, lng: (geometry.bbox[1] + geometry.bbox[3]) / 2 };
   }
 }
 

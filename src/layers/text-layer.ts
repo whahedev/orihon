@@ -203,7 +203,7 @@ export class TextLayer extends Layer<Required<TextLayerOptions>> {
           : geometry.type === "Polygon" ? geometry.coordinates : [];
       let best: { points: ReturnType<Orihon["latLngToContainerPoint"]>[]; length: number } | null = null;
       for (const line of lines) {
-        const points = line.map((coordinate) => this.map!.latLngToContainerPoint([coordinate[1], coordinate[0]]));
+        const points = line.map((coordinate) => this.map!.latLngToContainerPoint({ lat: coordinate[1], lng: coordinate[0] }));
         let length = 0;
         for (let index = 1; index < points.length; index++) length += points[index].distanceTo(points[index - 1]);
         if (!best || length > best.length) best = { points, length };
@@ -218,7 +218,7 @@ export class TextLayer extends Layer<Required<TextLayerOptions>> {
           : geometry.type === "MultiPolygon" ? geometry.coordinates[0]?.[0] ?? [] : [];
     if (!coordinates.length) return null;
     const sum = coordinates.reduce((result, coordinate) => [result[0] + coordinate[1], result[1] + coordinate[0]], [0, 0]);
-    return latLng([sum[0] / coordinates.length, sum[1] / coordinates.length]);
+    return latLng({ lat: sum[0] / coordinates.length, lng: sum[1] / coordinates.length });
   }
 }
 

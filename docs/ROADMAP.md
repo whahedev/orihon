@@ -160,14 +160,14 @@ import { createMap, CRS, tileLayer } from "orihon/core";
 
 const map = createMap("map", {
   crs: CRS.Simple,           // or "Simple"
-  center: [200, 300],        // y, x in map units
+  center: ({ lat: 200, lng: 300 }),        // y, x in map units
   zoom: 0,
   minZoom: -5,
   maxZoom: 4
 });
 
 // Image overlay in map units:
-imageOverlay("floor.png", [[0, 0], [1000, 1500]]).addTo(map);
+imageOverlay("floor.png", [({ lat: 0, lng: 0 }), ({ lat: 1000, lng: 1500 })]).addTo(map);
 ```
 
 ```ts

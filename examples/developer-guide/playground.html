@@ -26,14 +26,14 @@
     let map = null;
     let runId = 0;
     let outputText = "";
-    const center = [55.751244, 37.618423];
-    const demoBounds = [[55.45, 37.05], [56.03, 38.15]];
+    const center = ({ lat: 55.751244, lng: 37.618423 });
+    const demoBounds = [({ lat: 55.45, lng: 37.05 }), ({ lat: 56.03, lng: 38.15 })];
     const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
     const weightedPoints = createWeightedPoints(2500);
     const points = weightedPoints.map((point, index) => ({ ...point, data: { id: index, value: point.weight } }));
     const objects = points.slice(0, 1200).map((point, index) => ({
       id: `object-${index}`,
-      coordinates: [point.lat, point.lng],
+      coordinates: ({ lat: point.lat, lng: point.lng }),
       properties: { title: `Объект ${index + 1}`, value: point.weight, active: index % 7 !== 0 }
     }));
     const geojson = {

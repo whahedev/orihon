@@ -43,7 +43,7 @@
     const clone = (feature) => structuredClone(feature);
     const source = createFeatureSource(initial.map(clone));
 
-    const map = createMap("map", { center: [55.759, 37.625], zoom: 12, controls: true });
+    const map = createMap("map", { center: ({ lat: 55.759, lng: 37.625 }), zoom: 12, controls: true });
     tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors",
       maxZoom: 19
@@ -132,7 +132,7 @@
       selectedId = id;
       manager.setSelected(id);
       const feature = source.get(id);
-      map.panTo([feature.geometry.coordinates[1], feature.geometry.coordinates[0]]);
+      map.panTo(({ lat: feature.geometry.coordinates[1], lng: feature.geometry.coordinates[0] }));
       render();
     }
 
@@ -212,7 +212,7 @@
       source.replace(initial.map(clone));
       selectedId = initial[0].id;
       manager.setSelected(selectedId);
-      map.setView([55.759, 37.625], 12);
+      map.setView(({ lat: 55.759, lng: 37.625 }), 12);
       render();
     });
 

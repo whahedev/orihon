@@ -99,7 +99,7 @@ test("camera warp coverage rejects zoom-out and pan edge gaps", () => {
 test("fractional zoomAround keeps anchor and marker/tile math glued", async () => {
   const el = installDom();
   const map = createMap(el, {
-    center: [55.7558, 37.6173],
+    center: { lat: 55.7558, lng: 37.6173 },
     zoom: 10,
     zoomSnap: 0,
     wheelZoomStep: 0.25,
@@ -107,8 +107,8 @@ test("fractional zoomAround keeps anchor and marker/tile math glued", async () =
     inertia: false
   });
   const ll = [55.76, 37.62];
-  const pin = marker(ll, { shape: "circle", size: 16 }).addTo(map);
-  circleMarker(ll, { radius: 6 }).addTo(map);
+  const pin = marker({ lat: ll[0], lng: ll[1] }, { shape: "circle", size: 16 }).addTo(map);
+  circleMarker({ lat: ll[0], lng: ll[1] }, { radius: 6 }).addTo(map);
   const tiles = new TileLayer("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", {
     renderer: "dom",
     detectRetina: false
@@ -127,8 +127,8 @@ test("fractional zoomAround keeps anchor and marker/tile math glued", async () =
     assert.ok(Math.abs(afterPoint.x - anchor.x) <= 0.5, `anchor x at z=${z}`);
     assert.ok(Math.abs(afterPoint.y - anchor.y) <= 0.5, `anchor y at z=${z}`);
 
-    const expected = map.latLngToContainerPoint(ll);
-    const markerPt = map.latLngToLayerPoint(ll);
+    const expected = map.latLngToContainerPoint({ lat: ll[0], lng: ll[1] });
+    const markerPt = map.latLngToLayerPoint({ lat: ll[0], lng: ll[1] });
     assert.ok(Math.abs(markerPt.x - expected.x) < 1e-9);
     assert.ok(Math.abs(markerPt.y - expected.y) < 1e-9);
 
@@ -145,7 +145,7 @@ test("fractional zoomAround keeps anchor and marker/tile math glued", async () =
 
     const tileZ = tiles._tileZoom;
     assert.ok(tileZ != null);
-    const world = map.crs.project(ll, tileZ);
+    const world = map.crs.project({ lat: ll[0], lng: ll[1] }, tileZ);
     const tx = Math.floor(world.x / 256);
     const ty = Math.floor(world.y / 256);
     const scale = 2 ** (map.zoom - tileZ);
@@ -172,7 +172,7 @@ test("fractional zoomAround keeps anchor and marker/tile math glued", async () =
 test("TileLayer zoom switch never emits NaN level transforms", async () => {
   const el = installDom();
   const map = createMap(el, {
-    center: [52.52, 13.405],
+    center: { lat: 52.52, lng: 13.405 },
     zoom: 10,
     zoomSnap: 0,
     controls: false,

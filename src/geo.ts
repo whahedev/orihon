@@ -3,7 +3,8 @@ const EARTH_RADIUS = 6378137;
 const TILE_SIZE = 256;
 
 export type PointLike = Point | [number, number] | { x: number; y: number };
-export type LatLngLike = LatLng | [number, number] | { lat: number; lng: number };
+/** Named geographic or CRS coordinates; bare tuples are deliberately not accepted. */
+export type LatLngLike = LatLng | { lat: number; lng: number };
 export type LatLngBoundsLike =
   | LatLngBounds
   | [LatLngLike, LatLngLike]
@@ -135,8 +136,9 @@ export function pointBounds(a?: PointLike | PointLike[], b?: PointLike): Bounds 
 
 export class LatLng {
   constructor(public lat: number, public lng: number) {
-    this.lat = Number(lat);
-    this.lng = Number(lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new TypeError("Coordinates require finite numeric lat and lng values.");
+    }
   }
 
   clone(): LatLng {
@@ -168,10 +170,27 @@ export class LatLng {
 export function latLng(value: LatLngLike): LatLng;
 export function latLng(lat: number, lng: number): LatLng;
 export function latLng(value: LatLngLike | number, lng?: number): LatLng {
+  if (Array.isArray(value)) {
+    throw new TypeError("Coordinate tuples are ambiguous. Use { lat, lng } or fromGeoJSONPosition([lng, lat]).");
+  }
   if (value instanceof LatLng) return value;
-  if (Array.isArray(value)) return new LatLng(value[0], value[1]);
-  if (typeof value === "object") return new LatLng(value.lat, value.lng);
+  if (value && typeof value === "object") return new LatLng(value.lat, value.lng);
   return new LatLng(value, Number(lng));
+}
+
+/** Convert a GeoJSON longitude/latitude position (optional altitude is ignored). */
+export function fromGeoJSONPosition(position: readonly [number, number, ...number[]]): LatLng {
+  if (!Array.isArray(position) || position.length < 2 ||
+      !Number.isFinite(position[0]) || !Number.isFinite(position[1])) {
+    throw new TypeError("fromGeoJSONPosition requires [longitude, latitude] with finite numbers.");
+  }
+  return new LatLng(position[1], position[0]);
+}
+
+/** Convert named coordinates to a fresh standard GeoJSON longitude/latitude pair. */
+export function toGeoJSONPosition(position: LatLngLike): [longitude: number, latitude: number] {
+  const value = latLng(position);
+  return [value.lng, value.lat];
 }
 
 /**
@@ -192,11 +211,10 @@ export class LatLngBounds {
     if (a instanceof LatLngBounds) {
       this.extend(a);
     } else if (Array.isArray(a)) {
-      if (a.length === 2 && typeof a[0] === "number") this.extend(a as LatLngLike);
-      else for (const value of a as LatLngLike[]) this.extend(value);
+      for (const value of a as LatLngLike[]) this.extend(value);
     } else if (a && "south" in a) {
-      this.extend([a.south, a.west]);
-      this.extend([a.north, a.east]);
+      this.extend({ lat: a.south, lng: a.west });
+      this.extend({ lat: a.north, lng: a.east });
     } else if (a) {
       this.extend(a as LatLngLike);
     }
@@ -204,11 +222,11 @@ export class LatLngBounds {
   }
 
   extend(value: LatLngLike | LatLngBoundsLike): this {
-    if (value instanceof LatLngBounds || (!Array.isArray(value) && "south" in value)) {
+    if (value instanceof LatLngBounds || (value && typeof value === "object" && !Array.isArray(value) && "south" in value)) {
       const other = value instanceof LatLngBounds ? value : bounds(value);
       if (other.isValid()) {
-        this.extend([other.south, other.west]);
-        this.extend([other.north, other.east]);
+        this.extend({ lat: other.south, lng: other.west });
+        this.extend({ lat: other.north, lng: other.east });
       }
       return this;
     }
@@ -230,7 +248,7 @@ export class LatLngBounds {
   getSouthEast(): LatLng { return new LatLng(this.south, this.east); }
 
   contains(value: LatLngLike | LatLngBoundsLike): boolean {
-    if (value instanceof LatLngBounds || (!Array.isArray(value) && "south" in value)) {
+    if (value instanceof LatLngBounds || (value && typeof value === "object" && !Array.isArray(value) && "south" in value)) {
       const other = value instanceof LatLngBounds ? value : bounds(value);
       return other.south >= this.south && other.north <= this.north && other.west >= this.west && other.east <= this.east;
     }
@@ -246,7 +264,7 @@ export class LatLngBounds {
   pad(ratio: number): LatLngBounds {
     const latBuffer = Math.abs(this.north - this.south) * ratio;
     const lngBuffer = Math.abs(this.east - this.west) * ratio;
-    return new LatLngBounds([this.south - latBuffer, this.west - lngBuffer], [this.north + latBuffer, this.east + lngBuffer]);
+    return new LatLngBounds({ lat: this.south - latBuffer, lng: this.west - lngBuffer }, { lat: this.north + latBuffer, lng: this.east + lngBuffer });
   }
 
   equals(value: LatLngBoundsLike, maxMargin = 1e-9): boolean {
@@ -377,8 +395,8 @@ type ViewSize = PointLike | { width: number; height: number };
 
 export function zoomForBounds(viewSize: ViewSize, targetBounds: LatLngBoundsLike, padding = 32, maxZoom = 18): number {
   const b = bounds(targetBounds);
-  const nw = project([b.north, b.west], 0);
-  const se = project([b.south, b.east], 0);
+  const nw = project({ lat: b.north, lng: b.west }, 0);
+  const se = project({ lat: b.south, lng: b.east }, 0);
   const dx = Math.max(1e-9, Math.abs(se.x - nw.x));
   const dy = Math.max(1e-9, Math.abs(se.y - nw.y));
   const width = "width" in viewSize ? viewSize.width : point(viewSize).x;

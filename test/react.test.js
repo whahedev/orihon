@@ -29,7 +29,7 @@ test("React Map survives Strict Mode without leaking map instances", async () =>
   const root = createRoot(document.getElementById("root"));
   await act(async () => {
     root.render(React.createElement(StrictMode, null,
-      React.createElement(OrihonMap, { center: [10, 20], zoom: 4, controls: false, onMapReady: ready, style: { height: 300 } })
+      React.createElement(OrihonMap, { center: { lat: 10, lng: 20 }, zoom: 4, controls: false, onMapReady: ready, style: { height: 300 } })
     ));
   });
   assert.equal(creates, 2);
@@ -38,12 +38,12 @@ test("React Map survives Strict Mode without leaking map instances", async () =>
 
   await act(async () => {
     root.render(React.createElement(StrictMode, null,
-      React.createElement(OrihonMap, { center: [11, 21], zoom: 5, controls: false, onMapReady: ready, style: { height: 300 } })
+      React.createElement(OrihonMap, { center: { lat: 11, lng: 21 }, zoom: 5, controls: false, onMapReady: ready, style: { height: 300 } })
     ));
   });
   assert.equal(creates, 2);
   assert.equal(current.getZoom(), 5);
-  assert.ok(current.getCenter().equals([11, 21]));
+  assert.ok(current.getCenter().equals({ lat: 11, lng: 21 }));
 
   await act(async () => { root.unmount(); });
   assert.equal(removes, 2);
@@ -63,11 +63,11 @@ test("React ObjectManager keeps id-diffed objects through Strict Mode replay", a
   globalThis.cancelAnimationFrame = clearTimeout;
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   let manager;
-  const objects = [{ id: 1, coordinates: [10, 20] }, { id: 2, coordinates: [11, 21] }];
+  const objects = [{ id: 1, coordinates: ({ lat: 10, lng: 20 }) }, { id: 2, coordinates: ({ lat: 11, lng: 21 }) }];
   const root = createRoot(document.getElementById("root"));
   await act(async () => {
     root.render(React.createElement(StrictMode, null,
-      React.createElement(OrihonMap, { center: [10, 20], zoom: 4, controls: false },
+      React.createElement(OrihonMap, { center: { lat: 10, lng: 20 }, zoom: 4, controls: false },
         React.createElement(ObjectManager, { objects, clusterRenderer: "dom", onReady: (value) => { manager = value; } })
       )
     ));

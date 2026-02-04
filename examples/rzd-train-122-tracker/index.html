@@ -1251,6 +1251,10 @@
   </script>
 
   <script>
+// Demo datasets use latitude-first pairs internally; name coordinates at the API boundary.
+function mapPosition(value) { return Array.isArray(value) ? { lat: value[0], lng: value[1] } : value; }
+function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] === "number" ? mapPosition(value) : value.map(mapPositions)) : value; }
+
     (() => {
       "use strict";
 
@@ -1903,7 +1907,7 @@
             typeof routeLine.setLatLngs === "function"
           ) {
             routeLine.setLatLngs(
-              routeCoords
+              mapPositions(routeCoords)
             );
           }
 
@@ -2535,7 +2539,7 @@
         }
 
         map = Orihon.createMap("map", {
-          center: [52.2, 38.5],
+          center: ({ lat: 52.2, lng: 38.5 }),
           zoom: 5,
           locale: "ru",
           controls: false,
@@ -2562,7 +2566,7 @@
         );
 
         routeLine = Orihon.polyline(
-          routeCoords,
+          mapPositions(routeCoords),
           {
             strokeWidth: 3,
             strokeOpacity: 0.18,
@@ -2573,7 +2577,7 @@
         ).addTo(map);
 
         remainingLine = Orihon.polyline(
-          [routeCoords[0]],
+          mapPositions([routeCoords[0]]),
           {
             strokeWidth: 4,
             strokeOpacity: 0.55,
@@ -2585,7 +2589,7 @@
         ).addTo(map);
 
         progressLine = Orihon.polyline(
-          [routeCoords[0]],
+          mapPositions([routeCoords[0]]),
           {
             strokeWidth: 5,
             strokeOpacity: 0.95,
@@ -2598,7 +2602,7 @@
         rebuildStationMarkers();
 
         trainMarker = Orihon.marker(
-          [stops[0].lat, stops[0].lon],
+          ({ lat: stops[0].lat, lng: stops[0].lon }),
           {
             icon: Orihon.icon({
               content: makeTrainNode(),
@@ -2624,15 +2628,15 @@
           }).addTo(map);
         }
 
-        map.fitBounds([
-          [44.0, 29.4],
-          [60.4, 41.0]
-        ]);
+        map.fitBounds(mapPositions([
+          ({ lat: 44.0, lng: 29.4 }),
+          ({ lat: 60.4, lng: 41.0 })
+        ]));
       }
 
       function updateTrainMarker(state) {
         trainMarker.setLatLng(
-          [state.lat, state.lon]
+          ({ lat: state.lat, lng: state.lon })
         );
 
         if (
@@ -2788,7 +2792,7 @@
           "function"
         ) {
           progressLine.setLatLngs(
-            points
+            mapPositions(points)
           );
         }
 
@@ -2826,9 +2830,9 @@
           typeof remainingLine.setLatLngs === "function"
         ) {
           remainingLine.setLatLngs(
-            remaining.length >= 2
+            mapPositions(remaining.length >= 2
               ? remaining
-              : [[state.lat, state.lon]]
+              : [[state.lat, state.lon]])
           );
         }
 
@@ -3030,7 +3034,7 @@
                 Number.isFinite(anchor.lon)
               ) {
                 map.flyTo(
-                  [anchor.lat, anchor.lon],
+                  ({ lat: anchor.lat, lng: anchor.lon }),
                   9
                 );
               }
@@ -3281,10 +3285,7 @@
         if (!latestState || !map) return;
 
         map.flyTo(
-          [
-            latestState.lat,
-            latestState.lon
-          ],
+          ({ lat: latestState.lat, lng: latestState.lon }),
           Math.max(7, map.getZoom())
         );
       }
@@ -3374,10 +3375,10 @@
           maxLon = Math.max(maxLon, lon);
         }
 
-        map.fitBounds([
+        map.fitBounds(mapPositions([
           [minLat, minLon],
           [maxLat, maxLon]
-        ]);
+        ]));
       }
 
       function clearStationMarkers() {
@@ -3423,7 +3424,7 @@
 
               const marker =
                 Orihon.marker(
-                  [lat, lon],
+                  ({ lat: lat, lng: lon }),
                   {
                     icon:
                       Orihon.icon({
@@ -3500,7 +3501,7 @@
           typeof routeLine.setLatLngs === "function"
         ) {
           routeLine.setLatLngs(
-            routeCoords
+            mapPositions(routeCoords)
           );
         }
 
@@ -3515,7 +3516,7 @@
             Number.isFinite(start.lon)
           ) {
             trainMarker.setLatLng(
-              [start.lat, start.lon]
+              ({ lat: start.lat, lng: start.lon })
             );
           }
         }
@@ -3608,7 +3609,7 @@
           routeLine
         ) {
           routeLine.setLatLngs(
-            routeCoords
+            mapPositions(routeCoords)
           );
         }
 
@@ -4329,7 +4330,7 @@
 
             const marker =
               Orihon.marker(
-                [lat, lon],
+                ({ lat: lat, lng: lon }),
                 {
                   icon:
                     Orihon.icon({
@@ -4743,7 +4744,7 @@
 
         if (!didFocusTrain && Number.isFinite(state.lat) && Number.isFinite(state.lon)) {
           didFocusTrain = true;
-          map.setView([state.lat, state.lon], 7);
+          map.setView(({ lat: state.lat, lng: state.lon }), 7);
         }
 
         const progressKeyIndex =

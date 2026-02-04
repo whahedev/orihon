@@ -191,7 +191,7 @@
     <script>
       const { createMap, tileLayer, imageOverlay, marker } = Orihon;
 
-      const CENTER = [0, 0];
+      const CENTER = ({ lat: 0, lng: 0 });
       const DEFAULT_ZOOM = 3;
 
       const LAYERS = {
@@ -319,8 +319,8 @@
               const overlay = imageOverlay(
                 url,
                 [
-                  [tileSouth, tileWest],
-                  [tileNorth, tileEast]
+                  ({ lat: tileSouth, lng: tileWest }),
+                  ({ lat: tileNorth, lng: tileEast })
                 ],
                 {
                   pane: "tile",

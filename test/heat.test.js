@@ -58,7 +58,7 @@ function regionalPacked(count) {
 test("WASM scalar field tracks the reference JS field", () => {
   assert.equal(heatFieldWasmSupported(), true);
   const packed = packHeatPoints(densePoints());
-  const request = createHeatFieldRequest(packed, [[49.8, 13.9], [50.4, 14.9]], {
+  const request = createHeatFieldRequest(packed, [{ lat: 49.8, lng: 13.9 }, { lat: 50.4, lng: 14.9 }], {
     cols: 128,
     rows: 96,
     radius: 28,
@@ -113,7 +113,7 @@ test("both mode reuses one field for colors and WASM contours", async () => {
     zoom: 8,
     levels: 5
   };
-  const both = await buildHeat(points, [[49.8, 13.9], [50.4, 14.9]], {
+  const both = await buildHeat(points, [{ lat: 49.8, lng: 13.9 }, { lat: 50.4, lng: 14.9 }], {
     ...options,
     mode: "both"
   });
@@ -123,7 +123,7 @@ test("both mode reuses one field for colors and WASM contours", async () => {
   assert.ok(both.field.peak > 0);
   assert.ok(both.rings.length > 0);
 
-  const colors = await buildHeat(points, [[49.8, 13.9], [50.4, 14.9]], {
+  const colors = await buildHeat(points, [{ lat: 49.8, lng: 13.9 }, { lat: 50.4, lng: 14.9 }], {
     ...options,
     mode: "heatmap"
   });
@@ -133,7 +133,7 @@ test("both mode reuses one field for colors and WASM contours", async () => {
 });
 
 test("one-million-point field still produces contour geometry", async () => {
-  const result = await buildPackedHeat(regionalPacked(1_000_000), [[38, -7], [61.5, 21.5]], {
+  const result = await buildPackedHeat(regionalPacked(1_000_000), [{ lat: 38, lng: -7 }, { lat: 61.5, lng: 21.5 }], {
     mode: "both",
     backend: "wasm",
     cols: 512,
@@ -164,7 +164,7 @@ test("packed heat snapshot retains the complete offscreen source domain", () => 
 });
 
 test("manual isoline step produces stable absolute levels", async () => {
-  const result = await buildHeat(densePoints(1200), [[49.8, 13.9], [50.4, 14.9]], {
+  const result = await buildHeat(densePoints(1200), [{ lat: 49.8, lng: 13.9 }, { lat: 50.4, lng: 14.9 }], {
     mode: "both",
     backend: "wasm",
     cols: 128,
@@ -181,7 +181,7 @@ test("manual isoline step produces stable absolute levels", async () => {
 test("WebGPU request falls back deterministically when the runtime has no GPU", async () => {
   assert.equal(heatFieldWebGpuAvailable(), false);
   const packed = packHeatPoints(densePoints(50));
-  const result = await buildPackedHeat(packed, [[49.8, 13.9], [50.4, 14.9]], {
+  const result = await buildPackedHeat(packed, [{ lat: 49.8, lng: 13.9 }, { lat: 50.4, lng: 14.9 }], {
     mode: "heatmap",
     backend: "webgpu",
     cols: 48,

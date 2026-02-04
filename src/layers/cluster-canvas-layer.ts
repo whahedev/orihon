@@ -106,7 +106,7 @@ export class ClusterCanvasLayer extends Layer {
     const hit = this.queryAt(point, options.tolerance);
     return hit ? {
       layer: this,
-      latlng: latLng([hit.lat, hit.lng]),
+      latlng: latLng({ lat: hit.lat, lng: hit.lng }),
       source: "cluster",
       id: hit.key,
       feature: hit

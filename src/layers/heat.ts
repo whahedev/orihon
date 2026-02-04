@@ -1,6 +1,6 @@
 import { createEl, listen, listenTap } from "../dom.js";
 import { cameraWarpCss } from "../camera.js";
-import { TILE_SIZE, bounds, projectMercator01, unproject, type LatLngLike, type Point } from "../geo.js";
+import { TILE_SIZE, bounds, projectMercator01, unproject, type LatLngLike, type LatLngBoundsLike, type Point } from "../geo.js";
 import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions, TooltipOptions } from "../overlays/div-overlay.js";
@@ -635,10 +635,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
       mode: this.options.mode,
       backend: this.options.backend
     };
-    const serialBounds: [[number, number], [number, number]] = [
-      [area.south, area.west],
-      [area.north, area.east]
-    ];
+    const serialBounds = { south: area.south, west: area.west, north: area.north, east: area.east };
     let result = this.options.worker
       ? await this.#buildWithWorker(serialBounds, pipelineOptions)
       : null;
@@ -656,7 +653,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
   }
 
   async #buildWithWorker(
-    bounds: [[number, number], [number, number]],
+    bounds: LatLngBoundsLike,
     options: HeatOptions
   ): Promise<HeatResult | null> {
     const worker = this.#ensureWorker();
@@ -830,7 +827,8 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
       ctx.strokeStyle = stroke;
       ctx.beginPath();
       for (let i = 0; i < ring.coordinates.length; i++) {
-        const p = this.map.latLngToContainerPoint(ring.coordinates[i] as LatLngLike);
+        const [lat, lng] = ring.coordinates[i];
+        const p = this.map.latLngToContainerPoint({ lat, lng });
         interactionPoints.push({ x: p.x, y: p.y });
         const point = { x: p.x + offsetX, y: p.y + offsetY };
         if (i === 0) ctx.moveTo(point.x, point.y);
@@ -1065,12 +1063,12 @@ export function heatLayer(
   return new HeatLayer(points, options);
 }
 
-function fieldCorner(field: HeatGrid, x: 0 | 1, y: 0 | 1): [number, number] {
+function fieldCorner(field: HeatGrid, x: 0 | 1, y: 0 | 1): LatLngLike {
   const point = unproject([
     (field.westMerc + field.widthMerc * x) * TILE_SIZE,
     (field.northMerc + field.heightMerc * y) * TILE_SIZE
   ], 0);
-  return [point.lat, point.lng];
+  return point;
 }
 
 function projectWidth(west: number, east: number): number {

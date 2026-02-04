@@ -342,7 +342,7 @@ function createFakeMap(zoom = 8) {
     container = new FakeElement("div");
     panes = { marker: new FakeElement("div"), overlay: new FakeElement("div") };
     crs = { code: "EPSG:3857" };
-    getBounds() { return [[-85, -180], [85, 180]]; }
+    getBounds() { return [({ lat: -85, lng: -180 }), ({ lat: 85, lng: 180 })]; }
     getPane(name) { return this.panes[name] || this.panes.overlay; }
     latLngToLayerPoint(value) {
       const lat = Array.isArray(value) ? value[0] : value.lat;
@@ -385,7 +385,7 @@ function addObjectsInChunks(manager, count, chunkSize = 25_000) {
     for (let i = start; i < end; i++) {
       chunk[i - start] = {
         id: i,
-        coordinates: [55 + (i % 1000) * 0.00001, 37 + Math.floor(i / 1000) * 0.00001]
+        coordinates: ({ lat: 55 + (i % 1000) * 0.00001, lng: 37 + Math.floor(i / 1000) * 0.00001 })
       };
     }
     manager.add(chunk);
@@ -399,7 +399,7 @@ function addTemporalObjectsInChunks(manager, count, chunkSize = 25_000) {
     for (let i = start; i < end; i++) {
       chunk[i - start] = {
         id: i,
-        coordinates: [55 + (i % 1000) * 0.00001, 37 + Math.floor(i / 1000) * 0.00001],
+        coordinates: ({ lat: 55 + (i % 1000) * 0.00001, lng: 37 + Math.floor(i / 1000) * 0.00001 }),
         properties: { time: i % 10_000 }
       };
     }

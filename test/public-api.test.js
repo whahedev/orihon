@@ -81,7 +81,7 @@ test("public API exports the complete geometry toolkit", () => {
   assert.equal("latLngBounds" in Orihon, false);
   assert.equal("latLngBounds" in Standard, false);
   assert.equal("latLngBounds" in Geo, false);
-  const area = Orihon.bounds([[52, 13], [53, 14], [51, 15]]);
+  const area = Orihon.bounds([{ lat: 52, lng: 13 }, { lat: 53, lng: 14 }, { lat: 51, lng: 15 }]);
   assert.equal(area.toBBoxString(), "13,51,15,53");
   assert.equal(Orihon.bounds(area), area);
   assert.equal(Orihon.bounds(area, { south: 50, west: 12, north: 54, east: 16 }).toBBoxString(), "12,50,16,54");
@@ -130,9 +130,9 @@ test("public API exports ObjectManager state and style types", () => {
   assert.equal("canvasBaseLayer" in Standard, false);
   assert.ok(Orihon.icon({ content: "A" }) instanceof Orihon.DivIcon);
   assert.ok(Orihon.icon({ iconUrl: "marker.png" }) instanceof Orihon.Icon);
-  assert.ok(Orihon.objectManager({ points: [[1, 2]], renderer: "svg" }) instanceof Orihon.MarkerCollection);
+  assert.ok(Orihon.objectManager({ points: [{ lat: 1, lng: 2 }], renderer: "svg" }) instanceof Orihon.MarkerCollection);
   assert.ok(Orihon.objectManager({ loader: async () => [] }) instanceof Orihon.RemoteObjectManager);
-  assert.ok(Orihon.searchProvider([{ name: "A", center: [1, 2] }]) instanceof Orihon.SearchProvider);
+  assert.ok(Orihon.searchProvider([{ name: "A", center: { lat: 1, lng: 2 } }]) instanceof Orihon.SearchProvider);
   assert.ok(Orihon.OBJECT_MANAGER_PALETTE);
   const manager = Orihon.objectManager();
   assert.equal(typeof manager.setObjectState, "function");

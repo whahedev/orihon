@@ -160,7 +160,7 @@ export class WebGLPolygonBatch extends Layer<Required<WebGLPolygonBatchOptions>>
       if (inHole) continue;
       return {
         layer: this,
-        latlng: latLng([ll.lat, ll.lng]),
+        latlng: latLng({ lat: ll.lat, lng: ll.lng }),
         source: "webgl",
         index: i,
         id: polygon.id ?? undefined,
@@ -214,7 +214,7 @@ export class WebGLPolygonBatch extends Layer<Required<WebGLPolygonBatchOptions>>
       for (let r = 0; r < polygon.rings.length; r++) {
         const ring = polygon.rings[r];
         for (let i = 0; i < ring.length; i += 2) {
-          const pt = map.latLngToContainerPoint([ring[i], ring[i + 1]]);
+          const pt = map.latLngToContainerPoint({ lat: ring[i], lng: ring[i + 1] });
           if (i === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);
         }

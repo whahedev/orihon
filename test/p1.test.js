@@ -28,7 +28,7 @@ test("map.query walks panes and layers from topmost to bottom", () => {
     name,
     options: { pane: name === "marker" ? "marker" : "overlay" },
     getPane: () => pane,
-    queryHit() { return { layer: this, latlng: latLng([1, 2]), source: "dom", id: name }; }
+    queryHit() { return { layer: this, latlng: latLng({ lat: 1, lng: 2 }), source: "dom", id: name }; }
   });
   const bottom = makeLayer("bottom", overlay);
   const topInOverlay = makeLayer("top-overlay", overlay);
@@ -73,7 +73,7 @@ test("canvas GeoJSON hit testing keeps the source feature", () => {
   batch.map = {
     crs: { code: "Simple" },
     latLngToContainerPoint: (value) => new Point(value[1] ?? value.lng, value[0] ?? value.lat),
-    containerPointToLatLng: (value) => latLng([value.y, value.x])
+    containerPointToLatLng: (value) => latLng({ lat: value.y, lng: value.x })
   };
   const hit = batch.queryHit(new Point(5, 5), { tolerance: 0, layers: [batch], pane: "", limit: 1 });
   assert.equal(batch.options.interactive, true);

@@ -24,7 +24,7 @@ test("projection round trips deterministic fuzz coordinates", () => {
     const lat = random() * 220 - 110;
     const lng = random() * 2160 - 1080;
     const zoom = random() * 24;
-    const projected = project([lat, lng], zoom);
+    const projected = project({ lat: lat, lng: lng }, zoom);
     const restored = unproject(projected, zoom);
 
     assert.equal(Number.isFinite(projected.x), true);
@@ -40,15 +40,15 @@ test("distance and bounds invariants survive coordinate fuzzing", () => {
   for (let index = 0; index < 10_000; index += 1) {
     const a = [random() * 170 - 85, random() * 360 - 180];
     const b = [random() * 170 - 85, random() * 360 - 180];
-    const ab = distance(a, b);
-    const ba = distance(b, a);
-    const area = bounds(a, b);
+    const ab = distance({ lat: a[0], lng: a[1] }, { lat: b[0], lng: b[1] });
+    const ba = distance({ lat: b[0], lng: b[1] }, { lat: a[0], lng: a[1] });
+    const area = bounds({ lat: a[0], lng: a[1] }, { lat: b[0], lng: b[1] });
 
     assert.equal(Number.isFinite(ab), true);
     assert.ok(ab >= 0);
     assert.ok(Math.abs(ab - ba) < 1e-7);
-    assert.equal(area.contains(a), true);
-    assert.equal(area.contains(b), true);
+    assert.equal(area.contains({ lat: a[0], lng: a[1] }), true);
+    assert.equal(area.contains({ lat: b[0], lng: b[1] }), true);
     assert.ok(wrapLng(a[1]) >= -180 && wrapLng(a[1]) <= 180);
   }
 });

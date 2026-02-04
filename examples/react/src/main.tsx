@@ -29,10 +29,7 @@ const objects = Array.from({ length: 100 }, (_, id) => {
   const radius = 0.004 + rand() * rand() * 0.035;
   return {
     id,
-    coordinates: [
-      hub[0] + Math.cos(angle) * radius,
-      hub[1] + Math.sin(angle) * radius * 1.4
-    ] as [number, number]
+    coordinates: ({ lat: hub[0] + Math.cos(angle) * radius, lng: hub[1] + Math.sin(angle) * radius * 1.4 }) as [number, number]
   };
 });
 

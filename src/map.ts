@@ -54,7 +54,7 @@ type ResolvedMapOptions = Required<Omit<MapOptions, "behaviors" | "maxBounds" | 
 };
 
 const DEFAULTS: ResolvedMapOptions = {
-  center: [0, 0],
+  center: { lat: 0, lng: 0 },
   zoom: 2,
   minZoom: 0,
   maxZoom: 19,
@@ -544,10 +544,7 @@ export class Orihon extends Evented {
       if (!this._animationActive || this._destroyed) return;
       const progress = Math.min(1, (now - startTime) / duration);
       const eased = ease(progress);
-      this.#applyView([
-        startCenter.lat + (targetCenter.lat - startCenter.lat) * eased,
-        startCenter.lng + (targetCenter.lng - startCenter.lng) * eased
-      ], startZoom + (targetZoom - startZoom) * eased);
+      this.#applyView({ lat: startCenter.lat + (targetCenter.lat - startCenter.lat) * eased, lng: startCenter.lng + (targetCenter.lng - startCenter.lng) * eased }, startZoom + (targetZoom - startZoom) * eased);
       if (progress < 1) {
         this.#scheduleAnimation(frame);
         return;
@@ -922,8 +919,8 @@ export class Orihon extends Evented {
 
   fitWorld(options: { padding?: number; animate?: boolean; duration?: number } = {}): this {
     return this.fitBounds(this.crs.code === "Simple"
-      ? this.options.maxBounds ?? [[0, 0], [TILE_SIZE, TILE_SIZE]]
-      : [[-85.0511287798066, -180], [85.0511287798066, 180]], options);
+      ? this.options.maxBounds ?? [{ lat: 0, lng: 0 }, { lat: TILE_SIZE, lng: TILE_SIZE }]
+      : [{ lat: -85.0511287798066, lng: -180 }, { lat: 85.0511287798066, lng: 180 }], options);
   }
 
   flyTo(center: LatLngLike, zoom = this.zoom, options: { duration?: number } = {}): this {
@@ -959,7 +956,7 @@ export class Orihon extends Evented {
   getBounds(): LatLngBounds {
     const northWest = this.containerPointToLatLng([0, 0]);
     const southEast = this.containerPointToLatLng([this.size.width, this.size.height]);
-    return bounds([southEast.lat, northWest.lng], [northWest.lat, southEast.lng]);
+    return bounds({ lat: southEast.lat, lng: northWest.lng }, { lat: northWest.lat, lng: southEast.lng });
   }
 
   #zoomForBounds(target: LatLngBounds, padding: number): number {

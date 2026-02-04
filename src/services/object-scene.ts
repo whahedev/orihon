@@ -534,8 +534,8 @@ export class ObjectSceneController {
     const candidates: LabelCandidate[] = [];
     for (const anchor of this.labelAnchors) {
       const screen = map.latLngToContainerPoint
-        ? map.latLngToContainerPoint([anchor.lat, anchor.lng])
-        : map.latLngToLayerPoint([anchor.lat, anchor.lng]);
+        ? map.latLngToContainerPoint({ lat: anchor.lat, lng: anchor.lng })
+        : map.latLngToLayerPoint({ lat: anchor.lat, lng: anchor.lng });
       if (
         screen.x < -pad ||
         screen.y < -pad ||

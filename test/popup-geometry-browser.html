@@ -34,14 +34,14 @@
       rectangle
     } from "../dist/index.js";
 
-    const map = createMap("map", { center: [0, 0], zoom: 4, controls: false });
+    const map = createMap("map", { center: ({ lat: 0, lng: 0 }), zoom: 4, controls: false });
     const cases = [
-      ["marker", marker([10, -20], { title: "Marker" }), "el"],
-      ["circleMarker", circleMarker([10, 0], { radius: 18, fill: "#7c3aed" }), "path"],
-      ["polyline", polyline([[15, 20], [5, 20]], { strokeWidth: 8 }), "path"],
-      ["polygon", polygon([[-5, -25], [-15, -25], [-15, -15], [-5, -15]], { fillOpacity: 0.3 }), "path"],
-      ["rectangle", rectangle([[-15, -5], [-5, 5]], { fillOpacity: 0.3 }), "path"],
-      ["circle", circle([-10, 20], 300_000, { geodesic: true }), "path"]
+      ["marker", marker(({ lat: 10, lng: -20 }), { title: "Marker" }), "el"],
+      ["circleMarker", circleMarker(({ lat: 10, lng: 0 }), { radius: 18, fill: "#7c3aed" }), "path"],
+      ["polyline", polyline([({ lat: 15, lng: 20 }), ({ lat: 5, lng: 20 })], { strokeWidth: 8 }), "path"],
+      ["polygon", polygon([({ lat: -5, lng: -25 }), ({ lat: -15, lng: -25 }), ({ lat: -15, lng: -15 }), ({ lat: -5, lng: -15 })], { fillOpacity: 0.3 }), "path"],
+      ["rectangle", rectangle([({ lat: -15, lng: -5 }), ({ lat: -5, lng: 5 })], { fillOpacity: 0.3 }), "path"],
+      ["circle", circle(({ lat: -10, lng: 20 }), 300_000, { geodesic: true }), "path"]
     ];
 
     for (const [name, layer, targetProperty] of cases) {
@@ -57,14 +57,14 @@
     globalThis.popupGeometryTargets = {
       // Tip sits on the latlng; click into the pin body so the hit is not on the edge.
       marker: (() => {
-        const tip = map.latLngToContainerPoint([10, -20]);
+        const tip = map.latLngToContainerPoint(({ lat: 10, lng: -20 }));
         return { x: tip.x, y: tip.y - 14 };
       })(),
-      circleMarker: map.latLngToContainerPoint([10, 0]),
-      polyline: map.latLngToContainerPoint([10, 20]),
-      polygon: map.latLngToContainerPoint([-10, -20]),
-      rectangle: map.latLngToContainerPoint([-10, 0]),
-      circle: map.latLngToContainerPoint([-10, 20])
+      circleMarker: map.latLngToContainerPoint(({ lat: 10, lng: 0 })),
+      polyline: map.latLngToContainerPoint(({ lat: 10, lng: 20 })),
+      polygon: map.latLngToContainerPoint(({ lat: -10, lng: -20 })),
+      rectangle: map.latLngToContainerPoint(({ lat: -10, lng: 0 })),
+      circle: map.latLngToContainerPoint(({ lat: -10, lng: 20 }))
     };
     document.body.dataset.state = "ready";
     document.getElementById("result").textContent = JSON.stringify(cases.map(([name]) => name));

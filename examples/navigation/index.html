@@ -414,6 +414,10 @@
     </section>
 
     <script type="module">
+// Demo datasets use latitude-first pairs internally; name coordinates at the API boundary.
+function mapPosition(value) { return Array.isArray(value) ? { lat: value[0], lng: value[1] } : value; }
+function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] === "number" ? mapPosition(value) : value.map(mapPositions)) : value; }
+
       const ORIHON_CDN =
         "https://cdn.jsdelivr.net/npm/orihon@1.0.5/dist/orihon.esm.js";
       const ORIHON_CDN_CSS =
@@ -483,14 +487,14 @@
 
       function formatLatLng(latlng) {
         const ll = Array.isArray(latlng)
-          ? { lat: latlng[0], lng: latlng[1] }
+          ? latlng
           : latlng;
         return `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
       }
 
       function toLonLat(point) {
         const ll = Array.isArray(point)
-          ? { lat: point[0], lng: point[1] }
+          ? point
           : point.latlng
             ? Array.isArray(point.latlng)
               ? { lat: point.latlng[0], lng: point.latlng[1] }
@@ -623,10 +627,7 @@
               routes.push({
                 id: `${profile.id}-${index}`,
                 name,
-                coordinates: route.geometry.coordinates.map(([lon, lat]) => [
-                  lat,
-                  lon
-                ]),
+                coordinates: route.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
                 distance: route.distance,
                 duration,
                 properties: {
@@ -665,7 +666,7 @@
       } = await loadOrihon();
 
       const map = createMap("map", {
-        center: DEMO_A,
+        center: { lat: DEMO_A[0], lng: DEMO_A[1] },
         zoom: 12,
         locale: "ru",
         ariaLabel: "Навигация Orihon"
@@ -803,7 +804,7 @@
         setHint("Маршруты строятся…", true);
 
         try {
-          const routes = await router.route([a, b]);
+          const routes = await router.route([mapPosition(a), mapPosition(b)]);
           if (!routes.length) throw new Error("Нет маршрутов");
 
           renderRouteList(routes);
@@ -811,7 +812,7 @@
           setHint("Выберите вариант в списке или кликните линию на карте.", false);
 
           if (typeof map.fitBounds === "function" && routes[0].coordinates?.length) {
-            map.fitBounds(routes[0].coordinates, { padding: 56 });
+            map.fitBounds(mapPositions(routes[0].coordinates), { padding: 56 });
           }
         } catch (error) {
           const message =
@@ -823,7 +824,7 @@
       }
 
       function placePoint(latlng, role) {
-        const pin = marker(latlng, {
+        const pin = marker(mapPosition(latlng), {
           title: role === "A" ? "A · старт" : "B · финиш"
         })
           .bindPopup(role === "A" ? "A · старт" : "B · финиш")

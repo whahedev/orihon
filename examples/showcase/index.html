@@ -422,6 +422,10 @@
 
     <!-- EMBED:showcase-app -->
     <script type="module">
+// Demo datasets use latitude-first pairs internally; name coordinates at the API boundary.
+function mapPosition(value) { return Array.isArray(value) ? { lat: value[0], lng: value[1] } : value; }
+function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] === "number" ? mapPosition(value) : value.map(mapPositions)) : value; }
+
 const HEAT_GRADIENT = {
   0.0: "rgba(0,0,255,0)",
   0.15: "blue",
@@ -432,14 +436,14 @@ const HEAT_GRADIENT = {
   1.0: "red"
 };
 
-const EUROPE = { center: [50.1, 10.5], zoom: 5 };
-const METRO = { center: [52.52, 13.405], zoom: 11 };
-const WIDE = { center: [48.5, 8.5], zoom: 4 };
+const EUROPE = { center: ({ lat: 50.1, lng: 10.5 }), zoom: 5 };
+const METRO = { center: ({ lat: 52.52, lng: 13.405 }), zoom: 11 };
+const WIDE = { center: ({ lat: 48.5, lng: 8.5 }), zoom: 4 };
 
 const SCENARIOS = {
   vehicles: {
     copy: "<strong>City fleet</strong> · 100,000 vehicles",
-    view: { center: [50.8, 8.2], zoom: 6 },
+    view: { center: ({ lat: 50.8, lng: 8.2 }), zoom: 6 },
     count: 100_000
   },
   iot: {
@@ -721,10 +725,10 @@ async function loadCore(map) {
   clearOverlayLayers();
   showAdvancedChrome(false);
   els.heatToggle.classList.remove("is-on");
-  map.setView(EUROPE.center, EUROPE.zoom);
-  track(marker(EUROPE.center, { title: "Core" }).bindPopup("Core surface · map + tiles").addTo(map));
-  track(marker([48.8566, 2.3522]).bindPopup("Paris").addTo(map));
-  track(marker([41.0082, 28.9784]).bindPopup("Istanbul").addTo(map));
+  map.setView(mapPosition(EUROPE.center), EUROPE.zoom);
+  track(marker(mapPosition(EUROPE.center), { title: "Core" }).bindPopup("Core surface · map + tiles").addTo(map));
+  track(marker(({ lat: 48.8566, lng: 2.3522 })).bindPopup("Paris").addTo(map));
+  track(marker(({ lat: 41.0082, lng: 28.9784 })).bindPopup("Istanbul").addTo(map));
   setObjectMetrics(3, "dom");
   els.copy.innerHTML = "<strong>Core</strong> · map, tiles, events";
   setStatus("Core surface ready", "ok");
@@ -734,24 +738,24 @@ async function loadStandard(map) {
   clearOverlayLayers();
   showAdvancedChrome(false);
   els.heatToggle.classList.remove("is-on");
-  map.setView(METRO.center, 11);
+  map.setView(mapPosition(METRO.center), 11);
   const group = featureGroup([
-    marker(METRO.center).bindPopup("Standard · markers + vectors"),
+    marker(mapPosition(METRO.center)).bindPopup("Standard · markers + vectors"),
     polyline(
-      [
-        [52.54, 13.35],
-        [52.52, 13.405],
-        [52.49, 13.45]
-      ],
+      mapPositions([
+        ({ lat: 52.54, lng: 13.35 }),
+        ({ lat: 52.52, lng: 13.405 }),
+        ({ lat: 52.49, lng: 13.45 })
+      ]),
       { stroke: "#0f766e", strokeWidth: 4, strokeOpacity: 0.9 }
     ),
     polygon(
-      [
-        [52.53, 13.39],
-        [52.53, 13.43],
-        [52.505, 13.43],
-        [52.505, 13.39]
-      ],
+      mapPositions([
+        ({ lat: 52.53, lng: 13.39 }),
+        ({ lat: 52.53, lng: 13.43 }),
+        ({ lat: 52.505, lng: 13.43 }),
+        ({ lat: 52.505, lng: 13.39 })
+      ]),
       { stroke: "#0f766e", fill: "#0f766e", fillOpacity: 0.18, strokeWidth: 2 }
     ),
     geoJSON({
@@ -776,7 +780,7 @@ async function loadStandard(map) {
         }
       ]
     }, {
-      pointToLayer: (_feature, latlng) => marker(latlng),
+      pointToLayer: (_feature, latlng) => marker(mapPosition(latlng)),
       style: () => ({ stroke: "#b45309", strokeWidth: 3 })
     })
   ]).addTo(map);
@@ -800,7 +804,7 @@ async function loadVehicles(map) {
   });
   // Mutable working copy for drift.
   const live = points.map((pair) => [pair[0], pair[1]]);
-  const layer = webglPointLayer(live, {
+  const layer = webglPointLayer(mapPositions(live), {
     pointSize: 2.4,
     color: "#0f766e",
     opacity: 0.72,
@@ -824,7 +828,7 @@ async function loadVehicles(map) {
       pts[idx][0] += (rand() - 0.5) * 0.01;
       pts[idx][1] += (rand() - 0.5) * 0.014;
     }
-    state.pointsLayer.setData(pts);
+    state.pointsLayer.setData(mapPositions(pts));
   });
 }
 
@@ -839,7 +843,7 @@ async function loadIot(map) {
       scatter: { lat0: 52.35, latSpan: 0.35, lng0: 13.15, lngSpan: 0.55 }
     });
   });
-  const layer = webglPointLayer(points, {
+  const layer = webglPointLayer(mapPositions(points), {
     pointSize: 1.6,
     color: "#0369a1",
     opacity: 0.55,
@@ -862,7 +866,7 @@ async function loadIot(map) {
       pulse[i][0] = base[i][0] + jitter;
       pulse[i][1] = base[i][1] + jitter;
     }
-    state.pointsLayer.setData(pulse);
+    state.pointsLayer.setData(mapPositions(pulse));
   });
 }
 
@@ -889,7 +893,7 @@ async function loadFleet(map) {
       (a[0] + b[0]) / 2 + (rand() - 0.5) * 0.03,
       (a[1] + b[1]) / 2 + (rand() - 0.5) * 0.04
     ];
-    const line = polyline([a, mid, b], {
+    const line = polyline(mapPositions([a, mid, b]), {
       stroke: i % 3 ? "#0f766e" : "#b45309",
       strokeWidth: 2,
       strokeOpacity: 0.45
@@ -898,7 +902,7 @@ async function loadFleet(map) {
     routes.push(line);
   }
 
-  const layer = webglPointLayer(live, {
+  const layer = webglPointLayer(mapPositions(live), {
     pointSize: 3.2,
     color: "#c2410c",
     opacity: 0.8,
@@ -923,7 +927,7 @@ async function loadFleet(map) {
       if (pts[i][0] > 52.62 || pts[i][0] < 52.42) h[i] = Math.PI - h[i];
       if (pts[i][1] > 13.55 || pts[i][1] < 13.25) h[i] = -h[i];
     }
-    state.pointsLayer.setData(pts);
+    state.pointsLayer.setData(mapPositions(pts));
   });
 }
 
@@ -971,7 +975,7 @@ async function loadAircraft(map) {
   const headings = Float32Array.from({ length: live.length }, () => rand() * Math.PI * 2);
   const speeds = Float32Array.from({ length: live.length }, () => 0.00004 + rand() * 0.00012);
 
-  const layer = webglPointLayer(live, {
+  const layer = webglPointLayer(mapPositions(live), {
     pointSize: 2.8,
     color: "#1d4ed8",
     opacity: 0.78,
@@ -997,7 +1001,7 @@ async function loadAircraft(map) {
       if (pts[i][1] > 40) pts[i][1] = -12;
       if (pts[i][1] < -15) pts[i][1] = 38;
     }
-    state.pointsLayer.setData(pts);
+    state.pointsLayer.setData(mapPositions(pts));
   });
 }
 
@@ -1039,7 +1043,7 @@ async function loadIncidents(map) {
 async function loadScenario(map, scenario) {
   els.heatToggle.classList.remove("is-on");
   const meta = SCENARIOS[scenario];
-  map.setView(meta.view.center, meta.view.zoom);
+  map.setView(mapPosition(meta.view.center), meta.view.zoom);
   els.copy.innerHTML = meta.copy;
   if (scenario === "vehicles") await loadVehicles(map);
   else if (scenario === "iot") await loadIot(map);

@@ -218,8 +218,8 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
 
     if (hasGradient) {
       for (let i = 1; i < path.lat.length; i++) {
-        const a = this.map.latLngToContainerPoint([path.lat[i - 1], path.lng[i - 1]]);
-        const b = this.map.latLngToContainerPoint([path.lat[i], path.lng[i]]);
+        const a = this.map.latLngToContainerPoint({ lat: path.lat[i - 1], lng: path.lng[i - 1] });
+        const b = this.map.latLngToContainerPoint({ lat: path.lat[i], lng: path.lng[i] });
         const t = path.distances[i] / total;
         ctx.strokeStyle = sampleGradient(path.style.gradient!, t);
         ctx.globalAlpha = path.style.opacity;
@@ -242,7 +242,7 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
 
     ctx.beginPath();
     for (let i = 0; i < path.lat.length; i++) {
-      const pt = this.map.latLngToContainerPoint([path.lat[i], path.lng[i]]);
+      const pt = this.map.latLngToContainerPoint({ lat: path.lat[i], lng: path.lng[i] });
       if (i === 0) ctx.moveTo(pt.x, pt.y);
       else ctx.lineTo(pt.x, pt.y);
     }
@@ -267,8 +267,8 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
     if (!this.map || path.lat.length < 2) return null;
     let best = Infinity;
     for (let i = 1; i < path.lat.length; i++) {
-      const a = this.map.latLngToContainerPoint([path.lat[i - 1], path.lng[i - 1]]);
-      const b = this.map.latLngToContainerPoint([path.lat[i], path.lng[i]]);
+      const a = this.map.latLngToContainerPoint({ lat: path.lat[i - 1], lng: path.lng[i - 1] });
+      const b = this.map.latLngToContainerPoint({ lat: path.lat[i], lng: path.lng[i] });
       const dist = distanceToSegment(point.x, point.y, a.x, a.y, b.x, b.y);
       if (dist < best) best = dist;
     }

@@ -100,7 +100,7 @@ test("orihon/easy accepts any ready Layer as its basemap", () => {
 });
 
 test("orihon/easy addMarker composes marker, popup and tooltip", () => {
-  const map = createMap(container(), { center: [55.75, 37.62], zoom: 10 });
+  const map = createMap(container(), { center: { lat: 55.75, lng: 37.62 }, zoom: 10 });
   const layer = map.addMarker({
     position: { lat: 55.751244, lng: 37.618423 },
     title: "Москва",
@@ -114,11 +114,11 @@ test("orihon/easy addMarker composes marker, popup and tooltip", () => {
   assert.ok(layer.getPopup());
   assert.ok(layer.getTooltip());
 
-  const positional = map.addMarker([55.76, 37.63], { popup: "Positional overload" });
+  const positional = map.addMarker({ lat: 55.76, lng: 37.63 }, { popup: "Positional overload" });
   assert.ok(positional instanceof Marker);
   assert.ok(positional.getPopup());
 
-  const detached = marker([55.77, 37.64]);
+  const detached = marker({ lat: 55.77, lng: 37.64 });
   assert.equal(map.add(detached), map);
   assert.equal(map.hasLayer(detached), true);
 
@@ -126,11 +126,11 @@ test("orihon/easy addMarker composes marker, popup and tooltip", () => {
 });
 
 test("orihon/easy map-centric addX methods return regular layers", () => {
-  const map = createMap(container(), { center: [52.52, 13.405], zoom: 10 });
+  const map = createMap(container(), { center: { lat: 52.52, lng: 13.405 }, zoom: 10 });
   const tiles = map.addTileLayer("https://example.test/{z}/{x}/{y}.png");
-  const line = map.addPolyline([[52.50, 13.38], [52.54, 13.43]], { stroke: "#2563eb" });
+  const line = map.addPolyline([{ lat: 52.50, lng: 13.38 }, { lat: 52.54, lng: 13.43 }], { stroke: "#2563eb" });
   const area = map.addPolygon([
-    [52.50, 13.38], [52.50, 13.43], [52.54, 13.43], [52.50, 13.38]
+    { lat: 52.50, lng: 13.38 }, { lat: 52.50, lng: 13.43 }, { lat: 52.54, lng: 13.43 }, { lat: 52.50, lng: 13.38 }
   ], { fill: "#2563eb", fillOpacity: 0.2 });
   const data = map.addGeoJSON({
     type: "Feature",
@@ -148,7 +148,7 @@ test("orihon/easy map-centric addX methods return regular layers", () => {
 });
 
 test("orihon/easy map.add accepts declarative layer descriptions", () => {
-  const map = createMap(container(), { center: [55.7558, 37.6176], zoom: 10 });
+  const map = createMap(container(), { center: { lat: 55.7558, lng: 37.6176 }, zoom: 10 });
   const point = map.add({
     type: "marker",
     position: { lng: 37.6176, lat: 55.7558 },
@@ -165,7 +165,7 @@ test("orihon/easy map.add accepts declarative layer descriptions", () => {
   const area = map.add({
     type: "polygon",
     coordinates: [
-      [55.74, 37.59], [55.74, 37.66], [55.78, 37.66], [55.74, 37.59]
+      { lat: 55.74, lng: 37.59 }, { lat: 55.74, lng: 37.66 }, { lat: 55.78, lng: 37.66 }, { lat: 55.74, lng: 37.59 }
     ],
     style: { fill: "#2563eb", fillOpacity: 0.2 }
   });

@@ -162,7 +162,7 @@ export function createStraightLineRoutingProvider(): RoutingProvider {
       const end = coordinates[coordinates.length - 1];
       const alternative = [
         start,
-        latLng([(start.lat + end.lat) / 2 + 0.08, (start.lng + end.lng) / 2]),
+        latLng({ lat: (start.lat + end.lat) / 2 + 0.08, lng: (start.lng + end.lng) / 2 }),
         end
       ];
       const alternativeDistance = routeDistance(alternative);

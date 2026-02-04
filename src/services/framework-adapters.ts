@@ -40,10 +40,7 @@ export function defineOrihonElement(options: OrihonElementOptions = {}): CustomE
       if (!this.style.display) this.style.display = "block";
       if (!this.style.minHeight) this.style.minHeight = "320px";
       this.map = createMap(this, {
-        center: [
-          Number(this.getAttribute("lat") ?? 0),
-          Number(this.getAttribute("lng") ?? 0)
-        ],
+        center: { lat: Number(this.getAttribute("lat") ?? 0), lng: Number(this.getAttribute("lng") ?? 0) },
         zoom: Number(this.getAttribute("zoom") ?? 2),
         controls: this.getAttribute("controls") !== "false"
       });

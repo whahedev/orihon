@@ -238,8 +238,8 @@ test("all SVG geometry popups open from a pointer tap without a click event", as
     polyline([{ lat: 0, lng: -5 }, { lat: 0, lng: 5 }], { interactive: false }),
     polygon([{ lat: -5, lng: -5 }, { lat: -5, lng: 5 }, { lat: 5, lng: 5 }, { lat: 5, lng: -5 }], { interactive: false }),
     rectangle([{ lat: -4, lng: -4 }, { lat: 4, lng: 4 }], { interactive: false }),
-    circle({ lat: 0, lng: 0 }, 100_000, { interactive: false, geodesic: true }),
-    circleMarker({ lat: 0, lng: 0 }, { interactive: false, radius: 14 })
+    circle({ lat: 0, lng: 0 }, { radiusMeters: 100_000 }, { interactive: false, geodesic: true }),
+    circleMarker({ lat: 0, lng: 0 }, { interactive: false, radiusPixels: 14 })
   ];
 
   for (const [index, layer] of layers.entries()) {
@@ -284,7 +284,7 @@ test("bindTooltip enables interaction for an initially non-interactive SVG path"
 test("geodesic circle queryHit follows its projected ring at high latitude", () => {
   installDom();
   const map = createMap(new FakeElement("div"), { center: { lat: 70, lng: 0 }, zoom: 4, controls: false });
-  const layer = circle({ lat: 70, lng: 0 }, 500_000, {
+  const layer = circle({ lat: 70, lng: 0 }, { radiusMeters: 500_000 }, {
     fill: "#2563eb",
     fillOpacity: 0.2,
     geodesic: true
@@ -300,7 +300,7 @@ test("geodesic circle queryHit follows its projected ring at high latitude", () 
 test("an unfilled circle remains hittable across its interior", () => {
   installDom();
   const map = createMap(new FakeElement("div"), { center: { lat: 0, lng: 0 }, zoom: 4, controls: false });
-  const layer = circle({ lat: 0, lng: 0 }, 100_000).bindPopup("circle").addTo(map);
+  const layer = circle({ lat: 0, lng: 0 }, { radiusMeters: 100_000 }).bindPopup("circle").addTo(map);
   const center = map.latLngToContainerPoint({ lat: 0, lng: 0 });
 
   assert.equal(layer.options.fill, "none");

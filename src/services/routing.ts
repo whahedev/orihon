@@ -1,4 +1,5 @@
 import { FeatureGroup } from "../layer-group.js";
+import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { Polyline, polyline, type PathOptions } from "../layers/vector.js";
 import { LatLng, distance, latLng, type LatLngLike } from "../geo.js";
 
@@ -12,7 +13,8 @@ export interface RouteResult {
   name?: string;
   coordinates: LatLngLike[];
   distance?: number;
-  duration?: number;
+  /** Estimated travel time in milliseconds (convert provider seconds at the boundary). */
+  durationMs?: number;
   properties?: Record<string, unknown>;
 }
 
@@ -76,6 +78,10 @@ export class RoutingLayer extends FeatureGroup {
         signal: controller.signal
       });
       if (controller.signal.aborted) return [];
+      for (const route of result ?? []) {
+        rejectLegacyUnit(route, "duration", "durationMs");
+        if (route.durationMs !== undefined) nonNegativeFinite(route.durationMs, "durationMs");
+      }
       this.routes = result || [];
       this.selectedIndex = 0;
       this.#renderRoutes();
@@ -154,7 +160,7 @@ export function createStraightLineRoutingProvider(): RoutingProvider {
       name: "Direct",
       coordinates,
       distance: directDistance,
-      duration: directDistance / 13.9,
+      durationMs: directDistance / 13.9 * 1000,
       properties: { kind: "direct" }
     }];
     if (context.alternatives && coordinates.length >= 2) {
@@ -171,7 +177,7 @@ export function createStraightLineRoutingProvider(): RoutingProvider {
         name: "Alternative",
         coordinates: alternative,
         distance: alternativeDistance,
-        duration: alternativeDistance / 11.2,
+        durationMs: alternativeDistance / 11.2 * 1000,
         properties: { kind: "alternative" }
       });
     }

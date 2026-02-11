@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Breaking:** camera, motion, routing and trail time fields now use explicit millisecond names; camera and route seconds must be converted ×1000. Zero-duration object moves no longer fall back to 800 ms. Circles require `{ radiusMeters }` or `{ radiusMapUnits }`, pixel markers use `radiusPixels`, and Draw serializes the selected radius unit. ObjectManager's `clusterGridSize` / setter become `clusterRadiusPixels` / `setClusterRadiusPixels()`. Removed options and invalid units fail early. See [next-major migration](docs/MIGRATION-NEXT-MAJOR.md).
+
 - **Breaking:** geographic/CRS inputs now require `{ lat, lng }` or `LatLng`. Bare tuples are rejected at runtime and by TypeScript, including ObjectManager's mass-point path. GeoJSON keeps `[lng, lat]`; explicit `fromGeoJSONPosition()` and `toGeoJSONPosition()` converters bridge the formats. See [next-major migration](docs/MIGRATION-NEXT-MAJOR.md).
 
 - Geometry worker lifecycle: caller-owned pools are isolated from ObjectManager's internal shared worker, `destroy()` is terminal and rejects pending work with `AbortError`, and worker crashes, message deserialization failures, malformed responses and `postMessage` exceptions now reject affected operations with a contextual `GeometryWorkerError` instead of leaving promises pending. A failed worker is discarded and recreated on the next operation.

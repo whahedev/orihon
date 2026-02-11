@@ -3,7 +3,7 @@ import { destination, latLng, type LatLngLike, type PointLike } from "../geo.js"
 import { FeatureGroup, featureGroup } from "../layer-group.js";
 import type { Layer } from "../layer.js";
 import { Marker, marker } from "../layers/marker.js";
-import { Circle, Polygon, Polyline, circle, polygon, polyline, rectangle, type PathOptions } from "../layers/vector.js";
+import { Circle, Polygon, Polyline, circle, polygon, polyline, rectangle, type CircleRadius, type PathOptions } from "../layers/vector.js";
 import type { GeoJSONData, GeoJSONFeature, GeoJSONFeatureCollection, GeoJSONGeometry } from "../layers/geojson.js";
 import type { Orihon } from "../map.js";
 import { drawHandle, midpoint, type DrawHandle } from "./handles.js";
@@ -218,7 +218,9 @@ export class DrawHandler extends Evented {
     const end = this.#snap(this.#eventLatLng(event));
     const layer = this.mode === "rectangle"
       ? rectangle([start, end], this.options.guide)
-      : circle(start, this.map.distance(start, end), { ...this.options.guide, geodesic: true });
+      : circle(start, this.map.crs.code === "Simple"
+        ? { radiusMapUnits: this.map.distance(start, end) }
+        : { radiusMeters: this.map.distance(start, end) }, { ...this.options.guide, geodesic: true });
     this.dragStart = this.dragPoint = null;
     this.#complete(layer);
   }
@@ -325,20 +327,20 @@ export class DrawHandler extends Evented {
       const next = this.#snap(event.latlng as LatLngLike);
       layer.setLatLng(next);
       const edge = this.handles[1];
-      if (edge) edge.marker.setLatLng(destination(next, layer.getRadius(), 90));
+      if (edge) edge.marker.setLatLng(this.#circleEdge(layer));
       this.emit("editvertex", { layer, latlng: layer.getLatLng(), role: "center" });
     });
     centerHandle.marker.on("dragend", () => this.#finishEdit(layer));
     this.handles.push(centerHandle);
     centerHandle.marker.addTo(this.map);
 
-    const edgeHandle = drawHandle(destination(layer.getLatLng(), layer.getRadius(), 90), "midpoint", 0, 1);
+    const edgeHandle = drawHandle(this.#circleEdge(layer), "midpoint", 0, 1);
     edgeHandle.marker.on("drag", (event) => {
       const edge = this.#snap(event.latlng as LatLngLike);
-      const radius = Math.max(1, this.map!.distance(layer.getLatLng(), edge));
-      layer.setRadius(radius);
-      edgeHandle.marker.setLatLng(destination(layer.getLatLng(), radius, 90));
-      this.emit("editvertex", { layer, latlng: edge, role: "radius", radius });
+      const radius = Math.max(0, this.map!.distance(layer.getLatLng(), edge));
+      layer.setRadius(layer.getRadius().radiusMapUnits !== undefined ? { radiusMapUnits: radius } : { radiusMeters: radius });
+      edgeHandle.marker.setLatLng(this.#circleEdge(layer));
+      this.emit("editvertex", { layer, latlng: edge, role: "radius", ...layer.getRadius() });
     });
     edgeHandle.marker.on("dragend", () => this.#finishEdit(layer));
     this.handles.push(edgeHandle);
@@ -465,12 +467,20 @@ export class DrawHandler extends Evented {
     this.#clearHandles();
   }
 
+  #circleEdge(layer: Circle): LatLngLike {
+    const center = layer.getLatLng();
+    const radius = layer.getRadius();
+    return radius.radiusMapUnits !== undefined
+      ? { lat: center.lat, lng: center.lng + radius.radiusMapUnits }
+      : destination(center, radius.radiusMeters!, 90);
+  }
+
   #layerFeatures(layer: Layer): GeoJSONFeature[] {
     if (layer instanceof FeatureGroup) return layer.getLayers().flatMap((child) => this.#layerFeatures(child));
     if (layer instanceof Marker) return [this.#feature({ type: "Point", coordinates: this.#coordinate(layer.getLatLng()) })];
     if (layer instanceof Circle) return [this.#feature(
       { type: "Point", coordinates: this.#coordinate(layer.getLatLng()) },
-      { radius: layer.getRadius() }
+      { ...layer.getRadius() }
     )];
     if (layer instanceof Polygon) {
       const coordinates = layer.getLatLngs().map((ring) => {
@@ -508,8 +518,12 @@ export class DrawHandler extends Evented {
     const convert = (coordinate: number[]): LatLngLike => ({ lat: Number(coordinate[1]), lng: Number(coordinate[0]) });
     if (geometry.type === "Point") {
       const position = convert(geometry.coordinates);
-      const radius = Number(feature.properties?.radius);
-      this.featureGroup.addLayer(Number.isFinite(radius) && radius > 0 ? circle(position, radius, { geodesic: true }) : marker(position));
+      const properties = feature.properties ?? {};
+      if ("radius" in properties) throw new TypeError("Draw circle radius was removed. Use radiusMeters or radiusMapUnits.");
+      const hasRadius = "radiusMeters" in properties || "radiusMapUnits" in properties;
+      this.featureGroup.addLayer(hasRadius
+        ? circle(position, properties as unknown as CircleRadius, { geodesic: true })
+        : marker(position));
     } else if (geometry.type === "LineString") {
       this.featureGroup.addLayer(polyline(geometry.coordinates.map(convert)));
     } else if (geometry.type === "Polygon") {

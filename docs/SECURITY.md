@@ -106,7 +106,7 @@ Advanced networking APIs (`RemoteObjectManager`, search, routing, traffic, MVT p
 
 `RemoteObjectManager` aborts stale viewport requests when the view moves, so abandoned fetches do not apply late results.
 
-`decodeMVT` caps tile bytes (2 MiB), features (16384) and string length (8192) by default. `geoJSON({ maxFeatures })` and `objectManager({ maxObjects, maxVerticesPerGeometry })` are ingest limits for application / remote data. ObjectManager also clamps `style.trail.maxPoints` (512) and `maxAge` (24h). For untrusted bulk points prefer `{ maxObjects, sceneFeatures: false, styleByCategory: false }` plus `beginBulk()` / `endBulk()`.
+`decodeMVT` caps tile bytes (2 MiB), features (16384) and string length (8192) by default. `geoJSON({ maxFeatures })` and `objectManager({ maxObjects, maxVerticesPerGeometry })` are ingest limits for application / remote data. ObjectManager also clamps `style.trail.maxPoints` (512) and `maxAgeMs` (24h). For untrusted bulk points prefer `{ maxObjects, sceneFeatures: false, styleByCategory: false }` plus `beginBulk()` / `endBulk()`.
 
 ## Content Security Policy
 

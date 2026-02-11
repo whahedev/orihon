@@ -228,7 +228,7 @@ const map = createMap("map", { center: ({ lat: 52.52, lng: 13.405 }), zoom: 10 }
 const streets = tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 const places = featureGroup([
   marker(({ lat: 52.52, lng: 13.405 })).bindPopup("Berlin"),
-  circle(({ lat: 52.54, lng: 13.43 }), 750),
+  circle(({ lat: 52.54, lng: 13.43 }), { radiusMeters: 750 }),
   rectangle([({ lat: 52.49, lng: 13.35 }), ({ lat: 52.54, lng: 13.45 })])
 ]).addTo(map);
 
@@ -249,7 +249,7 @@ tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
 const manager = objectManager({
   clusterize: true,
-  clusterGridSize: 60,
+  clusterRadiusPixels: 60,
   clusterRenderer: "auto",
   layoutWorker: "auto"
 }).addTo(map);
@@ -362,7 +362,7 @@ manager.add([
     properties: { type: "truck", name: "Truck 42", heading: 90, timestamp: Date.now() }
   }
 ]);
-manager.updateObject("truck-42", { coordinates: ({ lat: 55.76, lng: 37.63 }) }, { animate: true, duration: 800 });
+manager.updateObject("truck-42", { coordinates: ({ lat: 55.76, lng: 37.63 }) }, { animate: true, durationMs: 800 });
 manager.search("truck 42", { limit: 10 });
 manager.setTimeRange(Date.now() - 3600_000, Date.now());
 ```
@@ -389,7 +389,7 @@ GeoJSON supports every standard geometry, polygon holes and the familiar callbac
 const data = geoJSON(featureCollection, {
   filter: (feature) => feature.properties?.visible !== false,
   style: (feature) => ({ stroke: feature.properties?.color }),
-  pointToLayer: (feature, position) => circleMarker(position, { radius: 7 }),
+  pointToLayer: (feature, position) => circleMarker(position, { radiusPixels: 7 }),
   onEachFeature: (feature, layer) => layer.bindPopup(feature.properties?.title)
 }).addTo(map);
 
@@ -419,7 +419,7 @@ await lines.addDataAsync(fileBlob, {
 
 `addDataAsync()` accepts parsed GeoJSON, raw JSON text/Blob, or an async stream. Its defaults are `chunkSize:5000`, `useWorker:true`, `yieldMode:"frame"` and a 256 MiB raw-input limit. If Blob workers are unavailable (for example because of CSP), parsing falls back to the main thread while ingestion remains chunked. `yieldMode:"task"` is useful before a map is attached or in a background import workflow.
 
-For write-once, non-interactive path sets at hundreds of thousands to millions of features, combine `addDataAsync()` with `renderer:"webgl"` and `retainFeatures:false`. This keeps only the packed path buffer; discarded features are intentionally unavailable through `toGeoJSON()` or later per-feature restyling. During continuous pan/zoom, the WebGL path batch camera-warps its last exact frame and throttles full GPU redraws; an exact frame is rendered after the camera settles. Direct `pathBatch({ mode:"uniform" })` users can tune `cameraRedrawInterval` (default 250 ms; `0` restores every-frame redraw) and `cameraSettleDelay` (default 120 ms).
+For write-once, non-interactive path sets at hundreds of thousands to millions of features, combine `addDataAsync()` with `renderer:"webgl"` and `retainFeatures:false`. This keeps only the packed path buffer; discarded features are intentionally unavailable through `toGeoJSON()` or later per-feature restyling. During continuous pan/zoom, the WebGL path batch camera-warps its last exact frame and throttles full GPU redraws; an exact frame is rendered after the camera settles. Direct `pathBatch({ mode:"uniform" })` users can tune `cameraRedrawIntervalMs` (default 250 ms; `0` restores every-frame redraw) and `cameraSettleDelayMs` (default 120 ms).
 
 WMS GetMap URLs are generated per tile with WMS 1.1.1 or 1.3.0 axis ordering and either `EPSG:3857` or `EPSG:4326` bounds:
 

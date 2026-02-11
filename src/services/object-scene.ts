@@ -8,6 +8,7 @@ import { ObjectIconAtlas, type ManagedIconOptions, type ManagedIconSource } from
 import { ObjectSearchIndex, type ObjectSearchOptions, type ObjectSearchResult } from "./object-search-index.js";
 import { ObjectTimeIndex, type ObjectTimeConfig } from "./object-time-index.js";
 import { ObjectTrailStore } from "./object-trail-store.js";
+import { nonNegativeFinite } from "../units.js";
 import {
   layoutObjectLabels,
   measureLabelText,
@@ -58,8 +59,8 @@ export interface ObjectMotionState {
   fromLng: number;
   toLat: number;
   toLng: number;
-  startTime: number;
-  duration: number;
+  startTimeMs: number;
+  durationMs: number;
 }
 
 export interface ObjectSceneOptions {
@@ -334,14 +335,15 @@ export class ObjectSceneController {
     fromLng: number,
     toLat: number,
     toLng: number,
-    duration: number
+    durationMs: number
   ): void {
+    nonNegativeFinite(durationMs, "durationMs");
     const now = performance.now();
     const existing = this.motions.get(id);
     let startLat = fromLat;
     let startLng = fromLng;
     if (existing) {
-      const t = Math.max(0, Math.min(1, (now - existing.startTime) / Math.max(existing.duration, 1)));
+      const t = existing.durationMs === 0 ? 1 : Math.max(0, Math.min(1, (now - existing.startTimeMs) / existing.durationMs));
       startLat = existing.fromLat + (existing.toLat - existing.fromLat) * t;
       startLng = existing.fromLng + (existing.toLng - existing.fromLng) * t;
     }
@@ -350,8 +352,8 @@ export class ObjectSceneController {
       fromLng: startLng,
       toLat,
       toLng,
-      startTime: now,
-      duration: Math.max(0, duration)
+      startTimeMs: now,
+      durationMs: Math.max(0, durationMs)
     });
     this.#ensureMotionLoop();
   }
@@ -360,7 +362,7 @@ export class ObjectSceneController {
     const motion = this.motions.get(id);
     if (!motion) return { lat: fallbackLat, lng: fallbackLng };
     const now = performance.now();
-    const t = Math.max(0, Math.min(1, (now - motion.startTime) / Math.max(motion.duration, 1)));
+    const t = motion.durationMs === 0 ? 1 : Math.max(0, Math.min(1, (now - motion.startTimeMs) / motion.durationMs));
     if (t >= 1) {
       this.motions.delete(id);
       return { lat: motion.toLat, lng: motion.toLng };
@@ -399,8 +401,8 @@ export class ObjectSceneController {
         lng: motion.toLng,
         prevLat: motion.fromLat,
         prevLng: motion.fromLng,
-        startTime: motion.startTime,
-        duration: motion.duration
+        startTimeMs: motion.startTimeMs,
+        durationMs: motion.durationMs
       };
       if (byId.has(id)) patch.rotation = byId.get(id);
       layer.patchById(id, patch);

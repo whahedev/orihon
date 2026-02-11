@@ -379,7 +379,7 @@
                   width: 2,
                   opacity: 0.45,
                   maxPoints: 35,
-                  maxAge: 120000
+                  maxAgeMs: 120000
                 }
               : null
         };
@@ -388,7 +388,7 @@
       let declutterOn = true;
       let manager = objectManager({
         clusterize: true,
-        clusterGridSize: 55,
+        clusterRadiusPixels: 55,
         clusterRenderer: "auto",
         webglThreshold: 20,
         declutter: true,
@@ -648,7 +648,7 @@
               properties: obj.properties
             });
           }
-          manager.updateObjects(updates, { animate: true, duration: 280 });
+          manager.updateObjects(updates, { animate: true, durationMs: 280 });
           if (editingId && String(editingId).startsWith("truck-")) fillPropsEditor(editingId);
         }, 280);
       });
@@ -986,7 +986,7 @@
               properties: obj.properties
             };
           }
-          manager.updateObjects(updates.filter(Boolean), { animate: true, duration });
+          manager.updateObjects(updates.filter(Boolean), { animate: true, durationMs: duration });
           lastMs = performance.now() - t0;
           ticks++;
           stressStatsEl.textContent =

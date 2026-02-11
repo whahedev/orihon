@@ -108,7 +108,7 @@ test("fractional zoomAround keeps anchor and marker/tile math glued", async () =
   });
   const ll = [55.76, 37.62];
   const pin = marker({ lat: ll[0], lng: ll[1] }, { shape: "circle", size: 16 }).addTo(map);
-  circleMarker({ lat: ll[0], lng: ll[1] }, { radius: 6 }).addTo(map);
+  circleMarker({ lat: ll[0], lng: ll[1] }, { radiusPixels: 6 }).addTo(map);
   const tiles = new TileLayer("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", {
     renderer: "dom",
     detectRetina: false

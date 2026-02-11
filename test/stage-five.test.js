@@ -206,8 +206,8 @@ test("GeoJSON canvas renderer still batches when requested", () => {
 
 test("WebGLPathBatch keeps vertex buffer large enough for many segments", () => {
   const batch = webglPathBatch({ stroke: "#0f766e", strokeWidth: 2 });
-  assert.equal(batch.options.cameraRedrawInterval, 250);
-  assert.equal(batch.options.cameraSettleDelay, 120);
+  assert.equal(batch.options.cameraRedrawIntervalMs, 250);
+  assert.equal(batch.options.cameraSettleDelayMs, 120);
   for (let i = 0; i < 200; i++) {
     batch.addPath(
       [
@@ -227,9 +227,9 @@ test("WebGLPathBatch keeps vertex buffer large enough for many segments", () => 
 });
 
 test("WebGLPathBatch camera redraw throttling can be disabled", () => {
-  const batch = webglPathBatch({ cameraRedrawInterval: 0, cameraSettleDelay: 0 });
-  assert.equal(batch.options.cameraRedrawInterval, 0);
-  assert.equal(batch.options.cameraSettleDelay, 0);
+  const batch = webglPathBatch({ cameraRedrawIntervalMs: 0, cameraSettleDelayMs: 0 });
+  assert.equal(batch.options.cameraRedrawIntervalMs, 0);
+  assert.equal(batch.options.cameraSettleDelayMs, 0);
 });
 
 test("GeoJSON creates point, multi-point and path feature layers", () => {
@@ -244,7 +244,7 @@ test("GeoJSON creates point, multi-point and path feature layers", () => {
     ]
   }, {
     filter: (feature) => feature.properties?.hidden !== true,
-    pointToLayer: (_feature, position) => circleMarker(position, { radius: 7 }),
+    pointToLayer: (_feature, position) => circleMarker(position, { radiusPixels: 7 }),
     style: (feature) => ({ stroke: feature.properties?.kind === "line" ? "#f00" : "#00f" }),
     onEachFeature: (feature) => visited.push(feature.id)
   });

@@ -1,5 +1,6 @@
 import { createEl, getContainer, listen, rafThrottle } from "./dom.js";
 import type { CameraState } from "./camera.js";
+import { nonNegativeFinite, rejectLegacyUnit } from "./units.js";
 import { CRS, resolveCRS, type CoordinateReferenceSystem, type CRSInput } from "./crs.js";
 import { Evented } from "./events.js";
 import { LatLng, LatLngBounds, Point, latLng, bounds, point, TILE_SIZE, distance, type LatLngBoundsLike, type LatLngLike, type PointLike } from "./geo.js";
@@ -20,7 +21,8 @@ export interface MapOptions {
   inertia?: boolean;
   inertiaDeceleration?: number;
   inertiaMaxSpeed?: number;
-  zoomAnimationDuration?: number;
+  /** Camera animation duration in milliseconds. Default 250; zero jumps immediately. */
+  zoomAnimationDurationMs?: number;
   controls?: boolean;
   locale?: LocaleInput;
   ariaLabel?: string;
@@ -65,7 +67,7 @@ const DEFAULTS: ResolvedMapOptions = {
   inertia: true,
   inertiaDeceleration: 3200,
   inertiaMaxSpeed: 1400,
-  zoomAnimationDuration: 0.25,
+  zoomAnimationDurationMs: 250,
   controls: true,
   locale: "en",
   ariaLabel: "",
@@ -176,6 +178,8 @@ export class Orihon extends Evented {
 
   constructor(container: string | HTMLElement, options: MapOptions = {}) {
     super();
+    rejectLegacyUnit(options, "zoomAnimationDuration", "zoomAnimationDurationMs");
+    nonNegativeFinite(options.zoomAnimationDurationMs ?? DEFAULTS.zoomAnimationDurationMs, "zoomAnimationDurationMs");
     this.options = {
       ...DEFAULTS,
       ...options,
@@ -527,13 +531,13 @@ export class Orihon extends Evented {
     else this._animationFrame = setTimeout(() => callback(performance.now()), 16) as unknown as number;
   }
 
-  #animateView(center: LatLngLike, zoom: number, durationSeconds = this.options.zoomAnimationDuration): this {
+  #animateView(center: LatLngLike, zoom: number, durationMs = this.options.zoomAnimationDurationMs): this {
     const targetCenter = this.#limitCenter(latLng(center), this.#clampZoom(zoom));
     const targetZoom = this.#clampZoom(zoom);
     const startCenter = this.center.clone();
     const startZoom = this.zoom;
     const zoomChanged = targetZoom !== startZoom;
-    const duration = Math.max(0, durationSeconds) * 1000;
+    const duration = nonNegativeFinite(durationMs, "durationMs");
     this.stop();
     if (duration === 0) return this.setView(targetCenter, targetZoom);
     this._animationActive = true;
@@ -744,8 +748,14 @@ export class Orihon extends Evented {
   addLayer(layer: Layer): this {
     if (this.layers.has(layer)) return this;
     this.layers.add(layer);
-    layer.onAdd(this);
-    layer.render();
+    try {
+      layer.onAdd(this);
+      layer.render();
+    } catch (error) {
+      this.layers.delete(layer);
+      if (layer.map === this) layer.onRemove();
+      throw error;
+    }
     layer.emit("add", { map: this }, false);
     this.emit("layeradd", { layer });
     return this;
@@ -865,7 +875,9 @@ export class Orihon extends Evented {
     return this;
   }
 
-  panInsideBounds(value: LatLngBoundsLike, options: { animate?: boolean; duration?: number } = {}): this {
+  panInsideBounds(value: LatLngBoundsLike, options: { animate?: boolean; durationMs?: number } = {}): this {
+    rejectLegacyUnit(options, "duration", "durationMs");
+    if (options.durationMs !== undefined) nonNegativeFinite(options.durationMs, "durationMs");
     const target = bounds(value);
     if (!target.isValid()) return this;
     const view = this.getBounds();
@@ -911,23 +923,26 @@ export class Orihon extends Evented {
     return this;
   }
 
-  fitBounds(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; duration?: number } = {}): this {
+  fitBounds(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; durationMs?: number } = {}): this {
+    rejectLegacyUnit(options, "duration", "durationMs");
+    if (options.durationMs !== undefined) nonNegativeFinite(options.durationMs, "durationMs");
     const target = bounds(value);
     const zoom = this.#zoomForBounds(target, options.padding ?? 32);
     return options.animate ? this.flyTo(target.getCenter(), zoom, options) : this.setView(target.getCenter(), zoom);
   }
 
-  fitWorld(options: { padding?: number; animate?: boolean; duration?: number } = {}): this {
+  fitWorld(options: { padding?: number; animate?: boolean; durationMs?: number } = {}): this {
     return this.fitBounds(this.crs.code === "Simple"
       ? this.options.maxBounds ?? [{ lat: 0, lng: 0 }, { lat: TILE_SIZE, lng: TILE_SIZE }]
       : [{ lat: -85.0511287798066, lng: -180 }, { lat: 85.0511287798066, lng: 180 }], options);
   }
 
-  flyTo(center: LatLngLike, zoom = this.zoom, options: { duration?: number } = {}): this {
-    return this.#animateView(center, zoom, options.duration ?? this.options.zoomAnimationDuration);
+  flyTo(center: LatLngLike, zoom = this.zoom, options: { durationMs?: number } = {}): this {
+    rejectLegacyUnit(options, "duration", "durationMs");
+    return this.#animateView(center, zoom, options.durationMs ?? this.options.zoomAnimationDurationMs);
   }
 
-  flyToBounds(value: LatLngBoundsLike, options: { padding?: number; duration?: number } = {}): this {
+  flyToBounds(value: LatLngBoundsLike, options: { padding?: number; durationMs?: number } = {}): this {
     const target = bounds(value);
     const zoom = this.#zoomForBounds(target, options.padding ?? 32);
     return this.flyTo(target.getCenter(), zoom, options);

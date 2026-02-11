@@ -629,7 +629,7 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
                 name,
                 coordinates: route.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
                 distance: route.distance,
-                duration,
+                durationMs: duration * 1000,
                 properties: {
                   provider: "osrm",
                   source: "osm",
@@ -764,7 +764,7 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
         routeList.innerHTML = routes
           .map((route, index) => {
             const color = route.properties?.color || "#64748b";
-            const speed = formatSpeed(route.distance, route.duration);
+            const speed = formatSpeed(route.distance, route.durationMs / 1000);
             const isSelected = index === selected;
             return `
               <button
@@ -777,7 +777,7 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
                 <span class="stripe" style="background:${color}"></span>
                 <span>
                   <span class="title">${route.name}</span>
-                  <span class="meta">${formatKm(route.distance)} · ${formatDuration(route.duration)}</span>
+                  <span class="meta">${formatKm(route.distance)} · ${formatDuration(route.durationMs / 1000)}</span>
                 </span>
                 <span class="speed">${speed}<small>ср. скорость</small></span>
               </button>
@@ -794,7 +794,7 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
         setStatus(
           `Выбран: ${route.name} · ${formatKm(route.distance)} · ${formatSpeed(
             route.distance,
-            route.duration
+            route.durationMs / 1000
           )}`
         );
       }
@@ -859,7 +859,7 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
             setStatus(
               `Выбран: ${route.name} · ${formatKm(route.distance)} · ${formatSpeed(
                 route.distance,
-                route.duration
+                route.durationMs / 1000
               )}`
             );
           }

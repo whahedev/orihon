@@ -61,7 +61,7 @@ test("all SVG geometry types accept popup click bindings", () => {
     polyline([{ lat: 0, lng: 0 }, { lat: 1, lng: 1 }]),
     polygon([{ lat: 0, lng: 0 }, { lat: 0, lng: 1 }, { lat: 1, lng: 1 }]),
     rectangle([{ lat: 0, lng: 0 }, { lat: 1, lng: 1 }]),
-    circle({ lat: 0, lng: 0 }, 100),
+    circle({ lat: 0, lng: 0 }, { radiusMeters: 100 }),
     circleMarker({ lat: 0, lng: 0 })
   ];
   for (const layer of layers) {
@@ -130,8 +130,8 @@ test("Marker draggability can be changed without recreating the layer", () => {
 test("Rectangle, Circle and CircleMarker expose mutable geometry", () => {
   const box = bounds({ lat: 10, lng: 20 }, { lat: 12, lng: 24 });
   const area = rectangle(box);
-  const dot = circleMarker({ lat: 11, lng: 22 }, { radius: 12 });
-  const metric = circle({ lat: 11, lng: 22 }, 1000);
+  const dot = circleMarker({ lat: 11, lng: 22 }, { radiusPixels: 12 });
+  const metric = circle({ lat: 11, lng: 22 }, { radiusMeters: 1000 });
 
   assert.ok(area instanceof Rectangle);
   assert.equal(area.getBounds().toBBoxString(), "20,10,24,12");
@@ -139,9 +139,9 @@ test("Rectangle, Circle and CircleMarker expose mutable geometry", () => {
   assert.equal(area.getBounds().toBBoxString(), "1,0,3,2");
 
   assert.ok(dot instanceof CircleMarker);
-  assert.equal(dot.getRadius(), 12);
-  dot.setRadius(18).setLatLng({ lat: 5, lng: 6 });
-  assert.equal(dot.getRadius(), 18);
+  assert.equal(dot.getRadiusPixels(), 12);
+  dot.setRadiusPixels(18).setLatLng({ lat: 5, lng: 6 });
+  assert.equal(dot.getRadiusPixels(), 18);
   assert.deepEqual(dot.getLatLng().toArray(), [5, 6]);
   assert.equal(metric.getBounds().contains(metric.getLatLng()), true);
 });

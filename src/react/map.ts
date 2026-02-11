@@ -3,6 +3,7 @@ import type { OrihonEvent, EventHandler } from "../events.js";
 import type { LatLngLike } from "../geo.js";
 import { createMap, type MapOptions, type Orihon } from "../map.js";
 import { MapContext } from "./context.js";
+import { rejectLegacyUnit } from "../units.js";
 
 export interface MapProps extends Omit<HTMLAttributes<HTMLDivElement>, "onClick">, Omit<MapOptions, "center" | "zoom"> {
   center: LatLngLike;
@@ -14,16 +15,17 @@ export interface MapProps extends Omit<HTMLAttributes<HTMLDivElement>, "onClick"
 }
 
 export function Map(props: MapProps) {
+  rejectLegacyUnit(props, "zoomAnimationDuration", "zoomAnimationDurationMs");
   const {
     center, zoom, children, onClick, onMapReady,
     minZoom, maxZoom, zoomSnap, wheelZoomStep, maxBounds, maxBoundsViscosity,
-    inertia, inertiaDeceleration, inertiaMaxSpeed, zoomAnimationDuration, controls,
+    inertia, inertiaDeceleration, inertiaMaxSpeed, zoomAnimationDurationMs, controls,
     locale, ariaLabel, keyboard, keyboardPanDelta, behaviors, crs,
     ...containerProps
   } = props;
   const mapOptions = {
     minZoom, maxZoom, zoomSnap, wheelZoomStep, maxBounds, maxBoundsViscosity,
-    inertia, inertiaDeceleration, inertiaMaxSpeed, zoomAnimationDuration, controls,
+    inertia, inertiaDeceleration, inertiaMaxSpeed, zoomAnimationDurationMs, controls,
     locale, ariaLabel, keyboard, keyboardPanDelta, behaviors, crs
   };
   const definedOptions = Object.fromEntries(

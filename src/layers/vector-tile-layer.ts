@@ -154,7 +154,7 @@ export class VectorTileLayer extends LayerGroup {
         filter: this.options.filter,
         pointToLayer: this.options.pointToLayer ?? (usePaint ? (feature, position) => {
           const paint = paintByFeature.get(feature);
-          return circleMarker(position, { ...paintStyle(paint), radius: paint?.radius ?? 3 });
+          return circleMarker(position, { ...paintStyle(paint), radiusPixels: paint?.radius ?? 3 });
         } : undefined),
         onEachFeature: this.options.onEachFeature,
         popup: this.options.popup,

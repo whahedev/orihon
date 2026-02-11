@@ -10,7 +10,7 @@ test("dash arrays accept strings, arrays and clearing values", () => {
 });
 
 test("geodesic circle bounds widen in longitude at high latitude", () => {
-  const geodesic = new Circle({ lat: 60, lng: 10 }, 50_000, { geodesic: true });
+  const geodesic = new Circle({ lat: 60, lng: 10 }, { radiusMeters: 50_000 }, { geodesic: true });
   const bounds = geodesic.getBounds();
   assert.ok(bounds.east - bounds.west > bounds.north - bounds.south);
 });
@@ -46,7 +46,7 @@ test("CanvasPathBatch densifies geodesic paths", () => {
 });
 
 test("Circle uses map units for bounds on Simple CRS", () => {
-  const shape = new Circle({ lat: 200, lng: 300 }, 50, { geodesic: true });
+  const shape = new Circle({ lat: 200, lng: 300 }, { radiusMapUnits: 50 }, { geodesic: true });
   shape.map = { crs: { code: "Simple" } };
   assert.deepEqual(shape.getBounds().getSouthWest().toArray(), [150, 250]);
   assert.deepEqual(shape.getBounds().getNorthEast().toArray(), [250, 350]);

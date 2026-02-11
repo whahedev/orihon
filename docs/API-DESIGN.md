@@ -39,6 +39,9 @@ These rules describe the conventions used by the public Orihon API. New APIs mus
 
 ## Options and extensibility
 
+- Public durations use milliseconds and an `Ms` suffix. External seconds are converted at provider boundaries; animation duration zero means an immediate move.
+- Radius inputs distinguish `radiusMeters`, `radiusMapUnits` and `radiusPixels`. CRS-dependent units are explicit and incompatible combinations fail before mutation.
+
 - Options objects are preferred once an operation has more than two independent arguments of the same primitive type.
 - Defaults represent the normal happy path and are documented in the public type or API guide.
 - Options that select mutually exclusive modes use a string union or discriminated union rather than several competing booleans.

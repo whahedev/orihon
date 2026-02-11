@@ -1,4 +1,5 @@
 import type { ObjectId } from "./object-types.js";
+import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import type { ObjectTrailStyle } from "./object-types.js";
 
 export interface TrailPoint {
@@ -18,12 +19,12 @@ const DEFAULT_TRAIL = {
   width: 2,
   opacity: 0.5,
   maxPoints: 40,
-  maxAge: 120_000
+  maxAgeMs: 120_000
 };
 
 /** Hard cap on `style.trail.maxPoints` (availability). */
 export const MAX_TRAIL_POINTS = 512;
-/** Hard cap on `style.trail.maxAge` (24h). */
+/** Hard cap on `style.trail.maxAgeMs` (24h). */
 export const MAX_TRAIL_AGE_MS = 86_400_000;
 
 /**
@@ -45,6 +46,10 @@ export class ObjectTrailStore {
   }
 
   configure(id: ObjectId, style: ObjectTrailStyle | null | undefined): void {
+    if (style) {
+      rejectLegacyUnit(style, "maxAge", "maxAgeMs");
+      nonNegativeFinite(style.maxAgeMs ?? DEFAULT_TRAIL.maxAgeMs, "maxAgeMs");
+    }
     if (!style || style.enabled === false) {
       this.remove(id);
       return;
@@ -57,9 +62,9 @@ export class ObjectTrailStore {
         MAX_TRAIL_POINTS,
         Math.max(2, Math.floor(style.maxPoints ?? DEFAULT_TRAIL.maxPoints))
       ),
-      maxAge: Math.min(
+      maxAgeMs: Math.min(
         MAX_TRAIL_AGE_MS,
-        Math.max(0, Number(style.maxAge ?? DEFAULT_TRAIL.maxAge))
+        Math.max(0, Number(style.maxAgeMs ?? DEFAULT_TRAIL.maxAgeMs))
       )
     });
     if (!this.trails.has(id)) this.trails.set(id, []);
@@ -99,7 +104,7 @@ export class ObjectTrailStore {
     const style = this.styles.get(id);
     const points = this.trails.get(id);
     if (!style || !points) return;
-    const minTime = style.maxAge > 0 ? now - style.maxAge : Number.NEGATIVE_INFINITY;
+    const minTime = style.maxAgeMs > 0 ? now - style.maxAgeMs : Number.NEGATIVE_INFINITY;
     let start = 0;
     while (start < points.length && points[start].time < minTime) start++;
     if (start > 0) points.splice(0, start);

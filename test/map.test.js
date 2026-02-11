@@ -164,7 +164,7 @@ test("navigation helpers and maxBounds are exposed", () => {
   map.setView({ lat: 80, lng: 80 }, 8);
   assert.equal(map.getMaxBounds().contains(map.getCenter()), true);
 
-  map.flyTo({ lat: 1, lng: 1 }, 6, { duration: 0 });
+  map.flyTo({ lat: 1, lng: 1 }, 6, { durationMs: 0 });
   assert.equal(map.getZoom(), 6);
   assert.ok(Math.abs(map.getCenter().lat - 1) < 1e-9);
   assert.ok(Math.abs(map.getCenter().lng - 1) < 1e-9);
@@ -185,7 +185,7 @@ test("destroy cancels in-flight flyTo animation", () => {
   globalThis.cancelAnimationFrame = () => {};
 
   const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });
-  map.flyTo({ lat: 10, lng: 10 }, 6, { duration: 1 });
+  map.flyTo({ lat: 10, lng: 10 }, 6, { durationMs: 1000 });
   assert.equal(map._animationActive, true);
   map.destroy();
   assert.equal(map._destroyed, true);

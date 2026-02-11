@@ -68,7 +68,7 @@ export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts
 export type { MarkerOptions, MarkerAppearance, MarkerShape } from "./layers/marker.js";
 export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";
-export type { PathOptions, CircleMarkerOptions } from "./layers/vector.js";
+export type { PathOptions, CircleMarkerOptions, CircleRadius } from "./layers/vector.js";
 export type {
   GeoJSONInput,
   GeoJSONAsyncInput,

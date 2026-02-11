@@ -54,7 +54,7 @@
       pointToLayer(feature, position) {
         const color = palette[feature.properties?.status] ?? palette.ready;
         return circleMarker(position, {
-          radius: 16, fill: color, fillOpacity: 0.13, stroke: color, strokeWidth: 2
+          radiusPixels: 16, fill: color, fillOpacity: 0.13, stroke: color, strokeWidth: 2
         });
       }
     }).addTo(map);

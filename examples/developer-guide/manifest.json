@@ -224,7 +224,7 @@
       "name": "circle",
       "group": "Векторные данные",
       "entry": "orihon/standard",
-      "summary": "Рисует географический круг с радиусом в метрах; его экранный размер меняется вместе с масштабом карты.",
+      "summary": "Рисует круг с явным радиусом: radiusMeters для EPSG:3857 или radiusMapUnits для CRS.Simple; экранный размер меняется с масштабом карты.",
       "url": "./functions/circle/"
     },
     {

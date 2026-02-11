@@ -33,7 +33,8 @@ export interface ObjectTrailStyle {
   width?: number;
   opacity?: number;
   maxPoints?: number;
-  maxAge?: number;
+  /** Trail retention in milliseconds. Default 120000; zero disables age trimming. */
+  maxAgeMs?: number;
 }
 
 export interface ObjectGradientStop {

@@ -44,7 +44,7 @@ console.log("(no WebGL — ingest / layout / updates only)\n");
 
 const manager = objectManager({
   clusterize: useClusters,
-  clusterGridSize: 55,
+  clusterRadiusPixels: 55,
   clusterRenderer: "auto",
   webglThreshold: 20,
   declutter: false,

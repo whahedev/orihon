@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-26T17:57:25.924Z",
+  "generatedAt": "2026-08-27T03:44:02.507Z",
   "entries": [
     {
       "entry": "orihon",
@@ -479,9 +479,9 @@
       "entry": "orihon",
       "name": "circle",
       "kind": "Function",
-      "type": "(center: LatLngLike, radiusMeters: number, options?: PathOptions) => Circle",
+      "type": "(center: LatLngLike, radius: CircleRadius, options?: PathOptions) => Circle",
       "calls": [
-        "(center: LatLngLike, radiusMeters: number, options: PathOptions) => Circle"
+        "(center: LatLngLike, radius: CircleRadius, options: PathOptions) => Circle"
       ],
       "constructs": [],
       "members": []
@@ -493,7 +493,7 @@
       "type": "Circle",
       "calls": [],
       "constructs": [
-        "(center: LatLngLike, radiusMeters: number, options: PathOptions) => Circle"
+        "(center: LatLngLike, radius: CircleRadius, options: PathOptions) => Circle"
       ],
       "members": [
         {
@@ -511,11 +511,13 @@
           "calls": []
         },
         {
-          "name": "radiusMeters",
+          "name": "onAdd",
           "optional": false,
           "readonly": false,
-          "type": "number",
-          "calls": []
+          "type": "(map: Orihon) => void",
+          "calls": [
+            "(map: Orihon) => void"
+          ]
         },
         {
           "name": "interactionPointerEvents",
@@ -539,9 +541,9 @@
           "name": "getRadius",
           "optional": false,
           "readonly": false,
-          "type": "() => number",
+          "type": "() => CircleRadius",
           "calls": [
-            "() => number"
+            "() => CircleRadius"
           ]
         },
         {
@@ -575,9 +577,9 @@
           "name": "setRadius",
           "optional": false,
           "readonly": false,
-          "type": "(radiusMeters: number) => Circle",
+          "type": "(radius: CircleRadius) => Circle",
           "calls": [
-            "(radiusMeters: number) => Circle"
+            "(radius: CircleRadius) => Circle"
           ]
         },
         {
@@ -638,15 +640,6 @@
           "type": "() => SVGPathElement | SVGCircleElement",
           "calls": [
             "() => SVGPathElement | SVGCircleElement"
-          ]
-        },
-        {
-          "name": "onAdd",
-          "optional": false,
-          "readonly": false,
-          "type": "(map: Orihon) => void",
-          "calls": [
-            "(map: Orihon) => void"
           ]
         },
         {
@@ -1020,6 +1013,13 @@
       ],
       "members": [
         {
+          "name": "#private",
+          "optional": false,
+          "readonly": false,
+          "type": "any",
+          "calls": []
+        },
+        {
           "name": "center",
           "optional": false,
           "readonly": false,
@@ -1061,7 +1061,7 @@
           ]
         },
         {
-          "name": "getRadius",
+          "name": "getRadiusPixels",
           "optional": false,
           "readonly": false,
           "type": "() => number",
@@ -1079,7 +1079,7 @@
           ]
         },
         {
-          "name": "setRadius",
+          "name": "setRadiusPixels",
           "optional": false,
           "readonly": false,
           "type": "(radiusPixels: number) => CircleMarker",
@@ -1523,7 +1523,7 @@
       "constructs": [],
       "members": [
         {
-          "name": "radius",
+          "name": "radiusPixels",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -1660,6 +1660,30 @@
           "optional": true,
           "readonly": false,
           "type": "string",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon",
+      "name": "CircleRadius",
+      "kind": "TypeAlias",
+      "type": "CircleRadius",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "radiusMeters",
+          "optional": true,
+          "readonly": true,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "radiusMapUnits",
+          "optional": true,
+          "readonly": true,
+          "type": "number",
           "calls": []
         }
       ]
@@ -2658,7 +2682,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -3286,7 +3310,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -5154,6 +5178,17 @@
     },
     {
       "entry": "orihon",
+      "name": "fromGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: readonly [number, number, ...number[]]) => LatLng",
+      "calls": [
+        "(position: readonly [number, number, ...number[]]) => LatLng"
+      ],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon",
       "name": "geodesicInterpolate",
       "kind": "Function",
       "type": "(a: LatLngLike, b: LatLngLike, maxSegmentMeters?: number) => LatLng[]",
@@ -6549,7 +6584,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => ArrayIterator<number>",
@@ -6558,7 +6593,7 @@
           ]
         },
         {
-          "name": "__@unscopables@184",
+          "name": "__@unscopables@185",
           "optional": false,
           "readonly": true,
           "type": "{ [x: number]: boolean; length?: boolean; toString?: boolean; toLocaleString?: boolean; pop?: boolean; push?: boolean; concat?: boolean; join?: boolean; reverse?: boolean; shift?: boolean; slice?: boolean; sort?: boolean; splice?: boolean; unshift?: boolean; indexOf?: boolean; lastIndexOf?: boolean; every?: boolean; some?: boolean; forEach?: boolean; map?: boolean; filter?: boolean; reduce?: boolean; reduceRight?: boolean; find?: boolean; findIndex?: boolean; fill?: boolean; copyWithin?: boolean; entries?: boolean; keys?: boolean; values?: boolean; includes?: boolean; flatMap?: boolean; flat?: boolean; at?: boolean; [Symbol.iterator]?: boolean; readonly [Symbol.unscopables]?: boolean; }",
@@ -7027,7 +7062,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -7272,10 +7307,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -7319,6 +7368,46 @@
           "calls": [
             "(processed: number, total: number) => void"
           ]
+        }
+      ]
+    },
+    {
+      "entry": "orihon",
+      "name": "GeometryWorkerError",
+      "kind": "Class",
+      "type": "GeometryWorkerError",
+      "calls": [],
+      "constructs": [
+        "(message: string, options: ErrorOptions) => GeometryWorkerError"
+      ],
+      "members": [
+        {
+          "name": "name",
+          "optional": false,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "message",
+          "optional": false,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "stack",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "cause",
+          "optional": true,
+          "readonly": false,
+          "type": "unknown",
+          "calls": []
         }
       ]
     },
@@ -7975,7 +8064,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -9945,7 +10034,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -10475,7 +10564,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -12408,7 +12497,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -12636,7 +12725,7 @@
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -13838,10 +13927,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -15369,7 +15472,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -16027,7 +16130,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -16123,7 +16226,7 @@
           "calls": []
         },
         {
-          "name": "zoomAnimationDuration",
+          "name": "zoomAnimationDurationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -17843,7 +17946,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -18525,7 +18628,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -19268,7 +19371,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -20137,27 +20240,27 @@
           "name": "update",
           "optional": false,
           "readonly": false,
-          "type": "(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; duration?: number; }) => ObjectManager",
+          "type": "(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; durationMs?: number; }) => ObjectManager",
           "calls": [
-            "(features: ManagedObject | ManagedObject[], options: { animate?: boolean; duration?: number; }) => ObjectManager"
+            "(features: ManagedObject | ManagedObject[], options: { animate?: boolean; durationMs?: number; }) => ObjectManager"
           ]
         },
         {
           "name": "updateObjects",
           "optional": false,
           "readonly": false,
-          "type": "(features: Iterable<ManagedObject>, options?: { animate?: boolean; duration?: number; }) => ObjectManager",
+          "type": "(features: Iterable<ManagedObject>, options?: { animate?: boolean; durationMs?: number; }) => ObjectManager",
           "calls": [
-            "(features: Iterable<ManagedObject>, options: { animate?: boolean; duration?: number; }) => ObjectManager"
+            "(features: Iterable<ManagedObject>, options: { animate?: boolean; durationMs?: number; }) => ObjectManager"
           ]
         },
         {
           "name": "moveObject",
           "optional": false,
           "readonly": false,
-          "type": "(id: ObjectId, coordinates: LatLngLike, options?: { animate?: boolean; duration?: number; }) => ObjectManager",
+          "type": "(id: ObjectId, coordinates: LatLngLike, options?: { animate?: boolean; durationMs?: number; }) => ObjectManager",
           "calls": [
-            "(id: ObjectId, coordinates: LatLngLike, options: { animate?: boolean; duration?: number; }) => ObjectManager"
+            "(id: ObjectId, coordinates: LatLngLike, options: { animate?: boolean; durationMs?: number; }) => ObjectManager"
           ]
         },
         {
@@ -20449,12 +20552,12 @@
           ]
         },
         {
-          "name": "setClusterGridSize",
+          "name": "setClusterRadiusPixels",
           "optional": false,
           "readonly": false,
-          "type": "(size: number) => ObjectManager",
+          "type": "(radiusPixels: number) => ObjectManager",
           "calls": [
-            "(size: number) => ObjectManager"
+            "(radiusPixels: number) => ObjectManager"
           ]
         },
         {
@@ -20701,7 +20804,7 @@
           ]
         },
         {
-          "name": "clusterGridSize",
+          "name": "clusterRadiusPixels",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -21527,7 +21630,7 @@
           "calls": []
         },
         {
-          "name": "maxAge",
+          "name": "maxAgeMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -22020,7 +22123,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -22761,9 +22864,9 @@
           "name": "panInsideBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { animate?: boolean; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
@@ -22833,36 +22936,36 @@
           "name": "fitBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "fitWorld",
           "optional": false,
           "readonly": false,
-          "type": "(options?: { padding?: number; animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(options?: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(options: { padding?: number; animate?: boolean; duration?: number; }) => Orihon"
+            "(options: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "flyTo",
           "optional": false,
           "readonly": false,
-          "type": "(center: LatLngLike, zoom?: number, options?: { duration?: number; }) => Orihon",
+          "type": "(center: LatLngLike, zoom?: number, options?: { durationMs?: number; }) => Orihon",
           "calls": [
-            "(center: LatLngLike, zoom: number, options: { duration?: number; }) => Orihon"
+            "(center: LatLngLike, zoom: number, options: { durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "flyToBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { padding?: number; durationMs?: number; }) => Orihon"
           ]
         },
         {
@@ -24192,7 +24295,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -25252,27 +25355,7 @@
       "type": "PointLike",
       "calls": [],
       "constructs": [],
-      "members": [
-        {
-          "name": "toString",
-          "optional": false,
-          "readonly": false,
-          "type": "(() => string) | (() => string)",
-          "calls": [
-            "() => string"
-          ]
-        },
-        {
-          "name": "toLocaleString",
-          "optional": false,
-          "readonly": false,
-          "type": "(() => string) | { (): string; (locales: string | string[], options?: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions): string; }",
-          "calls": [
-            "() => string",
-            "(locales: string | string[], options: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions) => string"
-          ]
-        }
-      ]
+      "members": []
     },
     {
       "entry": "orihon",
@@ -27122,6 +27205,51 @@
     },
     {
       "entry": "orihon",
+      "name": "PrefetchTileLayerOptions",
+      "kind": "TypeAlias",
+      "type": "PrefetchTileLayerOptions",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "zooms",
+          "optional": false,
+          "readonly": false,
+          "type": "number[]",
+          "calls": []
+        },
+        {
+          "name": "maxTiles",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "bounds",
+          "optional": true,
+          "readonly": false,
+          "type": "LatLngBoundsLike",
+          "calls": []
+        },
+        {
+          "name": "xRange",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "yRange",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon",
       "name": "PreparedPointBatch",
       "kind": "Interface",
       "type": "PreparedPointBatch",
@@ -27777,7 +27905,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -29078,27 +29206,27 @@
           "name": "update",
           "optional": false,
           "readonly": false,
-          "type": "(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; duration?: number; }) => RemoteObjectManager",
+          "type": "(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager",
           "calls": [
-            "(features: ManagedObject | ManagedObject[], options: { animate?: boolean; duration?: number; }) => RemoteObjectManager"
+            "(features: ManagedObject | ManagedObject[], options: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager"
           ]
         },
         {
           "name": "updateObjects",
           "optional": false,
           "readonly": false,
-          "type": "(features: Iterable<ManagedObject>, options?: { animate?: boolean; duration?: number; }) => RemoteObjectManager",
+          "type": "(features: Iterable<ManagedObject>, options?: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager",
           "calls": [
-            "(features: Iterable<ManagedObject>, options: { animate?: boolean; duration?: number; }) => RemoteObjectManager"
+            "(features: Iterable<ManagedObject>, options: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager"
           ]
         },
         {
           "name": "moveObject",
           "optional": false,
           "readonly": false,
-          "type": "(id: ObjectId, coordinates: LatLngLike, options?: { animate?: boolean; duration?: number; }) => RemoteObjectManager",
+          "type": "(id: ObjectId, coordinates: LatLngLike, options?: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager",
           "calls": [
-            "(id: ObjectId, coordinates: LatLngLike, options: { animate?: boolean; duration?: number; }) => RemoteObjectManager"
+            "(id: ObjectId, coordinates: LatLngLike, options: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager"
           ]
         },
         {
@@ -29390,12 +29518,12 @@
           ]
         },
         {
-          "name": "setClusterGridSize",
+          "name": "setClusterRadiusPixels",
           "optional": false,
           "readonly": false,
-          "type": "(size: number) => RemoteObjectManager",
+          "type": "(radiusPixels: number) => RemoteObjectManager",
           "calls": [
-            "(size: number) => RemoteObjectManager"
+            "(radiusPixels: number) => RemoteObjectManager"
           ]
         },
         {
@@ -29618,7 +29746,7 @@
           ]
         },
         {
-          "name": "clusterGridSize",
+          "name": "clusterRadiusPixels",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -30758,7 +30886,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -30816,7 +30944,7 @@
           "calls": []
         },
         {
-          "name": "duration",
+          "name": "durationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -35033,6 +35161,17 @@
     },
     {
       "entry": "orihon",
+      "name": "toGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: LatLngLike) => [longitude: number, latitude: number]",
+      "calls": [
+        "(position: LatLngLike) => [longitude: number, latitude: number]"
+      ],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon",
       "name": "tooltip",
       "kind": "Function",
       "type": "(content: OverlayContent, options?: TooltipOptions) => Tooltip",
@@ -36896,7 +37035,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -36976,14 +37115,14 @@
           "calls": []
         },
         {
-          "name": "cameraRedrawInterval",
+          "name": "cameraRedrawIntervalMs",
           "optional": true,
           "readonly": false,
           "type": "number",
           "calls": []
         },
         {
-          "name": "cameraSettleDelay",
+          "name": "cameraSettleDelayMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -39099,14 +39238,14 @@
           "calls": []
         },
         {
-          "name": "cameraRedrawInterval",
+          "name": "cameraRedrawIntervalMs",
           "optional": true,
           "readonly": false,
           "type": "number",
           "calls": []
         },
         {
-          "name": "cameraSettleDelay",
+          "name": "cameraSettleDelayMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -39341,10 +39480,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -41399,14 +41552,14 @@
           "calls": []
         },
         {
-          "name": "startTime",
+          "name": "startTimeMs",
           "optional": true,
           "readonly": false,
           "type": "number",
           "calls": []
         },
         {
-          "name": "duration",
+          "name": "durationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -44646,7 +44799,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -44999,6 +45152,17 @@
       "kind": "TypeAlias",
       "type": "FeatureSourceListener<TFeature>",
       "calls": [],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon/core",
+      "name": "fromGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: readonly [number, number, ...number[]]) => LatLng",
+      "calls": [
+        "(position: readonly [number, number, ...number[]]) => LatLng"
+      ],
       "constructs": [],
       "members": []
     },
@@ -45711,10 +45875,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -46546,7 +46724,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -46642,7 +46820,7 @@
           "calls": []
         },
         {
-          "name": "zoomAnimationDuration",
+          "name": "zoomAnimationDurationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -47193,9 +47371,9 @@
           "name": "panInsideBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { animate?: boolean; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
@@ -47265,36 +47443,36 @@
           "name": "fitBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "fitWorld",
           "optional": false,
           "readonly": false,
-          "type": "(options?: { padding?: number; animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(options?: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(options: { padding?: number; animate?: boolean; duration?: number; }) => Orihon"
+            "(options: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "flyTo",
           "optional": false,
           "readonly": false,
-          "type": "(center: LatLngLike, zoom?: number, options?: { duration?: number; }) => Orihon",
+          "type": "(center: LatLngLike, zoom?: number, options?: { durationMs?: number; }) => Orihon",
           "calls": [
-            "(center: LatLngLike, zoom: number, options: { duration?: number; }) => Orihon"
+            "(center: LatLngLike, zoom: number, options: { durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "flyToBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { padding?: number; durationMs?: number; }) => Orihon"
           ]
         },
         {
@@ -47639,27 +47817,7 @@
       "type": "PointLike",
       "calls": [],
       "constructs": [],
-      "members": [
-        {
-          "name": "toString",
-          "optional": false,
-          "readonly": false,
-          "type": "(() => string) | (() => string)",
-          "calls": [
-            "() => string"
-          ]
-        },
-        {
-          "name": "toLocaleString",
-          "optional": false,
-          "readonly": false,
-          "type": "(() => string) | { (): string; (locales: string | string[], options?: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions): string; }",
-          "calls": [
-            "() => string",
-            "(locales: string | string[], options: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions) => string"
-          ]
-        }
-      ]
+      "members": []
     },
     {
       "entry": "orihon/core",
@@ -48254,7 +48412,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -49228,6 +49386,17 @@
     },
     {
       "entry": "orihon/core",
+      "name": "toGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: LatLngLike) => [longitude: number, latitude: number]",
+      "calls": [
+        "(position: LatLngLike) => [longitude: number, latitude: number]"
+      ],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon/core",
       "name": "unproject",
       "kind": "Function",
       "type": "(value: PointLike, zoom?: number) => LatLng",
@@ -49576,9 +49745,9 @@
       "entry": "orihon/standard",
       "name": "circle",
       "kind": "Function",
-      "type": "(center: LatLngLike, radiusMeters: number, options?: PathOptions) => Circle",
+      "type": "(center: LatLngLike, radius: CircleRadius, options?: PathOptions) => Circle",
       "calls": [
-        "(center: LatLngLike, radiusMeters: number, options: PathOptions) => Circle"
+        "(center: LatLngLike, radius: CircleRadius, options: PathOptions) => Circle"
       ],
       "constructs": [],
       "members": []
@@ -49590,7 +49759,7 @@
       "type": "Circle",
       "calls": [],
       "constructs": [
-        "(center: LatLngLike, radiusMeters: number, options: PathOptions) => Circle"
+        "(center: LatLngLike, radius: CircleRadius, options: PathOptions) => Circle"
       ],
       "members": [
         {
@@ -49608,11 +49777,13 @@
           "calls": []
         },
         {
-          "name": "radiusMeters",
+          "name": "onAdd",
           "optional": false,
           "readonly": false,
-          "type": "number",
-          "calls": []
+          "type": "(map: Orihon) => void",
+          "calls": [
+            "(map: Orihon) => void"
+          ]
         },
         {
           "name": "interactionPointerEvents",
@@ -49636,9 +49807,9 @@
           "name": "getRadius",
           "optional": false,
           "readonly": false,
-          "type": "() => number",
+          "type": "() => CircleRadius",
           "calls": [
-            "() => number"
+            "() => CircleRadius"
           ]
         },
         {
@@ -49672,9 +49843,9 @@
           "name": "setRadius",
           "optional": false,
           "readonly": false,
-          "type": "(radiusMeters: number) => Circle",
+          "type": "(radius: CircleRadius) => Circle",
           "calls": [
-            "(radiusMeters: number) => Circle"
+            "(radius: CircleRadius) => Circle"
           ]
         },
         {
@@ -49735,15 +49906,6 @@
           "type": "() => SVGPathElement | SVGCircleElement",
           "calls": [
             "() => SVGPathElement | SVGCircleElement"
-          ]
-        },
-        {
-          "name": "onAdd",
-          "optional": false,
-          "readonly": false,
-          "type": "(map: Orihon) => void",
-          "calls": [
-            "(map: Orihon) => void"
           ]
         },
         {
@@ -50117,6 +50279,13 @@
       ],
       "members": [
         {
+          "name": "#private",
+          "optional": false,
+          "readonly": false,
+          "type": "any",
+          "calls": []
+        },
+        {
           "name": "center",
           "optional": false,
           "readonly": false,
@@ -50158,7 +50327,7 @@
           ]
         },
         {
-          "name": "getRadius",
+          "name": "getRadiusPixels",
           "optional": false,
           "readonly": false,
           "type": "() => number",
@@ -50176,7 +50345,7 @@
           ]
         },
         {
-          "name": "setRadius",
+          "name": "setRadiusPixels",
           "optional": false,
           "readonly": false,
           "type": "(radiusPixels: number) => CircleMarker",
@@ -50620,7 +50789,7 @@
       "constructs": [],
       "members": [
         {
-          "name": "radius",
+          "name": "radiusPixels",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -50757,6 +50926,30 @@
           "optional": true,
           "readonly": false,
           "type": "string",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon/standard",
+      "name": "CircleRadius",
+      "kind": "TypeAlias",
+      "type": "CircleRadius",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "radiusMeters",
+          "optional": true,
+          "readonly": true,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "radiusMapUnits",
+          "optional": true,
+          "readonly": true,
+          "type": "number",
           "calls": []
         }
       ]
@@ -51390,7 +51583,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -53119,6 +53312,17 @@
     },
     {
       "entry": "orihon/standard",
+      "name": "fromGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: readonly [number, number, ...number[]]) => LatLng",
+      "calls": [
+        "(position: readonly [number, number, ...number[]]) => LatLng"
+      ],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon/standard",
       "name": "geodesicInterpolate",
       "kind": "Function",
       "type": "(a: LatLngLike, b: LatLngLike, maxSegmentMeters?: number) => LatLng[]",
@@ -54514,7 +54718,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => ArrayIterator<number>",
@@ -54523,7 +54727,7 @@
           ]
         },
         {
-          "name": "__@unscopables@184",
+          "name": "__@unscopables@185",
           "optional": false,
           "readonly": true,
           "type": "{ [x: number]: boolean; length?: boolean; toString?: boolean; toLocaleString?: boolean; pop?: boolean; push?: boolean; concat?: boolean; join?: boolean; reverse?: boolean; shift?: boolean; slice?: boolean; sort?: boolean; splice?: boolean; unshift?: boolean; indexOf?: boolean; lastIndexOf?: boolean; every?: boolean; some?: boolean; forEach?: boolean; map?: boolean; filter?: boolean; reduce?: boolean; reduceRight?: boolean; find?: boolean; findIndex?: boolean; fill?: boolean; copyWithin?: boolean; entries?: boolean; keys?: boolean; values?: boolean; includes?: boolean; flatMap?: boolean; flat?: boolean; at?: boolean; [Symbol.iterator]?: boolean; readonly [Symbol.unscopables]?: boolean; }",
@@ -54992,7 +55196,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -56668,10 +56872,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -58199,7 +58417,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -58688,7 +58906,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -58784,7 +59002,7 @@
           "calls": []
         },
         {
-          "name": "zoomAnimationDuration",
+          "name": "zoomAnimationDurationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -60061,7 +60279,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -60552,9 +60770,9 @@
           "name": "panInsideBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { animate?: boolean; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
@@ -60624,36 +60842,36 @@
           "name": "fitBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "fitWorld",
           "optional": false,
           "readonly": false,
-          "type": "(options?: { padding?: number; animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(options?: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(options: { padding?: number; animate?: boolean; duration?: number; }) => Orihon"
+            "(options: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "flyTo",
           "optional": false,
           "readonly": false,
-          "type": "(center: LatLngLike, zoom?: number, options?: { duration?: number; }) => Orihon",
+          "type": "(center: LatLngLike, zoom?: number, options?: { durationMs?: number; }) => Orihon",
           "calls": [
-            "(center: LatLngLike, zoom: number, options: { duration?: number; }) => Orihon"
+            "(center: LatLngLike, zoom: number, options: { durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "flyToBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { padding?: number; durationMs?: number; }) => Orihon"
           ]
         },
         {
@@ -61878,27 +62096,7 @@
       "type": "PointLike",
       "calls": [],
       "constructs": [],
-      "members": [
-        {
-          "name": "toString",
-          "optional": false,
-          "readonly": false,
-          "type": "(() => string) | (() => string)",
-          "calls": [
-            "() => string"
-          ]
-        },
-        {
-          "name": "toLocaleString",
-          "optional": false,
-          "readonly": false,
-          "type": "(() => string) | { (): string; (locales: string | string[], options?: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions): string; }",
-          "calls": [
-            "() => string",
-            "(locales: string | string[], options: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions) => string"
-          ]
-        }
-      ]
+      "members": []
     },
     {
       "entry": "orihon/standard",
@@ -64134,7 +64332,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -67777,6 +67975,17 @@
           ]
         }
       ]
+    },
+    {
+      "entry": "orihon/standard",
+      "name": "toGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: LatLngLike) => [longitude: number, latitude: number]",
+      "calls": [
+        "(position: LatLngLike) => [longitude: number, latitude: number]"
+      ],
+      "constructs": [],
+      "members": []
     },
     {
       "entry": "orihon/standard",
@@ -72013,9 +72222,9 @@
           "name": "panInsideBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; duration?: number; }) => EasyMap",
+          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; durationMs?: number; }) => EasyMap",
           "calls": [
-            "(value: LatLngBoundsLike, options: { animate?: boolean; duration?: number; }) => EasyMap"
+            "(value: LatLngBoundsLike, options: { animate?: boolean; durationMs?: number; }) => EasyMap"
           ]
         },
         {
@@ -72085,36 +72294,36 @@
           "name": "fitBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; duration?: number; }) => EasyMap",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; durationMs?: number; }) => EasyMap",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; duration?: number; }) => EasyMap"
+            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; durationMs?: number; }) => EasyMap"
           ]
         },
         {
           "name": "fitWorld",
           "optional": false,
           "readonly": false,
-          "type": "(options?: { padding?: number; animate?: boolean; duration?: number; }) => EasyMap",
+          "type": "(options?: { padding?: number; animate?: boolean; durationMs?: number; }) => EasyMap",
           "calls": [
-            "(options: { padding?: number; animate?: boolean; duration?: number; }) => EasyMap"
+            "(options: { padding?: number; animate?: boolean; durationMs?: number; }) => EasyMap"
           ]
         },
         {
           "name": "flyTo",
           "optional": false,
           "readonly": false,
-          "type": "(center: LatLngLike, zoom?: number, options?: { duration?: number; }) => EasyMap",
+          "type": "(center: LatLngLike, zoom?: number, options?: { durationMs?: number; }) => EasyMap",
           "calls": [
-            "(center: LatLngLike, zoom: number, options: { duration?: number; }) => EasyMap"
+            "(center: LatLngLike, zoom: number, options: { durationMs?: number; }) => EasyMap"
           ]
         },
         {
           "name": "flyToBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; duration?: number; }) => EasyMap",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; durationMs?: number; }) => EasyMap",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; duration?: number; }) => EasyMap"
+            "(value: LatLngBoundsLike, options: { padding?: number; durationMs?: number; }) => EasyMap"
           ]
         },
         {
@@ -72345,7 +72554,7 @@
           "calls": []
         },
         {
-          "name": "zoomAnimationDuration",
+          "name": "zoomAnimationDurationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -74509,7 +74718,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -75433,7 +75642,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -78108,7 +78317,7 @@
           "calls": []
         },
         {
-          "name": "zoomAnimationDuration",
+          "name": "zoomAnimationDurationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -78408,7 +78617,7 @@
           ]
         },
         {
-          "name": "clusterGridSize",
+          "name": "clusterRadiusPixels",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -80154,7 +80363,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -82385,7 +82594,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -83152,6 +83361,17 @@
     },
     {
       "entry": "orihon/geo",
+      "name": "fromGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: readonly [number, number, ...number[]]) => LatLng",
+      "calls": [
+        "(position: readonly [number, number, ...number[]]) => LatLng"
+      ],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon/geo",
       "name": "geodesicInterpolate",
       "kind": "Function",
       "type": "(a: LatLngLike, b: LatLngLike, maxSegmentMeters?: number) => LatLng[]",
@@ -83419,10 +83639,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -83436,6 +83670,17 @@
       "type": "(lng: number, lat: number) => LatLng",
       "calls": [
         "(lng: number, lat: number) => LatLng"
+      ],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon/geo",
+      "name": "toGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: LatLngLike) => [longitude: number, latitude: number]",
+      "calls": [
+        "(position: LatLngLike) => [longitude: number, latitude: number]"
       ],
       "constructs": [],
       "members": []
@@ -84016,7 +84261,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -84531,9 +84776,9 @@
       "entry": "orihon/bundle",
       "name": "circle",
       "kind": "Function",
-      "type": "(center: LatLngLike, radiusMeters: number, options?: PathOptions) => Circle",
+      "type": "(center: LatLngLike, radius: CircleRadius, options?: PathOptions) => Circle",
       "calls": [
-        "(center: LatLngLike, radiusMeters: number, options: PathOptions) => Circle"
+        "(center: LatLngLike, radius: CircleRadius, options: PathOptions) => Circle"
       ],
       "constructs": [],
       "members": []
@@ -84545,7 +84790,7 @@
       "type": "Circle",
       "calls": [],
       "constructs": [
-        "(center: LatLngLike, radiusMeters: number, options: PathOptions) => Circle"
+        "(center: LatLngLike, radius: CircleRadius, options: PathOptions) => Circle"
       ],
       "members": [
         {
@@ -84563,11 +84808,13 @@
           "calls": []
         },
         {
-          "name": "radiusMeters",
+          "name": "onAdd",
           "optional": false,
           "readonly": false,
-          "type": "number",
-          "calls": []
+          "type": "(map: Orihon) => void",
+          "calls": [
+            "(map: Orihon) => void"
+          ]
         },
         {
           "name": "interactionPointerEvents",
@@ -84591,9 +84838,9 @@
           "name": "getRadius",
           "optional": false,
           "readonly": false,
-          "type": "() => number",
+          "type": "() => CircleRadius",
           "calls": [
-            "() => number"
+            "() => CircleRadius"
           ]
         },
         {
@@ -84627,9 +84874,9 @@
           "name": "setRadius",
           "optional": false,
           "readonly": false,
-          "type": "(radiusMeters: number) => Circle",
+          "type": "(radius: CircleRadius) => Circle",
           "calls": [
-            "(radiusMeters: number) => Circle"
+            "(radius: CircleRadius) => Circle"
           ]
         },
         {
@@ -84690,15 +84937,6 @@
           "type": "() => SVGPathElement | SVGCircleElement",
           "calls": [
             "() => SVGPathElement | SVGCircleElement"
-          ]
-        },
-        {
-          "name": "onAdd",
-          "optional": false,
-          "readonly": false,
-          "type": "(map: Orihon) => void",
-          "calls": [
-            "(map: Orihon) => void"
           ]
         },
         {
@@ -85072,6 +85310,13 @@
       ],
       "members": [
         {
+          "name": "#private",
+          "optional": false,
+          "readonly": false,
+          "type": "any",
+          "calls": []
+        },
+        {
           "name": "center",
           "optional": false,
           "readonly": false,
@@ -85113,7 +85358,7 @@
           ]
         },
         {
-          "name": "getRadius",
+          "name": "getRadiusPixels",
           "optional": false,
           "readonly": false,
           "type": "() => number",
@@ -85131,7 +85376,7 @@
           ]
         },
         {
-          "name": "setRadius",
+          "name": "setRadiusPixels",
           "optional": false,
           "readonly": false,
           "type": "(radiusPixels: number) => CircleMarker",
@@ -85575,7 +85820,7 @@
       "constructs": [],
       "members": [
         {
-          "name": "radius",
+          "name": "radiusPixels",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -85712,6 +85957,30 @@
           "optional": true,
           "readonly": false,
           "type": "string",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon/bundle",
+      "name": "CircleRadius",
+      "kind": "TypeAlias",
+      "type": "CircleRadius",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "radiusMeters",
+          "optional": true,
+          "readonly": true,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "radiusMapUnits",
+          "optional": true,
+          "readonly": true,
+          "type": "number",
           "calls": []
         }
       ]
@@ -86710,7 +86979,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -87338,7 +87607,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -89206,6 +89475,17 @@
     },
     {
       "entry": "orihon/bundle",
+      "name": "fromGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: readonly [number, number, ...number[]]) => LatLng",
+      "calls": [
+        "(position: readonly [number, number, ...number[]]) => LatLng"
+      ],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon/bundle",
       "name": "geodesicInterpolate",
       "kind": "Function",
       "type": "(a: LatLngLike, b: LatLngLike, maxSegmentMeters?: number) => LatLng[]",
@@ -90601,7 +90881,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => ArrayIterator<number>",
@@ -90610,7 +90890,7 @@
           ]
         },
         {
-          "name": "__@unscopables@184",
+          "name": "__@unscopables@185",
           "optional": false,
           "readonly": true,
           "type": "{ [x: number]: boolean; length?: boolean; toString?: boolean; toLocaleString?: boolean; pop?: boolean; push?: boolean; concat?: boolean; join?: boolean; reverse?: boolean; shift?: boolean; slice?: boolean; sort?: boolean; splice?: boolean; unshift?: boolean; indexOf?: boolean; lastIndexOf?: boolean; every?: boolean; some?: boolean; forEach?: boolean; map?: boolean; filter?: boolean; reduce?: boolean; reduceRight?: boolean; find?: boolean; findIndex?: boolean; fill?: boolean; copyWithin?: boolean; entries?: boolean; keys?: boolean; values?: boolean; includes?: boolean; flatMap?: boolean; flat?: boolean; at?: boolean; [Symbol.iterator]?: boolean; readonly [Symbol.unscopables]?: boolean; }",
@@ -91079,7 +91359,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -91324,10 +91604,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -91371,6 +91665,46 @@
           "calls": [
             "(processed: number, total: number) => void"
           ]
+        }
+      ]
+    },
+    {
+      "entry": "orihon/bundle",
+      "name": "GeometryWorkerError",
+      "kind": "Class",
+      "type": "GeometryWorkerError",
+      "calls": [],
+      "constructs": [
+        "(message: string, options: ErrorOptions) => GeometryWorkerError"
+      ],
+      "members": [
+        {
+          "name": "name",
+          "optional": false,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "message",
+          "optional": false,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "stack",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "cause",
+          "optional": true,
+          "readonly": false,
+          "type": "unknown",
+          "calls": []
         }
       ]
     },
@@ -92027,7 +92361,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -93997,7 +94331,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -94527,7 +94861,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -96460,7 +96794,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -96688,7 +97022,7 @@
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -97890,10 +98224,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": false,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -99421,7 +99769,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -100079,7 +100427,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -100175,7 +100523,7 @@
           "calls": []
         },
         {
-          "name": "zoomAnimationDuration",
+          "name": "zoomAnimationDurationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -101895,7 +102243,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -102577,7 +102925,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -103320,7 +103668,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -104189,27 +104537,27 @@
           "name": "update",
           "optional": false,
           "readonly": false,
-          "type": "(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; duration?: number; }) => ObjectManager",
+          "type": "(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; durationMs?: number; }) => ObjectManager",
           "calls": [
-            "(features: ManagedObject | ManagedObject[], options: { animate?: boolean; duration?: number; }) => ObjectManager"
+            "(features: ManagedObject | ManagedObject[], options: { animate?: boolean; durationMs?: number; }) => ObjectManager"
           ]
         },
         {
           "name": "updateObjects",
           "optional": false,
           "readonly": false,
-          "type": "(features: Iterable<ManagedObject>, options?: { animate?: boolean; duration?: number; }) => ObjectManager",
+          "type": "(features: Iterable<ManagedObject>, options?: { animate?: boolean; durationMs?: number; }) => ObjectManager",
           "calls": [
-            "(features: Iterable<ManagedObject>, options: { animate?: boolean; duration?: number; }) => ObjectManager"
+            "(features: Iterable<ManagedObject>, options: { animate?: boolean; durationMs?: number; }) => ObjectManager"
           ]
         },
         {
           "name": "moveObject",
           "optional": false,
           "readonly": false,
-          "type": "(id: ObjectId, coordinates: LatLngLike, options?: { animate?: boolean; duration?: number; }) => ObjectManager",
+          "type": "(id: ObjectId, coordinates: LatLngLike, options?: { animate?: boolean; durationMs?: number; }) => ObjectManager",
           "calls": [
-            "(id: ObjectId, coordinates: LatLngLike, options: { animate?: boolean; duration?: number; }) => ObjectManager"
+            "(id: ObjectId, coordinates: LatLngLike, options: { animate?: boolean; durationMs?: number; }) => ObjectManager"
           ]
         },
         {
@@ -104501,12 +104849,12 @@
           ]
         },
         {
-          "name": "setClusterGridSize",
+          "name": "setClusterRadiusPixels",
           "optional": false,
           "readonly": false,
-          "type": "(size: number) => ObjectManager",
+          "type": "(radiusPixels: number) => ObjectManager",
           "calls": [
-            "(size: number) => ObjectManager"
+            "(radiusPixels: number) => ObjectManager"
           ]
         },
         {
@@ -104753,7 +105101,7 @@
           ]
         },
         {
-          "name": "clusterGridSize",
+          "name": "clusterRadiusPixels",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -105579,7 +105927,7 @@
           "calls": []
         },
         {
-          "name": "maxAge",
+          "name": "maxAgeMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -106072,7 +106420,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -106813,9 +107161,9 @@
           "name": "panInsideBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { animate?: boolean; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
@@ -106885,36 +107233,36 @@
           "name": "fitBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "fitWorld",
           "optional": false,
           "readonly": false,
-          "type": "(options?: { padding?: number; animate?: boolean; duration?: number; }) => Orihon",
+          "type": "(options?: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon",
           "calls": [
-            "(options: { padding?: number; animate?: boolean; duration?: number; }) => Orihon"
+            "(options: { padding?: number; animate?: boolean; durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "flyTo",
           "optional": false,
           "readonly": false,
-          "type": "(center: LatLngLike, zoom?: number, options?: { duration?: number; }) => Orihon",
+          "type": "(center: LatLngLike, zoom?: number, options?: { durationMs?: number; }) => Orihon",
           "calls": [
-            "(center: LatLngLike, zoom: number, options: { duration?: number; }) => Orihon"
+            "(center: LatLngLike, zoom: number, options: { durationMs?: number; }) => Orihon"
           ]
         },
         {
           "name": "flyToBounds",
           "optional": false,
           "readonly": false,
-          "type": "(value: LatLngBoundsLike, options?: { padding?: number; duration?: number; }) => Orihon",
+          "type": "(value: LatLngBoundsLike, options?: { padding?: number; durationMs?: number; }) => Orihon",
           "calls": [
-            "(value: LatLngBoundsLike, options: { padding?: number; duration?: number; }) => Orihon"
+            "(value: LatLngBoundsLike, options: { padding?: number; durationMs?: number; }) => Orihon"
           ]
         },
         {
@@ -108244,7 +108592,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -109304,27 +109652,7 @@
       "type": "PointLike",
       "calls": [],
       "constructs": [],
-      "members": [
-        {
-          "name": "toString",
-          "optional": false,
-          "readonly": false,
-          "type": "(() => string) | (() => string)",
-          "calls": [
-            "() => string"
-          ]
-        },
-        {
-          "name": "toLocaleString",
-          "optional": false,
-          "readonly": false,
-          "type": "(() => string) | { (): string; (locales: string | string[], options?: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions): string; }",
-          "calls": [
-            "() => string",
-            "(locales: string | string[], options: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions) => string"
-          ]
-        }
-      ]
+      "members": []
     },
     {
       "entry": "orihon/bundle",
@@ -111174,6 +111502,51 @@
     },
     {
       "entry": "orihon/bundle",
+      "name": "PrefetchTileLayerOptions",
+      "kind": "TypeAlias",
+      "type": "PrefetchTileLayerOptions",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "zooms",
+          "optional": false,
+          "readonly": false,
+          "type": "number[]",
+          "calls": []
+        },
+        {
+          "name": "maxTiles",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "bounds",
+          "optional": true,
+          "readonly": false,
+          "type": "LatLngBoundsLike",
+          "calls": []
+        },
+        {
+          "name": "xRange",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "yRange",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon/bundle",
       "name": "PreparedPointBatch",
       "kind": "Interface",
       "type": "PreparedPointBatch",
@@ -111829,7 +112202,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -113130,27 +113503,27 @@
           "name": "update",
           "optional": false,
           "readonly": false,
-          "type": "(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; duration?: number; }) => RemoteObjectManager",
+          "type": "(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager",
           "calls": [
-            "(features: ManagedObject | ManagedObject[], options: { animate?: boolean; duration?: number; }) => RemoteObjectManager"
+            "(features: ManagedObject | ManagedObject[], options: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager"
           ]
         },
         {
           "name": "updateObjects",
           "optional": false,
           "readonly": false,
-          "type": "(features: Iterable<ManagedObject>, options?: { animate?: boolean; duration?: number; }) => RemoteObjectManager",
+          "type": "(features: Iterable<ManagedObject>, options?: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager",
           "calls": [
-            "(features: Iterable<ManagedObject>, options: { animate?: boolean; duration?: number; }) => RemoteObjectManager"
+            "(features: Iterable<ManagedObject>, options: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager"
           ]
         },
         {
           "name": "moveObject",
           "optional": false,
           "readonly": false,
-          "type": "(id: ObjectId, coordinates: LatLngLike, options?: { animate?: boolean; duration?: number; }) => RemoteObjectManager",
+          "type": "(id: ObjectId, coordinates: LatLngLike, options?: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager",
           "calls": [
-            "(id: ObjectId, coordinates: LatLngLike, options: { animate?: boolean; duration?: number; }) => RemoteObjectManager"
+            "(id: ObjectId, coordinates: LatLngLike, options: { animate?: boolean; durationMs?: number; }) => RemoteObjectManager"
           ]
         },
         {
@@ -113442,12 +113815,12 @@
           ]
         },
         {
-          "name": "setClusterGridSize",
+          "name": "setClusterRadiusPixels",
           "optional": false,
           "readonly": false,
-          "type": "(size: number) => RemoteObjectManager",
+          "type": "(radiusPixels: number) => RemoteObjectManager",
           "calls": [
-            "(size: number) => RemoteObjectManager"
+            "(radiusPixels: number) => RemoteObjectManager"
           ]
         },
         {
@@ -113670,7 +114043,7 @@
           ]
         },
         {
-          "name": "clusterGridSize",
+          "name": "clusterRadiusPixels",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -114810,7 +115183,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -114868,7 +115241,7 @@
           "calls": []
         },
         {
-          "name": "duration",
+          "name": "durationMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -119085,6 +119458,17 @@
     },
     {
       "entry": "orihon/bundle",
+      "name": "toGeoJSONPosition",
+      "kind": "Function",
+      "type": "(position: LatLngLike) => [longitude: number, latitude: number]",
+      "calls": [
+        "(position: LatLngLike) => [longitude: number, latitude: number]"
+      ],
+      "constructs": [],
+      "members": []
+    },
+    {
+      "entry": "orihon/bundle",
       "name": "tooltip",
       "kind": "Function",
       "type": "(content: OverlayContent, options?: TooltipOptions) => Tooltip",
@@ -120948,7 +121332,7 @@
           ]
         },
         {
-          "name": "__@iterator@182",
+          "name": "__@iterator@183",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -121028,14 +121412,14 @@
           "calls": []
         },
         {
-          "name": "cameraRedrawInterval",
+          "name": "cameraRedrawIntervalMs",
           "optional": true,
           "readonly": false,
           "type": "number",
           "calls": []
         },
         {
-          "name": "cameraSettleDelay",
+          "name": "cameraSettleDelayMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -123151,14 +123535,14 @@
           "calls": []
         },
         {
-          "name": "cameraRedrawInterval",
+          "name": "cameraRedrawIntervalMs",
           "optional": true,
           "readonly": false,
           "type": "number",
           "calls": []
         },
         {
-          "name": "cameraSettleDelay",
+          "name": "cameraSettleDelayMs",
           "optional": true,
           "readonly": false,
           "type": "number",
@@ -123393,10 +123777,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "lat",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "lng",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
           "name": "toString",
           "optional": false,
           "readonly": false,
-          "type": "(() => string) | (() => string) | (() => string)",
+          "type": "(() => string) | (() => string)",
           "calls": [
             "() => string"
           ]
@@ -125451,14 +125849,14 @@
           "calls": []
         },
         {
-          "name": "startTime",
+          "name": "startTimeMs",
           "optional": true,
           "readonly": false,
           "type": "number",
           "calls": []
         },
         {
-          "name": "duration",
+          "name": "durationMs",
           "optional": true,
           "readonly": false,
           "type": "number",

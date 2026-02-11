@@ -31,13 +31,13 @@
       "id": "8716311",
       "title": "Orihon API - circle",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716311",
-      "markdown": "circle\n======\n\nНазначение\n----------\n\nСоздает круг с радиусом в метрах.\n\nПример\n------\n\nDefaultnoneimport { circle } from \"orihon/standard\";\ncircle({ lat: 55.751244, lng: 37.618423 }, 1000, {\nstroke: \"#e11d48\",\nfill: \"#fb7185\",\nfillOpacity: 0.18\n}).bindPopup(\"Радиус 1 км\").addTo(map);\n\nОтличие\n-------\n\n`circle` задается в метрах, а `circleMarker` - в пикселях."
+      "markdown": "circle\n======\n\nНазначение\n----------\n\nСоздает круг с явными единицами радиуса.\n\nПример\n------\n\nDefaultnoneimport { circle } from \"orihon/standard\";\ncircle({ lat: 55.751244, lng: 37.618423 }, { radiusMeters: 1000 }, {\nstroke: \"#e11d48\",\nfill: \"#fb7185\",\nfillOpacity: 0.18\n}).bindPopup(\"Радиус 1 км\").addTo(map);\n\nОтличие\n-------\n\n`circle` принимает `{ radiusMeters }` для EPSG:3857 или `{ radiusMapUnits }` для CRS.Simple. `circleMarker` использует `radiusPixels` в CSS-пикселях."
     },
     {
       "id": "8716312",
       "title": "Orihon API - circleMarker",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716312",
-      "markdown": "circleMarker\n============\n\nНазначение\n----------\n\nСоздает круговой маркер с радиусом в пикселях.\n\nПример\n------\n\nDefaultnoneimport { circleMarker } from \"orihon/standard\";\ncircleMarker({ lat: 55.75, lng: 37.62 }, {\nradius: 7,\nfill: \"#2563eb\",\nfillOpacity: 0.85,\nstroke: \"#ffffff\",\nstrokeWidth: 2\n}).bindPopup(\"Точка данных\").addTo(map);\n\nГде применять\n-------------\n\nPOI и точки данных, чей экранный размер не должен расти вместе с zoom."
+      "markdown": "circleMarker\n============\n\nНазначение\n----------\n\nСоздает круговой маркер с радиусом в пикселях.\n\nПример\n------\n\nDefaultnoneimport { circleMarker } from \"orihon/standard\";\ncircleMarker({ lat: 55.75, lng: 37.62 }, {\nradiusPixels: 7,\nfill: \"#2563eb\",\nfillOpacity: 0.85,\nstroke: \"#ffffff\",\nstrokeWidth: 2\n}).bindPopup(\"Точка данных\").addTo(map);\n\nГде применять\n-------------\n\nPOI и точки данных, чей экранный размер не должен расти вместе с zoom."
     },
     {
       "id": "8716359",
@@ -115,7 +115,7 @@
       "id": "8716313",
       "title": "Orihon API - geoJSON",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716313",
-      "markdown": "geoJSON\n=======\n\nНазначение\n----------\n\nСоздает слой из GeoJSON Feature, FeatureCollection или Geometry.\n\nПример\n------\n\nDefaultnoneimport { geoJSON, circleMarker } from \"orihon/standard\";\nconst layer = geoJSON(collection, {\nfilter: (feature) => feature.properties?.visible !== false,\nstyle: (feature) => ({ stroke: feature.properties?.color ?? \"#334155\" }),\npointToLayer: (feature, latlng) => circleMarker(latlng, { radius: 6 }),\npopup: (feature) => feature.properties?.title ?? \"Объект\"\n}).addTo(map);\nlayer.addData(nextFeature);\n\nОсобенности Orihon 1.0.2\n------------------------\n\nВ Standard доступны SVG/canvas. В Advanced (`orihon`) можно использовать WebGL path batches через `renderer: \"webgl\"` или `\"auto\"` для больших линий."
+      "markdown": "geoJSON\n=======\n\nНазначение\n----------\n\nСоздает слой из GeoJSON Feature, FeatureCollection или Geometry.\n\nПример\n------\n\nDefaultnoneimport { geoJSON, circleMarker } from \"orihon/standard\";\nconst layer = geoJSON(collection, {\nfilter: (feature) => feature.properties?.visible !== false,\nstyle: (feature) => ({ stroke: feature.properties?.color ?? \"#334155\" }),\npointToLayer: (feature, latlng) => circleMarker(latlng, { radiusPixels: 6 }),\npopup: (feature) => feature.properties?.title ?? \"Объект\"\n}).addTo(map);\nlayer.addData(nextFeature);\n\nОсобенности Orihon 1.0.2\n------------------------\n\nВ Standard доступны SVG/canvas. В Advanced (`orihon`) можно использовать WebGL path batches через `renderer: \"webgl\"` или `\"auto\"` для больших линий."
     },
     {
       "id": "8716325",
@@ -181,7 +181,7 @@
       "id": "8716332",
       "title": "Orihon API - objectManager",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716332",
-      "markdown": "objectManager\n=============\n\nНазначение\n----------\n\nСоздает менеджер большого количества объектов с spatial index и кластеризацией.\n\nПример\n------\n\nDefaultnoneimport { objectManager } from \"orihon\";\nconst objects = objectManager({\nclusterize: true,\nclusterGridSize: 50,\nclusterRenderer: \"auto\"\n}).addTo(map);\nobjects.add(featureCollection);\nobjects.setFilter((item) => item.properties?.active !== false);\nobjects.bindPopup((object) => object.properties?.title ?? \"Объект\");\n\nОсобенности Orihon 1.0.2\n------------------------\n\nКластеризация hierarchical greedy в пиксельном радиусе, layout может готовиться в worker, unclustered points могут уходить в WebGL."
+      "markdown": "objectManager\n=============\n\nНазначение\n----------\n\nСоздает менеджер большого количества объектов с spatial index и кластеризацией.\n\nПример\n------\n\nDefaultnoneimport { objectManager } from \"orihon\";\nconst objects = objectManager({\nclusterize: true,\nclusterRadiusPixels: 50,\nclusterRenderer: \"auto\"\n}).addTo(map);\nobjects.add(featureCollection);\nobjects.setFilter((item) => item.properties?.active !== false);\nobjects.bindPopup((object) => object.properties?.title ?? \"Объект\");\n\nОсобенности Orihon 1.0.2\n------------------------\n\nКластеризация hierarchical greedy в пиксельном радиусе, layout может готовиться в worker, unclustered points могут уходить в WebGL."
     },
     {
       "id": "8716345",

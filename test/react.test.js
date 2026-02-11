@@ -6,6 +6,10 @@ import { JSDOM } from "jsdom";
 import { Map as OrihonMap } from "../dist/react/map.js";
 import { ObjectManager } from "../dist/react/object-manager.js";
 
+test("React Map rejects removed camera units before forwarding DOM props", () => {
+  assert.throws(() => OrihonMap({ center: { lat: 0, lng: 0 }, zoom: 4, zoomAnimationDuration: 0.25 }), /zoomAnimationDurationMs/);
+});
+
 test("React Map survives Strict Mode without leaking map instances", async () => {
   const dom = new JSDOM("<!doctype html><div id='root'></div>", { pretendToBeVisual: true });
   globalThis.window = dom.window;
@@ -29,10 +33,11 @@ test("React Map survives Strict Mode without leaking map instances", async () =>
   const root = createRoot(document.getElementById("root"));
   await act(async () => {
     root.render(React.createElement(StrictMode, null,
-      React.createElement(OrihonMap, { center: { lat: 10, lng: 20 }, zoom: 4, controls: false, onMapReady: ready, style: { height: 300 } })
+      React.createElement(OrihonMap, { center: { lat: 10, lng: 20 }, zoom: 4, zoomAnimationDurationMs: 125, controls: false, onMapReady: ready, style: { height: 300 } })
     ));
   });
   assert.equal(creates, 2);
+  assert.equal(current.options.zoomAnimationDurationMs, 125);
   assert.equal(removes, 1);
   assert.equal(document.querySelectorAll(".oh-viewport").length, 1);
 

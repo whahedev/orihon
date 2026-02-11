@@ -1,4 +1,6 @@
 import { createSvgEl, listen, listenTap } from "../dom.js";
+import { CRSCompatibilityError } from "../crs.js";
+import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { EARTH_RADIUS, destination, geodesicInterpolate, LatLng, LatLngBounds, latLng, bounds, metersToPixels, type LatLngBoundsLike, type LatLngLike } from "../geo.js";
 import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
@@ -520,14 +522,45 @@ export class Rectangle extends Polygon {
   }
 }
 
+/** Exactly one explicit radius unit; map units are supported only by CRS.Simple. */
+export type CircleRadius =
+  | { readonly radiusMeters: number; readonly radiusMapUnits?: never }
+  | { readonly radiusMapUnits: number; readonly radiusMeters?: never };
+
+function normalizeCircleRadius(radius: CircleRadius): CircleRadius {
+  if (!radius || typeof radius !== "object" ||
+      ("radiusMeters" in radius) === ("radiusMapUnits" in radius)) {
+    throw new TypeError("Circle requires exactly one of { radiusMeters } or { radiusMapUnits }.");
+  }
+  return radius.radiusMeters !== undefined
+    ? { radiusMeters: nonNegativeFinite(radius.radiusMeters, "radiusMeters") }
+    : { radiusMapUnits: nonNegativeFinite(radius.radiusMapUnits!, "radiusMapUnits") };
+}
+
 export class Circle extends PathLayer {
   center: LatLng;
-  radiusMeters: number;
+  #radius: CircleRadius;
 
-  constructor(center: LatLngLike, radiusMeters: number, options?: PathOptions) {
+  constructor(center: LatLngLike, radius: CircleRadius, options?: PathOptions) {
     super(options);
     this.center = latLng(center);
-    this.radiusMeters = Number(radiusMeters);
+    this.#radius = normalizeCircleRadius(radius);
+  }
+
+  get #radiusValue(): number { return this.#radius.radiusMeters ?? this.#radius.radiusMapUnits!; }
+
+  #assertCRS(map: Orihon, radius = this.#radius): void {
+    const mapUnits = radius.radiusMapUnits !== undefined;
+    if (mapUnits !== (map.crs.code === "Simple")) {
+      throw new CRSCompatibilityError(mapUnits
+        ? "radiusMapUnits requires CRS.Simple. Use radiusMeters on geographic maps."
+        : "radiusMeters requires EPSG:3857. Use radiusMapUnits on CRS.Simple.");
+    }
+  }
+
+  override onAdd(map: Orihon): void {
+    this.#assertCRS(map);
+    super.onAdd(map);
   }
 
   protected override interactionPointerEvents(): "all" {
@@ -535,13 +568,13 @@ export class Circle extends PathLayer {
   }
 
   getLatLng(): LatLng { return this.center.clone(); }
-  getRadius(): number { return this.radiusMeters; }
+  getRadius(): CircleRadius { return { ...this.#radius }; }
 
   getBounds(): LatLngBounds {
-    if (this.map?.crs.code === "Simple") {
+    if (this.#radius.radiusMapUnits !== undefined) {
       return new LatLngBounds(
-        { lat: this.center.lat - this.radiusMeters, lng: this.center.lng - this.radiusMeters },
-        { lat: this.center.lat + this.radiusMeters, lng: this.center.lng + this.radiusMeters }
+        { lat: this.center.lat - this.#radiusValue, lng: this.center.lng - this.#radiusValue },
+        { lat: this.center.lat + this.#radiusValue, lng: this.center.lng + this.#radiusValue }
       );
     }
     if (this.options.geodesic) {
@@ -549,7 +582,7 @@ export class Circle extends PathLayer {
       for (const value of this.#geodesicRing(64)) result.extend(value);
       return result;
     }
-    const latDelta = (this.radiusMeters / EARTH_RADIUS) * (180 / Math.PI);
+    const latDelta = (this.#radiusValue / EARTH_RADIUS) * (180 / Math.PI);
     const lngScale = Math.max(1e-6, Math.cos((this.center.lat * Math.PI) / 180));
     const lngDelta = latDelta / lngScale;
     return new LatLngBounds(
@@ -571,9 +604,9 @@ export class Circle extends PathLayer {
       );
       if (!inside && !onStroke) return null;
     } else {
-      const radius = Math.max(1, this.map.crs.code === "Simple"
-        ? Math.abs(this.radiusMeters) * this.map.crs.scale(this.map.zoom)
-        : metersToPixels(this.radiusMeters, this.center.lat, this.map.zoom));
+      const radius = Math.max(0, this.map.crs.code === "Simple"
+        ? Math.abs(this.#radiusValue) * this.map.crs.scale(this.map.zoom)
+        : metersToPixels(this.#radiusValue, this.center.lat, this.map.zoom));
       const distance = Math.hypot(target.x - center.x, target.y - center.y);
       if (distance > radius + options.tolerance) return null;
     }
@@ -586,8 +619,10 @@ export class Circle extends PathLayer {
     return this;
   }
 
-  setRadius(radiusMeters: number): this {
-    this.radiusMeters = Number(radiusMeters);
+  setRadius(radius: CircleRadius): this {
+    const next = normalizeCircleRadius(radius);
+    if (this.map) this.#assertCRS(this.map, next);
+    this.#radius = next;
     this.render();
     return this;
   }
@@ -606,9 +641,9 @@ export class Circle extends PathLayer {
       return;
     }
     const center = this.map.latLngToLayerPoint(this.center);
-    const radius = Math.max(1, this.map.crs.code === "Simple"
-      ? Math.abs(this.radiusMeters) * this.map.crs.scale(this.map.zoom)
-      : metersToPixels(this.radiusMeters, this.center.lat, this.map.zoom));
+    const radius = Math.max(0, this.map.crs.code === "Simple"
+      ? Math.abs(this.#radiusValue) * this.map.crs.scale(this.map.zoom)
+      : metersToPixels(this.#radiusValue, this.center.lat, this.map.zoom));
     if (!this.options.noClip && !projectedBoundsIntersectsViewport(this.map, {
       minX: center.x - radius,
       minY: center.y - radius,
@@ -624,28 +659,31 @@ export class Circle extends PathLayer {
   #geodesicRing(vertexCount: number): LatLng[] {
     return Array.from({ length: vertexCount }, (_, index) => destination(
       this.center,
-      this.radiusMeters,
+      this.#radiusValue,
       index * 360 / vertexCount
     ));
   }
 
   #geodesicVertexCount(): number {
-    return Math.max(32, Math.min(64, 32 + Math.ceil(Math.log2(Math.max(1, this.radiusMeters / 10_000))) * 4));
+    return Math.max(32, Math.min(64, 32 + Math.ceil(Math.log2(Math.max(1, this.#radiusValue / 10_000))) * 4));
   }
 }
 
 export interface CircleMarkerOptions extends PathOptions {
-  radius?: number;
+  /** Radius in CSS pixels, independent of zoom. Default 10. */
+  radiusPixels?: number;
 }
 
 export class CircleMarker extends PathLayer {
   center: LatLng;
-  radiusPixels: number;
+  #radiusPixels: number;
+  get radiusPixels(): number { return this.#radiusPixels; }
 
   constructor(center: LatLngLike, options: CircleMarkerOptions = {}) {
     super({ fill: options.fill ?? "#2563eb", ...options });
     this.center = latLng(center);
-    this.radiusPixels = Math.max(1, Number(options.radius ?? 10));
+    rejectLegacyUnit(options, "radius", "radiusPixels");
+    this.#radiusPixels = nonNegativeFinite(options.radiusPixels ?? 10, "radiusPixels");
   }
 
   protected override createPathElement(): SVGCircleElement {
@@ -657,7 +695,7 @@ export class CircleMarker extends PathLayer {
   }
 
   getLatLng(): LatLng { return this.center.clone(); }
-  getRadius(): number { return this.radiusPixels; }
+  getRadiusPixels(): number { return this.radiusPixels; }
 
   setLatLng(value: LatLngLike): this {
     this.center = latLng(value);
@@ -665,8 +703,8 @@ export class CircleMarker extends PathLayer {
     return this;
   }
 
-  setRadius(radiusPixels: number): this {
-    this.radiusPixels = Math.max(1, Number(radiusPixels));
+  setRadiusPixels(radiusPixels: number): this {
+    this.#radiusPixels = nonNegativeFinite(radiusPixels, "radiusPixels");
     this.render();
     return this;
   }
@@ -714,5 +752,5 @@ export class CircleMarker extends PathLayer {
 export function polyline(points: LatLngLike[], options?: PathOptions): Polyline { return new Polyline(points, options); }
 export function polygon(points: LatLngLike[] | LatLngLike[][], options?: PathOptions): Polygon { return new Polygon(points, options); }
 export function rectangle(value: LatLngBoundsLike, options?: PathOptions): Rectangle { return new Rectangle(value, options); }
-export function circle(center: LatLngLike, radiusMeters: number, options?: PathOptions): Circle { return new Circle(center, radiusMeters, options); }
+export function circle(center: LatLngLike, radius: CircleRadius, options?: PathOptions): Circle { return new Circle(center, radius, options); }
 export function circleMarker(center: LatLngLike, options?: CircleMarkerOptions): CircleMarker { return new CircleMarker(center, options); }

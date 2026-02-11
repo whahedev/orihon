@@ -467,7 +467,7 @@
             width: selected ? 2 : 1.25,
             opacity: selected ? 0.7 : 0.4,
             maxPoints: 16,
-            maxAge: 45_000
+            maxAgeMs: 45_000
           }
         };
       }
@@ -1019,7 +1019,7 @@
             properties: { ...prev.properties, heading: pos.heading }
           });
         }
-        if (updates.length) ops.updateObjects(updates, { animate: true, duration: dt });
+        if (updates.length) ops.updateObjects(updates, { animate: true, durationMs: dt });
       }
 
       function followVisual(now) {

@@ -2883,7 +2883,7 @@ async function clustersOrihon(points) {
 
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 50,
+    clusterRadiusPixels: 50,
     clusterMinPoints: 2,
     clusterMaxZoom: 14,
     clusterRenderer: "webgl",
@@ -4268,7 +4268,7 @@ async function filterOrihon(points) {
 
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 50,
+    clusterRadiusPixels: 50,
     clusterMinPoints: 2,
     clusterMaxZoom: 14,
     clusterRenderer: "webgl",
@@ -5084,7 +5084,7 @@ async function richOrihon(points) {
   const objects = makeRichObjects(points);
   const manager = objectManager({
     clusterize,
-    clusterGridSize: 56,
+    clusterRadiusPixels: 56,
     clusterMinPoints: 2,
     clusterMaxZoom: 15,
     clusterRenderer: "auto",

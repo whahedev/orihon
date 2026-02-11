@@ -1,4 +1,5 @@
 import { createEl } from "../dom.js";
+import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { cameraWarpCss } from "../camera.js";
 import { TILE_SIZE, LatLngBounds, latLng, projectMercator01, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
@@ -13,9 +14,9 @@ export interface WebGLPathBatchOptions extends LayerOptions, PathOptions {
   /** Fall back to Canvas 2D if WebGL init fails. Default true. */
   fallbackCanvas?: boolean;
   /** Minimum time between exact GPU camera redraws while moving. Default 250 ms; 0 redraws every frame. */
-  cameraRedrawInterval?: number;
+  cameraRedrawIntervalMs?: number;
   /** Idle time before the final exact GPU camera redraw. Default 120 ms. */
-  cameraSettleDelay?: number;
+  cameraSettleDelayMs?: number;
 }
 
 type ResolvedOptions = Required<
@@ -28,8 +29,8 @@ type ResolvedOptions = Required<
     | "maxDpr"
     | "fallbackCanvas"
     | "className"
-    | "cameraRedrawInterval"
-    | "cameraSettleDelay"
+    | "cameraRedrawIntervalMs"
+    | "cameraSettleDelayMs"
   >
 > &
   WebGLPathBatchOptions;
@@ -96,11 +97,15 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       strokeOpacity: 0.7,
       maxDpr: 1,
       fallbackCanvas: true,
-      cameraRedrawInterval: 250,
-      cameraSettleDelay: 120,
+      cameraRedrawIntervalMs: 250,
+      cameraSettleDelayMs: 120,
       interactive: false,
       ...options
     } as ResolvedOptions);
+    rejectLegacyUnit(options, "cameraRedrawInterval", "cameraRedrawIntervalMs");
+    rejectLegacyUnit(options, "cameraSettleDelay", "cameraSettleDelayMs");
+    nonNegativeFinite(this.options.cameraRedrawIntervalMs, "cameraRedrawIntervalMs");
+    nonNegativeFinite(this.options.cameraSettleDelayMs, "cameraSettleDelayMs");
     this.color = parseCssColor(String(this.options.stroke ?? "#0f766e"), { r: 15, g: 118, b: 110 });
   }
 
@@ -267,7 +272,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
         return;
       }
       const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      const baseInterval = Math.max(0, Number(this.options.cameraRedrawInterval) || 0);
+      const baseInterval = Math.max(0, Number(this.options.cameraRedrawIntervalMs) || 0);
       // A long submit can itself delay the next rAF beyond the base interval.
       // Scale the cadence with batch size so a heavy layer gets cheap camera
       // warps between exact frames instead of immediately submitting again.
@@ -320,7 +325,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
 
   #scheduleSettledGpu(): void {
     this.#clearSettleTimer();
-    const delay = Math.max(0, Number(this.options.cameraSettleDelay) || 0);
+    const delay = Math.max(0, Number(this.options.cameraSettleDelayMs) || 0);
     this._settleTimer = setTimeout(() => {
       this._settleTimer = null;
       this._forceGpu = true;

@@ -10,6 +10,7 @@ import { Polyline, polyline } from "../layers/vector.js";
 import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js";
 import { LatLng, LatLngBounds, Point, clampLat, latLng, bounds, wrapLng, type LatLngBoundsLike, type LatLngLike, type PointLike } from "../geo.js";
 import type { Orihon } from "../map.js";
+import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import {
   Popup,
   type OverlayContent,
@@ -184,10 +185,9 @@ export interface ObjectManagerOptions {
   style?: ObjectStyleResolver | null;
   /**
    * Cluster radius in CSS/world pixels at the clustered zoom (Leaflet-style).
-   * Kept name `clusterGridSize` for compatibility; was formerly a grid cell size.
    * Default 50. Clamped to ≥ 20.
    */
-  clusterGridSize?: number;
+  clusterRadiusPixels?: number;
   clusterMinPoints?: number;
   clusterMaxZoom?: number;
   clusterZoomOnClick?: boolean;
@@ -503,11 +503,12 @@ export class ObjectManager extends Evented {
 
   constructor(options: ObjectManagerOptions = {}) {
     super();
+    rejectLegacyUnit(options, "clusterGridSize", "clusterRadiusPixels");
     this.options = {
       minZoom: 0,
       marker: {},
       clusterize: false,
-      clusterGridSize: 50,
+      clusterRadiusPixels: 50,
       clusterMinPoints: 2,
       clusterMaxZoom: 16,
       clusterZoomOnClick: true,
@@ -545,7 +546,7 @@ export class ObjectManager extends Evented {
       source: null,
       ...options
     };
-    this.options.clusterGridSize = Math.max(20, Number(this.options.clusterGridSize));
+    this.options.clusterRadiusPixels = Math.max(20, nonNegativeFinite(this.options.clusterRadiusPixels, "clusterRadiusPixels"));
     this.options.clusterMinPoints = Math.max(2, Math.floor(this.options.clusterMinPoints));
     this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
     this.options.layoutWorkerThreshold = Math.max(1, Math.floor(this.options.layoutWorkerThreshold));
@@ -824,21 +825,22 @@ export class ObjectManager extends Evented {
    * On the WebGL non-cluster path this patches GPU buffers instead of a full layout rebuild —
    * critical for realtime stress at 100k–1M.
    */
-  update(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; duration?: number }): this {
+  update(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; durationMs?: number }): this {
     return this.updateObjects(Array.isArray(features) ? features : [features], options);
   }
 
   updateObjects(
     features: Iterable<ManagedObject>,
-    options?: { animate?: boolean; duration?: number }
+    options?: { animate?: boolean; durationMs?: number }
   ): this {
     const list = [...features];
     for (const item of list) assertManagedCoordinateFormat(item);
     const animate = Boolean(options?.animate);
-    const duration = Math.max(0, Number(options?.duration) || 800);
+    rejectLegacyUnit(options ?? {}, "duration", "durationMs");
+    const durationMs = nonNegativeFinite(options?.durationMs ?? 800, "durationMs");
 
     // Animated point moves must not rebuild cluster layout every tick.
-    if (animate && this.#applyAnimatedPointUpdates(list, duration)) {
+    if (animate && this.#applyAnimatedPointUpdates(list, durationMs)) {
       return this;
     }
 
@@ -989,7 +991,7 @@ export class ObjectManager extends Evented {
    * Fast path for animated point moves: update indexes + GPU motion attrs,
    * never rebuild cluster hierarchy mid-flight.
    */
-  #applyAnimatedPointUpdates(list: ManagedObject[], duration: number): boolean {
+  #applyAnimatedPointUpdates(list: ManagedObject[], durationMs: number): boolean {
     if (!this.map || !list.length) return false;
     let applied = 0;
     const headingPatches: Array<{ id: ObjectId; rotation: number }> = [];
@@ -1009,7 +1011,7 @@ export class ObjectManager extends Evented {
       const record = this.index.records.get(id);
       if (record && this._layout?.singles.has(id)) this._layout.singles.set(id, record);
       if (this.options.sceneFeatures) {
-        this.scene.startMotion(id, prevLat, prevLng, normalized.lat, normalized.lng, duration);
+        this.scene.startMotion(id, prevLat, prevLng, normalized.lat, normalized.lng, durationMs);
         this.scene.trails.append(id, prevLat, prevLng);
       }
 
@@ -1037,7 +1039,7 @@ export class ObjectManager extends Evented {
   moveObject(
     id: ObjectId,
     coordinates: LatLngLike,
-    options?: { animate?: boolean; duration?: number }
+    options?: { animate?: boolean; durationMs?: number }
   ): this {
     const object = this.items.get(id);
     if (!object) throw new RangeError(`ObjectManager: object "${String(id)}" does not exist`);
@@ -1402,11 +1404,10 @@ export class ObjectManager extends Evented {
     return this;
   }
 
-  setClusterGridSize(size: number): this {
-    const next = Math.max(20, Number(size));
-    if (!Number.isFinite(next)) throw new TypeError("clusterGridSize must be a finite number");
-    if (this.options.clusterGridSize === next) return this;
-    this.options.clusterGridSize = next;
+  setClusterRadiusPixels(radiusPixels: number): this {
+    const next = Math.max(20, nonNegativeFinite(radiusPixels, "clusterRadiusPixels"));
+    if (this.options.clusterRadiusPixels === next) return this;
+    this.options.clusterRadiusPixels = next;
     this.unspiderfy();
     this.#invalidateLayout();
     this.#clearRendered();
@@ -1828,7 +1829,7 @@ export class ObjectManager extends Evented {
       ids: this._layoutIds,
       coords: this._layoutCoords.subarray(0, this._layoutPacked * 2),
       zoomBucket,
-      gridSize: this.options.clusterGridSize,
+      gridSize: this.options.clusterRadiusPixels,
       minPoints: this.options.clusterMinPoints,
       clusterize: this.options.clusterize,
       clusterMaxZoom: this.options.clusterMaxZoom,
@@ -3413,8 +3414,8 @@ export class ObjectManager extends Evented {
             }),
             prevLat: motion?.fromLat ?? geometry.lat,
             prevLng: motion?.fromLng ?? geometry.lng,
-            startTime: motion?.startTime ?? 0,
-            duration: motion?.duration ?? 0
+            startTimeMs: motion?.startTimeMs ?? 0,
+            durationMs: motion?.durationMs ?? 0
           });
           if (this.options.declutter && this.map) {
             const project =

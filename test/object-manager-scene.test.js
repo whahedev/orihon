@@ -268,7 +268,7 @@ test("motion interrupt starts from interpolated position", () => {
 
 test("trails append, dedupe, maxPoints, remove", () => {
   const trails = new ObjectTrailStore();
-  trails.configure("a", { enabled: true, maxPoints: 3, maxAge: 60_000, color: "#2563eb", width: 2, opacity: 0.5 });
+  trails.configure("a", { enabled: true, maxPoints: 3, maxAgeMs: 60_000, color: "#2563eb", width: 2, opacity: 0.5 });
   trails.append("a", 1, 2);
   trails.append("a", 1, 2); // duplicate
   trails.append("a", 2, 3);
@@ -283,7 +283,7 @@ test("trails append, dedupe, maxPoints, remove", () => {
 
 test("trails clamp unbounded maxPoints", () => {
   const trails = new ObjectTrailStore();
-  trails.configure("a", { enabled: true, maxPoints: 1e9, maxAge: 1e15 });
+  trails.configure("a", { enabled: true, maxPoints: 1e9, maxAgeMs: 1e15 });
   for (let i = 0; i < MAX_TRAIL_POINTS + 40; i++) trails.append("a", i, i);
   assert.ok(trails.list()[0].points.length <= MAX_TRAIL_POINTS);
 });
@@ -440,7 +440,7 @@ test("sceneFeatures false keeps property and animated point updates", async () =
 
   manager.updateObjects(
     [{ id: 1, coordinates: { lat: 55.8, lng: 37.7 }, properties: manager.getObject(1).properties }],
-    { animate: true, duration: 50 }
+    { animate: true, durationMs: 50 }
   );
   const rec = manager.index.records.get(1);
   assert.ok(rec);

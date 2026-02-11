@@ -39,7 +39,7 @@ Use `objectManager` for interactive clustered objects and `webglPointLayer` for 
 ```js
 import { objectManager, webglPointLayer } from "orihon";
 
-const objects = objectManager({ clusterize: true, clusterGridSize: 50 }).addTo(map);
+const objects = objectManager({ clusterize: true, clusterRadiusPixels: 50 }).addTo(map);
 objects.add(featureCollection);
 
 const density = webglPointLayer(points, { pointSize: 4, color: "#e11d48" }).addTo(map);

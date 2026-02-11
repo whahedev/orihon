@@ -95,7 +95,7 @@ test("ObjectManager addAsync chunks iterable ingest and flushes bulk state", asy
 });
 
 test("ObjectManager exposes indexed collection and filter lifecycle", () => {
-  const manager = objectManager({ clusterize: true, clusterGridSize: 64 });
+  const manager = objectManager({ clusterize: true, clusterRadiusPixels: 64 });
   manager.add([
     { id: 1, coordinates: { lat: 52.52, lng: 13.40 }, properties: { side: "west" } },
     { id: 2, coordinates: { lat: 52.53, lng: 13.45 }, properties: { side: "east" } },
@@ -110,8 +110,8 @@ test("ObjectManager exposes indexed collection and filter lifecycle", () => {
 
   manager.setFilter((item) => item.properties?.side === "west");
   assert.equal(typeof manager.filter, "function");
-  manager.setClusterGridSize(50).setClusterize(false);
-  assert.equal(manager.options.clusterGridSize, 50);
+  manager.setClusterRadiusPixels(50).setClusterize(false);
+  assert.equal(manager.options.clusterRadiusPixels, 50);
   assert.equal(manager.options.clusterize, false);
 
   manager.remove([1, 3]);
@@ -166,7 +166,7 @@ test("ObjectManager cluster centers stay near source points", () => {
   const map = new FakeMap();
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 256,
+    clusterRadiusPixels: 256,
     clusterMinPoints: 2,
     clusterMaxZoom: 18
   });
@@ -212,7 +212,7 @@ test("ObjectManager spiderfies at max zoom even when clusterZoomOnClick is disab
   const manager = objectManager({
     clusterize: true,
     clusterMaxZoom: 10,
-    clusterGridSize: 256,
+    clusterRadiusPixels: 256,
     clusterZoomOnClick: false,
     spiderfyOnMaxZoom: true,
     clusterRenderer: "dom"
@@ -268,7 +268,7 @@ test("ObjectManager webgl renderer uses canvas cluster badges (no DOM Markers)",
   const map = new FakeMap();
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 256,
+    clusterRadiusPixels: 256,
     clusterMinPoints: 2,
     clusterMaxZoom: 18,
     clusterRenderer: "webgl",
@@ -326,7 +326,7 @@ test("ObjectManager canvas clusters do not accumulate clusterMembers across zoom
   const map = new FakeMap();
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 80,
+    clusterRadiusPixels: 80,
     clusterMinPoints: 2,
     clusterMaxZoom: 14,
     clusterRenderer: "webgl",
@@ -392,7 +392,7 @@ test("ObjectManager webgl + custom clusterIcon keeps DOM cluster badges", () => 
   const map = new FakeMap();
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 256,
+    clusterRadiusPixels: 256,
     clusterMinPoints: 2,
     clusterMaxZoom: 18,
     clusterRenderer: "webgl",
@@ -452,7 +452,7 @@ test("ObjectManager keeps layout across pan at the same zoom", () => {
   const map = new FakeMap();
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 64,
+    clusterRadiusPixels: 64,
     clusterMinPoints: 2,
     clusterRenderer: "dom"
   });
@@ -508,7 +508,7 @@ test("ObjectManager reuses pooled cluster badges across zoom rebuilds", () => {
   const map = new FakeMap();
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 64,
+    clusterRadiusPixels: 64,
     clusterMinPoints: 2,
     clusterRenderer: "dom",
     layoutWorker: false
@@ -631,7 +631,7 @@ test("ObjectManager.prepareLayout builds clusters off the hot path", async () =>
   const map = new FakeMap();
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 256,
+    clusterRadiusPixels: 256,
     clusterMinPoints: 2,
     clusterMaxZoom: 18,
     clusterRenderer: "dom",
@@ -651,7 +651,7 @@ test("ObjectManager.prepareLayout builds clusters off the hot path", async () =>
 test("ObjectManager caps the all-zoom hierarchy for mass clustering", async () => {
   const manager = objectManager({
     clusterize: true,
-    clusterGridSize: 256,
+    clusterRadiusPixels: 256,
     clusterMaxZoom: 18,
     clusterHierarchyMaxObjects: 2,
     layoutWorker: false
@@ -667,7 +667,7 @@ test("ObjectManager caps the all-zoom hierarchy for mass clustering", async () =
 
   const unlimited = objectManager({
     clusterize: true,
-    clusterGridSize: 256,
+    clusterRadiusPixels: 256,
     clusterMaxZoom: 18,
     clusterHierarchyMaxObjects: 0,
     layoutWorker: false

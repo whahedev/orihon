@@ -161,7 +161,7 @@ export type { MarkerOptions, MarkerAppearance, MarkerShape } from "./layers/mark
 export type { MarkerCollectionOptions, MarkerCollectionRenderer } from "./layers/marker-collection.js";
 export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";
-export type { PathOptions, CircleMarkerOptions } from "./layers/vector.js";
+export type { PathOptions, CircleMarkerOptions, CircleRadius } from "./layers/vector.js";
 export type {
   GeoJSONInput,
   GeoJSONAsyncInput,

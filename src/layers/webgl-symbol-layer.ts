@@ -1,4 +1,5 @@
 import { createEl } from "../dom.js";
+import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { TILE_SIZE, latLng, projectMercator01, type LatLngLike, type Point } from "../geo.js";
 import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
@@ -18,8 +19,10 @@ export interface WebGLSymbolInstance {
   /** Motion: previous mercator */
   prevLat?: number;
   prevLng?: number;
-  startTime?: number;
-  duration?: number;
+  /** Motion start on the performance.now() clock, in milliseconds. */
+  startTimeMs?: number;
+  /** Motion duration in milliseconds; zero uses the destination immediately. */
+  durationMs?: number;
 }
 
 export interface WebGLSymbolLayerOptions extends LayerOptions {
@@ -101,7 +104,14 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
   }
 
   setInstances(instances: Iterable<WebGLSymbolInstance>): this {
-    this.instances = [...instances];
+    const next = [...instances];
+    for (const instance of next) {
+      rejectLegacyUnit(instance, "duration", "durationMs");
+      rejectLegacyUnit(instance, "startTime", "startTimeMs");
+      if (instance.startTimeMs !== undefined) nonNegativeFinite(instance.startTimeMs, "startTimeMs");
+      nonNegativeFinite(instance.durationMs ?? 0, "durationMs");
+    }
+    this.instances = next;
     this.count = this.instances.length;
     this.dirty = true;
     this.render();
@@ -109,6 +119,10 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
   }
 
   patchInstance(index: number, patch: Partial<WebGLSymbolInstance>): this {
+    rejectLegacyUnit(patch, "duration", "durationMs");
+    rejectLegacyUnit(patch, "startTime", "startTimeMs");
+    if (patch.startTimeMs !== undefined) nonNegativeFinite(patch.startTimeMs, "startTimeMs");
+    if (patch.durationMs !== undefined) nonNegativeFinite(patch.durationMs, "durationMs");
     const current = this.instances[index];
     if (!current) return this;
     Object.assign(current, patch);
@@ -235,7 +249,7 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
     data[o + 11] = inst.tint[1];
     data[o + 12] = inst.tint[2];
     data[o + 13] = inst.tint[3] * (Number.isFinite(inst.opacity) ? inst.opacity : 1);
-    // motion start/duration packed into unused UV corners via extra attrs in shader buffer:
+    // motion start/durationMs packed into unused UV corners via extra attrs in shader buffer:
     // We append motion after tint by expanding — keep in parallel arrays for simplicity.
   }
 
@@ -260,7 +274,7 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
       varying vec4 v_tint;
       void main() {
         float dur = max(a_motion.y, 0.0001);
-        float t = clamp((u_time - a_motion.x) / dur, 0.0, 1.0);
+        float t = a_motion.y <= 0.0 ? 1.0 : clamp((u_time - a_motion.x) / dur, 0.0, 1.0);
         vec2 merc = mix(a_prevMerc, a_merc, t);
         vec2 pixel = merc * u_scale - u_origin;
         float c = cos(a_rotation);
@@ -385,8 +399,8 @@ export class WebGLSymbolLayer extends Layer<Resolved> {
         buf[o + 11] = inst.tint[1];
         buf[o + 12] = inst.tint[2];
         buf[o + 13] = inst.tint[3] * (Number.isFinite(inst.opacity) ? inst.opacity : 1);
-        buf[o + 14] = Number(inst.startTime) || 0;
-        buf[o + 15] = Math.max(0, Number(inst.duration) || 0);
+        buf[o + 14] = Number(inst.startTimeMs) || 0;
+        buf[o + 15] = Math.max(0, Number(inst.durationMs) || 0);
       }
       gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, buf.subarray(0, need), gl.DYNAMIC_DRAW);

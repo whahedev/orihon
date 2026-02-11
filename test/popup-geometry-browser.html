@@ -37,11 +37,11 @@
     const map = createMap("map", { center: ({ lat: 0, lng: 0 }), zoom: 4, controls: false });
     const cases = [
       ["marker", marker(({ lat: 10, lng: -20 }), { title: "Marker" }), "el"],
-      ["circleMarker", circleMarker(({ lat: 10, lng: 0 }), { radius: 18, fill: "#7c3aed" }), "path"],
+      ["circleMarker", circleMarker(({ lat: 10, lng: 0 }), { radiusPixels: 18, fill: "#7c3aed" }), "path"],
       ["polyline", polyline([({ lat: 15, lng: 20 }), ({ lat: 5, lng: 20 })], { strokeWidth: 8 }), "path"],
       ["polygon", polygon([({ lat: -5, lng: -25 }), ({ lat: -15, lng: -25 }), ({ lat: -15, lng: -15 }), ({ lat: -5, lng: -15 })], { fillOpacity: 0.3 }), "path"],
       ["rectangle", rectangle([({ lat: -15, lng: -5 }), ({ lat: -5, lng: 5 })], { fillOpacity: 0.3 }), "path"],
-      ["circle", circle(({ lat: -10, lng: 20 }), 300_000, { geodesic: true }), "path"]
+      ["circle", circle(({ lat: -10, lng: 20 }), { radiusMeters: 300_000 }, { geodesic: true }), "path"]
     ];
 
     for (const [name, layer, targetProperty] of cases) {

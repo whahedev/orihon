@@ -47,12 +47,12 @@ test("draw GeoJSON round-trips points, lines, polygons and circles", () => {
       { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [10, 20] } },
       { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] } },
       { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[0, 0], [2, 0], [2, 2], [0, 0]]] } },
-      { type: "Feature", properties: { radius: 500 }, geometry: { type: "Point", coordinates: [3, 4] } }
+      { type: "Feature", properties: { radiusMeters: 500 }, geometry: { type: "Point", coordinates: [3, 4] } }
     ]
   });
   const output = draw.toGeoJSON();
   assert.deepEqual(output.features.map((feature) => feature.geometry.type), ["Point", "LineString", "Polygon", "Point"]);
-  assert.equal(output.features[3].properties.radius, 500);
+  assert.equal(output.features[3].properties.radiusMeters, 500);
   assert.deepEqual(output.features[2].geometry.coordinates[0][0], output.features[2].geometry.coordinates[0].at(-1));
 });
 
@@ -87,13 +87,13 @@ test("circle GeoJSON edit surface stays a radius point feature", () => {
   const draw = new DrawHandler();
   draw.loadData({
     type: "Feature",
-    properties: { radius: 250 },
+    properties: { radiusMeters: 250 },
     geometry: { type: "Point", coordinates: [37.6, 55.7] }
   });
   const [feature] = draw.toGeoJSON().features;
   assert.equal(feature.geometry.type, "Point");
-  assert.equal(feature.properties.radius, 250);
+  assert.equal(feature.properties.radiusMeters, 250);
   const layer = draw.featureGroup.getLayers()[0];
   assert.equal(layer.constructor.name, "Circle");
-  assert.equal(layer.getRadius(), 250);
+  assert.deepEqual(layer.getRadius(), { radiusMeters: 250 });
 });

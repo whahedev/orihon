@@ -73,7 +73,7 @@
       "id": "8716340",
       "title": "Orihon API - createSuggestProvider",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716340",
-      "markdown": "createSuggestProvider\n=====================\n\nНазначение\n----------\n\nСоздает provider автоподсказок из fetcher-функции.\n\nПример\n------\n\nDefaultnoneimport { createSuggestProvider } from \"orihon\";\nconst suggest = createSuggestProvider(async (query, context) => {\nconst response = await fetch(`/api/suggest?q=${encodeURIComponent(query)}`);\nreturn response.json();\n});\nconst items = await suggest.suggest(\"ленин\");\n\nОсобенности\n-----------\n\nUI и backend разделены: Orihon управляет контрактом, приложение - данными."
+      "markdown": "createSuggestProvider\n=====================\n\nНазначение\n----------\n\nСоздает provider автоподсказок из fetcher-функции.\n\nПример\n------\n\nDefaultnoneimport { createSuggestProvider } from \"orihon\";\nconst suggest = createSuggestProvider(async (query, context) => {\nconst response = await fetch(`/api/suggest?q=${encodeURIComponent(query)}`, { signal: context.signal });\nreturn response.json();\n});\ntry {\nconst items = await suggest.suggest(\"ленин\");\n} catch (error) {\nif (error?.name !== \"AbortError\") throw error;\n} finally {\nsuggest.destroy();\n}\n\nОсобенности\n-----------\n\nОтмена и замена запроса отклоняют Promise с AbortError, а не возвращают пустой результат. Передавайте context.signal в fetch. UI и backend разделены."
     },
     {
       "id": "8716341",
@@ -259,7 +259,7 @@
       "id": "8716336",
       "title": "Orihon API - routingLayer",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716336",
-      "markdown": "routingLayer\n============\n\nНазначение\n----------\n\nСоздает слой маршрута с provider-based расчетом и отображением альтернатив.\n\nПример\n------\n\nDefaultnoneimport { routingLayer, createStraightLineRoutingProvider } from \"orihon\";\nconst routing = routingLayer({\nprovider: createStraightLineRoutingProvider(),\nalternatives: true\n}).addTo(map);\nrouting.route([\n{ lat: 55.751, lng: 37.618 },\n{ lat: 55.796, lng: 49.106 }\n]);\n\nОсобенности\n-----------\n\nProvider может быть OSRM, GraphHopper, коммерческим API, локальным сервисом или test double."
+      "markdown": "routingLayer\n============\n\nНазначение\n----------\n\nСоздает слой маршрута с provider-based расчетом и отображением альтернатив.\n\nПример\n------\n\nDefaultnoneimport { routingLayer, createStraightLineRoutingProvider } from \"orihon\";\nconst routing = routingLayer({\nprovider: createStraightLineRoutingProvider(),\nalternatives: true\n}).addTo(map);\ntry {\nawait routing.route([\n{ lat: 55.751, lng: 37.618 },\n{ lat: 55.796, lng: 49.106 }\n]);\n} catch (error) {\nif (error?.name !== \"AbortError\") throw error;\n}\n\nОсобенности\n-----------\n\nОтмена и замена запроса отклоняют Promise с AbortError. Последние успешные маршруты сохраняются. Provider может быть OSRM, GraphHopper, коммерческим API, локальным сервисом или test double."
     },
     {
       "id": "8716361",

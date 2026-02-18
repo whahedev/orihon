@@ -8,7 +8,7 @@ test("SuggestProvider settles a superseded request", async () => {
   const provider = new SuggestProvider(async (query) => [query], { debounceMs: 5 });
   const first = provider.suggest("first");
   const second = provider.suggest("second");
-  assert.deepEqual(await first, []);
+  await assert.rejects(first, { name: "AbortError" });
   assert.deepEqual(await second, ["second"]);
 });
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-27T03:44:02.507Z",
+  "generatedAt": "2026-08-27T14:20:13.683Z",
   "entries": [
     {
       "entry": "orihon",
@@ -2682,7 +2682,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -3310,7 +3310,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -6584,7 +6584,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => ArrayIterator<number>",
@@ -6593,7 +6593,7 @@
           ]
         },
         {
-          "name": "__@unscopables@185",
+          "name": "__@unscopables@186",
           "optional": false,
           "readonly": true,
           "type": "{ [x: number]: boolean; length?: boolean; toString?: boolean; toLocaleString?: boolean; pop?: boolean; push?: boolean; concat?: boolean; join?: boolean; reverse?: boolean; shift?: boolean; slice?: boolean; sort?: boolean; splice?: boolean; unshift?: boolean; indexOf?: boolean; lastIndexOf?: boolean; every?: boolean; some?: boolean; forEach?: boolean; map?: boolean; filter?: boolean; reduce?: boolean; reduceRight?: boolean; find?: boolean; findIndex?: boolean; fill?: boolean; copyWithin?: boolean; entries?: boolean; keys?: boolean; values?: boolean; includes?: boolean; flatMap?: boolean; flat?: boolean; at?: boolean; [Symbol.iterator]?: boolean; readonly [Symbol.unscopables]?: boolean; }",
@@ -7062,7 +7062,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -8064,7 +8064,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -10034,7 +10034,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -10564,7 +10564,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -12497,7 +12497,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -15472,7 +15472,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -16130,7 +16130,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -17946,7 +17946,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -18628,7 +18628,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -19371,7 +19371,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -22123,7 +22123,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -24295,7 +24295,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -27905,7 +27905,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -28542,43 +28542,6 @@
           "calls": []
         },
         {
-          "name": "_timer",
-          "optional": false,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "_controller",
-          "optional": false,
-          "readonly": false,
-          "type": "AbortController",
-          "calls": []
-        },
-        {
-          "name": "_requestId",
-          "optional": false,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "_loading",
-          "optional": false,
-          "readonly": false,
-          "type": "boolean",
-          "calls": []
-        },
-        {
-          "name": "_remoteRender",
-          "optional": false,
-          "readonly": true,
-          "type": "() => void",
-          "calls": [
-            "() => void"
-          ]
-        },
-        {
           "name": "loading",
           "optional": false,
           "readonly": false,
@@ -28617,9 +28580,9 @@
           "name": "reload",
           "optional": false,
           "readonly": false,
-          "type": "() => RemoteObjectManager",
+          "type": "(options?: RemoteObjectReloadOptions) => Promise<ManagedObject[]>",
           "calls": [
-            "() => RemoteObjectManager"
+            "(options: RemoteObjectReloadOptions) => Promise<ManagedObject[]>"
           ]
         },
         {
@@ -29990,6 +29953,23 @@
     },
     {
       "entry": "orihon",
+      "name": "RemoteObjectReloadOptions",
+      "kind": "Interface",
+      "type": "RemoteObjectReloadOptions",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "signal",
+          "optional": true,
+          "readonly": false,
+          "type": "AbortSignal",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon",
       "name": "Renderer",
       "kind": "Class",
       "type": "Renderer<TOptions>",
@@ -30886,7 +30866,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -31057,13 +31037,6 @@
           "calls": []
         },
         {
-          "name": "_controller",
-          "optional": false,
-          "readonly": false,
-          "type": "AbortController",
-          "calls": []
-        },
-        {
           "name": "route",
           "optional": false,
           "readonly": false,
@@ -31074,6 +31047,15 @@
         },
         {
           "name": "cancel",
+          "optional": false,
+          "readonly": false,
+          "type": "() => RoutingLayer",
+          "calls": [
+            "() => RoutingLayer"
+          ]
+        },
+        {
+          "name": "remove",
           "optional": false,
           "readonly": false,
           "type": "() => RoutingLayer",
@@ -31254,15 +31236,6 @@
           "type": "(map: Orihon) => RoutingLayer",
           "calls": [
             "(map: Orihon) => RoutingLayer"
-          ]
-        },
-        {
-          "name": "remove",
-          "optional": false,
-          "readonly": false,
-          "type": "() => RoutingLayer",
-          "calls": [
-            "() => RoutingLayer"
           ]
         },
         {
@@ -32425,6 +32398,13 @@
       ],
       "members": [
         {
+          "name": "#private",
+          "optional": false,
+          "readonly": false,
+          "type": "any",
+          "calls": []
+        },
+        {
           "name": "fetcher",
           "optional": false,
           "readonly": true,
@@ -32438,34 +32418,6 @@
           "optional": false,
           "readonly": true,
           "type": "Required<SuggestOptions>",
-          "calls": []
-        },
-        {
-          "name": "_timer",
-          "optional": false,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "_controller",
-          "optional": false,
-          "readonly": false,
-          "type": "AbortController",
-          "calls": []
-        },
-        {
-          "name": "_pending",
-          "optional": false,
-          "readonly": false,
-          "type": "Pending<TResult>",
-          "calls": []
-        },
-        {
-          "name": "_destroyed",
-          "optional": false,
-          "readonly": false,
-          "type": "boolean",
           "calls": []
         },
         {
@@ -37035,7 +36987,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -44799,7 +44751,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -46724,7 +46676,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -48412,7 +48364,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -51583,7 +51535,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -54718,7 +54670,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => ArrayIterator<number>",
@@ -54727,7 +54679,7 @@
           ]
         },
         {
-          "name": "__@unscopables@185",
+          "name": "__@unscopables@186",
           "optional": false,
           "readonly": true,
           "type": "{ [x: number]: boolean; length?: boolean; toString?: boolean; toLocaleString?: boolean; pop?: boolean; push?: boolean; concat?: boolean; join?: boolean; reverse?: boolean; shift?: boolean; slice?: boolean; sort?: boolean; splice?: boolean; unshift?: boolean; indexOf?: boolean; lastIndexOf?: boolean; every?: boolean; some?: boolean; forEach?: boolean; map?: boolean; filter?: boolean; reduce?: boolean; reduceRight?: boolean; find?: boolean; findIndex?: boolean; fill?: boolean; copyWithin?: boolean; entries?: boolean; keys?: boolean; values?: boolean; includes?: boolean; flatMap?: boolean; flat?: boolean; at?: boolean; [Symbol.iterator]?: boolean; readonly [Symbol.unscopables]?: boolean; }",
@@ -55196,7 +55148,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -58417,7 +58369,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -58906,7 +58858,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -60279,7 +60231,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -64332,7 +64284,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -74718,7 +74670,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -75642,7 +75594,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -80363,7 +80315,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -82594,7 +82546,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -84261,7 +84213,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -86979,7 +86931,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -87607,7 +87559,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -90881,7 +90833,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => ArrayIterator<number>",
@@ -90890,7 +90842,7 @@
           ]
         },
         {
-          "name": "__@unscopables@185",
+          "name": "__@unscopables@186",
           "optional": false,
           "readonly": true,
           "type": "{ [x: number]: boolean; length?: boolean; toString?: boolean; toLocaleString?: boolean; pop?: boolean; push?: boolean; concat?: boolean; join?: boolean; reverse?: boolean; shift?: boolean; slice?: boolean; sort?: boolean; splice?: boolean; unshift?: boolean; indexOf?: boolean; lastIndexOf?: boolean; every?: boolean; some?: boolean; forEach?: boolean; map?: boolean; filter?: boolean; reduce?: boolean; reduceRight?: boolean; find?: boolean; findIndex?: boolean; fill?: boolean; copyWithin?: boolean; entries?: boolean; keys?: boolean; values?: boolean; includes?: boolean; flatMap?: boolean; flat?: boolean; at?: boolean; [Symbol.iterator]?: boolean; readonly [Symbol.unscopables]?: boolean; }",
@@ -91359,7 +91311,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -92361,7 +92313,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -94331,7 +94283,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -94861,7 +94813,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -96794,7 +96746,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -99769,7 +99721,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -100427,7 +100379,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -102243,7 +102195,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -102925,7 +102877,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -103668,7 +103620,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -106420,7 +106372,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -108592,7 +108544,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -112202,7 +112154,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -112839,43 +112791,6 @@
           "calls": []
         },
         {
-          "name": "_timer",
-          "optional": false,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "_controller",
-          "optional": false,
-          "readonly": false,
-          "type": "AbortController",
-          "calls": []
-        },
-        {
-          "name": "_requestId",
-          "optional": false,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "_loading",
-          "optional": false,
-          "readonly": false,
-          "type": "boolean",
-          "calls": []
-        },
-        {
-          "name": "_remoteRender",
-          "optional": false,
-          "readonly": true,
-          "type": "() => void",
-          "calls": [
-            "() => void"
-          ]
-        },
-        {
           "name": "loading",
           "optional": false,
           "readonly": false,
@@ -112914,9 +112829,9 @@
           "name": "reload",
           "optional": false,
           "readonly": false,
-          "type": "() => RemoteObjectManager",
+          "type": "(options?: RemoteObjectReloadOptions) => Promise<ManagedObject[]>",
           "calls": [
-            "() => RemoteObjectManager"
+            "(options: RemoteObjectReloadOptions) => Promise<ManagedObject[]>"
           ]
         },
         {
@@ -114287,6 +114202,23 @@
     },
     {
       "entry": "orihon/bundle",
+      "name": "RemoteObjectReloadOptions",
+      "kind": "Interface",
+      "type": "RemoteObjectReloadOptions",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "signal",
+          "optional": true,
+          "readonly": false,
+          "type": "AbortSignal",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon/bundle",
       "name": "Renderer",
       "kind": "Class",
       "type": "Renderer<TOptions>",
@@ -115183,7 +115115,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",
@@ -115354,13 +115286,6 @@
           "calls": []
         },
         {
-          "name": "_controller",
-          "optional": false,
-          "readonly": false,
-          "type": "AbortController",
-          "calls": []
-        },
-        {
           "name": "route",
           "optional": false,
           "readonly": false,
@@ -115371,6 +115296,15 @@
         },
         {
           "name": "cancel",
+          "optional": false,
+          "readonly": false,
+          "type": "() => RoutingLayer",
+          "calls": [
+            "() => RoutingLayer"
+          ]
+        },
+        {
+          "name": "remove",
           "optional": false,
           "readonly": false,
           "type": "() => RoutingLayer",
@@ -115551,15 +115485,6 @@
           "type": "(map: Orihon) => RoutingLayer",
           "calls": [
             "(map: Orihon) => RoutingLayer"
-          ]
-        },
-        {
-          "name": "remove",
-          "optional": false,
-          "readonly": false,
-          "type": "() => RoutingLayer",
-          "calls": [
-            "() => RoutingLayer"
           ]
         },
         {
@@ -116722,6 +116647,13 @@
       ],
       "members": [
         {
+          "name": "#private",
+          "optional": false,
+          "readonly": false,
+          "type": "any",
+          "calls": []
+        },
+        {
           "name": "fetcher",
           "optional": false,
           "readonly": true,
@@ -116735,34 +116667,6 @@
           "optional": false,
           "readonly": true,
           "type": "Required<SuggestOptions>",
-          "calls": []
-        },
-        {
-          "name": "_timer",
-          "optional": false,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "_controller",
-          "optional": false,
-          "readonly": false,
-          "type": "AbortController",
-          "calls": []
-        },
-        {
-          "name": "_pending",
-          "optional": false,
-          "readonly": false,
-          "type": "Pending<TResult>",
-          "calls": []
-        },
-        {
-          "name": "_destroyed",
-          "optional": false,
-          "readonly": false,
-          "type": "boolean",
           "calls": []
         },
         {
@@ -121332,7 +121236,7 @@
           ]
         },
         {
-          "name": "__@iterator@183",
+          "name": "__@iterator@184",
           "optional": false,
           "readonly": false,
           "type": "() => StringIterator<string>",

@@ -1012,7 +1012,8 @@ export class Orihon extends Evented {
     this.panes = {};
     this._attributions.clear();
     this._destroyed = true;
-    this.off();
+    try { this.emit("unload"); }
+    finally { this.off(); }
     return this;
   }
 }

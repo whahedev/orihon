@@ -286,7 +286,7 @@ function searchProvider<T extends SearchResult>(source: SearchAdapter<T>, option
 function objectManager(options: RemoteObjectManagerOptions): RemoteObjectManager
 function objectManager(options: MarkerObjectManagerOptions): MarkerCollection`,
     returnType: "ObjectManager | RemoteObjectManager | MarkerCollection",
-    note: "Одна фабрика покрывает обычные объекты, удалённый loader с отменой устаревших запросов и points-режим с DOM/SVG/WebGL/hybrid renderer. Для миллионов объектов используйте \`addAsync(..., { render:false })\`, затем \`prepareLayout()\`.",
+    note: "Одна фабрика покрывает обычные объекты, удалённый loader с отменой устаревших запросов и points-режим с DOM/SVG/WebGL/hybrid renderer. Remote \`reload({ signal }?)\` запускает загрузку сразу и возвращает Promise объектов; отмена отклоняет его с AbortError. Автоматические загрузки используют debounceMs и события load/error/abort. Для миллионов объектов используйте \`addAsync(..., { render:false })\`, затем \`prepareLayout()\`.",
     sections: [{
       title: "Единый язык стилей",
       rows: [

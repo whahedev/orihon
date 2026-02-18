@@ -815,6 +815,8 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
             map.fitBounds(mapPositions(routes[0].coordinates), { padding: 56 });
           }
         } catch (error) {
+          // Superseded requests must not clear results/status belonging to the newer route.
+          if (error?.name === "AbortError") return;
           const message =
             error instanceof Error ? error.message : String(error);
           setStatus(message, true);

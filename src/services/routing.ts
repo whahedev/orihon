@@ -2,6 +2,7 @@ import { FeatureGroup } from "../layer-group.js";
 import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { Polyline, polyline, type PathOptions } from "../layers/vector.js";
 import { LatLng, distance, latLng, type LatLngLike } from "../geo.js";
+import { AbortableOperation, isAbortError } from "./abortable-operation.js";
 
 export interface RouteWaypoint {
   latlng: LatLngLike;
@@ -19,6 +20,7 @@ export interface RouteResult {
 }
 
 export interface RoutingContext {
+  /** Aborting rejects route() with AbortError, even if the provider ignores the signal. */
   signal?: AbortSignal;
   alternatives?: boolean;
   [key: string]: unknown;
@@ -42,7 +44,7 @@ export class RoutingLayer extends FeatureGroup {
   readonly routingOptions: ResolvedRoutingLayerOptions;
   routes: RouteResult[] = [];
   selectedIndex = 0;
-  _controller: AbortController | null = null;
+  #operation: AbortableOperation | null = null;
 
   constructor(options: RoutingLayerOptions) {
     super();
@@ -60,24 +62,25 @@ export class RoutingLayer extends FeatureGroup {
     };
   }
 
+  /** Supersedes the previous request. Cancellation rejects and retains the last successful routes. */
   async route(waypoints: Array<RouteWaypoint | LatLngLike>, context: RoutingContext = {}): Promise<RouteResult[]> {
-    this.cancel();
     const normalized = waypoints.map((waypoint) => this.#normalizeWaypoint(waypoint));
-    if (normalized.length < 2) {
-      this.routes = [];
-      this.clearLayers();
-      return [];
-    }
-    const controller = new AbortController();
-    this._controller = controller;
-    this.emit("loading", { waypoints: normalized });
+    const previous = this.#operation;
+    const operation = new AbortableOperation("RoutingLayer request", context.signal);
+    this.#operation = operation;
+    previous?.cancel();
     try {
-      const result = await this.routingOptions.provider(normalized, {
-        alternatives: this.routingOptions.alternatives,
-        ...context,
-        signal: controller.signal
+      const result = await operation.run(() => {
+        if (normalized.length < 2) return [];
+        this.emit("loading", { waypoints: normalized });
+        operation.throwIfAborted();
+        return this.routingOptions.provider(normalized, {
+          alternatives: this.routingOptions.alternatives,
+          ...context,
+          signal: operation.signal
+        });
       });
-      if (controller.signal.aborted) return [];
+      operation.throwIfAborted();
       for (const route of result ?? []) {
         rejectLegacyUnit(route, "duration", "durationMs");
         if (route.durationMs !== undefined) nonNegativeFinite(route.durationMs, "durationMs");
@@ -85,24 +88,27 @@ export class RoutingLayer extends FeatureGroup {
       this.routes = result || [];
       this.selectedIndex = 0;
       this.#renderRoutes();
-      this.emit("load", { routes: this.routes, waypoints: normalized });
+      if (normalized.length >= 2) this.emit("load", { routes: this.routes, waypoints: normalized });
       return this.routes;
     } catch (error) {
-      if (controller.signal.aborted) {
-        this.emit("abort", { waypoints: normalized });
-        return [];
-      }
-      this.emit("error", { error, waypoints: normalized });
+      this.emit(isAbortError(error) ? "abort" : "error", { error, waypoints: normalized });
       throw error;
     } finally {
-      if (this._controller === controller) this._controller = null;
+      operation.dispose();
+      if (this.#operation === operation) this.#operation = null;
     }
   }
 
   cancel(): this {
-    this._controller?.abort();
-    this._controller = null;
+    const operation = this.#operation;
+    this.#operation = null;
+    operation?.cancel();
     return this;
+  }
+
+  override remove(): this {
+    this.cancel();
+    return super.remove();
   }
 
   override onRemove(): void {

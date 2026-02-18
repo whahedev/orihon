@@ -24,6 +24,7 @@
       wmtsTileLayer
     } from "/dist/standard.js";
     import { objectManager } from "/dist/index.js";
+    import { createSuggestProvider, routingLayer } from "/dist/orihon.esm.js";
 
     const assert = (condition, message) => {
       if (!condition) throw new Error(message);
@@ -107,15 +108,67 @@
       );
       assert(wmts.wmtsOptions.layer === "lab-grid", "WMTS capabilities layer mismatch");
 
+      // Exercise cancellation through the minified public browser bundle as well as Node sources.
+      const controller = new AbortController();
+      let suggestSignal;
+      const suggestions = createSuggestProvider((_query, context) => {
+        suggestSignal = context.signal;
+        return new Promise(() => {});
+      }, { debounceMs: 0 });
+      const suggestion = suggestions.suggest("query", { signal: controller.signal }).then(
+        () => { throw new Error("cancelled suggestion resolved"); },
+        (error) => assert(error.name === "AbortError", "suggestion lost AbortError")
+      );
+      await waitFor(() => suggestSignal, "suggest provider did not start");
+      controller.abort();
+      await suggestion;
+      assert(suggestSignal.aborted, "external cancellation did not reach suggest provider");
+      suggestions.destroy();
+
+      let finishRoute;
+      let routeSignal;
+      const routing = routingLayer({ provider: (_waypoints, context) => {
+        routeSignal = context.signal;
+        return new Promise((resolve) => { finishRoute = resolve; });
+      } }).addTo(map);
+      let routeLoads = 0;
+      let routeAborts = 0;
+      routing.on("load", () => routeLoads++);
+      routing.on("abort", () => routeAborts++);
+      const route = routing.route([{ lat: 0, lng: 0 }, { lat: 1, lng: 1 }]).then(
+        () => { throw new Error("detached routing request resolved"); },
+        (error) => assert(error.name === "AbortError", "routing lost AbortError")
+      );
+      map.removeLayer(routing);
+      await route;
+      assert(routeSignal.aborted, "map removal did not abort routing provider");
+      finishRoute([{ coordinates: [{ lat: 0, lng: 0 }, { lat: 1, lng: 1 }] }]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert(routeLoads === 0 && routeAborts === 1, "late route result emitted incorrect lifecycle events");
+      assert(routing.getRoutes().length === 0 && routing.getLayers().length === 0, "late route result mutated detached state");
+
       const result = {
         mixedQueryHits: hits.length,
         topHit: "marker",
         spiderMarkers: document.querySelectorAll(".oh-spider-marker").length,
         rtl: labelContext.direction,
         visibleLabels: labels.getVisibleLabels().length,
+        serviceCancellation: "AbortError",
         wmtsTile: new URL(tile.src).pathname
       };
+      let remoteSignal;
+      const remote = objectManager({ debounceMs: 60_000, loader: ({ signal }) => {
+        remoteSignal = signal;
+        return new Promise(() => {});
+      } }).addTo(map);
+      const remoteRequest = remote.reload().then(
+        () => { throw new Error("map destruction resolved a remote load"); },
+        (error) => assert(error.name === "AbortError", "remote load lost AbortError")
+      );
       map.destroy();
+      await remoteRequest;
+      assert(remoteSignal.aborted && !remote.loading && remote.map === null, "map destruction leaked remote lifecycle");
+      remote.destroy();
       return result;
     }
 

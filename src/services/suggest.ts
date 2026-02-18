@@ -1,5 +1,6 @@
 import { createEl, empty, getContainer, listen } from "../dom.js";
 import { Evented } from "../events.js";
+import { AbortableOperation, abortError, isAbortError } from "./abortable-operation.js";
 
 export interface SuggestOptions {
   debounceMs?: number;
@@ -9,83 +10,78 @@ export interface SuggestOptions {
 
 export interface SuggestContext {
   limit?: number;
+  /** Cancels this request with AbortError, including while waiting for debounce. */
   signal?: AbortSignal;
   [key: string]: unknown;
 }
 
 export type SuggestFetcher<TResult> = (query: string, context: SuggestContext) => Promise<TResult[] | null | undefined> | TResult[] | null | undefined;
 
-interface Pending<TResult> {
-  resolve: (value: TResult[]) => void;
-  reject: (reason?: unknown) => void;
-  controller: AbortController;
-}
-
-function suggestAbortError(): Error {
-  if (typeof DOMException !== "undefined") return new DOMException("SuggestProvider was destroyed", "AbortError");
-  const error = new Error("SuggestProvider was destroyed");
-  error.name = "AbortError";
-  return error;
+interface PendingSuggest {
+  operation: AbortableOperation;
+  timer: ReturnType<typeof setTimeout> | null;
 }
 
 export class SuggestProvider<TResult = unknown> {
   readonly fetcher: SuggestFetcher<TResult>;
   readonly options: Required<SuggestOptions>;
-  _timer: ReturnType<typeof setTimeout> | null = null;
-  _controller: AbortController | null = null;
-  _pending: Pending<TResult> | null = null;
-  _destroyed = false;
+  #pending: PendingSuggest | null = null;
+  #destroyed = false;
 
   constructor(fetcher: SuggestFetcher<TResult>, options: SuggestOptions = {}) {
     this.fetcher = fetcher;
     this.options = { debounceMs: 180, minLength: 2, limit: 8, ...options };
   }
 
+  /** Supersedes the previous request; cancellation rejects with AbortError, never []. */
   suggest(query: string, context: SuggestContext = {}): Promise<TResult[]> {
-    if (this._destroyed) return Promise.reject(suggestAbortError());
-    this.cancel();
-    if (!query || query.trim().length < this.options.minLength) return Promise.resolve([]);
-    const controller = new AbortController();
-    this._controller = controller;
-    return new Promise<TResult[]>((resolve, reject) => {
-      const pending = { resolve, reject, controller };
-      this._pending = pending;
-      this._timer = setTimeout(async () => {
-        this._timer = null;
-        try {
-          const result = await this.fetcher(query.trim(), { ...context, limit: this.options.limit, signal: controller.signal });
-          resolve(result || []);
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") resolve([]);
-          else if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") resolve([]);
-          else reject(error);
-        } finally {
-          if (this._pending === pending) this._pending = null;
-          if (this._controller === controller) this._controller = null;
-        }
-      }, this.options.debounceMs);
+    if (this.#destroyed) return Promise.reject(abortError("SuggestProvider was destroyed"));
+    const previous = this.#pending;
+    const operation = new AbortableOperation("SuggestProvider request", context.signal);
+    const pending: PendingSuggest = { operation, timer: null };
+    this.#pending = pending;
+    // Publish the new owner before abort listeners can synchronously start another request.
+    this.#cancelPending(previous);
+    return operation.run<TResult[]>(() => {
+      if (!query || query.trim().length < this.options.minLength) return [];
+      return new Promise<TResult[]>((resolve, reject) => {
+        pending.timer = setTimeout(() => {
+          pending.timer = null;
+          try {
+            operation.throwIfAborted();
+            Promise.resolve(this.fetcher(query.trim(), { ...context, limit: this.options.limit, signal: operation.signal }))
+              .then((result) => resolve(result ?? []), reject);
+          } catch (error) { reject(error); }
+        }, this.options.debounceMs);
+      });
+    }).then((items) => {
+      operation.throwIfAborted();
+      return items;
+    }).finally(() => {
+      operation.dispose();
+      if (pending.timer !== null) clearTimeout(pending.timer);
+      if (this.#pending === pending) this.#pending = null;
     });
   }
 
+  /** Cancels pending work but leaves this provider reusable. */
   cancel(): this {
-    if (this._timer) clearTimeout(this._timer);
-    this._timer = null;
-    this._controller?.abort();
-    this._controller = null;
-    this._pending?.resolve([]);
-    this._pending = null;
+    const pending = this.#pending;
+    this.#pending = null;
+    this.#cancelPending(pending);
     return this;
   }
 
+  #cancelPending(pending: PendingSuggest | null): void {
+    if (!pending) return;
+    if (pending.timer !== null) clearTimeout(pending.timer);
+    pending.operation.cancel();
+  }
+
   destroy(): void {
-    if (this._destroyed) return;
-    this._destroyed = true;
-    if (this._timer) clearTimeout(this._timer);
-    this._timer = null;
-    this._controller?.abort();
-    this._controller = null;
-    this._pending?.reject(suggestAbortError());
-    this._pending = null;
+    if (this.#destroyed) return;
+    this.#destroyed = true;
+    this.cancel();
   }
 }
 
@@ -217,7 +213,7 @@ export class SuggestWidget<TResult = unknown> extends Evented {
       this.results = [];
       this.activeIndex = -1;
       this.#render();
-      this.emit("error", { query, error });
+      this.emit(isAbortError(error) ? "abort" : "error", { query, error });
     });
     return this;
   }

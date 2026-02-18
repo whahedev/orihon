@@ -255,6 +255,18 @@ Import `drawControl` or the headless `DrawHandler` from `orihon/draw`, plus `ori
 
 `orihon/react` exports `Map`, `TileLayer`, `Marker`, `Popup`, `Tooltip`, `GeoJSON`, `FeatureGroup`, `ObjectManager`, `useMap()` and `useMapEvent()`. The map is created in a layout effect and removed during cleanup. Layer prop changes call mutable Orihon methods instead of recreating the map; ObjectManager diffs `objects` by `id`. Rendering is client-only; SSR map output and React Native are outside this entry.
 
+## Suggest and routing cancellation
+
+`SuggestProvider.suggest(query, { signal })` and `RoutingLayer.route(waypoints, { signal })`
+reject with `AbortError` on cancellation or supersession. `[]` is reserved for a
+successful empty result. Both honor pre-aborted signals and settle cancellation
+even when the application provider ignores its signal. Pass the received signal
+to `fetch()` to cancel underlying I/O as well. Other provider failures propagate
+unchanged. `cancel()` leaves either service reusable; suggest `destroy()` is
+terminal and idempotent. Routing removal cancels pending work and preserves the
+last successful routes. Routing and the current SuggestWidget request emit
+`abort` rather than `error` for cancellation. See [migration examples](MIGRATION-NEXT-MAJOR.md#suggest-and-routing-cancellation).
+
 ## Public function and method reference
 
 This section is the compact index of the supported surface. Factory functions use lower camel case and return the corresponding class (`marker()` → `Marker`, `objectManager()` → `ObjectManager`). Factories and classes are equivalent; factories are convenient in JavaScript, while classes are useful for extension and `instanceof` checks.
@@ -411,7 +423,7 @@ Create with `objectManager(options?)`; pass `loader` for viewport loading or `po
 | `spiderfyCluster(id)`, `unspiderfy()` | Expand/collapse overlapping maximum-zoom members |
 | `getStats()` | Return object/index/visible/renderer/layout counters |
 
-`RemoteObjectManager.reload()` re-requests the current viewport; `cancel()` aborts the active load. Its loader receives bounds, zoom and an `AbortSignal`; stale completions are ignored.
+`RemoteObjectManager.reload({ signal }?)` immediately loads the current viewport and returns `Promise<ManagedObject[]>`. Automatic add/move/zoom/resize requests use `debounceMs` (default 120). The loader receives bounds, zoom, reason and a linked `AbortSignal`. Cancellation, supersession, detach or destruction reject explicit reloads with `AbortError`; provider failures reject unchanged. Automatic requests report outcomes through `load` / `error` / `abort` events. Viewport changes invalidate stale requests before debounce. `loading` reflects an active request, not a queued timer. `remove()` retains data and permits reattachment; `destroy()` prohibits future remote reloads and attachment. Map destruction emits `unload`, which detaches the manager and cancels pending remote work. See [migration](MIGRATION-NEXT-MAJOR.md#remote-viewport-loading).
 
 ### GPU, heat and geometry processing
 

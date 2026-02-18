@@ -74,3 +74,30 @@ const oldRoute: RouteResult = { coordinates: [], duration: 10 };
 const oldMotion: Partial<WebGLSymbolInstance> = { startTime: 1, duration: 2 };
 void oldRoute;
 void oldMotion;
+
+import { createSuggestProvider, routingLayer } from "../../src/index.js";
+const suggestions = createSuggestProvider(async (_query, context) => {
+  const signal: AbortSignal | undefined = context.signal;
+  void signal;
+  return ["result"];
+});
+const routing = routingLayer({ provider: () => [] });
+const signal = new AbortController().signal;
+const suggestionResult: Promise<string[]> = suggestions.suggest("query", { signal });
+const routeResult: Promise<RouteResult[]> = routing.route([namedPosition, namedPosition], { signal });
+// @ts-expect-error Request ownership is private; callers use cancel() or AbortSignal.
+suggestions._pending;
+// @ts-expect-error The active request controller is no longer writable public state.
+routing._controller;
+void suggestionResult;
+void routeResult;
+
+import type { ManagedObject, RemoteObjectReloadOptions } from "../../src/index.js";
+const remote = objectManager({ loader: () => [] });
+const reloadOptions: RemoteObjectReloadOptions = { signal };
+const reloaded: Promise<ManagedObject[]> = remote.reload(reloadOptions);
+// @ts-expect-error Reload is a Promise, no longer a chainable scheduling call.
+remote.reload().addTo(camera);
+// @ts-expect-error Remote request controllers are private lifecycle state.
+remote._controller;
+void reloaded;

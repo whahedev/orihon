@@ -93,8 +93,77 @@ there is no value conversion. Removed constructor options are rejected.
 Specialized heat bandwidth, style-expression and packed-buffer layouts are not
 renamed in this batch; retain their separately documented units.
 
+## Suggest and routing cancellation
+
+`SuggestProvider.suggest()` and `RoutingLayer.route()` now reject with an error
+named `AbortError` when cancelled, superseded by a newer request, or aborted by
+`context.signal`. They no longer resolve `[]` to disguise cancellation. Already
+aborted signals reject without invoking the provider, even for short/empty input.
+Cancellation settles promptly even if a custom provider ignores its signal;
+late responses cannot replace current results. Providers should still pass the
+received signal to `fetch()` to stop their own network work.
+
+```js
+try {
+  const routes = await routing.route(waypoints, { signal: controller.signal });
+  renderRoutes(routes); // [] here means a successful empty result.
+} catch (error) {
+  if (error?.name !== "AbortError") throw error;
+  // Cancelled/superseded: leave results belonging to the latest request alone.
+}
+```
+
+Both services remain reusable after `cancel()`. Routing removal also cancels
+pending work (including map-driven removal); the last successful route data is
+retained for reattachment. `SuggestProvider.destroy()` remains terminal and
+idempotent. Successful `null`/`undefined` provider results still normalize to `[]`.
+Other provider errors propagate unchanged, preserving the original error/cause.
+
+`RoutingLayer` emits one `abort` event for a cancelled request, not `load` or
+`error`; its event includes the error and waypoints. `SuggestWidget` consumes
+rejections internally: a current-request cancellation emits `abort`, while
+superseded/destroyed widget requests stay silent. A widget does not destroy its
+caller-owned provider. Private pending-request fields are no longer public API.
+
+## Remote viewport loading
+
+`RemoteObjectManager.reload({ signal }?)` now returns `Promise<ManagedObject[]>`,
+not the manager. It starts immediately; `debounceMs` only affects automatic
+add/move/zoom/resize loads. Replace chained or fire-and-forget `reload()` calls
+with awaited calls or explicit rejection handling:
+
+```js
+try {
+  const objects = await remote.reload({ signal: controller.signal });
+  console.log(`Loaded ${objects.length} objects`);
+} catch (error) {
+  if (error?.name !== "AbortError") throw error;
+}
+```
+
+Cancel, supersession, detach, map destruction and manager destruction reject
+unfinished explicit reloads with `AbortError`, even when the loader ignores its
+signal. Viewport changes invalidate old responses immediately, before debounce.
+Loader failures reject unchanged. Automatic requests have no caller-owned Promise;
+subscribe to `load`, `error` and `abort` for their outcomes. No stale request may
+clear the loading state of a newer one. Pending debounce alone is not `loading`.
+
+`remove()` cancels and detaches while retaining data; reattachment remains valid.
+`destroy()` is idempotent and prohibits future remote reloads and attachment with
+`AbortError`. Calling `reload()` while detached rejects with an actionable error.
+Map `destroy()` now emits `unload` once, allowing the remote manager to detach and
+cancel automatically; the manager can subsequently attach to another live map.
+After manager destruction, late lifecycle events are suppressed.
+
+Successful null/undefined loader results still normalize to `[]`. Cancellation
+and provider failure retain stored data. Invalid response shapes and legacy
+coordinate tuples are checked before clearing the store. This does not make all
+inherited ObjectManager mutations transactional or terminal; that broader store
+lifecycle remains a separate review item. Remote timer/controller bookkeeping is
+now private. `debounceMs` rejects negative, non-finite and string values.
+
 ## Remaining review work
 
-Competing marker/factory modes, remaining asynchronous lifecycle contracts, event
-typing, mutable public state and renderer registration remain open and must be
-completed before a next-major release.
+Competing marker/factory modes, base ObjectManager store lifecycle and detach/delete
+overloads, event typing, mutable public state and renderer registration
+remain open and must be completed before a next-major release.

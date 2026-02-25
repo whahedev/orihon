@@ -48,7 +48,7 @@ test("ObjectManager detaches map listeners on remove", () => {
   const afterAdd = renders;
   map.emit("moveend");
   assert.equal(renders, afterAdd + 1);
-  manager.remove();
+  manager.detach();
   map.emit("moveend");
   map.emit("zoomend");
   assert.equal(renders, afterAdd + 1);

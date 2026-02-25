@@ -112,7 +112,7 @@ const map = createMap(container, options);
 const remote = objectManager({ loader }).addTo(map);
 
 return () => {
-  remote.remove();
+  remote.destroy();
   map.remove();
 };
 ```

@@ -148,7 +148,7 @@ Loader failures reject unchanged. Automatic requests have no caller-owned Promis
 subscribe to `load`, `error` and `abort` for their outcomes. No stale request may
 clear the loading state of a newer one. Pending debounce alone is not `loading`.
 
-`remove()` cancels and detaches while retaining data; reattachment remains valid.
+`detach()` cancels and detaches while retaining data; reattachment remains valid.
 `destroy()` is idempotent and prohibits future remote reloads and attachment with
 `AbortError`. Calling `reload()` while detached rejects with an actionable error.
 Map `destroy()` now emits `unload` once, allowing the remote manager to detach and
@@ -158,12 +158,77 @@ After manager destruction, late lifecycle events are suppressed.
 Successful null/undefined loader results still normalize to `[]`. Cancellation
 and provider failure retain stored data. Invalid response shapes and legacy
 coordinate tuples are checked before clearing the store. This does not make all
-inherited ObjectManager mutations transactional or terminal; that broader store
-lifecycle remains a separate review item. Remote timer/controller bookkeeping is
+inherited ObjectManager mutations transactional; terminal state is covered below.
+Remote timer/controller bookkeeping is
 now private. `debounceMs` rejects negative, non-finite and string values.
+
+## ObjectManager lifetime and data removal
+
+The ambiguous `ObjectManager.remove()` overload (including RemoteObjectManager) is
+removed. Use `detach()` to disconnect from a map, `removeObjects(idOrIds)` to delete
+records, `clear()` to discard all records, and `destroy()` for final cleanup.
+
+```js
+manager.removeObjects(["truck-1", "truck-2"]); // Remains on the map.
+manager.detach(); // Keeps records and source subscription; may be added again.
+manager.addTo(otherMap);
+manager.destroy(); // Releases source/scene/imports; cannot be revived.
+```
+
+`isDestroyed` is a read-only boolean. After destruction, imports, attachment,
+layout preparation and data/state/style mutations throw or reject with `AbortError`.
+Reads remain available; cleanup calls such as `clear()`, `detach()`, `closePopup()`,
+`endBulk()` and repeated `destroy()` remain safe. Late scheduled renders are no-ops.
+Raw public stores/options still need encapsulation in a later review batch; do not
+mutate them to bypass the supported methods.
+
+Pending `addAsync()` calls reject promptly on destroy, including when `next()` is
+blocked. Iterator `return()` is requested but cannot force external code to stop;
+late yielded values are never ingested. External AbortSignal cancellation retains
+the accepted prefix and ends bulk mode; destroy clears the data. Detachment alone
+does not cancel logical imports. Map `unload` detaches both local and remote managers.
+
+React now creates managers in the effect and destroys them during its cleanup,
+including development Strict Mode replay. `onReady` may receive a new instance after
+replay; do not reuse an earlier destroyed instance. The current instance receives
+the objects again, and source subscriptions are released at unmount.
+
+## Draw lifetime and feature ownership
+
+`DrawHandler` and `DrawControl` now distinguish reusable `remove()` from final
+`destroy()`. The latter is idempotent and exposes read-only `isDestroyed`.
+`remove({ destroyFeatures: true })` is removed and rejected at runtime; choose
+explicitly whether to discard caller-owned data:
+
+```js
+draw.remove(); // Cancel draft, release input/edit listeners; retain data/history.
+draw.addTo(otherMap); // Reusable, initially in "off" mode.
+draw.destroy(); // Final cleanup; this instance cannot be attached again.
+
+// When a featureGroup was supplied by the application:
+sharedGroup.clearLayers(); // Explicit application decision, not done by destroy().
+```
+
+Destroy clears a group created internally by Draw, but preserves a supplied
+group's features and unrelated subscriptions. Remove/destroy detach the group
+only if Draw attached it; an already attached caller-owned group stays on its map.
+A supplied group attached to a different map must be removed there explicitly
+before transferring Draw. Standalone handlers now detach on map `unload` too;
+map destruction does not destroy the Draw instance or erase its features.
+
+After destruction, `addTo()`, `setMode()`, `finish()`, `undo()`, `redo()`, `loadData()`
+and control `setPosition()` throw `AbortError`. Reads, `cancel()`, `remove()` and
+repeated `destroy()` stay safe. `DrawHandler.map` and `.mode` are read-only;
+use the lifecycle methods and `setMode()` instead of assigning fields directly.
+
+Removal restores captured map behaviors, releases edit-handle and keyboard
+listeners, and keeps undo/redo history across reattachment. Destruction releases
+history and Draw event subscriptions. Cancellation from within `drawstart` cannot
+commit a late feature, and browser `pointercancel` now discards the draft rather
+than treating it as pointer-up. Toolbar transfers remove the previous DOM/control
+registration; failed control attachment rolls back the new registration.
 
 ## Remaining review work
 
-Competing marker/factory modes, base ObjectManager store lifecycle and detach/delete
-overloads, event typing, mutable public state and renderer registration
-remain open and must be completed before a next-major release.
+Competing marker/factory modes, event typing, mutable public state
+and renderer registration remain open and must be completed before a next-major release.

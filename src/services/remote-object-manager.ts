@@ -1,5 +1,4 @@
 import type { LatLngBoundsLike } from "../geo.js";
-import type { ObjectId } from "./object-manager.js";
 import { AbortableOperation, abortError, isAbortError } from "./abortable-operation.js";
 import { assertManagedCoordinateFormat } from "./object-geometry.js";
 import { nonNegativeFinite } from "../units.js";
@@ -41,9 +40,7 @@ export class RemoteObjectManager extends ObjectManager {
   #timer: ReturnType<typeof setTimeout> | null = null;
   #operation: AbortableOperation | null = null;
   #generation = 0;
-  #destroyed = false;
   readonly #remoteRender = (): void => this.#schedule("move");
-  readonly #mapUnload = (): void => { this.remove(); };
 
   constructor(options: RemoteObjectManagerOptions) {
     if (typeof options.loader !== "function") throw new TypeError("RemoteObjectManager loader is required");
@@ -59,39 +56,27 @@ export class RemoteObjectManager extends ObjectManager {
   }
 
   override addTo(map: RemoteObjectMap): this {
-    this.#assertAlive();
+    this.assertAlive();
     if ("_destroyed" in map && map._destroyed === true) throw abortError("Cannot attach RemoteObjectManager to a destroyed map");
     if (this.map === map) return this;
     super.addTo(map);
     map.on("moveend", this.#remoteRender);
     map.on("zoomend", this.#remoteRender);
     map.on("resize", this.#remoteRender);
-    map.on("unload", this.#mapUnload);
     this.#schedule("add");
     return this;
   }
 
-  override remove(): this;
-  override remove(ids: ObjectId | ObjectId[]): this;
-  override remove(ids?: ObjectId | ObjectId[]): this {
-    if (ids !== undefined) return super.remove(ids);
+  override detach(): this {
     const map = this.map;
     if (map) {
       map.off("moveend", this.#remoteRender);
       map.off("zoomend", this.#remoteRender);
       map.off("resize", this.#remoteRender);
-      map.off("unload", this.#mapUnload);
     }
-    super.remove();
+    super.detach();
     this.cancel();
     return this;
-  }
-
-  override destroy(): this {
-    if (this.#destroyed) return this;
-    this.#destroyed = true;
-    this.cancel();
-    return super.destroy();
   }
 
   /** Immediately loads the attached viewport. Rejects on cancellation, failure or detached use. */
@@ -109,11 +94,11 @@ export class RemoteObjectManager extends ObjectManager {
   }
 
   #schedule(reason: RemoteObjectLoadContext["reason"]): void {
-    if (this.#destroyed || !this.map) return;
+    if (this.isDestroyed || !this.map) return;
     const generation = this.#generation + 1;
     // Invalidate now, not after debounce: a late response belongs to the old viewport.
     this.cancel();
-    if (this.#destroyed || !this.map || this.#generation !== generation) return;
+    if (this.isDestroyed || !this.map || this.#generation !== generation) return;
     this.#timer = setTimeout(() => {
       this.#timer = null;
       // Automatic viewport requests report outcomes through load/error/abort events.
@@ -122,7 +107,7 @@ export class RemoteObjectManager extends ObjectManager {
   }
 
   async #load(reason: RemoteObjectLoadContext["reason"], signal?: AbortSignal): Promise<ManagedObject[]> {
-    this.#assertAlive();
+    this.assertAlive();
     const map = this.map;
     if (!map) throw new Error("RemoteObjectManager.reload requires an attached map. Call addTo(map) first.");
     const bounds = map.getBounds();
@@ -159,7 +144,7 @@ export class RemoteObjectManager extends ObjectManager {
       return objects;
     } catch (error) {
       if (this.#operation === operation) this.#operation = null;
-      if (!this.#destroyed) this.emit(isAbortError(error) ? "abort" : "error", { context, error });
+      if (!this.isDestroyed) this.emit(isAbortError(error) ? "abort" : "error", { context, error });
       throw error;
     } finally {
       operation.dispose();
@@ -172,9 +157,6 @@ export class RemoteObjectManager extends ObjectManager {
     this.#timer = null;
   }
 
-  #assertAlive(): void {
-    if (this.#destroyed) throw abortError("RemoteObjectManager was destroyed");
-  }
 }
 
 export function remoteObjectManager(options: RemoteObjectManagerOptions): RemoteObjectManager {

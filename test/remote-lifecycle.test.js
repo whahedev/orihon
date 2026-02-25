@@ -134,7 +134,7 @@ test("remove detaches listeners and rejects work but allows reattachment", async
   let calls = 0;
   const { manager, map } = fixture(t, () => { calls++; return new Promise(() => {}); });
   const pending = manager.reload();
-  manager.remove();
+  manager.detach();
   await assert.rejects(pending, { name: "AbortError" });
   assert.equal(manager.map, null);
   await assert.rejects(manager.reload(), /attached map/);
@@ -187,7 +187,7 @@ test("cancel clears queued automatic loads and invalid debounce is rejected", (t
   t.mock.timers.tick(60_000);
   assert.equal(calls, 0);
   map.emit("moveend");
-  manager.remove();
+  manager.detach();
   t.mock.timers.tick(60_000);
   assert.equal(calls, 0);
   for (const debounceMs of [-1, NaN, Infinity, "120"]) {

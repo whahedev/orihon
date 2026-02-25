@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-27T14:20:13.683Z",
+  "generatedAt": "2026-08-27T14:46:41.037Z",
   "entries": [
     {
       "entry": "orihon",
@@ -19645,6 +19645,22 @@
           "calls": []
         },
         {
+          "name": "isDestroyed",
+          "optional": false,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "assertAlive",
+          "optional": false,
+          "readonly": false,
+          "type": "() => void",
+          "calls": [
+            "() => void"
+          ]
+        },
+        {
           "name": "options",
           "optional": false,
           "readonly": true,
@@ -20173,13 +20189,12 @@
           ]
         },
         {
-          "name": "remove",
+          "name": "detach",
           "optional": false,
           "readonly": false,
-          "type": "{ (): ObjectManager; (ids: ObjectId | ObjectId[]): ObjectManager; }",
+          "type": "() => ObjectManager",
           "calls": [
-            "() => ObjectManager",
-            "(ids: ObjectId | ObjectId[]) => ObjectManager"
+            "() => ObjectManager"
           ]
         },
         {
@@ -28558,17 +28573,7 @@
           ]
         },
         {
-          "name": "remove",
-          "optional": false,
-          "readonly": false,
-          "type": "{ (): RemoteObjectManager; (ids: ObjectId | ObjectId[]): RemoteObjectManager; }",
-          "calls": [
-            "() => RemoteObjectManager",
-            "(ids: ObjectId | ObjectId[]) => RemoteObjectManager"
-          ]
-        },
-        {
-          "name": "destroy",
+          "name": "detach",
           "optional": false,
           "readonly": false,
           "type": "() => RemoteObjectManager",
@@ -28600,6 +28605,22 @@
           "readonly": false,
           "type": "any",
           "calls": []
+        },
+        {
+          "name": "isDestroyed",
+          "optional": false,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "assertAlive",
+          "optional": false,
+          "readonly": false,
+          "type": "() => void",
+          "calls": [
+            "() => void"
+          ]
         },
         {
           "name": "options",
@@ -29119,6 +29140,15 @@
           "readonly": true,
           "type": "any",
           "calls": []
+        },
+        {
+          "name": "destroy",
+          "optional": false,
+          "readonly": false,
+          "type": "() => RemoteObjectManager",
+          "calls": [
+            "() => RemoteObjectManager"
+          ]
         },
         {
           "name": "add",
@@ -73882,6 +73912,22 @@
           "calls": []
         },
         {
+          "name": "isDestroyed",
+          "optional": false,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "addTo",
+          "optional": false,
+          "readonly": false,
+          "type": "(map: Orihon) => DrawControl",
+          "calls": [
+            "(map: Orihon) => DrawControl"
+          ]
+        },
+        {
           "name": "onAdd",
           "optional": false,
           "readonly": false,
@@ -73903,9 +73949,27 @@
           "name": "remove",
           "optional": false,
           "readonly": false,
-          "type": "(options?: { destroyFeatures?: boolean; }) => DrawControl",
+          "type": "() => DrawControl",
           "calls": [
-            "(options: { destroyFeatures?: boolean; }) => DrawControl"
+            "() => DrawControl"
+          ]
+        },
+        {
+          "name": "destroy",
+          "optional": false,
+          "readonly": false,
+          "type": "() => DrawControl",
+          "calls": [
+            "() => DrawControl"
+          ]
+        },
+        {
+          "name": "setPosition",
+          "optional": false,
+          "readonly": false,
+          "type": "(position: ControlPosition) => DrawControl",
+          "calls": [
+            "(position: ControlPosition) => DrawControl"
           ]
         },
         {
@@ -74043,30 +74107,12 @@
           "calls": []
         },
         {
-          "name": "addTo",
-          "optional": false,
-          "readonly": false,
-          "type": "(map: Orihon) => DrawControl",
-          "calls": [
-            "(map: Orihon) => DrawControl"
-          ]
-        },
-        {
           "name": "getPosition",
           "optional": false,
           "readonly": false,
           "type": "() => ControlPosition",
           "calls": [
             "() => ControlPosition"
-          ]
-        },
-        {
-          "name": "setPosition",
-          "optional": false,
-          "readonly": false,
-          "type": "(position: ControlPosition) => DrawControl",
-          "calls": [
-            "(position: ControlPosition) => DrawControl"
           ]
         },
         {
@@ -74712,20 +74758,6 @@
           "calls": []
         },
         {
-          "name": "map",
-          "optional": false,
-          "readonly": false,
-          "type": "Orihon",
-          "calls": []
-        },
-        {
-          "name": "mode",
-          "optional": false,
-          "readonly": false,
-          "type": "DrawMode",
-          "calls": []
-        },
-        {
           "name": "vertices",
           "optional": false,
           "readonly": false,
@@ -74803,6 +74835,27 @@
           "calls": []
         },
         {
+          "name": "map",
+          "optional": false,
+          "readonly": false,
+          "type": "Orihon",
+          "calls": []
+        },
+        {
+          "name": "mode",
+          "optional": false,
+          "readonly": false,
+          "type": "DrawMode",
+          "calls": []
+        },
+        {
+          "name": "isDestroyed",
+          "optional": false,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
           "name": "addTo",
           "optional": false,
           "readonly": false,
@@ -74815,9 +74868,18 @@
           "name": "remove",
           "optional": false,
           "readonly": false,
-          "type": "(options?: { destroyFeatures?: boolean; }) => DrawHandler",
+          "type": "() => DrawHandler",
           "calls": [
-            "(options: { destroyFeatures?: boolean; }) => DrawHandler"
+            "() => DrawHandler"
+          ]
+        },
+        {
+          "name": "destroy",
+          "optional": false,
+          "readonly": false,
+          "type": "() => DrawHandler",
+          "calls": [
+            "() => DrawHandler"
           ]
         },
         {
@@ -103894,6 +103956,22 @@
           "calls": []
         },
         {
+          "name": "isDestroyed",
+          "optional": false,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "assertAlive",
+          "optional": false,
+          "readonly": false,
+          "type": "() => void",
+          "calls": [
+            "() => void"
+          ]
+        },
+        {
           "name": "options",
           "optional": false,
           "readonly": true,
@@ -104422,13 +104500,12 @@
           ]
         },
         {
-          "name": "remove",
+          "name": "detach",
           "optional": false,
           "readonly": false,
-          "type": "{ (): ObjectManager; (ids: ObjectId | ObjectId[]): ObjectManager; }",
+          "type": "() => ObjectManager",
           "calls": [
-            "() => ObjectManager",
-            "(ids: ObjectId | ObjectId[]) => ObjectManager"
+            "() => ObjectManager"
           ]
         },
         {
@@ -112807,17 +112884,7 @@
           ]
         },
         {
-          "name": "remove",
-          "optional": false,
-          "readonly": false,
-          "type": "{ (): RemoteObjectManager; (ids: ObjectId | ObjectId[]): RemoteObjectManager; }",
-          "calls": [
-            "() => RemoteObjectManager",
-            "(ids: ObjectId | ObjectId[]) => RemoteObjectManager"
-          ]
-        },
-        {
-          "name": "destroy",
+          "name": "detach",
           "optional": false,
           "readonly": false,
           "type": "() => RemoteObjectManager",
@@ -112849,6 +112916,22 @@
           "readonly": false,
           "type": "any",
           "calls": []
+        },
+        {
+          "name": "isDestroyed",
+          "optional": false,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "assertAlive",
+          "optional": false,
+          "readonly": false,
+          "type": "() => void",
+          "calls": [
+            "() => void"
+          ]
         },
         {
           "name": "options",
@@ -113368,6 +113451,15 @@
           "readonly": true,
           "type": "any",
           "calls": []
+        },
+        {
+          "name": "destroy",
+          "optional": false,
+          "readonly": false,
+          "type": "() => RemoteObjectManager",
+          "calls": [
+            "() => RemoteObjectManager"
+          ]
         },
         {
           "name": "add",

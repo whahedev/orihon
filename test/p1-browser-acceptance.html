@@ -25,6 +25,7 @@
     } from "/dist/standard.js";
     import { objectManager } from "/dist/index.js";
     import { createSuggestProvider, routingLayer } from "/dist/orihon.esm.js";
+    import { DrawHandler, drawControl } from "/dist/draw/index.js";
 
     const assert = (condition, message) => {
       if (!condition) throw new Error(message);
@@ -156,6 +157,16 @@
         serviceCancellation: "AbortError",
         wmtsTile: new URL(tile.src).pathname
       };
+      const localImport = manager.addAsync({
+        [Symbol.asyncIterator]() { return this; },
+        next() { return new Promise(() => {}); }
+      }).then(
+        () => { throw new Error("destroyed manager resolved blocked import"); },
+        (error) => assert(error.name === "AbortError", "blocked import lost AbortError")
+      );
+      manager.destroy();
+      await localImport;
+      assert(manager.isDestroyed && manager.getStats().objects === 0, "manager was not terminal after import abort");
       let remoteSignal;
       const remote = objectManager({ debounceMs: 60_000, loader: ({ signal }) => {
         remoteSignal = signal;
@@ -165,10 +176,26 @@
         () => { throw new Error("map destruction resolved a remote load"); },
         (error) => assert(error.name === "AbortError", "remote load lost AbortError")
       );
+      const draw = new DrawHandler().addTo(map).setMode("point");
+      draw.once("drawstart", () => draw.remove());
+      map.emit("click", { latlng: { lat: 0, lng: 0 } });
+      assert(draw.toGeoJSON().features.length === 0, "removed draw committed a stale point");
+      draw.addTo(map).loadData({ type: "Point", coordinates: [0, 0] }).setMode("circle");
+      for (const type of ["pointerdown", "pointermove", "pointercancel", "pointerup"]) {
+        map.container.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 100, clientY: 100 }));
+      }
+      assert(draw.toGeoJSON().features.length === 1, "pointercancel committed a circle");
+      const drawToolbar = drawControl().addTo(map);
+      drawToolbar.destroy();
+      assert(drawToolbar.isDestroyed && !map.controls.has(drawToolbar), "destroyed Draw toolbar retained control registration");
       map.destroy();
       await remoteRequest;
       assert(remoteSignal.aborted && !remote.loading && remote.map === null, "map destruction leaked remote lifecycle");
       remote.destroy();
+      assert(draw.map === null && draw.mode === "off", "standalone Draw survived map unload with live input state");
+      assert(draw.toGeoJSON().features.length === 1, "map unload erased Draw data");
+      draw.destroy();
+      assert(draw.isDestroyed && draw.toGeoJSON().features.length === 0, "Draw destruction retained owned features");
       return result;
     }
 

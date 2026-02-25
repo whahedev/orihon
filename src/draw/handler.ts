@@ -8,6 +8,7 @@ import type { GeoJSONData, GeoJSONFeature, GeoJSONFeatureCollection, GeoJSONGeom
 import type { Orihon } from "../map.js";
 import { drawHandle, midpoint, type DrawHandle } from "./handles.js";
 import { snapLatLng, type DrawSnapOptions } from "./snap.js";
+import { abortError } from "../services/abortable-operation.js";
 
 export type DrawMode = "off" | "point" | "polyline" | "polygon" | "rectangle" | "circle" | "edit" | "delete";
 
@@ -28,8 +29,12 @@ export class DrawHandler extends Evented {
     snapLayers: Layer[];
   };
   readonly featureGroup: FeatureGroup;
-  map: Orihon | null = null;
-  mode: DrawMode = "off";
+  #map: Orihon | null = null;
+  #mode: DrawMode = "off";
+  #destroyed = false;
+  #detaching = false;
+  #generation = 0;
+  readonly #ownsGroup: boolean;
   private vertices: ReturnType<typeof latLng>[] = [];
   private guideLayer: Polyline | Polygon | null = null;
   private handles: DrawHandle[] = [];
@@ -44,6 +49,7 @@ export class DrawHandler extends Evented {
 
   constructor(options: DrawHandlerOptions = {}) {
     super();
+    this.#ownsGroup = options.featureGroup === undefined;
     this.featureGroup = options.featureGroup ?? featureGroup();
     this.options = {
       modes: options.modes ?? ["point", "polyline", "polygon", "rectangle", "circle", "edit", "delete"],
@@ -56,16 +62,37 @@ export class DrawHandler extends Evented {
     this.#resetHistory();
   }
 
+  get map(): Orihon | null { return this.#map; }
+  get mode(): DrawMode { return this.#mode; }
+  get isDestroyed(): boolean { return this.#destroyed; }
+
+  #assertAlive(): void {
+    if (this.#destroyed || this.#detaching) throw abortError("DrawHandler is destroyed or being detached");
+  }
+
+  #isCurrent(generation: number): boolean {
+    return !this.#destroyed && !!this.map && generation === this.#generation;
+  }
+
   addTo(map: Orihon): this {
+    this.#assertAlive();
+    if (map._destroyed) throw abortError("Cannot attach DrawHandler to a destroyed map");
+    if (this.featureGroup.map && this.featureGroup.map !== map && (!this.addedGroup || this.featureGroup.map !== this.map)) {
+      throw new Error("Remove the supplied featureGroup from its current map before attaching DrawHandler");
+    }
     if (this.map === map) return this;
+    const generation = this.#generation + 1;
     this.remove();
-    this.map = map;
+    this.#assertAlive();
+    if (generation !== this.#generation) throw abortError("DrawHandler attachment was superseded");
+    this.#map = map;
     this.addedGroup = !map.hasLayer(this.featureGroup);
-    if (this.addedGroup) this.featureGroup.addTo(map);
     const click = (event: OrihonEvent): void => this.#mapClick(event);
     const move = (event: PointerEvent): void => this.#pointerMove(event);
     const down = (event: PointerEvent): void => this.#pointerDown(event);
     const up = (event: PointerEvent): void => this.#pointerUp(event);
+    const cancel = (): void => { this.cancel(); };
+    const unload = (): void => { this.remove(); };
     const key = (event: KeyboardEvent): void => this.#keyDown(event);
     const doubleClick = (event: MouseEvent): void => {
       if (this.mode !== "polyline" && this.mode !== "polygon") return;
@@ -75,60 +102,104 @@ export class DrawHandler extends Evented {
     };
     const deletion = (event: OrihonEvent): void => this.#featureClick(event);
     map.on("click", click);
+    map.on("unload", unload);
     this.featureGroup.on("click", deletion);
     map.container.addEventListener("pointermove", move, true);
     map.container.addEventListener("pointerdown", down, true);
     map.container.addEventListener("pointerup", up, true);
-    map.container.addEventListener("pointercancel", up, true);
+    map.container.addEventListener("pointercancel", cancel, true);
     map.container.addEventListener("dblclick", doubleClick, true);
     if (typeof window !== "undefined") window.addEventListener("keydown", key);
     else map.container.addEventListener("keydown", key);
-    if (map.container.tabIndex < 0) map.container.tabIndex = 0;
+    const tabIndex = map.container.getAttribute("tabindex");
+    const changedTabIndex = map.container.tabIndex < 0;
+    if (changedTabIndex) map.container.tabIndex = 0;
     this.unsubs.push(
       () => map.off("click", click),
+      () => map.off("unload", unload),
       () => this.featureGroup.off("click", deletion),
       () => map.container.removeEventListener("pointermove", move, true),
       () => map.container.removeEventListener("pointerdown", down, true),
       () => map.container.removeEventListener("pointerup", up, true),
-      () => map.container.removeEventListener("pointercancel", up, true),
+      () => map.container.removeEventListener("pointercancel", cancel, true),
       () => map.container.removeEventListener("dblclick", doubleClick, true),
       () => {
         if (typeof window !== "undefined") window.removeEventListener("keydown", key);
         else map.container.removeEventListener("keydown", key);
+      },
+      () => {
+        if (!map._destroyed && changedTabIndex && map.container.getAttribute("tabindex") === "0") {
+          if (tabIndex === null) map.container.removeAttribute("tabindex");
+          else map.container.setAttribute("tabindex", tabIndex);
+        }
       }
     );
-    this.#resetHistory();
+    try {
+      if (this.addedGroup) this.featureGroup.addTo(map);
+      if (!this.#isCurrent(generation)) throw abortError("DrawHandler attachment was cancelled");
+    } catch (error) {
+      this.remove();
+      throw error;
+    }
     return this;
   }
 
-  remove(options: { destroyFeatures?: boolean } = {}): this {
-    this.setMode("off");
-    for (const unsubscribe of this.unsubs.splice(0)) unsubscribe();
-    this.#clearHandles();
-    this.#clearGuide();
-    if (options.destroyFeatures) this.featureGroup.clearLayers();
-    if (this.addedGroup) this.featureGroup.remove();
-    this.addedGroup = false;
-    this.map = null;
+  remove(): this {
+    if (arguments.length) throw new TypeError("Draw remove() no longer accepts options. Clear featureGroup explicitly or use destroy().");
+    if (this.#detaching) return this;
+    this.#detaching = true;
+    this.#generation++;
+    const previous = this.mode;
+    const map = this.map;
+    const addedGroup = this.addedGroup;
+    this.#mode = "off";
+    try {
+      this.#syncBehaviors();
+      this.#map = null;
+      this.addedGroup = false;
+      for (const unsubscribe of this.unsubs.splice(0)) unsubscribe();
+      this.#cancelShape();
+      this.#clearHandles();
+      this.editingLayer = null;
+      if (addedGroup && this.featureGroup.map === map) this.featureGroup.remove();
+    } finally {
+      this.#detaching = false;
+    }
+    if (!this.#destroyed && previous !== "off") this.emit("modechange", { mode: "off", previous });
+    return this;
+  }
+
+  destroy(): this {
+    if (this.#destroyed) return this;
+    this.#destroyed = true;
+    this.off();
+    this.remove();
+    if (this.#ownsGroup) this.featureGroup.clearLayers();
+    this.snapshots = [];
+    this.snapshotIndex = -1;
     return this;
   }
 
   setMode(mode: DrawMode): this {
+    this.#assertAlive();
     if (mode !== "off" && !this.options.modes.includes(mode)) throw new TypeError(`Draw mode is not enabled: ${mode}`);
     if (this.mode === mode) return this;
     const previous = this.mode;
+    const generation = ++this.#generation;
     this.#cancelShape();
     this.#clearHandles();
+    if (this.#destroyed || generation !== this.#generation) return this;
     this.editingLayer = null;
-    this.mode = mode;
+    this.#mode = mode;
     this.#syncBehaviors();
     if (mode === "edit") this.emit("editstart");
     if (mode === "delete") this.emit("deletestart");
-    this.emit("modechange", { mode, previous });
+    if (!this.#destroyed && generation === this.#generation) this.emit("modechange", { mode, previous });
     return this;
   }
 
   finish(): this {
+    this.#assertAlive();
     if (this.mode !== "polyline" && this.mode !== "polygon") return this;
     const minimum = this.mode === "polygon" ? 3 : 2;
     if (this.vertices.length < minimum) return this;
@@ -140,23 +211,28 @@ export class DrawHandler extends Evented {
   }
 
   cancel(): this {
+    this.#generation++;
     this.#cancelShape();
     return this;
   }
 
   undo(): this {
+    this.#assertAlive();
+    this.cancel();
     if (this.snapshotIndex <= 0) return this;
     this.snapshotIndex--;
     this.#restore(this.snapshots[this.snapshotIndex]);
-    this.emit("undo", { geojson: this.toGeoJSON() });
+    if (!this.#destroyed) this.emit("undo", { geojson: this.toGeoJSON() });
     return this;
   }
 
   redo(): this {
+    this.#assertAlive();
+    this.cancel();
     if (this.snapshotIndex >= this.snapshots.length - 1) return this;
     this.snapshotIndex++;
     this.#restore(this.snapshots[this.snapshotIndex]);
-    this.emit("redo", { geojson: this.toGeoJSON() });
+    if (!this.#destroyed) this.emit("redo", { geojson: this.toGeoJSON() });
     return this;
   }
 
@@ -165,6 +241,11 @@ export class DrawHandler extends Evented {
   }
 
   loadData(data: GeoJSONData): this {
+    this.#assertAlive();
+    this.cancel();
+    this.#clearHandles();
+    if (this.#destroyed) return this;
+    this.editingLayer = null;
     this.featureGroup.clearLayers();
     const features = this.#asFeatures(data);
     for (const feature of features) this.#loadFeature(feature);
@@ -174,15 +255,20 @@ export class DrawHandler extends Evented {
 
   #mapClick(event: OrihonEvent): void {
     if (!this.map || !["point", "polyline", "polygon"].includes(this.mode)) return;
+    const generation = this.#generation;
     const value = this.#snap(event.latlng as LatLngLike);
+    if (!this.#isCurrent(generation)) return;
     if (this.mode === "point") {
       this.emit("drawstart", { mode: this.mode, latlng: value });
+      if (!this.#isCurrent(generation)) return;
       this.#complete(marker(value));
       return;
     }
     if (!this.vertices.length) this.emit("drawstart", { mode: this.mode, latlng: value });
+    if (!this.#isCurrent(generation)) return;
     this.vertices.push(value);
     this.#updateGuide(value);
+    if (!this.#isCurrent(generation)) return;
     this.emit("drawvertex", { mode: this.mode, latlng: value, vertices: this.vertices.map((item) => item.clone()) });
   }
 
@@ -191,7 +277,9 @@ export class DrawHandler extends Evented {
     if ((event.target as Element | null)?.closest?.(".oh-control")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    const generation = this.#generation;
     const value = this.#snap(this.#eventLatLng(event));
+    if (!this.#isCurrent(generation)) return;
     this.dragStart = value;
     this.dragPoint = value;
     this.emit("drawstart", { mode: this.mode, latlng: value });
@@ -215,7 +303,9 @@ export class DrawHandler extends Evented {
     event.preventDefault();
     event.stopImmediatePropagation();
     const start = this.dragStart;
+    const generation = this.#generation;
     const end = this.#snap(this.#eventLatLng(event));
+    if (!this.#isCurrent(generation)) return;
     const layer = this.mode === "rectangle"
       ? rectangle([start, end], this.options.guide)
       : circle(start, this.map.crs.code === "Simple"
@@ -252,6 +342,7 @@ export class DrawHandler extends Evented {
     if (!this.featureGroup.hasLayer(layer)) return;
     if (this.mode === "delete") {
       this.featureGroup.removeLayer(layer);
+      if (this.#destroyed) return;
       this.#commit();
       this.emit("deletecomplete", { layer, geojson: this.toGeoJSON() });
       return;
@@ -324,7 +415,9 @@ export class DrawHandler extends Evented {
     if (!this.map) return;
     const centerHandle = drawHandle(layer.getLatLng(), "vertex", 0, 0);
     centerHandle.marker.on("drag", (event) => {
+      const generation = this.#generation;
       const next = this.#snap(event.latlng as LatLngLike);
+      if (!this.#isCurrent(generation)) return;
       layer.setLatLng(next);
       const edge = this.handles[1];
       if (edge) edge.marker.setLatLng(this.#circleEdge(layer));
@@ -336,7 +429,9 @@ export class DrawHandler extends Evented {
 
     const edgeHandle = drawHandle(this.#circleEdge(layer), "midpoint", 0, 1);
     edgeHandle.marker.on("drag", (event) => {
+      const generation = this.#generation;
       const edge = this.#snap(event.latlng as LatLngLike);
+      if (!this.#isCurrent(generation)) return;
       const radius = Math.max(0, this.map!.distance(layer.getLatLng(), edge));
       layer.setRadius(layer.getRadius().radiusMapUnits !== undefined ? { radiusMapUnits: radius } : { radiusMeters: radius });
       edgeHandle.marker.setLatLng(this.#circleEdge(layer));
@@ -348,8 +443,10 @@ export class DrawHandler extends Evented {
   }
 
   #moveVertex(layer: Polyline | Polygon, ring: number, index: number, value: LatLngLike): void {
+    const generation = this.#generation;
     const rings = this.#rings(layer);
     rings[ring][index] = this.#snap(value);
+    if (!this.#isCurrent(generation)) return;
     this.#setRings(layer, rings);
     this.emit("editvertex", { layer, ring, index, latlng: rings[ring][index] });
   }
@@ -365,6 +462,7 @@ export class DrawHandler extends Evented {
   }
 
   #finishEdit(layer: MutableLayer): void {
+    if (this.#destroyed || !this.map || this.mode !== "edit") return;
     this.#commit();
     this.emit("editcomplete", { layer, geojson: this.toGeoJSON() });
   }
@@ -379,9 +477,13 @@ export class DrawHandler extends Evented {
   }
 
   #complete(layer: Layer): void {
+    const generation = this.#generation;
+    if (!this.#isCurrent(generation)) return;
     this.#clearGuide();
+    if (!this.#isCurrent(generation)) return;
     this.vertices = [];
     this.featureGroup.addLayer(layer);
+    if (!this.#isCurrent(generation)) return;
     this.#commit();
     this.emit("drawcomplete", { layer, geojson: this.#layerFeatures(layer)[0] });
   }
@@ -397,7 +499,9 @@ export class DrawHandler extends Evented {
 
   #updateDragGuide(): void {
     if (!this.map || !this.dragStart || !this.dragPoint) return;
+    const generation = this.#generation;
     this.#clearGuide();
+    if (!this.#isCurrent(generation) || !this.dragStart || !this.dragPoint) return;
     this.guideLayer = this.mode === "rectangle"
       ? rectangle([this.dragStart, this.dragPoint], this.options.guide)
       : polygon(Array.from({ length: 32 }, (_, index) => destination(
@@ -407,8 +511,9 @@ export class DrawHandler extends Evented {
   }
 
   #clearGuide(): void {
-    this.guideLayer?.remove();
+    const guide = this.guideLayer;
     this.guideLayer = null;
+    guide?.remove();
   }
 
   #cancelShape(): void {
@@ -418,8 +523,10 @@ export class DrawHandler extends Evented {
   }
 
   #clearHandles(): void {
-    for (const handle of this.handles) handle.marker.remove();
-    this.handles = [];
+    for (const handle of this.handles.splice(0)) {
+      handle.marker.off();
+      handle.marker.remove();
+    }
   }
 
   #snap(value: LatLngLike, emit = true): ReturnType<typeof latLng> {
@@ -435,7 +542,8 @@ export class DrawHandler extends Evented {
   }
 
   #syncBehaviors(): void {
-    if (!this.map || !this.options.capturePointer) return;
+    if (!this.map || this.map._destroyed) { this.behaviors.clear(); return; }
+    if (!this.options.capturePointer && this.mode !== "off") return;
     if (this.mode !== "off" && !this.behaviors.size) {
       for (const name of ["dblClick", "boxZoom"] as const) {
         const enabled = this.map.behaviors.isEnabled(name);
@@ -449,6 +557,7 @@ export class DrawHandler extends Evented {
   }
 
   #commit(): void {
+    if (this.#destroyed) return;
     const snapshot = this.toGeoJSON();
     this.snapshots.splice(this.snapshotIndex + 1);
     this.snapshots.push(snapshot);
@@ -462,9 +571,11 @@ export class DrawHandler extends Evented {
   }
 
   #restore(snapshot: GeoJSONFeatureCollection): void {
+    this.#clearHandles();
+    if (this.#destroyed) return;
+    this.editingLayer = null;
     this.featureGroup.clearLayers();
     for (const feature of snapshot.features) this.#loadFeature(feature);
-    this.#clearHandles();
   }
 
   #circleEdge(layer: Circle): LatLngLike {
@@ -513,6 +624,7 @@ export class DrawHandler extends Evented {
   }
 
   #loadFeature(feature: GeoJSONFeature): void {
+    if (this.#destroyed) return;
     const geometry = feature.geometry;
     if (!geometry) return;
     const convert = (coordinate: number[]): LatLngLike => ({ lat: Number(coordinate[1]), lng: Number(coordinate[0]) });
@@ -521,21 +633,25 @@ export class DrawHandler extends Evented {
       const properties = feature.properties ?? {};
       if ("radius" in properties) throw new TypeError("Draw circle radius was removed. Use radiusMeters or radiusMapUnits.");
       const hasRadius = "radiusMeters" in properties || "radiusMapUnits" in properties;
-      this.featureGroup.addLayer(hasRadius
+      this.#addFeatureLayer(hasRadius
         ? circle(position, properties as unknown as CircleRadius, { geodesic: true })
         : marker(position));
     } else if (geometry.type === "LineString") {
-      this.featureGroup.addLayer(polyline(geometry.coordinates.map(convert)));
+      this.#addFeatureLayer(polyline(geometry.coordinates.map(convert)));
     } else if (geometry.type === "Polygon") {
-      this.featureGroup.addLayer(polygon(geometry.coordinates.map((ring) => ring.slice(0, -1).map(convert))));
+      this.#addFeatureLayer(polygon(geometry.coordinates.map((ring) => ring.slice(0, -1).map(convert))));
     } else if (geometry.type === "MultiLineString") {
-      for (const line of geometry.coordinates) this.featureGroup.addLayer(polyline(line.map(convert)));
+      for (const line of geometry.coordinates) this.#addFeatureLayer(polyline(line.map(convert)));
     } else if (geometry.type === "MultiPolygon") {
-      for (const area of geometry.coordinates) this.featureGroup.addLayer(polygon(area.map((ring) => ring.slice(0, -1).map(convert))));
+      for (const area of geometry.coordinates) this.#addFeatureLayer(polygon(area.map((ring) => ring.slice(0, -1).map(convert))));
     } else if (geometry.type === "MultiPoint") {
-      for (const position of geometry.coordinates) this.featureGroup.addLayer(marker(convert(position)));
+      for (const position of geometry.coordinates) this.#addFeatureLayer(marker(convert(position)));
     } else if (geometry.type === "GeometryCollection") {
       for (const child of geometry.geometries) this.#loadFeature({ ...feature, geometry: child });
     }
+  }
+
+  #addFeatureLayer(layer: Layer): void {
+    if (!this.#destroyed) this.featureGroup.addLayer(layer);
   }
 }

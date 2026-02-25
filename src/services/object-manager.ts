@@ -11,6 +11,7 @@ import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js
 import { LatLng, LatLngBounds, Point, clampLat, latLng, bounds, wrapLng, type LatLngBoundsLike, type LatLngLike, type PointLike } from "../geo.js";
 import type { Orihon } from "../map.js";
 import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
+import { AbortableOperation, abortError } from "./abortable-operation.js";
 import {
   Popup,
   type OverlayContent,
@@ -405,6 +406,14 @@ interface WebGLSyncProfile {
 type ResolvedObjectManagerOptions = Required<ObjectManagerOptions>;
 
 export class ObjectManager extends Evented {
+  #destroyed = false;
+  readonly #imports = new Set<AbortableOperation>();
+  readonly #mapUnload = (): void => { this.detach(); };
+  get isDestroyed(): boolean { return this.#destroyed; }
+
+  protected assertAlive(): void {
+    if (this.#destroyed) throw abortError("ObjectManager was destroyed");
+  }
   readonly options: ResolvedObjectManagerOptions;
   readonly items = new Map<ObjectId, ManagedObject>();
   readonly markers = new Map<ObjectId, Marker>();
@@ -600,8 +609,11 @@ export class ObjectManager extends Evented {
   }
 
   addTo(map: ObjectManagerMap): this {
+    this.assertAlive();
+    if ("_destroyed" in map && map._destroyed === true) throw abortError("Cannot attach ObjectManager to a destroyed map");
     if (this.map === map) return this;
-    this.remove();
+    this.detach();
+    this.assertAlive();
     if (this.options.clusterRenderer === "webgl" && map.crs?.code === "Simple") {
       throw new CRSCompatibilityError();
     }
@@ -613,15 +625,15 @@ export class ObjectManager extends Evented {
     map.on("zoomend", this._scheduleRender);
     map.on("resize", this._scheduleRender);
     map.on("click", this._unspiderfyOnMapClick);
+    map.on("unload", this.#mapUnload);
     this.render();
     return this;
   }
 
-  remove(): this;
-  remove(ids: ObjectId | ObjectId[]): this;
-  remove(ids?: ObjectId | ObjectId[]): this {
-    if (ids !== undefined) return this.removeObjects(ids);
+  /** Detach rendering/listeners while retaining data and allowing later addTo(). */
+  detach(): this {
     if (!this.map) return this;
+    this.map.off("unload", this.#mapUnload);
     this.map.off("move", this._scheduleLabelRedraw);
     this.map.off("zoom", this._scheduleLabelRedraw);
     this.map.off("moveend", this._scheduleRender);
@@ -638,14 +650,23 @@ export class ObjectManager extends Evented {
     this.closePopup();
     this.scene.detach();
     this.map = null;
+    this.#invalidateLayout();
     return this;
   }
 
   destroy(): this {
+    if (this.#destroyed) return this;
+    this.#destroyed = true;
+    this.off();
+    // Mark terminal before abort listeners or popup cleanup can reenter the API.
+    for (const operation of this.#imports) operation.cancel();
+    this.#imports.clear();
     this._sourceUnsubscribe?.();
     this._sourceUnsubscribe = null;
-    this.remove();
+    this.detach();
     this.clear();
+    this.scene.atlas.clear();
+    this._bulkDepth = 0;
     this.#drainClusterPool();
     this._layoutGeneration++;
     // The library-owned shared pool outlives individual managers.
@@ -654,6 +675,7 @@ export class ObjectManager extends Evented {
   }
 
   #applySourceChange(change: FeatureSourceChange<GeoJSONFeature>): void {
+    if (this.#destroyed) return;
     if (change.type === "add") {
       this.add(change.features.map((feature) => this.#sourceObject(feature)));
       return;
@@ -692,6 +714,7 @@ export class ObjectManager extends Evented {
   }
 
   add(features: ManagedObject | ManagedObject[]): this {
+    this.assertAlive();
     const list = Array.isArray(features) ? features : [features];
     for (const item of list) assertManagedCoordinateFormat(item);
     const cap = this.options.maxObjects;
@@ -732,11 +755,14 @@ export class ObjectManager extends Evented {
     features: Iterable<ManagedObject> | AsyncIterable<ManagedObject>,
     options: ObjectManagerAsyncOptions = {}
   ): Promise<this> {
-    const resolved = resolveAsyncBatchOptions(options, 10_000);
+    this.assertAlive();
+    const operation = new AbortableOperation("ObjectManager import", options.signal);
+    const resolved = resolveAsyncBatchOptions({ ...options, signal: operation.signal }, 10_000);
     const total = Array.isArray(features) ? features.length : null;
     let processed = 0;
     let chunk: ManagedObject[] = [];
     const commit = async (final: boolean): Promise<void> => {
+      operation.throwIfAborted();
       if (!chunk.length) return;
       this.add(chunk);
       processed += chunk.length;
@@ -745,32 +771,53 @@ export class ObjectManager extends Evented {
       if (!final) await yieldAsyncBatch(resolved.yieldMode);
     };
 
-    throwIfAsyncAborted(resolved.signal);
     this.beginBulk();
+    this.#imports.add(operation);
     try {
-      if (Array.isArray(features)) {
-        for (let index = 0; index < features.length; index++) {
-          throwIfAsyncAborted(resolved.signal);
-          chunk.push(features[index]);
-          if (chunk.length >= resolved.chunkSize) await commit(index === features.length - 1);
+      return await operation.run(async () => {
+        if (Array.isArray(features)) {
+          for (let index = 0; index < features.length; index++) {
+            throwIfAsyncAborted(resolved.signal);
+            chunk.push(features[index]);
+            if (chunk.length >= resolved.chunkSize) await commit(index === features.length - 1);
+          }
+        } else if (isAsyncIterable<ManagedObject>(features)) {
+          const iterator = features[Symbol.asyncIterator]();
+          let closed = false;
+          const close = (): void => {
+            if (closed) return;
+            closed = true;
+            try { void Promise.resolve(iterator.return?.()).catch(() => {}); }
+            catch { /* Iterator cleanup must not replace the cancellation result. */ }
+          };
+          operation.signal.addEventListener("abort", close, { once: true });
+          try {
+            while (true) {
+              operation.throwIfAborted();
+              const next = await iterator.next();
+              operation.throwIfAborted();
+              if (next.done) { closed = true; break; }
+              chunk.push(next.value);
+              if (chunk.length >= resolved.chunkSize) await commit(false);
+            }
+          } finally {
+            operation.signal.removeEventListener("abort", close);
+            close();
+          }
+        } else {
+          for (const feature of features) {
+            throwIfAsyncAborted(resolved.signal);
+            chunk.push(feature);
+            if (chunk.length >= resolved.chunkSize) await commit(false);
+          }
         }
-      } else if (isAsyncIterable<ManagedObject>(features)) {
-        for await (const feature of features) {
-          throwIfAsyncAborted(resolved.signal);
-          chunk.push(feature);
-          if (chunk.length >= resolved.chunkSize) await commit(false);
-        }
-      } else {
-        for (const feature of features) {
-          throwIfAsyncAborted(resolved.signal);
-          chunk.push(feature);
-          if (chunk.length >= resolved.chunkSize) await commit(false);
-        }
-      }
-      await commit(true);
-      throwIfAsyncAborted(resolved.signal);
-      return this;
+        await commit(true);
+        throwIfAsyncAborted(resolved.signal);
+        return this;
+      });
     } finally {
+      operation.dispose();
+      this.#imports.delete(operation);
       this.endBulk({ render: options.render });
     }
   }
@@ -780,12 +827,14 @@ export class ObjectManager extends Evented {
    * Pair with `endBulk()` — required for chunked 100k–1M ingest while the manager is on the map.
    */
   beginBulk(): this {
+    this.assertAlive();
     this._bulkDepth++;
     return this;
   }
 
   /** Flush one layout invalidate (+ optional render) after `beginBulk()`. */
   endBulk(options?: { render?: boolean }): this {
+    if (this.#destroyed) return this;
     if (this._bulkDepth > 0) this._bulkDepth--;
     if (this._bulkDepth === 0) {
       this.#invalidateLayout();
@@ -799,6 +848,7 @@ export class ObjectManager extends Evented {
    * Re-enabling rebuilds scene geometries from stored objects.
    */
   setSceneFeatures(enabled: boolean): this {
+    this.assertAlive();
     const next = Boolean(enabled);
     if (this.options.sceneFeatures === next) return this;
     this.options.sceneFeatures = next;
@@ -833,6 +883,7 @@ export class ObjectManager extends Evented {
     features: Iterable<ManagedObject>,
     options?: { animate?: boolean; durationMs?: number }
   ): this {
+    this.assertAlive();
     const list = [...features];
     for (const item of list) assertManagedCoordinateFormat(item);
     const animate = Boolean(options?.animate);
@@ -1041,12 +1092,14 @@ export class ObjectManager extends Evented {
     coordinates: LatLngLike,
     options?: { animate?: boolean; durationMs?: number }
   ): this {
+    this.assertAlive();
     const object = this.items.get(id);
     if (!object) throw new RangeError(`ObjectManager: object "${String(id)}" does not exist`);
     return this.updateObjects([{ ...object, id, coordinates }], options);
   }
 
   removeObjects(ids: ObjectId | ObjectId[]): this {
+    this.assertAlive();
     this.unspiderfy();
     this.closePopup();
     const list = Array.isArray(ids) ? ids : [ids];
@@ -1069,6 +1122,7 @@ export class ObjectManager extends Evented {
   getObjects(): ManagedObject[] { return [...this.items.values()]; }
 
   setFilter(filter: ObjectFilter | null): this {
+    this.assertAlive();
     this.unspiderfy();
     this.filter = filter;
     this._gpuSubset = false;
@@ -1104,6 +1158,7 @@ export class ObjectManager extends Evented {
    * Pass `null` to restore every packed point. No layout rebuild.
    */
   setVisibleIds(ids: Iterable<ObjectId> | null): this {
+    this.assertAlive();
     if (!this.map || !this.#shouldUseWebgl() || this.options.clusterize) {
       return this;
     }
@@ -1127,6 +1182,7 @@ export class ObjectManager extends Evented {
   }
 
   setSelected(id: ObjectId | null): this {
+    this.assertAlive();
     const next = id == null ? null : id;
     if (next != null && !this.items.has(next)) {
       throw new RangeError(`ObjectManager: object "${String(next)}" does not exist`);
@@ -1152,6 +1208,7 @@ export class ObjectManager extends Evented {
   }
 
   setHovered(id: ObjectId | null): this {
+    this.assertAlive();
     const next = id == null ? null : id;
     if (next != null && !this.items.has(next)) {
       throw new RangeError(`ObjectManager: object "${String(next)}" does not exist`);
@@ -1178,6 +1235,7 @@ export class ObjectManager extends Evented {
   }
 
   setObjectState(id: ObjectId, state: Partial<ObjectState>): this {
+    this.assertAlive();
     this.#assertObjectExists(id);
     const { changedKeys, sideTouched } = this.#mergeObjectState(id, state);
     if (!changedKeys.length) return this;
@@ -1191,6 +1249,7 @@ export class ObjectManager extends Evented {
   }
 
   setObjectStates(updates: Iterable<{ id: ObjectId; state: Partial<ObjectState> }>): this {
+    this.assertAlive();
     const touched = new Set<ObjectId>();
     for (const update of updates) {
       this.#assertObjectExists(update.id);
@@ -1209,6 +1268,7 @@ export class ObjectManager extends Evented {
   }
 
   removeObjectState(id: ObjectId, keys?: keyof ObjectState | Array<keyof ObjectState>): this {
+    this.assertAlive();
     this.#assertObjectExists(id);
     const current = this.objectStates.get(id);
     if (!current) return this;
@@ -1241,6 +1301,7 @@ export class ObjectManager extends Evented {
   }
 
   clearObjectStates(): this {
+    this.assertAlive();
     if (!this.objectStates.size && this._selectedId == null && this._hoveredId == null) return this;
     const touched = [...this.objectStates.keys()];
     if (this._selectedId != null && !touched.includes(this._selectedId)) touched.push(this._selectedId);
@@ -1260,6 +1321,7 @@ export class ObjectManager extends Evented {
   }
 
   setStyle(style: ObjectStyleResolver | null): this {
+    this.assertAlive();
     const next = style ?? null;
     if (this._styleResolver === next) return this;
     this._styleResolver = next;
@@ -1281,6 +1343,7 @@ export class ObjectManager extends Evented {
   }
 
   registerIcon(name: string, source: ManagedIconSource, options?: ManagedIconOptions): this {
+    this.assertAlive();
     this.scene.registerIcon(name, source, options);
     this.emit("iconregister", { name });
     this._scheduleRender();
@@ -1288,6 +1351,7 @@ export class ObjectManager extends Evented {
   }
 
   removeIcon(name: string): this {
+    this.assertAlive();
     this.scene.removeIcon(name);
     this.emit("iconremove", { name });
     this._scheduleRender();
@@ -1299,6 +1363,7 @@ export class ObjectManager extends Evented {
   }
 
   clearIcons(): this {
+    this.assertAlive();
     this.scene.clearIcons();
     this._scheduleRender();
     return this;
@@ -1313,6 +1378,7 @@ export class ObjectManager extends Evented {
   }
 
   setTimeRange(from: number | null, to: number | null): this {
+    this.assertAlive();
     this.scene.setTimeRange(from, to);
     this.emit("timerangechange", { from, to });
     if (this.map && this.#shouldUseWebgl() && !this.options.clusterize) {
@@ -1325,6 +1391,7 @@ export class ObjectManager extends Evented {
   }
 
   setVisualization(mode: ObjectVisualizationMode): this {
+    this.assertAlive();
     if (this.options.visualization === mode) return this;
     this.options.visualization = mode;
     this.scene.visualization = mode;
@@ -1334,6 +1401,7 @@ export class ObjectManager extends Evented {
   }
 
   focusObject(id: ObjectId, options?: { zoom?: number; animate?: boolean }): this {
+    this.assertAlive();
     const object = this.items.get(id);
     const position = object ? this.#objectPosition(object) : null;
     if (!object || !position || !this.map) return this;
@@ -1344,6 +1412,7 @@ export class ObjectManager extends Evented {
   }
 
   bindPopup(content: ObjectPopupContent, options?: PopupOptions): this {
+    this.assertAlive();
     this._popupBinding = { content, options };
     return this;
   }
@@ -1355,6 +1424,7 @@ export class ObjectManager extends Evented {
   }
 
   bindClusterPopup(content: ClusterPopupContent, options?: PopupOptions): this {
+    this.assertAlive();
     this._clusterPopupBinding = { content, options };
     return this;
   }
@@ -1366,6 +1436,7 @@ export class ObjectManager extends Evented {
   }
 
   openPopup(id: ObjectId): this {
+    this.assertAlive();
     const object = this.items.get(id);
     const position = object ? this.#objectPosition(object) : null;
     if (object && position && this._popupBinding) {
@@ -1385,6 +1456,7 @@ export class ObjectManager extends Evented {
   }
 
   setClusterize(enabled: boolean): this {
+    this.assertAlive();
     if (this.options.clusterize === Boolean(enabled)) return this;
     this.options.clusterize = Boolean(enabled);
     this.unspiderfy();
@@ -1405,6 +1477,7 @@ export class ObjectManager extends Evented {
   }
 
   setClusterRadiusPixels(radiusPixels: number): this {
+    this.assertAlive();
     const next = Math.max(20, nonNegativeFinite(radiusPixels, "clusterRadiusPixels"));
     if (this.options.clusterRadiusPixels === next) return this;
     this.options.clusterRadiusPixels = next;
@@ -1416,6 +1489,7 @@ export class ObjectManager extends Evented {
   }
 
   setClusterRenderer(renderer: ClusterRenderer): this {
+    this.assertAlive();
     if (this.options.clusterRenderer === renderer) return this;
     this.options.clusterRenderer = renderer;
     this.unspiderfy();
@@ -1436,6 +1510,7 @@ export class ObjectManager extends Evented {
     this._hoveredId = null;
     this._styleZoom = null;
     this._visibleObjects = 0;
+    this._layout = null;
     this.#invalidateLayout();
     return this;
   }
@@ -1518,6 +1593,7 @@ export class ObjectManager extends Evented {
   }
 
   spiderfyCluster(clusterId: string): this {
+    this.assertAlive();
     if (!this.map || !this.options.spiderfyOnMaxZoom) return this;
     const ids = [...this.#clusterMemberIds(clusterId)];
     const spec = this._layout?.clusters.get(clusterId);
@@ -1580,6 +1656,7 @@ export class ObjectManager extends Evented {
   }
 
   render(): void {
+    if (this.#destroyed) return;
     const map = this.map;
     if (!map) return;
     if (map.zoom < this.options.minZoom) {
@@ -1720,6 +1797,7 @@ export class ObjectManager extends Evented {
    * in the background (worker when enabled). Zoom changes use the index once it is ready.
    */
   async prepareLayout(zoom?: number): Promise<this> {
+    this.assertAlive();
     // Flat WebGL mass markers: skip greedy singles allocation (huge win at 1M).
     if (this.#shouldUseWebgl() && !this.options.clusterize) {
       const zoomBucket = Math.floor(zoom ?? this.map?.zoom ?? 0);
@@ -1727,6 +1805,7 @@ export class ObjectManager extends Evented {
       if (this.map) {
         this.render();
       }
+      this.assertAlive();
       return this;
     }
 
@@ -1739,6 +1818,7 @@ export class ObjectManager extends Evented {
     this._greedyCache.set(zoomBucket, greedy);
     this.#applyLayoutResult(zoomBucket, greedy);
     if (this.map) this.render();
+    this.assertAlive();
     if (generation !== this._layoutGeneration) return this;
 
     if (!request.clusterize || request.ids.length === 0) {
@@ -1756,6 +1836,7 @@ export class ObjectManager extends Evented {
       this._greedyCache.clear();
       this.#applyLayoutResult(zoomBucket, this.#queryClusterIndex(index, zoomBucket));
       if (this.map) this.render();
+      this.assertAlive();
       return this;
     }
 
@@ -1769,6 +1850,9 @@ export class ObjectManager extends Evented {
       if (this._layoutPromise === settled) this._layoutPromise = null;
     });
     this._layoutPromise = settled;
+    void settled.catch((error) => {
+      if (!this.#destroyed && generation === this._layoutGeneration) this.emit("error", { error, phase: "layout" });
+    });
     return this;
   }
 
@@ -1787,10 +1871,15 @@ export class ObjectManager extends Evented {
     generation: number,
     zoomBucket: number
   ): Promise<void> {
+    if (this.#destroyed || generation !== this._layoutGeneration) return;
     const index = this.#shouldUseLayoutWorker()
       ? await this._workerPool.clusterIndex(request)
-      : await new Promise<ClusterIndex>((resolve) => {
-          setTimeout(() => resolve(buildClusterIndex(request)), 0);
+      : await new Promise<ClusterIndex>((resolve, reject) => {
+          setTimeout(() => {
+            if (this.#destroyed || generation !== this._layoutGeneration) { reject(abortError("ObjectManager layout was cancelled")); return; }
+            try { resolve(buildClusterIndex(request)); }
+            catch (error) { reject(error); }
+          }, 0);
         });
     if (generation !== this._layoutGeneration) return;
     this._clusterIndex = index;
@@ -1940,9 +2029,11 @@ export class ObjectManager extends Evented {
 
   /** Coalesce expensive pre-hierarchy reclusters onto the latest zoom only. */
   #scheduleGreedyForZoom(zoomBucket: number): void {
+    if (this.#destroyed) return;
     this._pendingGreedyZoom = zoomBucket;
     if (this._greedyRaf || this._greedyPromise) return;
     const run = () => {
+      if (this.#destroyed) return;
       this._greedyRaf = 0;
       const target = this._pendingGreedyZoom;
       this._pendingGreedyZoom = null;
@@ -1971,6 +2062,9 @@ export class ObjectManager extends Evented {
           if (this._pendingGreedyZoom != null) this.#scheduleGreedyForZoom(this._pendingGreedyZoom);
         });
         this._greedyPromise = settled;
+        void settled.catch((error) => {
+          if (!this.#destroyed && generation === this._layoutGeneration) this.emit("error", { error, phase: "layout" });
+        });
         return;
       }
       const result = buildGreedyClusterLayout(request);
@@ -2092,6 +2186,9 @@ export class ObjectManager extends Evented {
           if (this._layoutPromise === settled) this._layoutPromise = null;
         });
         this._layoutPromise = settled;
+        void settled.catch((error) => {
+          if (!this.#destroyed && generation === this._layoutGeneration) this.emit("error", { error, phase: "layout" });
+        });
       }
     }
 

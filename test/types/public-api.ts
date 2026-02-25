@@ -3,6 +3,23 @@ import {
   createGeometryWorkerPool,
   type PrefetchTileLayerOptions
 } from "../../src/index.js";
+import { DrawHandler, drawControl } from "../../src/draw/index.js";
+const draw = new DrawHandler();
+draw.remove().destroy();
+const drawToolbar = drawControl();
+drawToolbar.remove().destroy();
+const drawDestroyed: boolean = draw.isDestroyed;
+void drawDestroyed;
+// @ts-expect-error Destructive removal options were replaced by explicit group clearing.
+draw.remove({ destroyFeatures: true });
+// @ts-expect-error DrawControl follows the same non-destructive remove contract.
+drawToolbar.remove({ destroyFeatures: true });
+// @ts-expect-error Draw mode may only change through setMode().
+draw.mode = "point";
+// @ts-expect-error Draw attachment is read-only.
+draw.map = null;
+// @ts-expect-error Destroyed state cannot be reset.
+drawToolbar.isDestroyed = false;
 
 const ownedPool = createGeometryWorkerPool({ useWorker: false });
 ownedPool.destroy();
@@ -101,3 +118,14 @@ remote.reload().addTo(camera);
 // @ts-expect-error Remote request controllers are private lifecycle state.
 remote._controller;
 void reloaded;
+
+const localManager = objectManager();
+localManager.detach().addTo(camera).removeObjects([1, 2]);
+const destroyed: boolean = localManager.isDestroyed;
+// @ts-expect-error Ambiguous removal was removed; use detach() or removeObjects().
+localManager.remove();
+// @ts-expect-error The remote subtype uses the same unambiguous lifecycle API.
+remote.remove(1);
+// @ts-expect-error Terminal state is read-only.
+localManager.isDestroyed = false;
+void destroyed;

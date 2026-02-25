@@ -836,8 +836,14 @@ export class Orihon extends Evented {
   addControl(control: Control): this {
     if (this.controls.has(control)) return this;
     this.controls.add(control);
-    control.onAdd(this);
-    control.render();
+    try {
+      control.onAdd(this);
+      control.render();
+    } catch (error) {
+      this.controls.delete(control);
+      if (control.map === this) control.onRemove();
+      throw error;
+    }
     return this;
   }
 

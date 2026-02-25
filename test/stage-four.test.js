@@ -114,7 +114,7 @@ test("ObjectManager exposes indexed collection and filter lifecycle", () => {
   assert.equal(manager.options.clusterRadiusPixels, 50);
   assert.equal(manager.options.clusterize, false);
 
-  manager.remove([1, 3]);
+  manager.removeObjects([1, 3]);
   assert.equal(manager.getStats().objects, 1);
   manager.clear();
   assert.equal(manager.getStats().objects, 0);

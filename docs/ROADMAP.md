@@ -95,7 +95,7 @@ draw.loadData(featureCollection);
 
 - Draw polygon with a hole is **out of scope** for v1 of draw (outer ring only). Holes stay editable if loaded via `loadData`.
 - `toGeoJSON()` round-trips Point / LineString / Polygon / rectangle-as-polygon / circle-as-polygon (sampled) or Circle properties (`properties.radiusMeters` on EPSG:3857 or `properties.radiusMapUnits` on CRS.Simple).
-- Removing the control calls `onRemove`, restores behaviors, drops handles, does not destroy `featureGroup` unless `draw.remove({ destroyFeatures: true })`.
+- Removing the control calls `onRemove`, restores behaviors, drops handles, and retains features/history. `destroy()` is terminal and clears only internally owned features; supplied groups remain caller-owned. See [Draw lifetime migration](MIGRATION-NEXT-MAJOR.md#draw-lifetime-and-feature-ownership).
 - Size: `orihon/draw` ESM gzip ≤ 12 KiB. Core/Standard/Advanced budgets unchanged.
 - No `innerHTML` in toolbar; buttons use locale strings.
 

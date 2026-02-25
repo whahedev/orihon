@@ -14,6 +14,7 @@ These rules describe the conventions used by the public Orihon API. New APIs mus
 - `addTo(map)` attaches a reusable object to a map and returns that object.
 - `remove()` detaches a layer or control but allows it to be added again. `Map.remove()` is the documented ecosystem-compatible terminal alias of `Map.destroy()`.
 - `clear()` removes contained data without destroying the container.
+- ObjectManager uses `detach()` for map disconnection and `removeObjects()` for record deletion; it has no overloaded `remove()`.
 - `cancel()` stops the current operation while leaving its owner reusable.
 - `destroy()` is terminal and idempotent. Methods that require a live resource fail after destruction.
 - Cleanup must settle every outstanding promise. It must never turn cancellation or failure into an empty successful business result.

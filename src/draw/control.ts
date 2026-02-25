@@ -1,11 +1,12 @@
 import { createEl, listen } from "../dom.js";
 import type { EventHandler, OrihonEvent } from "../events.js";
 import type { GeoJSONData, GeoJSONFeatureCollection } from "../layers/geojson.js";
-import type { Orihon } from "../map.js";
+import type { ControlPosition, Orihon } from "../map.js";
 import { Control, type ControlOptions } from "../ui/control.js";
 import type { LocaleName } from "../ui/locale.js";
 import { DrawHandler, type DrawHandlerOptions, type DrawMode } from "./handler.js";
 import { drawLocaleFromMapLabel, resolveDrawLocale, type DrawLocale } from "./locale.js";
+import { abortError } from "../services/abortable-operation.js";
 
 export interface DrawControlOptions extends DrawHandlerOptions, ControlOptions {}
 
@@ -79,7 +80,23 @@ export class DrawControl extends Control<DrawControlOptions> {
     this.featureGroup = this.handler.featureGroup;
   }
 
+  get isDestroyed(): boolean { return this.handler.isDestroyed; }
+
+  #assertAlive(): void {
+    if (this.isDestroyed) throw abortError("DrawControl was destroyed");
+  }
+
+  override addTo(map: Orihon): this {
+    this.#assertAlive();
+    if (map._destroyed) throw abortError("Cannot attach DrawControl to a destroyed map");
+    return super.addTo(map);
+  }
+
   override onAdd(map: Orihon): void {
+    this.#assertAlive();
+    if (map._destroyed) throw abortError("Cannot attach DrawControl to a destroyed map");
+    if (this.map && this.map !== map) this.remove();
+    this.#assertAlive();
     super.onAdd(map);
     this.handler.addTo(map);
     const toolbar = createEl("div", "oh-draw-toolbar", this.el!);
@@ -115,15 +132,31 @@ export class DrawControl extends Control<DrawControlOptions> {
   }
 
   override onRemove(): void {
-    this.handler.remove();
-    this.buttons.clear();
-    this.actionButtons.clear();
-    super.onRemove();
+    try {
+      this.handler.remove();
+    } finally {
+      this.buttons.clear();
+      this.actionButtons.clear();
+      super.onRemove();
+    }
   }
 
-  override remove(options: { destroyFeatures?: boolean } = {}): this {
-    this.handler.remove(options);
-    return super.remove();
+  override remove(): this {
+    if (arguments.length) throw new TypeError("Draw remove() no longer accepts options. Clear featureGroup explicitly or use destroy().");
+    if (this.map) super.remove();
+    else this.handler.remove();
+    return this;
+  }
+
+  destroy(): this {
+    this.handler.destroy();
+    this.remove();
+    return this;
+  }
+
+  override setPosition(position: ControlPosition): this {
+    this.#assertAlive();
+    return super.setPosition(position);
   }
 
   setMode(mode: DrawMode): this { this.handler.setMode(mode); return this; }
@@ -138,6 +171,7 @@ export class DrawControl extends Control<DrawControlOptions> {
   loadData(data: GeoJSONData): this { this.handler.loadData(data); return this; }
 
   override render(): void {
+    if (this.isDestroyed) return;
     const labels = this.#labels();
     for (const [mode, button] of this.buttons) {
       const label = labels[MODE_LABELS[mode as Exclude<DrawMode, "off">]];

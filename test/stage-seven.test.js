@@ -102,7 +102,7 @@ test("RemoteObjectManager loads viewport objects and cancels stale work", async 
   assert.equal(calls, 1);
   assert.deepEqual(loads, [1]);
   assert.equal(manager.getStats().objects, 1);
-  manager.remove();
+  manager.detach();
 });
 
 test("SearchProvider normalizes search, geocode and reverse APIs", async () => {

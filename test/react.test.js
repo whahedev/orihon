@@ -68,18 +68,28 @@ test("React ObjectManager keeps id-diffed objects through Strict Mode replay", a
   globalThis.cancelAnimationFrame = clearTimeout;
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   let manager;
+  let subscriptions = 0;
+  const instances = [];
+  const source = {
+    getSnapshot: () => ({ version: 0, features: [] }),
+    subscribe() { subscriptions++; return () => { subscriptions--; }; }
+  };
   const objects = [{ id: 1, coordinates: ({ lat: 10, lng: 20 }) }, { id: 2, coordinates: ({ lat: 11, lng: 21 }) }];
   const root = createRoot(document.getElementById("root"));
   await act(async () => {
     root.render(React.createElement(StrictMode, null,
       React.createElement(OrihonMap, { center: { lat: 10, lng: 20 }, zoom: 4, controls: false },
-        React.createElement(ObjectManager, { objects, clusterRenderer: "dom", onReady: (value) => { manager = value; } })
+        React.createElement(ObjectManager, { objects, source, clusterRenderer: "dom", onReady: (value) => { manager = value; instances.push(value); } })
       )
     ));
   });
   assert.equal(manager.getObjects().length, 2);
+  assert.equal(subscriptions, 1);
+  assert.ok(instances.slice(0, -1).every((value) => value.isDestroyed));
   await act(async () => { root.unmount(); });
   assert.equal(manager.map, null);
+  assert.equal(manager.isDestroyed, true);
+  assert.equal(subscriptions, 0);
   dom.window.close();
   delete globalThis.ResizeObserver;
 });

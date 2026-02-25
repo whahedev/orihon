@@ -249,7 +249,11 @@ geoJSON(buffer(featureCollection, 2, { units: "kilometers" })).addTo(map);
 
 ## Drawing entry
 
-Import `drawControl` or the headless `DrawHandler` from `orihon/draw`, plus `orihon/draw.css` for the toolbar. Point, polyline, polygon, rectangle, circle, edit and delete modes support snapping, `undo()` / `redo()`, `toGeoJSON()` and `loadData()`. Edit mode supports vertex/midpoint handles for paths and markers, plus center/radius handles for circles. Keyboard: `Enter` finish, `Escape` cancel, `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Y` or `Ctrl/Cmd+Shift+Z` redo (window-level while a mode is active). Toolbar strings use `resolveDrawLocale` / `DrawLocale` (nine languages, including `drawRedo`); they are not part of core `OrihonLocale`. Pass `locale: "ru"` (etc.) on the control, or call `draw.render()` after `map.setLocale(...)` so titles follow the map. Use `setMode()`, `finish()` and `cancel()` for programmatic control. Removing the control keeps its `featureGroup`; pass `remove({ destroyFeatures: true })` to clear it.
+Import `drawControl` or the headless `DrawHandler` from `orihon/draw`, plus `orihon/draw.css` for the toolbar. Point, polyline, polygon, rectangle, circle, edit and delete modes support snapping, `undo()` / `redo()`, `toGeoJSON()` and `loadData()`. Edit mode supports vertex/midpoint handles for paths and markers, plus center/radius handles for circles. Keyboard: `Enter` finish, `Escape` cancel, `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Y` or `Ctrl/Cmd+Shift+Z` redo (window-level while a mode is active). Toolbar strings use `resolveDrawLocale` / `DrawLocale` (nine languages, including `drawRedo`); they are not part of core `OrihonLocale`. Pass `locale: "ru"` (etc.) on the control, or call `draw.render()` after `map.setLocale(...)` so titles follow the map. Use `setMode()`, `finish()` and `cancel()` for programmatic control.
+
+Both DrawHandler and DrawControl support reusable `remove()` and terminal, idempotent `destroy()`, with read-only `isDestroyed`. Removal cancels the draft, switches to `off`, releases pointer/keyboard/edit-handle listeners, restores captured map behaviors and retains features and undo/redo history. Map destruction also detaches standalone handlers. Only a group attached by Draw is detached; a caller-attached group stays on its map. After removal, `addTo()` can attach to a live map again. A supplied group still attached to a different map must be explicitly removed from that map first.
+
+Destroy additionally releases history and event listeners and clears the internally created feature group. A supplied `featureGroup` remains caller-owned: its features and unrelated subscriptions are never cleared by Draw destruction. After destroy, attachment, mode changes, finish, undo/redo, data loading and control positioning throw `AbortError`; reads, `cancel()`, `remove()` and repeated `destroy()` remain safe. DrawHandler `map` and `mode` are read-only; use `addTo()` / `remove()` and `setMode()`. The old `remove({ destroyFeatures: true })` is rejected: use explicit `featureGroup.clearLayers()` to clear a retained group. `pointercancel` discards a drag draft without completing a feature.
 
 ## React entry
 
@@ -401,7 +405,9 @@ Create with `objectManager(options?)`; pass `loader` for viewport loading or `po
 | `beginBulk()` / `endBulk({ render? })` | Coalesce layout invalidation and rendering for chunked ingest |
 | `update(objectOrArray, options?)` / `updateObjects(iterable, options?)` | Replace existing object data; fast paths patch properties or GPU positions |
 | `moveObject(id, coordinates, options?)` | Move one object; optional animation/duration |
-| `removeObjects(ids)` / `remove(ids)` | Remove data by id (`remove()` with no ids detaches from map) |
+| `removeObjects(ids)` | Delete records by id without detaching |
+| `detach()` | Release map rendering/listeners; retain data and source subscription for reattachment |
+| `isDestroyed` | Read-only terminal state; `addTo`, imports and state mutations reject after destruction |
 | `clear()` / `destroy()` | Clear data / fully release manager resources and handlers |
 | `getObject(id)` / `getObjects()` | Read one object / a snapshot array of stored objects |
 | `setFilter(fnOrNull)` | Apply an application predicate without mutating objects |
@@ -423,7 +429,19 @@ Create with `objectManager(options?)`; pass `loader` for viewport loading or `po
 | `spiderfyCluster(id)`, `unspiderfy()` | Expand/collapse overlapping maximum-zoom members |
 | `getStats()` | Return object/index/visible/renderer/layout counters |
 
-`RemoteObjectManager.reload({ signal }?)` immediately loads the current viewport and returns `Promise<ManagedObject[]>`. Automatic add/move/zoom/resize requests use `debounceMs` (default 120). The loader receives bounds, zoom, reason and a linked `AbortSignal`. Cancellation, supersession, detach or destruction reject explicit reloads with `AbortError`; provider failures reject unchanged. Automatic requests report outcomes through `load` / `error` / `abort` events. Viewport changes invalidate stale requests before debounce. `loading` reflects an active request, not a queued timer. `remove()` retains data and permits reattachment; `destroy()` prohibits future remote reloads and attachment. Map destruction emits `unload`, which detaches the manager and cancels pending remote work. See [migration](MIGRATION-NEXT-MAJOR.md#remote-viewport-loading).
+`RemoteObjectManager.reload({ signal }?)` immediately loads the current viewport and returns `Promise<ManagedObject[]>`. Automatic add/move/zoom/resize requests use `debounceMs` (default 120). The loader receives bounds, zoom, reason and a linked `AbortSignal`. Cancellation, supersession, detach or destruction reject explicit reloads with `AbortError`; provider failures reject unchanged. Automatic requests report outcomes through `load` / `error` / `abort` events. Viewport changes invalidate stale requests before debounce. `loading` reflects an active request, not a queued timer. `detach()` retains data and permits reattachment; `destroy()` prohibits future remote reloads and attachment. Map destruction emits `unload`, which detaches all ObjectManagers and cancels pending remote work. See [migration](MIGRATION-NEXT-MAJOR.md#remote-viewport-loading).
+
+ObjectManager's ambiguous `remove()` overload is removed. `destroy()` is terminal and
+idempotent, cancels every pending `addAsync()` with `AbortError` and releases the
+source subscription. Even a blocked async iterator cannot keep the returned import
+Promise pending; its `return()` cleanup is requested without waiting indefinitely.
+External cancellation preserves the accepted prefix and leaves the manager reusable;
+destruction clears all data. `detach()` pauses rendering, not data ingestion.
+Background hierarchy work is generation-guarded and cannot revive destroyed state;
+the shared worker remains library-owned. `prepareLayout()` retains its first-paint
+contract and may continue hierarchy construction in the background; current background
+failures emit `error` with `phase: "layout"`. React creates and destroys its own manager
+per effect lifetime, including Strict Mode replay, so no source subscription survives unmount.
 
 ### GPU, heat and geometry processing
 

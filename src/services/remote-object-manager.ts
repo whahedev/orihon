@@ -21,6 +21,8 @@ export type RemoteObjectLoader = (
 
 export interface RemoteObjectManagerOptions extends ObjectManagerOptions {
   loader: RemoteObjectLoader;
+  points?: never;
+  source?: never;
   /** Delay for automatic viewport loads only, in milliseconds. Default 120. */
   debounceMs?: number;
   replace?: boolean;
@@ -43,7 +45,8 @@ export class RemoteObjectManager extends ObjectManager {
   readonly #remoteRender = (): void => this.#schedule("move");
 
   constructor(options: RemoteObjectManagerOptions) {
-    if (typeof options.loader !== "function") throw new TypeError("RemoteObjectManager loader is required");
+    if (options?.points !== undefined || options?.source !== undefined) throw new TypeError("RemoteObjectManager loader cannot be combined with points or source");
+    if (typeof options?.loader !== "function") throw new TypeError("RemoteObjectManager loader is required");
     const debounceMs = nonNegativeFinite(options.debounceMs ?? 120, "debounceMs");
     super(options);
     this.loader = options.loader;

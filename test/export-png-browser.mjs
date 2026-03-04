@@ -39,13 +39,15 @@ if (!address || typeof address === "string") throw new Error("Unable to bind bro
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage();
-  await page.goto(`http://127.0.0.1:${address.port}/test/export-png-composition.html`);
-  await page.waitForFunction(() => document.body.dataset.state !== "running");
-  const state = await page.locator("body").getAttribute("data-state");
-  const result = await page.locator("#result").innerText();
-  assert.equal(state, "passed", result);
-  assert.deepEqual(JSON.parse(result), { width: 64, height: 64, checks: 6 });
-  console.log("exportPng browser composition ok");
+  for (const query of ["", "?bundle"]) {
+    await page.goto(`http://127.0.0.1:${address.port}/test/export-png-composition.html${query}`);
+    await page.waitForFunction(() => document.body.dataset.state !== "running");
+    const state = await page.locator("body").getAttribute("data-state");
+    const result = await page.locator("#result").innerText();
+    assert.equal(state, "passed", result);
+    assert.deepEqual(JSON.parse(result), { width: 64, height: 64, checks: 6 });
+  }
+  console.log("exportPng browser composition ok (modules and compressed Standard)");
 } finally {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));

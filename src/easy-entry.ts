@@ -38,7 +38,7 @@ export interface EasyMapOptions extends MapOptions {
   basemap?: EasyBasemap | false | null;
 }
 
-export interface EasyMarkerOptions extends MarkerOptions {
+interface EasyMarkerExtras {
   position: LatLngLike;
   popup?: OverlayContent;
   popupOptions?: PopupOptions;
@@ -46,9 +46,10 @@ export interface EasyMarkerOptions extends MarkerOptions {
   tooltipOptions?: TooltipOptions;
 }
 
-export type EasyMarkerLayerOptions = Omit<EasyMarkerOptions, "position">;
+export type EasyMarkerOptions = MarkerOptions & EasyMarkerExtras;
+export type EasyMarkerLayerOptions = MarkerOptions & Omit<EasyMarkerExtras, "position">;
 
-export interface EasyMarkerDescription extends EasyMarkerOptions {
+export type EasyMarkerDescription = EasyMarkerOptions & {
   type: "marker";
 }
 

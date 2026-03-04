@@ -79,7 +79,7 @@ const clearSummaries = {
   geometryWorkerPool: "Устаревший alias createGeometryWorkerPool; создаёт отдельный пул, принадлежащий вызывающему.",
   heatLayer: "Показывает тепловую поверхность, изолинии или оба представления одного поля значений.",
   heatSupport: "Проверяет, доступны ли в текущем браузере ускоренные WASM- и WebGPU-backend теплового pipeline.",
-  icon: "Описывает растровую иконку маркера: изображение, размер, anchor и дополнительные CSS-настройки.",
+  icon: "Создаёт иконку маркера из изображения либо безопасного текста/Node; задаёт размер и anchor.",
   imageOverlay: "Растягивает изображение по заданной географической области и синхронизирует его с картой.",
   latLng: "Нормализует поддерживаемый формат координаты в объект LatLng с широтой и долготой.",
   lngLat: "Создаёт LatLng из longitude-first координат MapLibre, GeoJSON и совместимых API.",
@@ -127,6 +127,9 @@ const clearSummaries = {
 };
 
 const special = {
+  marker: {
+    note: "Выберите один режим: встроенная фигура (shape/color/size), content или icon. Смешанные режимы и устаревший html отклоняются. Пустой content остаётся пустым. setContent(), setIcon() и setAppearance() явно переключают режим; anchor для иконки задаётся через iconAnchor."
+  },
   fromGeoJSONPosition: {
     example: `import { fromGeoJSONPosition, marker } from "orihon";
 const position = fromGeoJSONPosition([37.618423, 55.751244]);
@@ -274,7 +277,7 @@ console.log({
     signature: `function icon(options: IconOptions): Icon
 function icon(options?: DivIconOptions): DivIcon`,
     returnType: "Icon | DivIcon",
-    note: "Передайте `iconUrl` для растровой иконки. Передайте `content` (или не передавайте аргумент) для HTML/CSS-иконки; отдельная фабрика `divIcon()` больше не нужна."
+    note: "Передайте `iconUrl` для растровой иконки или `content` (либо ни одного аргумента) для текстовой/Node-иконки. Одновременные iconUrl/content отклоняются; image-only поля недопустимы в DivIcon. Строки — безопасный текст, пустая строка и 0 сохраняются."
   },
   searchProvider: {
     signature: `function searchProvider<T extends SearchResult>(source: T[], options?: SearchProviderOptions<T>): SearchProvider<T>
@@ -282,12 +285,16 @@ function searchProvider<T extends SearchResult>(source: SearchAdapter<T>, option
     note: "Локальный массив получает встроенный поиск по тексту; адаптер позволяет подключить серверные search, geocode и reverse без второй фабрики."
   },
   objectManager: {
-    signature: `function objectManager(options?: ObjectManagerOptions): ObjectManager
+    signature: `function objectManager(options?: LocalObjectManagerOptions): ObjectManager
 function objectManager(options: RemoteObjectManagerOptions): RemoteObjectManager
-function objectManager(options: MarkerObjectManagerOptions): MarkerCollection`,
+function objectManager(options: PointObjectManagerOptions): MarkerCollection
+function objectManager(options: UnifiedObjectManagerOptions): ObjectManager | RemoteObjectManager | MarkerCollection`,
     returnType: "ObjectManager | RemoteObjectManager | MarkerCollection",
     note: "Одна фабрика покрывает обычные объекты, удалённый loader с отменой устаревших запросов и points-режим с DOM/SVG/WebGL/hybrid renderer. Remote \`reload({ signal }?)\` запускает загрузку сразу и возвращает Promise объектов; отмена отклоняет его с AbortError. Автоматические загрузки используют debounceMs и события load/error/abort. ObjectManager отключается от карты через \`detach()\`, удаляет записи через \`removeObjects(ids)\`; \`destroy()\` терминален и отменяет незавершённые импорты. Для миллионов объектов используйте \`addAsync(..., { render:false })\`, затем \`prepareLayout()\`.",
     sections: [{
+      title: "Взаимоисключающие источники",
+      bullets: ["Выберите локальные опции/source, loader или points; смешанные источники отклоняются до подписок и чтения итератора.", "debounceMs/replace требуют loader. points использует renderer и не принимает clusterize/clusterRenderer/style."]
+    }, {
       title: "Единый язык стилей",
       rows: [
         ["Точка", "`fill`, `fillOpacity`, `size`", "`color` и `opacity` поддерживаются как совместимые aliases; fill-поля имеют приоритет."],
@@ -535,6 +542,9 @@ function expandParameterProperties(parameter, type) {
     const declaration = property.valueDeclaration ?? property.declarations?.[0];
     if (!declaration || ts.isMethodSignature(declaration) || ts.isMethodDeclaration(declaration)) return [];
     const propertyType = checker.getTypeOfSymbolAtLocation(property, declaration);
+    // Optional `never` fields only prohibit another union branch; they are not
+    // available user options (the checker represents them as `undefined`).
+    if (checker.getNonNullableType(propertyType).flags & ts.TypeFlags.Never) return [];
     return [{
       name: property.getName(),
       type: typeText(propertyType, declaration),
@@ -555,6 +565,9 @@ function typeText(type, node) {
 
 function describeOption(name, sourceDescription = "", propertyType = "") {
   const known = {
+    content: "Безопасный текст, число или DOM Node. Пустая строка остаётся пустым содержимым.",
+    icon: "Готовая иконка; не комбинируется с content или полями встроенной фигуры.",
+    shape: "Форма встроенного маркера; выбирает режим фигуры, несовместимый с content/icon.",
     options: "Объект настроек функции; его поля перечислены в таблице ниже.",
     mode: "Режим результата или визуализации. Для heat: heatmap, isolines либо оба слоя из одного поля.",
     backend: "Вычислительный backend: auto выбирает доступное ускорение, wasm фиксирует WASM, webgpu — WebGPU.",

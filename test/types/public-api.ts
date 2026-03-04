@@ -129,3 +129,58 @@ remote.remove(1);
 // @ts-expect-error Terminal state is read-only.
 localManager.isDestroyed = false;
 void destroyed;
+
+import { icon, type Icon, type DivIcon, type MarkerOptions, type ObjectManager as LocalManager, type RemoteObjectManager, type MarkerCollection, type UnifiedObjectManagerOptions } from "../../src/index.js";
+import { createMap as createEasyMap, type EasyMarkerLayerOptions } from "../../src/easy-entry.js";
+import type { MarkerProps } from "../../src/react/layers.js";
+const imageIcon: Icon = icon({ iconUrl: "pin.png" });
+const textIcon: DivIcon = icon({ content: "" });
+marker(namedPosition, { icon: imageIcon });
+marker(namedPosition, { content: 0 }).setContent("").setIcon(null).setAppearance({ shape: "circle" });
+const mixedMarker = { icon: imageIcon, content: "hidden" };
+// @ts-expect-error Mixed modes are rejected even through a pre-existing variable.
+marker(namedPosition, mixedMarker);
+// @ts-expect-error Built-in appearance cannot be hidden behind an icon.
+const mixedAppearance: MarkerOptions = { icon: imageIcon, color: "red" };
+// @ts-expect-error Icon owns its anchor.
+marker(namedPosition, { icon: imageIcon, anchor: [1, 2] });
+// @ts-expect-error Null is not a visual selector; use setIcon(null) to reset a live marker.
+marker(namedPosition, { icon: null });
+const legacyHtml = { html: "old", title: "title" };
+// @ts-expect-error Legacy html is forbidden on variables too.
+marker(namedPosition, legacyHtml);
+// @ts-expect-error setAppearance cannot silently store custom content.
+marker(namedPosition).setAppearance(mixedMarker);
+const mixedIcon = { iconUrl: "pin.png", content: "hidden" };
+// @ts-expect-error Factory overloads must not accept the other mode through structural typing.
+icon(mixedIcon);
+// @ts-expect-error DivIcon cannot silently ignore image-only options.
+icon({ content: "text", shadowUrl: "shadow.png" });
+// @ts-expect-error React preserves the full mutually exclusive union.
+const mixedReactMarker: MarkerProps = { position: namedPosition, ...mixedMarker };
+// @ts-expect-error Easy's position-less options must not collapse the union through Omit.
+const mixedEasyMarker: EasyMarkerLayerOptions = mixedMarker;
+const easy = createEasyMap("map");
+// @ts-expect-error Easy positional overload keeps visual exclusivity.
+easy.addMarker(namedPosition, mixedMarker);
+// @ts-expect-error Easy declarative overload keeps visual exclusivity.
+easy.add({ type: "marker", position: namedPosition, ...mixedMarker });
+const localResult: LocalManager = objectManager();
+const remoteResult: RemoteObjectManager = objectManager({ loader: () => [] });
+const pointResult: MarkerCollection = objectManager({ points: [namedPosition] });
+const conflictingManager = { loader: () => [], points: [namedPosition] };
+// @ts-expect-error Local fallback cannot swallow conflicting remote/point selectors.
+objectManager(conflictingManager);
+// @ts-expect-error The exported union itself enforces the same constraint.
+const mixedManagerOptions: UnifiedObjectManagerOptions = conflictingManager;
+// @ts-expect-error Invalid loader types cannot fall back to local mode.
+objectManager({ loader: "url", clusterize: true });
+// @ts-expect-error Remote-only options require a loader.
+objectManager({ debounceMs: 10 });
+// @ts-expect-error Reactive source and remote loader cannot compete for the same store.
+objectManager({ loader: () => [], source: { getSnapshot: () => ({ version: 0, features: [] }), subscribe: () => () => {} } });
+// @ts-expect-error Point collections cannot silently ignore local clustering options.
+objectManager({ points: [], clusterize: true });
+declare const selectedManagerOptions: UnifiedObjectManagerOptions;
+const selectedManager: LocalManager | RemoteObjectManager | MarkerCollection = objectManager(selectedManagerOptions);
+void [textIcon, mixedAppearance, mixedReactMarker, mixedEasyMarker, localResult, remoteResult, pointResult, mixedManagerOptions, selectedManager];

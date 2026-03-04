@@ -35,7 +35,7 @@ test("rectangle accepts LatLng drag endpoints and produces editable vertices", (
 
 test("edit handles suppress the default map-pin content", () => {
   const handle = drawHandle({ lat: 55.75, lng: 37.62 }, "vertex", 0, 0);
-  assert.equal(handle.marker.options.content, "\u200b");
+  assert.equal(handle.marker.options.content, "");
   assert.match(handle.marker.options.className, /oh-draw-vertex-handle/);
 });
 

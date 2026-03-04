@@ -3,7 +3,7 @@ import type { LatLngLike } from "../geo.js";
 import { FeatureGroup as OrihonFeatureGroup, featureGroup } from "../layer-group.js";
 import type { Layer } from "../layer.js";
 import { GeoJSONLayer, geoJSON, type GeoJSONData, type GeoJSONOptions } from "../layers/geojson.js";
-import { Marker as OrihonMarker, marker, type MarkerOptions } from "../layers/marker.js";
+import { Marker as OrihonMarker, marker, validateMarkerOptions, type MarkerOptions } from "../layers/marker.js";
 import { TileLayer as OrihonTileLayer, tileLayer, type TileLayerOptions, type TileTemplate } from "../layers/tile-layer.js";
 import { GroupContext, LayerContext, useMap } from "./context.js";
 
@@ -30,12 +30,13 @@ export function TileLayer({ url, ...options }: TileLayerProps) {
   return null;
 }
 
-export interface MarkerProps extends MarkerOptions {
+export type MarkerProps = MarkerOptions & {
   position: LatLngLike;
   children?: ReactNode;
 }
 
 export function Marker({ position, children, ...options }: MarkerProps) {
+  validateMarkerOptions(options);
   const [layer] = useState(() => marker(position, options));
   useLayer(layer);
   useLayoutEffect(() => { layer.setLatLng(position); }, [layer, position]);

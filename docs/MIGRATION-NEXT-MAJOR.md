@@ -228,7 +228,52 @@ commit a late feature, and browser `pointercancel` now discards the draft rather
 than treating it as pointer-up. Toolbar transfers remove the previous DOM/control
 registration; failed control attachment rolls back the new registration.
 
+## Exclusive marker and factory modes
+
+Marker visuals now have three mutually exclusive forms:
+
+```js
+marker(position, { shape: "circle", color: "#0f766e", size: 18 });
+marker(position, { content: "A", anchor: [0, 0] });
+marker(position, { icon: icon({ iconUrl: "pin.png", iconAnchor: [12, 36] }) });
+```
+
+Do not combine `content` / `icon` with each other or with built-in appearance
+fields (`shape`, `color`, `strokeColor`, `size`, `strokeWidth`). The default with no
+visual selector remains a pin. Put an image icon's anchor on `iconAnchor`, not the
+ignored marker `anchor`. `html` is removed: rename it to `content`; strings remain
+plain text, not parsed HTML. `content: ""` now means an empty marker, not a pin.
+`0` is also valid content. Omit inactive fields instead of using null selectors.
+
+Use `setContent(value)`, `setIcon(icon)` or `setAppearance(appearance)` to switch
+the existing marker explicitly. `setAppearance()` now selects the built-in glyph
+instead of silently updating it behind custom content. `setIcon(null)` returns to
+the stored glyph appearance without resurrecting old content. `getContent()` is
+null outside content mode. Mode switches reset the previous marker anchor; an
+explicit glyph anchor is preserved through same-mode appearance updates/rendering.
+
+`MarkerOptions`, React `MarkerProps` and Easy marker options are now unions. If an
+application previously used `interface Custom extends MarkerOptions`, replace it
+with `type Custom = MarkerOptions & { ... }`. The exclusivity also applies to
+pre-existing variables, not only inline object literals. Invalid combinations
+throw `TypeError` before attachment, source subscription or collection iteration.
+Direct writes to resolved `.options` remain unsupported; use the setters.
+
+The `icon()` factory (and direct Icon/DivIcon constructors) rejects simultaneous
+`iconUrl` and `content`; image-only fields cannot be passed to DivIcon. Image URLs
+must be non-empty strings. `icon()` without arguments still creates an empty
+DivIcon. Empty content strings and numbers are not treated as absent.
+
+`objectManager()` selects local options, `{ loader }`, or `{ points }`. Loader,
+points and reactive source cannot compete for the same collection. An explicitly
+present invalid loader/points field, including undefined, is rejected rather than
+falling back to local mode. `debounceMs` / `replace` require a loader; point mode
+rejects `clusterize`, `clusterRenderer` and `style` (use its `renderer` and marker
+options instead). Direct RemoteObjectManager construction also rejects a source
+or points. `LocalObjectManagerOptions` and the updated unified union expose the
+factory constraints while overloads retain their precise result classes.
+
 ## Remaining review work
 
-Competing marker/factory modes, event typing, mutable public state
+Event typing, mutable public state
 and renderer registration remain open and must be completed before a next-major release.

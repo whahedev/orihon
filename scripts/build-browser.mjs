@@ -56,7 +56,7 @@ const terserPropertyMangle = {
   reserved: ["_unsub", "__heap_base", "__data_end"]
 };
 
-async function terserMinifyFile(filePath, { module }) {
+async function terserMinifyFile(filePath, { module, mangleProperties = true }) {
   const sourceMapPath = `${filePath}.map`;
   let mapContent;
   try {
@@ -67,9 +67,11 @@ async function terserMinifyFile(filePath, { module }) {
   const file = filePath.split(/[/\\]/).pop();
   const compact = await minify(await readFile(filePath, "utf8"), {
     module,
-    compress: { passes: 8, booleans_as_integers: true, keep_fargs: false },
+    // Public getters and external modules rely on actual booleans (=== true),
+    // so do not rewrite them to 0/1 in any published artifact.
+    compress: { passes: 8, keep_fargs: false },
     mangle: {
-      properties: terserPropertyMangle
+      properties: mangleProperties ? terserPropertyMangle : false
     },
     format: { comments: /^!/ },
     sourceMap: mapContent
@@ -105,6 +107,10 @@ const artifacts = [
     entry: "standard.ts",
     file: "orihon.standard.esm.js",
     format: "esm",
+    // Compress boundary validation while preserving property names used by plugins
+    // and the external map-export module. The Standard budget remains 36 KiB.
+    terser: true,
+    mangleProperties: false,
     external: ["./services/map-export.js"]
   },
   { entry: "index.ts", file: "orihon.esm.js", format: "esm", split: true },
@@ -220,7 +226,7 @@ for (const artifact of artifacts) {
   });
 
   if (artifact.terser) {
-    await terserMinifyFile(resolve(dist, artifact.file), { module: artifact.format === "esm" });
+    await terserMinifyFile(resolve(dist, artifact.file), { module: artifact.format === "esm", mangleProperties: artifact.mangleProperties });
   }
 }
 

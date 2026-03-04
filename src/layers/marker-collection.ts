@@ -4,7 +4,7 @@ import { latLng, bounds, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { SpatialGridIndex } from "../services/spatial-grid-index.js";
-import { Marker, type MarkerOptions } from "./marker.js";
+import { Marker, validateMarkerOptions, type MarkerOptions } from "./marker.js";
 import { WebGLPointLayer, webglPointLayer } from "./webgl-point-layer.js";
 
 export type MarkerCollectionRenderer = "auto" | "dom" | "svg" | "webgl" | "hybrid";
@@ -78,17 +78,20 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
   private readonly _onView = (): void => this.#scheduleViewLayout();
 
   constructor(points: Iterable<LatLngLike> = [], options: MarkerCollectionOptions = {}) {
+    validateMarkerOptions(options.marker ?? {});
     const fill = options.fill ?? options.color ?? "#0f766e";
     const fillOpacity = options.fillOpacity ?? options.opacity ?? 0.88;
     const markerOpts: MarkerOptions = {
       keyboard: false,
       interactive: false,
-      shape: "dot",
-      size: options.pointSize ?? 8,
-      strokeWidth: 0,
-      color: fill,
+      ...(options.marker?.icon !== undefined || options.marker?.content !== undefined ? {} : {
+        shape: "dot" as const,
+        size: options.pointSize ?? 8,
+        strokeWidth: 0,
+        color: fill
+      }),
       ...(options.marker ?? {})
-    };
+    } as MarkerOptions;
     super({
       pane: "overlay",
       renderer: "auto",

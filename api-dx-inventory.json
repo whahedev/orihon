@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-27T14:46:41.037Z",
+  "generatedAt": "2026-08-27T15:00:39.174Z",
   "entries": [
     {
       "entry": "orihon",
@@ -3984,6 +3984,62 @@
       "calls": [],
       "constructs": [],
       "members": [
+        {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "iconUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "iconRetinaUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowRetinaUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowSize",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowAnchor",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "alt",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
         {
           "name": "content",
           "optional": true,
@@ -13012,10 +13068,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
           "name": "iconUrl",
           "optional": false,
           "readonly": false,
           "type": "string",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
           "calls": []
         },
         {
@@ -15502,6 +15572,329 @@
     },
     {
       "entry": "orihon",
+      "name": "LocalObjectManagerOptions",
+      "kind": "TypeAlias",
+      "type": "LocalObjectManagerOptions",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "source",
+          "optional": true,
+          "readonly": false,
+          "type": "ReadonlyFeatureSource<GeoJSONFeature>",
+          "calls": []
+        },
+        {
+          "name": "minZoom",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "marker",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerOptions",
+          "calls": []
+        },
+        {
+          "name": "clusterize",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "styleByCategory",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "style",
+          "optional": true,
+          "readonly": false,
+          "type": "ObjectStyleResolver",
+          "calls": [
+            "(object: { [key: string]: unknown; id?: ObjectId; properties?: Record<string, unknown>; }, state: Readonly<ObjectState>, context: Readonly<ObjectStyleContext>) => ObjectStyle"
+          ]
+        },
+        {
+          "name": "clusterRadiusPixels",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterMinPoints",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterMaxZoom",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterZoomOnClick",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "spiderfyOnMaxZoom",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "spiderfyDistanceMultiplier",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "zoomToBoundsOnClick",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "indexCellSize",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterIcon",
+          "optional": true,
+          "readonly": false,
+          "type": "ClusterIconFactory",
+          "calls": [
+            "(count: number, ids: ObjectId[]) => MarkerIcon"
+          ]
+        },
+        {
+          "name": "clusterClassName",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "clusterTitle",
+          "optional": true,
+          "readonly": false,
+          "type": "(count: number, ids: ObjectId[]) => string",
+          "calls": [
+            "(count: number, ids: ObjectId[]) => string"
+          ]
+        },
+        {
+          "name": "clusterAriaLabel",
+          "optional": true,
+          "readonly": false,
+          "type": "(count: number, ids: ObjectId[]) => string",
+          "calls": [
+            "(count: number, ids: ObjectId[]) => string"
+          ]
+        },
+        {
+          "name": "clusterRenderer",
+          "optional": true,
+          "readonly": false,
+          "type": "ClusterRenderer",
+          "calls": []
+        },
+        {
+          "name": "webglThreshold",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "layoutWorker",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean | \"auto\"",
+          "calls": []
+        },
+        {
+          "name": "layoutWorkerThreshold",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterHierarchyMaxObjects",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "maxObjects",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "declutter",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "visualization",
+          "optional": true,
+          "readonly": false,
+          "type": "ObjectVisualizationMode",
+          "calls": []
+        },
+        {
+          "name": "visualizationByZoom",
+          "optional": true,
+          "readonly": false,
+          "type": "ObjectVisualizationByZoom",
+          "calls": []
+        },
+        {
+          "name": "search",
+          "optional": true,
+          "readonly": false,
+          "type": "{ fields: string[]; normalize?: boolean; }",
+          "calls": []
+        },
+        {
+          "name": "time",
+          "optional": true,
+          "readonly": false,
+          "type": "{ value?: (object: ManagedObject) => number | null; from?: (object: ManagedObject) => number | null; to?: (object: ManagedObject) => number | null; }",
+          "calls": []
+        },
+        {
+          "name": "clusterProperties",
+          "optional": true,
+          "readonly": false,
+          "type": "ClusterPropertiesConfig",
+          "calls": []
+        },
+        {
+          "name": "heatmapWeight",
+          "optional": true,
+          "readonly": false,
+          "type": "(object: ManagedObject, id?: ObjectId) => number",
+          "calls": [
+            "(object: ManagedObject, id: ObjectId) => number"
+          ]
+        },
+        {
+          "name": "heatmapDisplay",
+          "optional": true,
+          "readonly": false,
+          "type": "HeatMode",
+          "calls": []
+        },
+        {
+          "name": "heatmapIsolineLabels",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "heatmapBackend",
+          "optional": true,
+          "readonly": false,
+          "type": "HeatBackend",
+          "calls": []
+        },
+        {
+          "name": "heatmapEvaluation",
+          "optional": true,
+          "readonly": false,
+          "type": "HeatEvaluation",
+          "calls": []
+        },
+        {
+          "name": "heatmapIsolineStep",
+          "optional": true,
+          "readonly": false,
+          "type": "number | \"auto\"",
+          "calls": []
+        },
+        {
+          "name": "clusterStyle",
+          "optional": true,
+          "readonly": false,
+          "type": "(cluster: { id: string; count: number; properties: Record<string, number>; containsSelected: boolean; }, context: Readonly<ObjectStyleContext>) => ObjectStyle | null | undefined",
+          "calls": [
+            "(cluster: { id: string; count: number; properties: Record<string, number>; containsSelected: boolean; }, context: Readonly<ObjectStyleContext>) => ObjectStyle"
+          ]
+        },
+        {
+          "name": "sceneFeatures",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "maxVerticesPerGeometry",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "loader",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "points",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "debounceMs",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "replace",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon",
       "name": "ManagedGeometry",
       "kind": "TypeAlias",
       "type": "ManagedGeometry",
@@ -16486,12 +16879,30 @@
           ]
         },
         {
+          "name": "setContent",
+          "optional": false,
+          "readonly": false,
+          "type": "(content: Node | string | number) => Marker",
+          "calls": [
+            "(content: string | number | Node) => Marker"
+          ]
+        },
+        {
+          "name": "getContent",
+          "optional": false,
+          "readonly": false,
+          "type": "() => Node | string | number | null",
+          "calls": [
+            "() => string | number | Node"
+          ]
+        },
+        {
           "name": "setAppearance",
           "optional": false,
           "readonly": false,
-          "type": "(appearance: MarkerAppearance) => Marker",
+          "type": "(appearance: MarkerAppearance & { icon?: never; content?: never; html?: never; }) => Marker",
           "calls": [
-            "(appearance: MarkerAppearance) => Marker"
+            "(appearance: MarkerAppearance & { icon?: never; content?: never; html?: never; }) => Marker"
           ]
         },
         {
@@ -18013,11 +18424,18 @@
     {
       "entry": "orihon",
       "name": "MarkerOptions",
-      "kind": "Interface",
+      "kind": "TypeAlias",
       "type": "MarkerOptions",
       "calls": [],
       "constructs": [],
       "members": [
+        {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
         {
           "name": "title",
           "optional": true,
@@ -18040,38 +18458,10 @@
           "calls": []
         },
         {
-          "name": "anchor",
-          "optional": true,
-          "readonly": false,
-          "type": "[number, number]",
-          "calls": []
-        },
-        {
-          "name": "content",
-          "optional": true,
-          "readonly": false,
-          "type": "string | number | Node",
-          "calls": []
-        },
-        {
-          "name": "html",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
           "name": "ariaLabel",
           "optional": true,
           "readonly": false,
           "type": "string",
-          "calls": []
-        },
-        {
-          "name": "icon",
-          "optional": true,
-          "readonly": false,
-          "type": "MarkerIcon",
           "calls": []
         },
         {
@@ -18163,6 +18553,27 @@
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "anchor",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "string | number | Node",
+          "calls": []
+        },
+        {
+          "name": "icon",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerIcon",
           "calls": []
         }
       ]
@@ -19618,11 +20029,12 @@
       "entry": "orihon",
       "name": "objectManager",
       "kind": "Function",
-      "type": "{ (options: RemoteObjectManagerOptions): RemoteObjectManager; (options: PointObjectManagerOptions): MarkerCollection; (options?: ObjectManagerOptions): ObjectManager; }",
+      "type": "{ (options: RemoteObjectManagerOptions): RemoteObjectManager; (options: PointObjectManagerOptions): MarkerCollection; (options?: LocalObjectManagerOptions): ObjectManager; (options: UnifiedObjectManagerOptions): ObjectManager | RemoteObjectManager | MarkerCollection; }",
       "calls": [
         "(options: RemoteObjectManagerOptions) => RemoteObjectManager",
         "(options: PointObjectManagerOptions) => MarkerCollection",
-        "(options: ObjectManagerOptions) => ObjectManager"
+        "(options: LocalObjectManagerOptions) => ObjectManager",
+        "(options: UnifiedObjectManagerOptions) => ObjectManager | MarkerCollection | RemoteObjectManager"
       ],
       "constructs": [],
       "members": []
@@ -25498,6 +25910,55 @@
           "readonly": false,
           "type": "Iterable<LatLngLike>",
           "calls": []
+        },
+        {
+          "name": "loader",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "debounceMs",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "replace",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "clusterize",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "clusterRenderer",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "style",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
         }
       ]
     },
@@ -29681,6 +30142,20 @@
           ]
         },
         {
+          "name": "points",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
           "name": "debounceMs",
           "optional": true,
           "readonly": false,
@@ -29692,13 +30167,6 @@
           "optional": true,
           "readonly": false,
           "type": "boolean",
-          "calls": []
-        },
-        {
-          "name": "source",
-          "optional": true,
-          "readonly": false,
-          "type": "ReadonlyFeatureSource<GeoJSONFeature>",
           "calls": []
         },
         {
@@ -37045,11 +37513,34 @@
       "constructs": [],
       "members": [
         {
+          "name": "source",
+          "optional": true,
+          "readonly": false,
+          "type": "ReadonlyFeatureSource<GeoJSONFeature>",
+          "calls": []
+        },
+        {
           "name": "marker",
           "optional": true,
           "readonly": false,
           "type": "MarkerOptions",
           "calls": []
+        },
+        {
+          "name": "clusterize",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "style",
+          "optional": true,
+          "readonly": false,
+          "type": "ObjectStyleResolver",
+          "calls": [
+            "(object: { [key: string]: unknown; id?: ObjectId; properties?: Record<string, unknown>; }, state: Readonly<ObjectState>, context: Readonly<ObjectStyleContext>) => ObjectStyle"
+          ]
         },
         {
           "name": "indexCellSize",
@@ -37059,10 +37550,47 @@
           "calls": []
         },
         {
+          "name": "clusterRenderer",
+          "optional": true,
+          "readonly": false,
+          "type": "ClusterRenderer",
+          "calls": []
+        },
+        {
           "name": "webglThreshold",
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "loader",
+          "optional": true,
+          "readonly": false,
+          "type": "RemoteObjectLoader",
+          "calls": [
+            "(context: RemoteObjectLoadContext) => ManagedObject[] | Promise<ManagedObject[]>"
+          ]
+        },
+        {
+          "name": "points",
+          "optional": true,
+          "readonly": false,
+          "type": "Iterable<LatLngLike>",
+          "calls": []
+        },
+        {
+          "name": "debounceMs",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "replace",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
           "calls": []
         }
       ]
@@ -52080,6 +52608,62 @@
       "constructs": [],
       "members": [
         {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "iconUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "iconRetinaUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowRetinaUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowSize",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowAnchor",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "alt",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
           "name": "content",
           "optional": true,
           "readonly": false,
@@ -55939,10 +56523,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
           "name": "iconUrl",
           "optional": false,
           "readonly": false,
           "type": "string",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
           "calls": []
         },
         {
@@ -59244,12 +59842,30 @@
           ]
         },
         {
+          "name": "setContent",
+          "optional": false,
+          "readonly": false,
+          "type": "(content: Node | string | number) => Marker",
+          "calls": [
+            "(content: string | number | Node) => Marker"
+          ]
+        },
+        {
+          "name": "getContent",
+          "optional": false,
+          "readonly": false,
+          "type": "() => Node | string | number | null",
+          "calls": [
+            "() => string | number | Node"
+          ]
+        },
+        {
           "name": "setAppearance",
           "optional": false,
           "readonly": false,
-          "type": "(appearance: MarkerAppearance) => Marker",
+          "type": "(appearance: MarkerAppearance & { icon?: never; content?: never; html?: never; }) => Marker",
           "calls": [
-            "(appearance: MarkerAppearance) => Marker"
+            "(appearance: MarkerAppearance & { icon?: never; content?: never; html?: never; }) => Marker"
           ]
         },
         {
@@ -59646,11 +60262,18 @@
     {
       "entry": "orihon/standard",
       "name": "MarkerOptions",
-      "kind": "Interface",
+      "kind": "TypeAlias",
       "type": "MarkerOptions",
       "calls": [],
       "constructs": [],
       "members": [
+        {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
         {
           "name": "title",
           "optional": true,
@@ -59673,38 +60296,10 @@
           "calls": []
         },
         {
-          "name": "anchor",
-          "optional": true,
-          "readonly": false,
-          "type": "[number, number]",
-          "calls": []
-        },
-        {
-          "name": "content",
-          "optional": true,
-          "readonly": false,
-          "type": "string | number | Node",
-          "calls": []
-        },
-        {
-          "name": "html",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
           "name": "ariaLabel",
           "optional": true,
           "readonly": false,
           "type": "string",
-          "calls": []
-        },
-        {
-          "name": "icon",
-          "optional": true,
-          "readonly": false,
-          "type": "MarkerIcon",
           "calls": []
         },
         {
@@ -59796,6 +60391,27 @@
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "anchor",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "string | number | Node",
+          "calls": []
+        },
+        {
+          "name": "icon",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerIcon",
           "calls": []
         }
       ]
@@ -72596,16 +73212,156 @@
     {
       "entry": "orihon/easy",
       "name": "EasyMarkerDescription",
-      "kind": "Interface",
+      "kind": "TypeAlias",
       "type": "EasyMarkerDescription",
       "calls": [],
       "constructs": [],
       "members": [
         {
-          "name": "type",
-          "optional": false,
+          "name": "html",
+          "optional": true,
           "readonly": false,
-          "type": "\"marker\"",
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "title",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "className",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "draggable",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "ariaLabel",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "opacity",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "zIndexOffset",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "keyboard",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "interactive",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "rotation",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "rotationOrigin",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "pane",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "attribution",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "shape",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerShape",
+          "calls": []
+        },
+        {
+          "name": "color",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "strokeColor",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "size",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "strokeWidth",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "anchor",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "string | number | Node",
+          "calls": []
+        },
+        {
+          "name": "icon",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerIcon",
           "calls": []
         },
         {
@@ -72644,150 +73400,10 @@
           "calls": []
         },
         {
-          "name": "title",
-          "optional": true,
+          "name": "type",
+          "optional": false,
           "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "className",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "draggable",
-          "optional": true,
-          "readonly": false,
-          "type": "boolean",
-          "calls": []
-        },
-        {
-          "name": "anchor",
-          "optional": true,
-          "readonly": false,
-          "type": "[number, number]",
-          "calls": []
-        },
-        {
-          "name": "content",
-          "optional": true,
-          "readonly": false,
-          "type": "string | number | Node",
-          "calls": []
-        },
-        {
-          "name": "html",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "ariaLabel",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "icon",
-          "optional": true,
-          "readonly": false,
-          "type": "MarkerIcon",
-          "calls": []
-        },
-        {
-          "name": "opacity",
-          "optional": true,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "zIndexOffset",
-          "optional": true,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "keyboard",
-          "optional": true,
-          "readonly": false,
-          "type": "boolean",
-          "calls": []
-        },
-        {
-          "name": "interactive",
-          "optional": true,
-          "readonly": false,
-          "type": "boolean",
-          "calls": []
-        },
-        {
-          "name": "rotation",
-          "optional": true,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "rotationOrigin",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "pane",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "attribution",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "shape",
-          "optional": true,
-          "readonly": false,
-          "type": "MarkerShape",
-          "calls": []
-        },
-        {
-          "name": "color",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "strokeColor",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
-          "name": "size",
-          "optional": true,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "strokeWidth",
-          "optional": true,
-          "readonly": false,
-          "type": "number",
+          "type": "\"marker\"",
           "calls": []
         }
       ]
@@ -72801,14 +73417,14 @@
       "constructs": [],
       "members": [
         {
-          "name": "pane",
+          "name": "html",
           "optional": true,
           "readonly": false,
-          "type": "string",
+          "type": "never",
           "calls": []
         },
         {
-          "name": "attribution",
+          "name": "title",
           "optional": true,
           "readonly": false,
           "type": "string",
@@ -72822,55 +73438,6 @@
           "calls": []
         },
         {
-          "name": "strokeWidth",
-          "optional": true,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "interactive",
-          "optional": true,
-          "readonly": false,
-          "type": "boolean",
-          "calls": []
-        },
-        {
-          "name": "anchor",
-          "optional": true,
-          "readonly": false,
-          "type": "[number, number]",
-          "calls": []
-        },
-        {
-          "name": "opacity",
-          "optional": true,
-          "readonly": false,
-          "type": "number",
-          "calls": []
-        },
-        {
-          "name": "content",
-          "optional": true,
-          "readonly": false,
-          "type": "string | number | Node",
-          "calls": []
-        },
-        {
-          "name": "icon",
-          "optional": true,
-          "readonly": false,
-          "type": "MarkerIcon",
-          "calls": []
-        },
-        {
-          "name": "title",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
           "name": "draggable",
           "optional": true,
           "readonly": false,
@@ -72878,17 +73445,17 @@
           "calls": []
         },
         {
-          "name": "html",
+          "name": "ariaLabel",
           "optional": true,
           "readonly": false,
           "type": "string",
           "calls": []
         },
         {
-          "name": "ariaLabel",
+          "name": "opacity",
           "optional": true,
           "readonly": false,
-          "type": "string",
+          "type": "number",
           "calls": []
         },
         {
@@ -72906,6 +73473,13 @@
           "calls": []
         },
         {
+          "name": "interactive",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
           "name": "rotation",
           "optional": true,
           "readonly": false,
@@ -72914,6 +73488,20 @@
         },
         {
           "name": "rotationOrigin",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "pane",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "attribution",
           "optional": true,
           "readonly": false,
           "type": "string",
@@ -72945,6 +73533,34 @@
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "strokeWidth",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "anchor",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "string | number | Node",
+          "calls": []
+        },
+        {
+          "name": "icon",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerIcon",
           "calls": []
         },
         {
@@ -72980,44 +73596,16 @@
     {
       "entry": "orihon/easy",
       "name": "EasyMarkerOptions",
-      "kind": "Interface",
+      "kind": "TypeAlias",
       "type": "EasyMarkerOptions",
       "calls": [],
       "constructs": [],
       "members": [
         {
-          "name": "position",
-          "optional": false,
-          "readonly": false,
-          "type": "LatLngLike",
-          "calls": []
-        },
-        {
-          "name": "popup",
+          "name": "html",
           "optional": true,
           "readonly": false,
-          "type": "OverlayContent",
-          "calls": []
-        },
-        {
-          "name": "popupOptions",
-          "optional": true,
-          "readonly": false,
-          "type": "PopupOptions",
-          "calls": []
-        },
-        {
-          "name": "tooltip",
-          "optional": true,
-          "readonly": false,
-          "type": "OverlayContent",
-          "calls": []
-        },
-        {
-          "name": "tooltipOptions",
-          "optional": true,
-          "readonly": false,
-          "type": "TooltipOptions",
+          "type": "never",
           "calls": []
         },
         {
@@ -73042,38 +73630,10 @@
           "calls": []
         },
         {
-          "name": "anchor",
-          "optional": true,
-          "readonly": false,
-          "type": "[number, number]",
-          "calls": []
-        },
-        {
-          "name": "content",
-          "optional": true,
-          "readonly": false,
-          "type": "string | number | Node",
-          "calls": []
-        },
-        {
-          "name": "html",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
           "name": "ariaLabel",
           "optional": true,
           "readonly": false,
           "type": "string",
-          "calls": []
-        },
-        {
-          "name": "icon",
-          "optional": true,
-          "readonly": false,
-          "type": "MarkerIcon",
           "calls": []
         },
         {
@@ -73165,6 +73725,62 @@
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "anchor",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "string | number | Node",
+          "calls": []
+        },
+        {
+          "name": "icon",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerIcon",
+          "calls": []
+        },
+        {
+          "name": "position",
+          "optional": false,
+          "readonly": false,
+          "type": "LatLngLike",
+          "calls": []
+        },
+        {
+          "name": "popup",
+          "optional": true,
+          "readonly": false,
+          "type": "OverlayContent",
+          "calls": []
+        },
+        {
+          "name": "popupOptions",
+          "optional": true,
+          "readonly": false,
+          "type": "PopupOptions",
+          "calls": []
+        },
+        {
+          "name": "tooltip",
+          "optional": true,
+          "readonly": false,
+          "type": "OverlayContent",
+          "calls": []
+        },
+        {
+          "name": "tooltipOptions",
+          "optional": true,
+          "readonly": false,
+          "type": "TooltipOptions",
           "calls": []
         }
       ]
@@ -76113,7 +76729,7 @@
           "calls": []
         },
         {
-          "name": "content",
+          "name": "color",
           "optional": true,
           "readonly": false,
           "type": "string",
@@ -76131,13 +76747,6 @@
           "optional": true,
           "readonly": false,
           "type": "Booleanish",
-          "calls": []
-        },
-        {
-          "name": "color",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
           "calls": []
         },
         {
@@ -76180,6 +76789,13 @@
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
           "calls": []
         },
         {
@@ -78374,23 +78990,16 @@
     {
       "entry": "orihon/react",
       "name": "MarkerProps",
-      "kind": "Interface",
+      "kind": "TypeAlias",
       "type": "MarkerProps",
       "calls": [],
       "constructs": [],
       "members": [
         {
-          "name": "position",
-          "optional": false,
-          "readonly": false,
-          "type": "LatLngLike",
-          "calls": []
-        },
-        {
-          "name": "children",
+          "name": "html",
           "optional": true,
           "readonly": false,
-          "type": "ReactNode",
+          "type": "never",
           "calls": []
         },
         {
@@ -78415,38 +79024,10 @@
           "calls": []
         },
         {
-          "name": "anchor",
-          "optional": true,
-          "readonly": false,
-          "type": "[number, number]",
-          "calls": []
-        },
-        {
-          "name": "content",
-          "optional": true,
-          "readonly": false,
-          "type": "string | number | Node",
-          "calls": []
-        },
-        {
-          "name": "html",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
           "name": "ariaLabel",
           "optional": true,
           "readonly": false,
           "type": "string",
-          "calls": []
-        },
-        {
-          "name": "icon",
-          "optional": true,
-          "readonly": false,
-          "type": "MarkerIcon",
           "calls": []
         },
         {
@@ -78538,6 +79119,41 @@
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "anchor",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "string | number | Node",
+          "calls": []
+        },
+        {
+          "name": "icon",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerIcon",
+          "calls": []
+        },
+        {
+          "name": "position",
+          "optional": false,
+          "readonly": false,
+          "type": "LatLngLike",
+          "calls": []
+        },
+        {
+          "name": "children",
+          "optional": true,
+          "readonly": false,
+          "type": "ReactNode",
           "calls": []
         }
       ]
@@ -88296,6 +88912,62 @@
       "constructs": [],
       "members": [
         {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "iconUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "iconRetinaUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowRetinaUrl",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowSize",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "shadowAnchor",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "alt",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
           "name": "content",
           "optional": true,
           "readonly": false,
@@ -97323,10 +97995,24 @@
       "constructs": [],
       "members": [
         {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
           "name": "iconUrl",
           "optional": false,
           "readonly": false,
           "type": "string",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
           "calls": []
         },
         {
@@ -99813,6 +100499,329 @@
     },
     {
       "entry": "orihon/bundle",
+      "name": "LocalObjectManagerOptions",
+      "kind": "TypeAlias",
+      "type": "LocalObjectManagerOptions",
+      "calls": [],
+      "constructs": [],
+      "members": [
+        {
+          "name": "source",
+          "optional": true,
+          "readonly": false,
+          "type": "ReadonlyFeatureSource<GeoJSONFeature>",
+          "calls": []
+        },
+        {
+          "name": "minZoom",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "marker",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerOptions",
+          "calls": []
+        },
+        {
+          "name": "clusterize",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "styleByCategory",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "style",
+          "optional": true,
+          "readonly": false,
+          "type": "ObjectStyleResolver",
+          "calls": [
+            "(object: { [key: string]: unknown; id?: ObjectId; properties?: Record<string, unknown>; }, state: Readonly<ObjectState>, context: Readonly<ObjectStyleContext>) => ObjectStyle"
+          ]
+        },
+        {
+          "name": "clusterRadiusPixels",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterMinPoints",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterMaxZoom",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterZoomOnClick",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "spiderfyOnMaxZoom",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "spiderfyDistanceMultiplier",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "zoomToBoundsOnClick",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "indexCellSize",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterIcon",
+          "optional": true,
+          "readonly": false,
+          "type": "ClusterIconFactory",
+          "calls": [
+            "(count: number, ids: ObjectId[]) => MarkerIcon"
+          ]
+        },
+        {
+          "name": "clusterClassName",
+          "optional": true,
+          "readonly": false,
+          "type": "string",
+          "calls": []
+        },
+        {
+          "name": "clusterTitle",
+          "optional": true,
+          "readonly": false,
+          "type": "(count: number, ids: ObjectId[]) => string",
+          "calls": [
+            "(count: number, ids: ObjectId[]) => string"
+          ]
+        },
+        {
+          "name": "clusterAriaLabel",
+          "optional": true,
+          "readonly": false,
+          "type": "(count: number, ids: ObjectId[]) => string",
+          "calls": [
+            "(count: number, ids: ObjectId[]) => string"
+          ]
+        },
+        {
+          "name": "clusterRenderer",
+          "optional": true,
+          "readonly": false,
+          "type": "ClusterRenderer",
+          "calls": []
+        },
+        {
+          "name": "webglThreshold",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "layoutWorker",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean | \"auto\"",
+          "calls": []
+        },
+        {
+          "name": "layoutWorkerThreshold",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "clusterHierarchyMaxObjects",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "maxObjects",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "declutter",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "visualization",
+          "optional": true,
+          "readonly": false,
+          "type": "ObjectVisualizationMode",
+          "calls": []
+        },
+        {
+          "name": "visualizationByZoom",
+          "optional": true,
+          "readonly": false,
+          "type": "ObjectVisualizationByZoom",
+          "calls": []
+        },
+        {
+          "name": "search",
+          "optional": true,
+          "readonly": false,
+          "type": "{ fields: string[]; normalize?: boolean; }",
+          "calls": []
+        },
+        {
+          "name": "time",
+          "optional": true,
+          "readonly": false,
+          "type": "{ value?: (object: ManagedObject) => number | null; from?: (object: ManagedObject) => number | null; to?: (object: ManagedObject) => number | null; }",
+          "calls": []
+        },
+        {
+          "name": "clusterProperties",
+          "optional": true,
+          "readonly": false,
+          "type": "ClusterPropertiesConfig",
+          "calls": []
+        },
+        {
+          "name": "heatmapWeight",
+          "optional": true,
+          "readonly": false,
+          "type": "(object: ManagedObject, id?: ObjectId) => number",
+          "calls": [
+            "(object: ManagedObject, id: ObjectId) => number"
+          ]
+        },
+        {
+          "name": "heatmapDisplay",
+          "optional": true,
+          "readonly": false,
+          "type": "HeatMode",
+          "calls": []
+        },
+        {
+          "name": "heatmapIsolineLabels",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "heatmapBackend",
+          "optional": true,
+          "readonly": false,
+          "type": "HeatBackend",
+          "calls": []
+        },
+        {
+          "name": "heatmapEvaluation",
+          "optional": true,
+          "readonly": false,
+          "type": "HeatEvaluation",
+          "calls": []
+        },
+        {
+          "name": "heatmapIsolineStep",
+          "optional": true,
+          "readonly": false,
+          "type": "number | \"auto\"",
+          "calls": []
+        },
+        {
+          "name": "clusterStyle",
+          "optional": true,
+          "readonly": false,
+          "type": "(cluster: { id: string; count: number; properties: Record<string, number>; containsSelected: boolean; }, context: Readonly<ObjectStyleContext>) => ObjectStyle | null | undefined",
+          "calls": [
+            "(cluster: { id: string; count: number; properties: Record<string, number>; containsSelected: boolean; }, context: Readonly<ObjectStyleContext>) => ObjectStyle"
+          ]
+        },
+        {
+          "name": "sceneFeatures",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "maxVerticesPerGeometry",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "loader",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "points",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "debounceMs",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "replace",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        }
+      ]
+    },
+    {
+      "entry": "orihon/bundle",
       "name": "ManagedGeometry",
       "kind": "TypeAlias",
       "type": "ManagedGeometry",
@@ -100797,12 +101806,30 @@
           ]
         },
         {
+          "name": "setContent",
+          "optional": false,
+          "readonly": false,
+          "type": "(content: Node | string | number) => Marker",
+          "calls": [
+            "(content: string | number | Node) => Marker"
+          ]
+        },
+        {
+          "name": "getContent",
+          "optional": false,
+          "readonly": false,
+          "type": "() => Node | string | number | null",
+          "calls": [
+            "() => string | number | Node"
+          ]
+        },
+        {
           "name": "setAppearance",
           "optional": false,
           "readonly": false,
-          "type": "(appearance: MarkerAppearance) => Marker",
+          "type": "(appearance: MarkerAppearance & { icon?: never; content?: never; html?: never; }) => Marker",
           "calls": [
-            "(appearance: MarkerAppearance) => Marker"
+            "(appearance: MarkerAppearance & { icon?: never; content?: never; html?: never; }) => Marker"
           ]
         },
         {
@@ -102324,11 +103351,18 @@
     {
       "entry": "orihon/bundle",
       "name": "MarkerOptions",
-      "kind": "Interface",
+      "kind": "TypeAlias",
       "type": "MarkerOptions",
       "calls": [],
       "constructs": [],
       "members": [
+        {
+          "name": "html",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
         {
           "name": "title",
           "optional": true,
@@ -102351,38 +103385,10 @@
           "calls": []
         },
         {
-          "name": "anchor",
-          "optional": true,
-          "readonly": false,
-          "type": "[number, number]",
-          "calls": []
-        },
-        {
-          "name": "content",
-          "optional": true,
-          "readonly": false,
-          "type": "string | number | Node",
-          "calls": []
-        },
-        {
-          "name": "html",
-          "optional": true,
-          "readonly": false,
-          "type": "string",
-          "calls": []
-        },
-        {
           "name": "ariaLabel",
           "optional": true,
           "readonly": false,
           "type": "string",
-          "calls": []
-        },
-        {
-          "name": "icon",
-          "optional": true,
-          "readonly": false,
-          "type": "MarkerIcon",
           "calls": []
         },
         {
@@ -102474,6 +103480,27 @@
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "anchor",
+          "optional": true,
+          "readonly": false,
+          "type": "[number, number]",
+          "calls": []
+        },
+        {
+          "name": "content",
+          "optional": true,
+          "readonly": false,
+          "type": "string | number | Node",
+          "calls": []
+        },
+        {
+          "name": "icon",
+          "optional": true,
+          "readonly": false,
+          "type": "MarkerIcon",
           "calls": []
         }
       ]
@@ -103929,11 +104956,12 @@
       "entry": "orihon/bundle",
       "name": "objectManager",
       "kind": "Function",
-      "type": "{ (options: RemoteObjectManagerOptions): RemoteObjectManager; (options: PointObjectManagerOptions): MarkerCollection; (options?: ObjectManagerOptions): ObjectManager; }",
+      "type": "{ (options: RemoteObjectManagerOptions): RemoteObjectManager; (options: PointObjectManagerOptions): MarkerCollection; (options?: LocalObjectManagerOptions): ObjectManager; (options: UnifiedObjectManagerOptions): ObjectManager | RemoteObjectManager | MarkerCollection; }",
       "calls": [
         "(options: RemoteObjectManagerOptions) => RemoteObjectManager",
         "(options: PointObjectManagerOptions) => MarkerCollection",
-        "(options: ObjectManagerOptions) => ObjectManager"
+        "(options: LocalObjectManagerOptions) => ObjectManager",
+        "(options: UnifiedObjectManagerOptions) => ObjectManager | MarkerCollection | RemoteObjectManager"
       ],
       "constructs": [],
       "members": []
@@ -109809,6 +110837,55 @@
           "readonly": false,
           "type": "Iterable<LatLngLike>",
           "calls": []
+        },
+        {
+          "name": "loader",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "debounceMs",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "replace",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "clusterize",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "clusterRenderer",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "style",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
         }
       ]
     },
@@ -113992,6 +115069,20 @@
           ]
         },
         {
+          "name": "points",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "readonly": false,
+          "type": "never",
+          "calls": []
+        },
+        {
           "name": "debounceMs",
           "optional": true,
           "readonly": false,
@@ -114003,13 +115094,6 @@
           "optional": true,
           "readonly": false,
           "type": "boolean",
-          "calls": []
-        },
-        {
-          "name": "source",
-          "optional": true,
-          "readonly": false,
-          "type": "ReadonlyFeatureSource<GeoJSONFeature>",
           "calls": []
         },
         {
@@ -121356,11 +122440,34 @@
       "constructs": [],
       "members": [
         {
+          "name": "source",
+          "optional": true,
+          "readonly": false,
+          "type": "ReadonlyFeatureSource<GeoJSONFeature>",
+          "calls": []
+        },
+        {
           "name": "marker",
           "optional": true,
           "readonly": false,
           "type": "MarkerOptions",
           "calls": []
+        },
+        {
+          "name": "clusterize",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
+          "calls": []
+        },
+        {
+          "name": "style",
+          "optional": true,
+          "readonly": false,
+          "type": "ObjectStyleResolver",
+          "calls": [
+            "(object: { [key: string]: unknown; id?: ObjectId; properties?: Record<string, unknown>; }, state: Readonly<ObjectState>, context: Readonly<ObjectStyleContext>) => ObjectStyle"
+          ]
         },
         {
           "name": "indexCellSize",
@@ -121370,10 +122477,47 @@
           "calls": []
         },
         {
+          "name": "clusterRenderer",
+          "optional": true,
+          "readonly": false,
+          "type": "ClusterRenderer",
+          "calls": []
+        },
+        {
           "name": "webglThreshold",
           "optional": true,
           "readonly": false,
           "type": "number",
+          "calls": []
+        },
+        {
+          "name": "loader",
+          "optional": true,
+          "readonly": false,
+          "type": "RemoteObjectLoader",
+          "calls": [
+            "(context: RemoteObjectLoadContext) => ManagedObject[] | Promise<ManagedObject[]>"
+          ]
+        },
+        {
+          "name": "points",
+          "optional": true,
+          "readonly": false,
+          "type": "Iterable<LatLngLike>",
+          "calls": []
+        },
+        {
+          "name": "debounceMs",
+          "optional": true,
+          "readonly": false,
+          "type": "number",
+          "calls": []
+        },
+        {
+          "name": "replace",
+          "optional": true,
+          "readonly": false,
+          "type": "boolean",
           "calls": []
         }
       ]

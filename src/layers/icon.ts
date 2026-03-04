@@ -1,7 +1,9 @@
 import { Point, point, type PointLike } from "../geo.js";
 
 export interface IconOptions {
+  html?: never;
   iconUrl: string;
+  content?: never;
   iconRetinaUrl?: string;
   iconSize?: PointLike;
   iconAnchor?: PointLike;
@@ -30,7 +32,8 @@ export class Icon {
   readonly options: ResolvedIconOptions;
 
   constructor(options: IconOptions) {
-    if (!options?.iconUrl) throw new TypeError("Icon iconUrl is required");
+    validateIconOptions(options);
+    if (typeof options.iconUrl !== "string" || !options.iconUrl.trim()) throw new TypeError("Icon iconUrl must be a non-empty string");
     const iconSize = point(options.iconSize ?? [24, 36]);
     this.options = {
       iconUrl: options.iconUrl,
@@ -83,6 +86,14 @@ export class Icon {
 }
 
 export interface DivIconOptions {
+  html?: never;
+  iconUrl?: never;
+  iconRetinaUrl?: never;
+  shadowUrl?: never;
+  shadowRetinaUrl?: never;
+  shadowSize?: never;
+  shadowAnchor?: never;
+  alt?: never;
   content?: string | number | Node;
   iconSize?: PointLike;
   iconAnchor?: PointLike;
@@ -100,6 +111,10 @@ export class DivIcon {
   readonly options: ResolvedDivIconOptions;
 
   constructor(options: DivIconOptions = {}) {
+    validateIconOptions(options);
+    for (const key of ["iconUrl", "iconRetinaUrl", "shadowUrl", "shadowRetinaUrl", "shadowSize", "shadowAnchor", "alt"] as const) {
+      if (options[key] !== undefined) throw new TypeError(`DivIcon does not accept image option ${key}; use icon({ iconUrl })`);
+    }
     const iconSize = point(options.iconSize ?? [32, 32]);
     this.options = {
       content: options.content ?? "",
@@ -137,10 +152,19 @@ export class DivIcon {
 
 export type MarkerIcon = Icon | DivIcon;
 
+function validateIconOptions(options: IconOptions | DivIconOptions): void {
+  if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("Icon options must be an object");
+  if ("html" in options) throw new TypeError("Icon html is not supported. Use content for text or a Node for markup.");
+  if (options.iconUrl !== undefined && options.content !== undefined) throw new TypeError("Icon accepts either iconUrl or content, not both");
+  if (options.content !== undefined && typeof options.content !== "string" && typeof options.content !== "number"
+    && !(typeof Node !== "undefined" && options.content instanceof Node)) throw new TypeError("Icon content must be a string, number or Node");
+}
+
 export function icon(options: IconOptions): Icon;
 export function icon(options?: DivIconOptions): DivIcon;
 export function icon(options: IconOptions | DivIconOptions = {}): Icon | DivIcon {
-  return "iconUrl" in options ? new Icon(options) : new DivIcon(options);
+  validateIconOptions(options);
+  return options.iconUrl !== undefined ? new Icon(options as IconOptions) : new DivIcon(options as DivIconOptions);
 }
 
 export function divIcon(options?: DivIconOptions): DivIcon {

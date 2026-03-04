@@ -24,7 +24,7 @@
       wmtsTileLayer
     } from "/dist/standard.js";
     import { objectManager } from "/dist/index.js";
-    import { createSuggestProvider, routingLayer } from "/dist/orihon.esm.js";
+    import { createSuggestProvider, routingLayer, marker as bundleMarker, icon as bundleIcon, objectManager as bundleManager } from "/dist/orihon.esm.js";
     import { DrawHandler, drawControl } from "/dist/draw/index.js";
 
     const assert = (condition, message) => {
@@ -41,6 +41,21 @@
 
     async function run() {
       const map = createMap("map", { controls: false, center: ({ lat: 0, lng: 0 }), zoom: 18, maxZoom: 18 });
+
+      const visual = bundleMarker({ lat: 0, lng: 0 }, { content: "" }).addTo(map);
+      assert(visual.el.childNodes.length === 0, "empty marker content became a pin");
+      visual.setIcon(bundleIcon({ content: "icon" })).setAppearance({ shape: "circle" });
+      assert(visual.getIcon() === null && visual.el.querySelector(".is-circle"), "visual mode setter did not switch to glyph");
+      visual.remove();
+      for (const create of [
+        () => bundleMarker({ lat: 0, lng: 0 }, { content: "mixed", shape: "circle" }),
+        () => bundleIcon({ iconUrl: "pin.png", content: "mixed" }),
+        () => bundleManager({ loader: () => [], points: [] })
+      ]) {
+        let rejected = false;
+        try { create(); } catch (error) { rejected = error instanceof TypeError; }
+        assert(rejected, "bundle accepted competing factory modes");
+      }
 
       const svg = polygon([[({ lat: -0.00035, lng: -0.00035 }), ({ lat: -0.00035, lng: 0.00035 }), ({ lat: 0.00035, lng: 0.00035 }), ({ lat: 0.00035, lng: -0.00035 })]], {
         fill: "#22c55e",
@@ -166,7 +181,7 @@
       );
       manager.destroy();
       await localImport;
-      assert(manager.isDestroyed && manager.getStats().objects === 0, "manager was not terminal after import abort");
+      assert(manager.isDestroyed === true && manager.getStats().objects === 0, "manager was not terminal after import abort");
       let remoteSignal;
       const remote = objectManager({ debounceMs: 60_000, loader: ({ signal }) => {
         remoteSignal = signal;

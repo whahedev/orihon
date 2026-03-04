@@ -21,15 +21,12 @@ export interface MarkerAppearance {
   strokeWidth?: number;
 }
 
-export interface MarkerOptions extends LayerOptions, MarkerAppearance {
+interface MarkerBaseOptions extends LayerOptions {
+  html?: never;
   title?: string;
   className?: string;
   draggable?: boolean;
-  anchor?: [number, number];
-  content?: Node | string | number | null;
-  html?: string;
   ariaLabel?: string;
-  icon?: MarkerIcon | null;
   opacity?: number;
   zIndexOffset?: number;
   keyboard?: boolean;
@@ -39,11 +36,52 @@ export interface MarkerOptions extends LayerOptions, MarkerAppearance {
   rotationOrigin?: string;
 }
 
-type ResolvedMarkerOptions = Required<Omit<MarkerOptions, "pane" | "attribution" | "content" | "icon">> &
-  Pick<MarkerOptions, "pane" | "attribution"> & {
+type NoMarkerAppearance = { [K in keyof MarkerAppearance]?: never };
+
+/** Choose a built-in glyph, safe content, or an icon; these modes cannot be mixed. */
+export type MarkerOptions = MarkerBaseOptions & (
+  | (MarkerAppearance & { anchor?: [number, number]; content?: never; icon?: never })
+  | (NoMarkerAppearance & { anchor?: [number, number]; content: Node | string | number; icon?: never })
+  | (NoMarkerAppearance & { anchor?: never; icon: MarkerIcon; content?: never })
+);
+
+type ResolvedMarkerOptions = Required<Omit<MarkerBaseOptions, "pane" | "attribution" | "html">> &
+  Pick<MarkerBaseOptions, "pane" | "attribution"> & Required<MarkerAppearance> & {
+    anchor: [number, number];
     content: Node | string | number | null;
     icon: MarkerIcon | null;
   };
+
+function validateContent(content: unknown): void {
+  if (typeof content !== "string" && typeof content !== "number" && !(typeof Node !== "undefined" && content instanceof Node)) {
+    throw new TypeError("Marker content must be a string, number or Node");
+  }
+}
+
+function validateIcon(value: unknown): void {
+  if (!value || typeof value !== "object" || ["createIcon", "createShadow", "getSize", "getAnchor"].some(
+    (key) => typeof (value as Record<string, unknown>)[key] !== "function"
+  )) throw new TypeError("Marker icon must implement createIcon(), createShadow(), getSize() and getAnchor()");
+}
+
+/** @internal Validate before collections or wrappers allocate resources. */
+export function validateMarkerOptions(options: MarkerOptions): void {
+  if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("Marker options must be an object");
+  if ("html" in options) throw new TypeError("Marker html was removed. Use content for plain text or a Node for markup.");
+  const content = options.content !== undefined;
+  const icon = options.icon !== undefined;
+  const appearance = ["shape", "color", "strokeColor", "size", "strokeWidth"].some(
+    (key) => (options as Record<string, unknown>)[key] !== undefined
+  );
+  if (Number(content) + Number(icon) + Number(appearance) > 1) {
+    throw new TypeError("Marker accepts exactly one visual mode: appearance, content or icon");
+  }
+  if (content) validateContent(options.content);
+  if (icon) {
+    validateIcon(options.icon);
+    if (options.anchor !== undefined) throw new TypeError("Set iconAnchor on the icon instead of Marker anchor");
+  }
+}
 
 const MARKER_SHAPES = new Set<MarkerShape>(["pin", "circle", "square", "dot", "diamond", "triangle"]);
 
@@ -100,6 +138,8 @@ export function markerShapeMetrics(appearance: MarkerAppearance = {}): {
 }
 
 export class Marker extends Layer<ResolvedMarkerOptions> {
+  #customAnchor: boolean;
+  #customRotationOrigin: boolean;
   position: LatLng;
   el: HTMLButtonElement | null = null;
   iconElement: HTMLElement | null = null;
@@ -108,6 +148,7 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
   readonly _dragUnsub: Array<() => void> = [];
 
   constructor(position: LatLngLike, options: MarkerOptions = {}) {
+    validateMarkerOptions(options);
     const shape = normalizeShape(options.shape);
     const size = normalizeSize(options.size);
     const strokeWidth = normalizeStrokeWidth(options.strokeWidth);
@@ -127,16 +168,15 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
       title: "",
       className: "",
       draggable: false,
-      content: null,
-      html: "",
       ariaLabel: "",
-      icon: null,
       opacity: 1,
       zIndexOffset: 0,
       keyboard: true,
       interactive: true,
       rotation: 0,
       ...rest,
+      content: options.content ?? null,
+      icon: options.icon ?? null,
       shape,
       size,
       strokeWidth,
@@ -145,6 +185,8 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
       anchor: anchorOpt ?? metrics.anchor,
       rotationOrigin: rotationOriginOpt ?? metrics.rotationOrigin
     } as ResolvedMarkerOptions);
+    this.#customAnchor = options.anchor !== undefined;
+    this.#customRotationOrigin = options.rotationOrigin !== undefined;
     this.position = latLng(position);
     this.options.opacity = Math.max(0, Math.min(1, Number(this.options.opacity)));
     this.options.zIndexOffset = Number.isFinite(Number(this.options.zIndexOffset)) ? Number(this.options.zIndexOffset) : 0;
@@ -232,7 +274,10 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
   }
 
   setIcon(value: MarkerIcon | null): this {
+    if (value !== null) validateIcon(value);
     this.options.icon = value;
+    this.options.content = null;
+    this.#resetVisualGeometry();
     this.#setContent();
     this.render();
     return this;
@@ -242,18 +287,35 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     return this.options.icon;
   }
 
-  /** Updates built-in glyph appearance (ignored while a custom `icon` is set). */
-  setAppearance(appearance: MarkerAppearance): this {
+  /** Switches to safe text/Node content. Empty string is intentionally empty. */
+  setContent(content: Node | string | number): this {
+    validateContent(content);
+    if (this.options.content === null) this.#resetVisualGeometry();
+    this.options.icon = null;
+    this.options.content = content;
+    this.#setContent();
+    this.render();
+    return this;
+  }
+
+  getContent(): Node | string | number | null { return this.options.content; }
+
+  /** Selects the built-in glyph and updates its appearance. */
+  setAppearance(appearance: MarkerAppearance & { icon?: never; content?: never; html?: never }): this {
+    validateMarkerOptions(appearance);
+    if ("icon" in appearance || "content" in appearance) throw new TypeError("setAppearance accepts only built-in glyph properties");
+    const switched = this.options.icon !== null || this.options.content !== null;
+    this.options.icon = null;
+    this.options.content = null;
     if (appearance.shape != null) this.options.shape = normalizeShape(appearance.shape);
     if (appearance.color != null) this.options.color = String(appearance.color);
     if (appearance.strokeColor != null) this.options.strokeColor = String(appearance.strokeColor);
     if (appearance.size != null) this.options.size = normalizeSize(appearance.size);
     if (appearance.strokeWidth != null) this.options.strokeWidth = normalizeStrokeWidth(appearance.strokeWidth);
-    if (!this.options.icon) {
-      const metrics = markerShapeMetrics(this.options);
-      this.options.anchor = metrics.anchor;
-      this.options.rotationOrigin = metrics.rotationOrigin;
-    }
+    if (switched) this.#resetVisualGeometry();
+    const metrics = markerShapeMetrics(this.options);
+    if (!this.#customAnchor) this.options.anchor = metrics.anchor;
+    if (!this.#customRotationOrigin) this.options.rotationOrigin = metrics.rotationOrigin;
     this.#setContent();
     this.render();
     return this;
@@ -285,6 +347,13 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     }
   }
 
+  #resetVisualGeometry(): void {
+    this.#customAnchor = false;
+    const metrics = markerShapeMetrics(this.options);
+    this.options.anchor = metrics.anchor;
+    if (!this.#customRotationOrigin) this.options.rotationOrigin = metrics.rotationOrigin;
+  }
+
   #setContent(): void {
     if (!this.el) return;
     this.el.style.backgroundColor = "";
@@ -304,21 +373,21 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     this.shadowElement = null;
     this.el.classList.remove("oh-marker-custom");
     this.el.replaceChildren();
-    const content = this.options.content ?? this.options.html;
+    const content = this.options.content;
     if (typeof Node !== "undefined" && content instanceof Node) {
       this.el.style.width = "";
       this.el.style.height = "";
       this.el.replaceChildren(content);
       return;
     }
-    if (content !== null && content !== undefined && content !== "") {
+    if (content !== null && content !== undefined) {
       this.el.style.width = "";
       this.el.style.height = "";
       this.el.textContent = String(content);
       return;
     }
     const metrics = markerShapeMetrics(this.options);
-    this.options.anchor = metrics.anchor;
+    if (!this.#customAnchor) this.options.anchor = metrics.anchor;
     this.el.style.width = `${metrics.width}px`;
     this.el.style.height = `${metrics.height}px`;
     if (!this.options.interactive && !this.options.draggable && metrics.shape === "dot") {

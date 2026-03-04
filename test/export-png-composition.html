@@ -14,7 +14,7 @@
   <div id="map"></div>
   <pre id="result">running</pre>
   <script type="module">
-    import { CRS, Orihon } from "/dist/standard.js";
+    const { CRS, Orihon } = await import(location.search.includes("bundle") ? "/dist/orihon.standard.esm.js" : "/dist/standard.js");
 
     const expected = {
       canvas: [255, 0, 0, 255],

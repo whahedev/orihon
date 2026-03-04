@@ -4,7 +4,7 @@ import { CRSCompatibilityError } from "../crs.js";
 import { rafThrottle } from "../dom.js";
 import { ClusterCanvasLayer, clusterCanvasLayer } from "../layers/cluster-canvas-layer.js";
 import { DivIcon, type MarkerIcon } from "../layers/icon.js";
-import { Marker, type MarkerOptions } from "../layers/marker.js";
+import { Marker, validateMarkerOptions, type MarkerOptions } from "../layers/marker.js";
 import type { GeoJSONFeature } from "../layers/geojson.js";
 import { Polyline, polyline } from "../layers/vector.js";
 import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js";
@@ -511,6 +511,7 @@ export class ObjectManager extends Evented {
   private readonly _unspiderfyOnMapClick = (): void => { this.unspiderfy(); };
 
   constructor(options: ObjectManagerOptions = {}) {
+    validateMarkerOptions(options.marker ?? {});
     super();
     rejectLegacyUnit(options, "clusterGridSize", "clusterRadiusPixels");
     this.options = {

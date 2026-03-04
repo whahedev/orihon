@@ -15,10 +15,8 @@ export function drawHandle(position: LatLngLike, kind: DrawHandleKind, ring: num
     marker: marker(position, {
       className: `oh-draw-handle oh-draw-${kind}-handle`,
       anchor: [6, 6],
-      // An explicitly empty string falls back to the standard map pin in Marker.
-      // A zero-width text node keeps this marker visually empty so draw CSS can
-      // render the compact vertex/midpoint handle itself.
-      content: "\u200b",
+      // Explicit empty content lets draw CSS render the handle without a pin.
+      content: "",
       draggable: true,
       keyboard: false,
       title: kind === "vertex" ? "Vertex" : "Insert vertex"

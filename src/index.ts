@@ -239,7 +239,7 @@ export type {
   ClusterPopupContext
 } from "./services/object-manager.js";
 export type { RemoteObjectLoadContext, RemoteObjectLoader, RemoteObjectManagerOptions, RemoteObjectReloadOptions } from "./services/remote-object-manager.js";
-export type { PointObjectManagerOptions, UnifiedObjectManagerOptions } from "./services/object-manager-factory.js";
+export type { LocalObjectManagerOptions, PointObjectManagerOptions, UnifiedObjectManagerOptions } from "./services/object-manager-factory.js";
 export type { SpatialId, SpatialRecord } from "./services/spatial-grid-index.js";
 export type { TrafficLayerOptions, TrafficState } from "./services/traffic-layer.js";
 export type { SearchAdapter, SearchContext, SearchResult, SearchProviderSource, SearchProviderOptions } from "./services/search.js";

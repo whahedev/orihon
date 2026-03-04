@@ -14,23 +14,48 @@ import {
 
 export type PointObjectManagerOptions = MarkerCollectionOptions & {
   points: Iterable<LatLngLike>;
+  loader?: never;
+  source?: never;
+  debounceMs?: never;
+  replace?: never;
+  clusterize?: never;
+  clusterRenderer?: never;
+  style?: never;
+};
+
+export type LocalObjectManagerOptions = ObjectManagerOptions & {
+  loader?: never;
+  points?: never;
+  debounceMs?: never;
+  replace?: never;
 };
 
 export type UnifiedObjectManagerOptions =
-  | ObjectManagerOptions
+  | LocalObjectManagerOptions
   | RemoteObjectManagerOptions
   | PointObjectManagerOptions;
 
 export function objectManager(options: RemoteObjectManagerOptions): RemoteObjectManager;
 export function objectManager(options: PointObjectManagerOptions): MarkerCollection;
-export function objectManager(options?: ObjectManagerOptions): ObjectManager;
+export function objectManager(options?: LocalObjectManagerOptions): ObjectManager;
+export function objectManager(options: UnifiedObjectManagerOptions): ObjectManager | RemoteObjectManager | MarkerCollection;
 export function objectManager(options: UnifiedObjectManagerOptions = {}): ObjectManager | RemoteObjectManager | MarkerCollection {
-  if ("loader" in options && typeof options.loader === "function") {
-    return new RemoteObjectManager(options);
+  if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("objectManager options must be an object");
+  if ("loader" in options && "points" in options) throw new TypeError("objectManager accepts either loader or points, not both");
+  if ("loader" in options) {
+    if (typeof options.loader !== "function") throw new TypeError("objectManager loader must be a function");
+    return new RemoteObjectManager(options as RemoteObjectManagerOptions);
+  }
+  if (options.debounceMs !== undefined || options.replace !== undefined) {
+    throw new TypeError("objectManager debounceMs and replace require loader mode");
   }
   if ("points" in options) {
+    if (!options.points || typeof options.points[Symbol.iterator] !== "function") throw new TypeError("objectManager points must be an iterable of named coordinates");
+    for (const key of ["source", "clusterize", "clusterRenderer", "style"] as const) {
+      if (options[key] !== undefined) throw new TypeError(`objectManager points mode does not accept ${key}`);
+    }
     const { points, ...markerOptions } = options;
     return new MarkerCollection(points, markerOptions);
   }
-  return new ObjectManager(options);
+  return new ObjectManager(options as LocalObjectManagerOptions);
 }

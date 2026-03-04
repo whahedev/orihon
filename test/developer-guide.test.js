@@ -4,6 +4,14 @@ import { access, readFile } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
 
+test("developer guide does not advertise forbidden visual selector fields", async () => {
+  for (const name of ["marker", "icon"]) {
+    const html = await readFile(new URL(`examples/developer-guide/functions/${name}/index.html`, root), "utf8");
+    assert.doesNotMatch(html, /<td><code>html<\/code><\/td>/);
+    assert.doesNotMatch(html, /<td><code>undefined<\/code><\/td>/);
+  }
+});
+
 test("developer guide has one physical page per catalogued public function", async () => {
   const manifest = JSON.parse(await readFile(new URL("examples/developer-guide/manifest.json", root), "utf8"));
   assert.ok(manifest.functions.length >= 70, `unexpectedly small guide: ${manifest.functions.length}`);

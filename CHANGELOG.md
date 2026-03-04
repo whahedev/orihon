@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Breaking — exclusive visual/data modes:** Marker, icon and objectManager reject conflicting selectors in TypeScript and JavaScript, including pre-existing option variables. Marker `html` is replaced by safe `content`; empty content remains empty. `setContent()`, `setIcon()` and `setAppearance()` explicitly switch modes without reviving hidden content. Easy/React retain the union contract, point collections no longer mix glyph defaults into custom icons, and invalid manager selectors fail before subscriptions/iteration. See [migration](docs/MIGRATION-NEXT-MAJOR.md#exclusive-marker-and-factory-modes).
+
+- Build contracts: Standard receives an additional compression pass without property mangling to retain its 36 KiB gzip budget. Minified artifacts preserve actual boolean return values instead of rewriting them to 0/1, keeping strict lifecycle checks compatible with external modules.
+
 - **Breaking — Draw lifetime:** added terminal `destroy()` / read-only `isDestroyed` to DrawHandler and DrawControl. `remove()` now only detaches and retains features/history; destructive options are rejected. Destroy clears internally owned features but preserves supplied groups. Handler `map` / `mode` are read-only. Map unload, edit-handle disposal, cancelled pointer gestures, reentrant cancellation and toolbar transfers no longer leak listeners or commit stale drafts. Failed control attachment rolls back registration. See [migration](docs/MIGRATION-NEXT-MAJOR.md#draw-lifetime-and-feature-ownership).
 
 - **Breaking — ObjectManager lifetime:** removed overloaded `remove()` in favor of `detach()` / `removeObjects()`. `destroy()` is terminal and idempotent, exposes read-only `isDestroyed`, rejects pending imports even for blocked async iterators, and prevents later data/style/state mutations. Local managers now detach on map unload too. React owns one manager per effect lifetime and releases source subscriptions during Strict Mode cleanup and unmount. See [migration](docs/MIGRATION-NEXT-MAJOR.md#objectmanager-lifetime-and-data-removal).

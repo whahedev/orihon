@@ -47,7 +47,12 @@ interface BoundedLayer {
   getBounds(): { getCenter(): LatLngLike; isValid?(): boolean };
 }
 
-export class Layer<TOptions extends LayerOptions = LayerOptions> extends Evented {
+export interface LayerEventMap {
+  add: { map: Orihon };
+  remove: { map: Orihon };
+}
+
+export class Layer<TOptions extends LayerOptions = LayerOptions, TEvents extends object = {}> extends Evented<LayerEventMap & TEvents> {
   map: Orihon | null = null;
   protected _popup: Popup | null = null;
   protected _tooltip: Tooltip | null = null;

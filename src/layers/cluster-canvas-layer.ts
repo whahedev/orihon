@@ -33,7 +33,11 @@ function tierStyle(count: number): { radius: number; fill: string; stroke: strin
 /**
  * Single-canvas cluster badges (OpenLayers-style): one redraw per frame, no DOM Markers.
  */
-export class ClusterCanvasLayer extends Layer {
+export interface ClusterCanvasEventMap {
+  clusterclick: { originalEvent: MouseEvent; clusterKey: string; latlng: LatLngLike; count: number };
+}
+
+export class ClusterCanvasLayer extends Layer<LayerOptions, ClusterCanvasEventMap> {
   declare options: ClusterCanvasLayerOptions;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Event contracts now cover SVG paths, raster/vector tiles, traffic, text, heat, WebGL points/symbols and overlays, including popup/tooltip notifications on maps. Declarations preserve renderer differences: optional DOM tiles, nested vector coordinates, plain coordinate objects, nullable hover and absent packed-point data. Added compile-time rejection tests and DOM/GPU/heat payload regressions without changing runtime dispatch. See [layer event migration](docs/MIGRATION-NEXT-MAJOR.md#layer-and-overlay-event-payloads).
+
+- **Breaking — event subscriptions:** `on` / `once` / `off` infer payloads and concrete receiver targets from literal names, with exported event maps for map, Marker, layer attachment, Draw and main services. React map callbacks share the contract; SuggestWidget retains its item type. Dynamic/custom names remain `unknown`. Old explicit payload type arguments must migrate to event maps. Runtime dispatch and permissive low-level `emit` remain unchanged. See [migration](docs/MIGRATION-NEXT-MAJOR.md#typed-event-subscriptions).
+
 - **Breaking — exclusive visual/data modes:** Marker, icon and objectManager reject conflicting selectors in TypeScript and JavaScript, including pre-existing option variables. Marker `html` is replaced by safe `content`; empty content remains empty. `setContent()`, `setIcon()` and `setAppearance()` explicitly switch modes without reviving hidden content. Easy/React retain the union contract, point collections no longer mix glyph defaults into custom icons, and invalid manager selectors fail before subscriptions/iteration. See [migration](docs/MIGRATION-NEXT-MAJOR.md#exclusive-marker-and-factory-modes).
 
 - Build contracts: Standard receives an additional compression pass without property mangling to retain its 36 KiB gzip budget. Minified artifacts preserve actual boolean return values instead of rewriting them to 0/1, keeping strict lifecycle checks compatible with external modules.

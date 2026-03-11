@@ -55,7 +55,11 @@ interface GLLocs {
  * Instanced icon quads from an ObjectIconAtlas.
  * Supports per-instance size, rotation (degrees), tint, and GPU motion mix.
  */
-export class WebGLSymbolLayer extends Layer<Resolved> {
+export interface WebGLSymbolEventMap {
+  click: { originalEvent: MouseEvent; index: number; latlng: LatLngLike; data: WebGLSymbolInstance };
+}
+
+export class WebGLSymbolLayer extends Layer<Resolved, WebGLSymbolEventMap> {
   canvas: HTMLCanvasElement | null = null;
   gl: WebGLRenderingContext | null = null;
   renderer: "webgl" | "canvas" | "none" = "none";

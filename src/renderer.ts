@@ -6,7 +6,7 @@ export interface RendererOptions extends LayerOptions {
   className?: string;
 }
 
-export class Renderer<TOptions extends RendererOptions = RendererOptions> extends Layer<TOptions> {
+export class Renderer<TOptions extends RendererOptions = RendererOptions, TEvents extends object = {}> extends Layer<TOptions, TEvents> {
   container: HTMLElement | SVGElement | null = null;
 
   constructor(options = {} as TOptions) {

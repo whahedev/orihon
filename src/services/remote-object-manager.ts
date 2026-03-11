@@ -5,7 +5,9 @@ import { nonNegativeFinite } from "../units.js";
 import {
   ObjectManager,
   type ManagedObject,
-  type ObjectManagerOptions
+  type ObjectManagerOptions,
+  type ObjectManagerEventMap,
+  type ObjectManagerStats
 } from "./object-manager.js";
 
 export interface RemoteObjectLoadContext {
@@ -35,7 +37,15 @@ export interface RemoteObjectReloadOptions {
 
 type RemoteObjectMap = NonNullable<ObjectManager["map"]>;
 
-export class RemoteObjectManager extends ObjectManager {
+export interface RemoteObjectManagerEventMap extends Omit<ObjectManagerEventMap, "error"> {
+  loading: { context: RemoteObjectLoadContext };
+  load: { context: RemoteObjectLoadContext; objects: ManagedObject[]; stats: ObjectManagerStats };
+  abort: { context: RemoteObjectLoadContext; error: unknown };
+  error: { context: RemoteObjectLoadContext; error: unknown; phase?: never }
+    | { phase: "layout"; error: unknown; context?: never };
+}
+
+export class RemoteObjectManager extends ObjectManager<RemoteObjectManagerEventMap> {
   readonly loader: RemoteObjectLoader;
   readonly debounceMs: number;
   readonly replace: boolean;

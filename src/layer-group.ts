@@ -2,7 +2,7 @@ import { LatLngBounds, bounds, type LatLngBoundsLike, type LatLngLike } from "./
 import { Layer, type LayerOptions } from "./layer.js";
 import type { Orihon } from "./map.js";
 
-export class LayerGroup extends Layer {
+export class LayerGroup<TEvents extends object = {}> extends Layer<LayerOptions, TEvents> {
   protected readonly groupLayers = new Set<Layer>();
 
   constructor(layers: Iterable<Layer> = [], options: LayerOptions = {}) {
@@ -77,7 +77,7 @@ function hasLatLng(layer: Layer): layer is LocatedLayer {
   return typeof (layer as unknown as Partial<LocatedLayer>).getLatLng === "function";
 }
 
-export class FeatureGroup extends LayerGroup {
+export class FeatureGroup<TEvents extends object = {}> extends LayerGroup<TEvents> {
   constructor(layers: Iterable<Layer> = [], options: LayerOptions = {}) {
     super([], options);
     for (const layer of layers) this.addLayer(layer);

@@ -1,5 +1,5 @@
 import { listenTap } from "../dom.js";
-import { LatLngBounds, bounds, type LatLngBoundsLike } from "../geo.js";
+import { LatLngBounds, bounds, type LatLng, type LatLngBoundsLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { OverlayContent, PopupOptions } from "./div-overlay.js";
 
@@ -12,11 +12,16 @@ export interface ResolvedMediaOverlayOptions extends LayerOptions {
   zIndex: number;
 }
 
+export interface MediaOverlayEventMap {
+  click: { originalEvent: MouseEvent | PointerEvent; latlng: LatLng };
+}
+
 /** Internal shared lifecycle for image, video and SVG overlays. */
 export abstract class MediaOverlay<
   TElement extends HTMLElement | SVGElement,
-  TOptions extends ResolvedMediaOverlayOptions
-> extends Layer<TOptions> {
+  TOptions extends ResolvedMediaOverlayOptions,
+  TEvents extends object = {}
+> extends Layer<TOptions, MediaOverlayEventMap & TEvents> {
   overlayBounds: LatLngBounds;
   readonly _unsub: Array<() => void> = [];
   private _interactiveUnsub: (() => void) | null = null;

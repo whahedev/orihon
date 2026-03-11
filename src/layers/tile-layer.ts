@@ -109,7 +109,24 @@ export function normalizeTileBounds(value: unknown, errorMessage: string): LatLn
   throw new TypeError(errorMessage);
 }
 
-export class TileLayer extends GridLayer<ResolvedTileOptions> {
+/** Shared raster payload: GPU backends do not provide a DOM image. */
+export interface RasterTileEventDetail {
+  x: number;
+  y: number;
+  z: number;
+  url: string;
+  tile?: HTMLImageElement;
+}
+
+export interface TileLayerEventMap {
+  tileloadstart: RasterTileEventDetail;
+  tileload: RasterTileEventDetail;
+  tileerror: RasterTileEventDetail;
+  tileabort: RasterTileEventDetail;
+  load: {};
+}
+
+export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTileOptions, TileLayerEventMap & TEvents> {
   template: TileTemplate;
   tiles = new Map<string, TileRecord>();
   previousTiles = new Map<string, TileRecord>();

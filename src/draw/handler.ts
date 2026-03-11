@@ -23,7 +23,28 @@ export interface DrawHandlerOptions {
 
 type MutableLayer = Marker | Polyline | Polygon | Circle;
 
-export class DrawHandler extends Evented {
+export type DrawEditVertexDetail =
+  | { layer: Marker; latlng: ReturnType<typeof latLng>; role?: never }
+  | { layer: Polyline | Polygon; latlng: ReturnType<typeof latLng>; ring: number; index: number; role?: never }
+  | { layer: Circle; latlng: ReturnType<typeof latLng>; role: "center" }
+  | ({ layer: Circle; latlng: ReturnType<typeof latLng>; role: "radius" } & CircleRadius);
+
+export interface DrawEventMap {
+  modechange: { mode: DrawMode; previous: DrawMode };
+  editstart: {};
+  deletestart: {};
+  drawstart: { mode: DrawMode; latlng: ReturnType<typeof latLng> };
+  drawvertex: { mode: DrawMode; latlng: ReturnType<typeof latLng>; vertices: ReturnType<typeof latLng>[] };
+  drawcomplete: { layer: Layer; geojson: GeoJSONFeature };
+  editvertex: DrawEditVertexDetail;
+  editcomplete: { layer: MutableLayer; geojson: GeoJSONFeatureCollection };
+  deletecomplete: { layer: Layer; geojson: GeoJSONFeatureCollection };
+  undo: { geojson: GeoJSONFeatureCollection };
+  redo: { geojson: GeoJSONFeatureCollection };
+  snap: { latlng: ReturnType<typeof latLng>; layer?: Layer };
+}
+
+export class DrawHandler extends Evented<DrawEventMap> {
   readonly options: Required<Omit<DrawHandlerOptions, "featureGroup" | "snapLayers">> & {
     featureGroup: FeatureGroup;
     snapLayers: Layer[];

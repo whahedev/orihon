@@ -25,7 +25,12 @@ export interface PerformanceInspectorOptions {
   includeMemory?: boolean;
 }
 
-export class PerformanceInspector extends Evented {
+export interface PerformanceEventMap {
+  measure: { snapshot: PerformanceSnapshot };
+  sample: { snapshot: PerformanceSnapshot };
+}
+
+export class PerformanceInspector extends Evented<PerformanceEventMap> {
   readonly map: Orihon;
   readonly options: Required<PerformanceInspectorOptions>;
   _running = false;

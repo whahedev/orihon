@@ -108,22 +108,49 @@ try {
       mode: "both",
       backend: "wasm",
       worker: true,
+      interactive: true,
       scaleZoom: 8
     }).addTo(map);
     await layer.rebuildAsync();
+    let rebuilt;
+    layer.once("rebuild", (event) => { rebuilt = event; });
     map.setView(({ lat: 50.1, lng: 14.5 }), 8.5);
     await layer.rebuildAsync();
     const stats = layer.getStats();
     const frameDriven = layer.wantsFrameRender();
+    let picked = null;
+    for (let y = 16; y < 320 && !picked; y += 16) {
+      for (let x = 16; x < 480; x += 16) {
+        if (layer.getFeatureAt({ x, y })) { picked = { x, y }; break; }
+      }
+    }
+    if (!picked) throw new Error("No heat feature available to test event payloads");
+    let click, hover, selected;
+    layer.once("click", (event) => { click = event; });
+    layer.once("select", (event) => { selected = event; });
+    layer.once("hover", (event) => { hover = event; });
+    const rect = host.getBoundingClientRect();
+    layer.canvas.dispatchEvent(new MouseEvent("click", { clientX: rect.left + picked.x, clientY: rect.top + picked.y, bubbles: true }));
+    host.dispatchEvent(new MouseEvent("mouseleave"));
+    const events = {
+      clickTarget: click?.target === layer,
+      feature: click?.feature === click?.data && typeof click?.feature?.fieldValue === "number",
+      detail: click?.detail.feature === click?.feature,
+      plainPoint: Object.getPrototypeOf(click?.containerPoint ?? {}) === Object.prototype,
+      selection: selected?.feature === click?.feature,
+      nullHover: hover?.latlng === null && hover?.feature === null && hover?.containerPoint === null,
+      rebuild: rebuilt?.target === layer && typeof rebuilt?.stats?.rings === "number"
+    };
     layer.remove();
     map.remove();
     host.remove();
-    return { worker: stats.worker, backend: stats.backend, rings: stats.rings, frameDriven };
+    return { worker: stats.worker, backend: stats.backend, rings: stats.rings, frameDriven, events };
   });
   assert.equal(layerWorker.worker, true);
   assert.equal(layerWorker.backend, "wasm");
   assert.ok(layerWorker.rings > 0);
   assert.equal(Boolean(layerWorker.frameDriven), false);
+  assert.deepEqual(layerWorker.events, { clickTarget: true, feature: true, detail: true, plainPoint: true, selection: true, nullHover: true, rebuild: true });
   console.log(`heat browser ok · wasm+contours · webgpu ${result.webgpuSupported ? "adapter" : "fallback-ready"}`);
 } finally {
   await browser.close();

@@ -143,8 +143,29 @@ const DEFAULT_GRADIENT: HeatGradient = {
   1: "#dc2626"
 };
 
+export interface HeatPointerDetail {
+  originalEvent: MouseEvent | PointerEvent;
+  latlng: ReturnType<Orihon["containerPointToLatLng"]>;
+  containerPoint: { x: number; y: number };
+  data: HeatFeature;
+  feature: HeatFeature;
+  index: number;
+}
+
+export interface HeatEventMap {
+  select: { data: HeatFeature; feature: HeatFeature };
+  unselect: { data: HeatFeature; feature: HeatFeature };
+  rebuild: { stats: HeatLayerStats };
+  click: HeatPointerDetail;
+  contextmenu: HeatPointerDetail;
+  mouseover: { originalEvent: MouseEvent; latlng: ReturnType<Orihon["containerPointToLatLng"]>; data: HeatFeature; feature: HeatFeature };
+  mousemove: HeatEventMap["mouseover"];
+  mouseout: { originalEvent: MouseEvent; latlng: ReturnType<Orihon["containerPointToLatLng"]> | null; data: HeatFeature; feature: HeatFeature };
+  hover: { originalEvent: MouseEvent; latlng: ReturnType<Orihon["containerPointToLatLng"]> | null; containerPoint: { x: number; y: number } | null; data: HeatFeature | null; feature: HeatFeature | null };
+}
+
 /** One field, three views: continuous heat colors, isolines, or both. */
-export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
+export class HeatLayer extends Layer<ResolvedHeatLayerOptions, HeatEventMap> {
   canvas: HTMLCanvasElement | null = null;
   private _fieldCanvas: HTMLCanvasElement | null = null;
   private _points: PackedHeatPoints = { data: new Float32Array(0), count: 0 };

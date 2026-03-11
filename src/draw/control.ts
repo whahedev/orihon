@@ -1,10 +1,10 @@
 import { createEl, listen } from "../dom.js";
-import type { EventHandler, OrihonEvent } from "../events.js";
+import type { EventFor, EventHandler } from "../events.js";
 import type { GeoJSONData, GeoJSONFeatureCollection } from "../layers/geojson.js";
 import type { ControlPosition, Orihon } from "../map.js";
 import { Control, type ControlOptions } from "../ui/control.js";
 import type { LocaleName } from "../ui/locale.js";
-import { DrawHandler, type DrawHandlerOptions, type DrawMode } from "./handler.js";
+import { DrawHandler, type DrawEventMap, type DrawHandlerOptions, type DrawMode } from "./handler.js";
 import { drawLocaleFromMapLabel, resolveDrawLocale, type DrawLocale } from "./locale.js";
 import { abortError } from "../services/abortable-operation.js";
 
@@ -160,9 +160,15 @@ export class DrawControl extends Control<DrawControlOptions> {
   }
 
   setMode(mode: DrawMode): this { this.handler.setMode(mode); return this; }
-  on<T extends OrihonEvent = OrihonEvent>(type: string, handler: EventHandler<T>): this { this.handler.on(type, handler); return this; }
-  once<T extends OrihonEvent = OrihonEvent>(type: string, handler: EventHandler<T>): this { this.handler.once(type, handler); return this; }
-  off(type?: string, handler?: EventHandler): this { this.handler.off(type, handler); return this; }
+  on<K extends string>(type: K, handler: EventHandler<EventFor<DrawEventMap, NoInfer<K>, DrawHandler>>): this { this.handler.on(type, handler); return this; }
+  once<K extends string>(type: K, handler: EventHandler<EventFor<DrawEventMap, NoInfer<K>, DrawHandler>>): this { this.handler.once(type, handler); return this; }
+  off(): this;
+  off<K extends string>(type: K, handler?: EventHandler<EventFor<DrawEventMap, NoInfer<K>, DrawHandler>>): this;
+  off(type?: string, handler?: EventHandler<any>): this {
+    if (type === undefined) this.handler.off();
+    else this.handler.off(type, handler);
+    return this;
+  }
   finish(): this { this.handler.finish(); return this; }
   cancel(): this { this.handler.cancel(); return this; }
   undo(): this { this.handler.undo(); return this; }

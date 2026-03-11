@@ -6,7 +6,7 @@ registerGpuTileFactory((template, options) => new GPUTileLayer(template, {
   backend: options?.renderer === "webgl" || options?.renderer === "webgpu" ? options.renderer : "auto"
 }));
 
-export { GPUTileLayer, type GPUTileBackend, type GPUTileLayerOptions, type GPUTileLayerStats } from "./layers/gpu-tile-layer.js";
+export { GPUTileLayer, type GPUTileBackend, type GPUTileLayerOptions, type GPUTileLayerStats, type GPUTileLayerEventMap } from "./layers/gpu-tile-layer.js";
 export {
   buildHeatFieldWebGpu,
   heatFieldWebGpuAvailable,

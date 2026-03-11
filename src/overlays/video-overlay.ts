@@ -32,7 +32,12 @@ interface ResolvedVideoOverlayOptions extends LayerOptions {
   poster: string;
 }
 
-export class VideoOverlay extends MediaOverlay<HTMLVideoElement, ResolvedVideoOverlayOptions> {
+export interface VideoOverlayEventMap {
+  load: { originalEvent: Event };
+  error: { originalEvent: Event };
+}
+
+export class VideoOverlay extends MediaOverlay<HTMLVideoElement, ResolvedVideoOverlayOptions, VideoOverlayEventMap> {
   urls: string[];
   video: HTMLVideoElement | null = null;
 

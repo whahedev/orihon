@@ -1,36 +1,48 @@
-export interface OrihonEvent<T extends Record<string, unknown> = Record<string, unknown>> {
-  type: string;
-  target: Evented;
-  sourceTarget: Evented;
-  propagatedFrom?: Evented;
-  layer?: Evented;
-  detail: T;
+interface EventMetadata<T extends object, TType extends string, TTarget> {
+  type: TType;
+  target: TTarget;
+  sourceTarget: Evented<any>;
+  propagatedFrom?: Evented<any>;
+  layer?: Evented<any>;
+  detail: T & Record<string, unknown>;
   [key: string]: unknown;
 }
 
-export type EventHandler<T extends OrihonEvent = OrihonEvent> = (event: T) => void;
+/** Payload fields are available both on the event and on event.detail. */
+export type OrihonEvent<T extends object = Record<string, unknown>, TType extends string = string, TTarget = Evented<any>> =
+  T extends unknown ? Omit<T, "type" | "target" | "sourceTarget" | "detail" | "propagatedFrom"> & EventMetadata<T, TType, TTarget> : never;
 
-export class Evented {
+/** Known literal names infer their payload; dynamic/custom names retain unknown fields. */
+export type EventFor<TEvents extends object, TName extends string, TTarget = Evented<any>> =
+  string extends TName ? OrihonEvent<Record<string, unknown>, TName, TTarget> : TName extends keyof TEvents
+    ? OrihonEvent<TEvents[TName] & object, TName, TTarget>
+    : OrihonEvent<Record<string, unknown>, TName, TTarget>;
+
+export type EventHandler<T extends { type: string } = OrihonEvent> = (event: T) => void;
+
+export class Evented<TEvents extends object = {}> {
   readonly #events = new Map<string, Set<EventHandler>>();
-  readonly #eventParents = new Set<Evented>();
+  readonly #eventParents = new Set<Evented<any>>();
 
-  on<T extends OrihonEvent = OrihonEvent>(type: string, handler: EventHandler<T>): this {
+  on<K extends string>(type: K, handler: EventHandler<EventFor<TEvents, NoInfer<K>, this>>): this {
     const list = this.#events.get(type);
-    const normalized = handler as EventHandler;
+    const normalized = handler as unknown as EventHandler;
     if (list) list.add(normalized);
     else this.#events.set(type, new Set([normalized]));
     return this;
   }
 
-  once<T extends OrihonEvent = OrihonEvent>(type: string, handler: EventHandler<T>): this {
-    const wrap: EventHandler<T> = (event) => {
-      this.off(type, wrap as EventHandler);
+  once<K extends string>(type: K, handler: EventHandler<EventFor<TEvents, NoInfer<K>, this>>): this {
+    const wrap: EventHandler<EventFor<TEvents, K, this>> = (event) => {
+      this.off(type, wrap);
       handler(event);
     };
     return this.on(type, wrap);
   }
 
-  off(type?: string, handler?: EventHandler): this {
+  off(): this;
+  off<K extends string>(type: K, handler?: EventHandler<EventFor<TEvents, NoInfer<K>, this>>): this;
+  off(type?: string, handler?: EventHandler<any>): this {
     if (!type) {
       this.#events.clear();
       return this;
@@ -48,12 +60,12 @@ export class Evented {
     return propagate && [...this.#eventParents].some((parent) => parent.listens(type, true));
   }
 
-  addEventParent(parent: Evented): this {
+  addEventParent(parent: Evented<any>): this {
     if (parent !== this) this.#eventParents.add(parent);
     return this;
   }
 
-  removeEventParent(parent: Evented): this {
+  removeEventParent(parent: Evented<any>): this {
     this.#eventParents.delete(parent);
     return this;
   }
@@ -66,7 +78,7 @@ export class Evented {
       target: this,
       sourceTarget,
       detail
-    } as OrihonEvent<T>;
+    } as unknown as OrihonEvent<T>;
     const list = this.#events.get(type);
     if (list) for (const handler of [...list]) handler(event);
 

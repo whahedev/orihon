@@ -1,7 +1,7 @@
 import { createElement, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
-import type { OrihonEvent, EventHandler } from "../events.js";
+import type { EventFor, EventHandler } from "../events.js";
 import type { LatLngLike } from "../geo.js";
-import { createMap, type MapOptions, type Orihon } from "../map.js";
+import { createMap, type MapEventMap, type MapOptions, type Orihon } from "../map.js";
 import { MapContext } from "./context.js";
 import { rejectLegacyUnit } from "../units.js";
 
@@ -10,7 +10,7 @@ export interface MapProps extends Omit<HTMLAttributes<HTMLDivElement>, "onClick"
   zoom: number;
   children?: ReactNode;
   style?: CSSProperties;
-  onClick?: EventHandler;
+  onClick?: EventHandler<EventFor<MapEventMap, "click", Orihon>>;
   onMapReady?: (map: Orihon) => void;
 }
 

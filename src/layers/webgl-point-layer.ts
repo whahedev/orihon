@@ -75,7 +75,12 @@ export interface WebGLPointLayerStats {
   pickIndex: number;
 }
 
-export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions> {
+export interface WebGLPointEventMap {
+  click: { originalEvent: MouseEvent | PointerEvent; latlng: LatLngLike; containerPoint: { x: number; y: number }; index: number; data: WebGLPointInput | undefined };
+  hover: { originalEvent: MouseEvent; latlng: LatLngLike | null; containerPoint: { x: number; y: number } | null; index: number; data: WebGLPointInput | null | undefined };
+}
+
+export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions, WebGLPointEventMap> {
   canvas: HTMLCanvasElement | null = null;
   gl: WebGLRenderingContext | null = null;
   program: WebGLProgram | null = null;

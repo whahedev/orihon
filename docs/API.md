@@ -238,7 +238,34 @@ Also available:
 
 ## Events
 
-`Evented` powers map and layer listeners. The public event shape is `OrihonEvent`.
+`Evented<TEvents>` powers map and layer listeners. The public event shape is
+`OrihonEvent<Payload, Name, Target>`; `EventFor<EventMap, Name, Target>` selects the
+payload by name, and `EventHandler<Event>` types a reusable callback. Literal
+event names infer fields for map, Marker, SVG paths, tile layers, heat, WebGL
+points/symbols, text, traffic, overlays, base layer add/remove, Draw, ObjectManager,
+remote loading, routing, SuggestWidget and performance events. React's
+`useMapEvent()` and Map `onClick` share `MapEventMap`.
+
+```ts
+map.on("click", (event) => console.log(event.latlng.lat));
+map.once("zoomend", (event) => console.log(event.detail.zoom));
+```
+
+Known payload fields appear on the event and `detail`. `target` is the current
+receiver, while `sourceTarget` can be a propagated child. DrawControl forwards
+subscriptions to its handler, which remains the target. Dynamic/custom names and
+extra fields are `unknown` unless declared in an event map. Plugins can extend
+`Evented<TheirEventMap>` or augment exported maps. Low-level `emit()` is permissive
+and does not validate payloads. See [event migration](MIGRATION-NEXT-MAJOR.md#typed-event-subscriptions)
+for reusable callback types, plugin augmentation and error/propagation caveats.
+
+Layer payloads differ by renderer: raster events have flat tile coordinates and
+an optional DOM `tile`; vector-tile events have nested `coordinates`. Heat/WebGL
+screen points are plain objects, hover may contain nulls, and packed GPU point
+data may be absent. Popup/Tooltip events are available both on the overlay and
+as map `popupopen` / `popupclose` / `tooltipopen` / `tooltipclose` notifications.
+See [layer event contracts](MIGRATION-NEXT-MAJOR.md#layer-and-overlay-event-payloads)
+for the exact absence/null and custom-child rules.
 
 Public TypeScript declarations are emitted beside every modular ESM entry.
 

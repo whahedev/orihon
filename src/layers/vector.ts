@@ -29,7 +29,7 @@ export interface PathOptions extends RendererOptions {
 type ResolvedPathOptions = Required<Omit<PathOptions, "pane" | "attribution" | "className">> &
   Pick<PathOptions, "pane" | "attribution" | "className">;
 
-export class SvgLayer<TOptions extends RendererOptions = RendererOptions> extends Renderer<TOptions> {
+export class SvgLayer<TOptions extends RendererOptions = RendererOptions, TEvents extends object = {}> extends Renderer<TOptions, TEvents> {
   svg: SVGSVGElement | null = null;
   group: SVGGElement | null = null;
 
@@ -63,7 +63,13 @@ export class SvgLayer<TOptions extends RendererOptions = RendererOptions> extend
   }
 }
 
-export class PathLayer extends SvgLayer<ResolvedPathOptions> {
+export interface PathEventMap {
+  click: { originalEvent: MouseEvent | PointerEvent; latlng: LatLng };
+  mouseover: { originalEvent: PointerEvent; latlng: LatLng };
+  mouseout: { originalEvent: PointerEvent; latlng: LatLng };
+}
+
+export class PathLayer extends SvgLayer<ResolvedPathOptions, PathEventMap> {
   path: SVGPathElement | SVGCircleElement | null = null;
   readonly _pathUnsub: Array<() => void> = [];
   protected supportsArrows = false;

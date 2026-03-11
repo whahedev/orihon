@@ -39,7 +39,16 @@ interface ResolvedDivOverlayOptions extends LayerOptions {
   offset: Point;
 }
 
-export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDivOverlayOptions> extends Layer<TOptions> {
+export interface DivOverlayEventMap {
+  contenterror: { error: unknown };
+}
+
+export interface OverlayLifecycleEventMap {
+  open: { map: Orihon };
+  close: { map: Orihon | null };
+}
+
+export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDivOverlayOptions, TEvents extends object = {}> extends Layer<TOptions, DivOverlayEventMap & TEvents> {
   container: HTMLDivElement | null = null;
   contentNode: HTMLDivElement | null = null;
   protected content: OverlayContent;
@@ -253,7 +262,7 @@ interface ResolvedPopupOptions extends ResolvedDivOverlayOptions {
 
 const activePopups = new WeakMap<Orihon, Popup>();
 
-export class Popup extends DivOverlay<ResolvedPopupOptions> {
+export class Popup extends DivOverlay<ResolvedPopupOptions, OverlayLifecycleEventMap> {
   private _mapClick: (() => void) | null = null;
   private _closeOnClickTimer: ReturnType<typeof setTimeout> | null = null;
   private _autoPanFrame = 0;
@@ -404,7 +413,7 @@ interface ResolvedTooltipOptions extends ResolvedDivOverlayOptions {
   opacity: number;
 }
 
-export class Tooltip extends DivOverlay<ResolvedTooltipOptions> {
+export class Tooltip extends DivOverlay<ResolvedTooltipOptions, OverlayLifecycleEventMap> {
   constructor(content: OverlayContent, options: TooltipOptions = {}) {
     super(content, {
       pane: "tooltip",

@@ -8,7 +8,13 @@ export interface TrafficLayerOptions extends TileLayerOptions {
   refreshIntervalMs?: number;
 }
 
-export class TrafficLayer extends TileLayer {
+export interface TrafficEventMap {
+  datatimechange: { dataTime: Date | null };
+  refresh: { dataTime: Date | null };
+  statechange: { state: TrafficState; dataTime: Date | null };
+}
+
+export class TrafficLayer extends TileLayer<TrafficEventMap> {
   state: TrafficState = "idle";
   dataTime: Date | null;
   refreshIntervalMs: number;

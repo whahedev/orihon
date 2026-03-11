@@ -142,26 +142,26 @@ export {
   EARTH_RADIUS
 } from "./geo.js";
 
-export type { OrihonEvent, EventHandler } from "./events.js";
-export type { LayerOptions, QueryHit, QueryOptions, QuerySource } from "./layer.js";
+export type { OrihonEvent, EventHandler, EventFor } from "./events.js";
+export type { LayerOptions, LayerEventMap, QueryHit, QueryOptions, QuerySource } from "./layer.js";
 export type { RendererOptions } from "./renderer.js";
-export type { BehaviorOptions, MapBehaviorName, MapOptions, MapSize, ControlPosition, SetViewOptions } from "./map.js";
+export type { BehaviorOptions, MapBehaviorName, MapEventMap, MapOptions, MapSize, ControlPosition, SetViewOptions } from "./map.js";
 export type { CameraState, CameraOrigin } from "./camera.js";
 export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
 export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
-export type { TileCoordinates, TileTemplate, TileLayerOptions, GPUTileFactory } from "./layers/tile-layer.js";
-export type { GPUTileBackend, GPUTileLayerOptions, GPUTileLayerStats } from "./layers/gpu-tile-layer.js";
+export type { TileCoordinates, TileTemplate, TileLayerOptions, GPUTileFactory, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
+export type { GPUTileBackend, GPUTileLayerOptions, GPUTileLayerStats, GPUTileLayerEventMap } from "./layers/gpu-tile-layer.js";
 export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-layer.js";
 export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts-tile-layer.js";
-export type { MVTPaintRule, VectorTileCoordinates, VectorTileLayerOptions, VectorTileProvider } from "./layers/vector-tile-layer.js";
+export type { MVTPaintRule, VectorTileCoordinates, VectorTileLayerOptions, VectorTileProvider, VectorTileEventMap } from "./layers/vector-tile-layer.js";
 export type { MVTDecodeOptions } from "./layers/mvt.js";
-export type { MarkerOptions, MarkerAppearance, MarkerShape } from "./layers/marker.js";
+export type { MarkerOptions, MarkerAppearance, MarkerShape, MarkerEventMap } from "./layers/marker.js";
 export type { MarkerCollectionOptions, MarkerCollectionRenderer } from "./layers/marker-collection.js";
 export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
-export type { TextLayerOptions } from "./layers/text-layer.js";
-export type { PathOptions, CircleMarkerOptions, CircleRadius } from "./layers/vector.js";
+export type { TextLayerOptions, TextLayerEventMap } from "./layers/text-layer.js";
+export type { PathOptions, CircleMarkerOptions, CircleRadius, PathEventMap } from "./layers/vector.js";
 export type {
   GeoJSONInput,
   GeoJSONAsyncInput,
@@ -186,11 +186,14 @@ export type {
   OverlayMountable,
   OverlayRenderable,
   DivOverlayOptions,
+  DivOverlayEventMap,
+  OverlayLifecycleEventMap,
   PopupOptions,
   TooltipOptions
 } from "./overlays/div-overlay.js";
-export type { ImageOverlayOptions } from "./overlays/image-overlay.js";
-export type { VideoOverlayOptions } from "./overlays/video-overlay.js";
+export type { MediaOverlayEventMap } from "./overlays/media-overlay.js";
+export type { ImageOverlayOptions, ImageOverlayEventMap } from "./overlays/image-overlay.js";
+export type { VideoOverlayOptions, VideoOverlayEventMap } from "./overlays/video-overlay.js";
 export type { SVGOverlayContent, SVGOverlayOptions } from "./overlays/svg-overlay.js";
 export type {
   ControlOptions,
@@ -216,6 +219,7 @@ export type {
   ObjectManagerAsyncOptions,
   ObjectManagerOptions,
   ObjectManagerStats,
+  ObjectManagerEventMap,
   ObjectPopupContent,
   ObjectPopupContext,
   ObjectState,
@@ -238,15 +242,15 @@ export type {
   ClusterPopupContent,
   ClusterPopupContext
 } from "./services/object-manager.js";
-export type { RemoteObjectLoadContext, RemoteObjectLoader, RemoteObjectManagerOptions, RemoteObjectReloadOptions } from "./services/remote-object-manager.js";
+export type { RemoteObjectLoadContext, RemoteObjectLoader, RemoteObjectManagerOptions, RemoteObjectReloadOptions, RemoteObjectManagerEventMap } from "./services/remote-object-manager.js";
 export type { LocalObjectManagerOptions, PointObjectManagerOptions, UnifiedObjectManagerOptions } from "./services/object-manager-factory.js";
 export type { SpatialId, SpatialRecord } from "./services/spatial-grid-index.js";
-export type { TrafficLayerOptions, TrafficState } from "./services/traffic-layer.js";
+export type { TrafficLayerOptions, TrafficState, TrafficEventMap } from "./services/traffic-layer.js";
 export type { SearchAdapter, SearchContext, SearchResult, SearchProviderSource, SearchProviderOptions } from "./services/search.js";
-export type { RouteResult, RouteWaypoint, RoutingContext, RoutingLayerOptions, RoutingProvider } from "./services/routing.js";
-export type { SuggestOptions, SuggestContext, SuggestFetcher, SuggestWidgetOptions } from "./services/suggest.js";
-export type { WebGLPointInput, WebGLPointDataOptions, WebGLPointAsyncDataOptions, WebGLPointLayerOptions, WebGLPointLayerStats } from "./layers/webgl-point-layer.js";
-export type { WebGLSymbolInstance, WebGLSymbolLayerOptions } from "./layers/webgl-symbol-layer.js";
+export type { RouteResult, RouteWaypoint, RoutingContext, RoutingLayerOptions, RoutingProvider, RoutingEventMap } from "./services/routing.js";
+export type { SuggestOptions, SuggestContext, SuggestFetcher, SuggestWidgetOptions, SuggestWidgetEventMap } from "./services/suggest.js";
+export type { WebGLPointInput, WebGLPointDataOptions, WebGLPointAsyncDataOptions, WebGLPointLayerOptions, WebGLPointLayerStats, WebGLPointEventMap } from "./layers/webgl-point-layer.js";
+export type { WebGLSymbolInstance, WebGLSymbolLayerOptions, WebGLSymbolEventMap } from "./layers/webgl-symbol-layer.js";
 export type { StyledPathInput, StyledPathStyle, WebGLStyledPathBatchOptions } from "./layers/webgl-styled-path-batch.js";
 export type { PathBatch, PathBatchMode, PathBatchOptions, UniformPathBatchOptions, FeaturePathBatchOptions } from "./layers/path-batch.js";
 export type { PolygonBatchInput, PolygonBatchStyle, WebGLPolygonBatchOptions } from "./layers/webgl-polygon-batch.js";
@@ -255,6 +259,8 @@ export type {
   HeatLayerOptions,
   HeatAsyncDataOptions,
   HeatLayerStats,
+  HeatEventMap,
+  HeatPointerDetail,
   HeatGradient,
   HeatFeature
 } from "./layers/heat.js";
@@ -287,5 +293,5 @@ export type {
   OfflineTileCacheStats,
   PrefetchTileLayerOptions
 } from "./services/offline-cache.js";
-export type { PerformanceInspectorOptions, PerformanceSnapshot } from "./services/performance.js";
+export type { PerformanceInspectorOptions, PerformanceSnapshot, PerformanceEventMap } from "./services/performance.js";
 export type { OrihonElementOptions, MapAdapter } from "./services/framework-adapters.js";

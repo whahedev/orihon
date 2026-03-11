@@ -41,7 +41,14 @@ interface TileState {
   controller: AbortController;
 }
 
-export class VectorTileLayer extends LayerGroup {
+export interface VectorTileEventMap {
+  tileloadstart: { coordinates: VectorTileCoordinates };
+  tileload: { coordinates: VectorTileCoordinates; features: GeoJSONFeature[] };
+  tileabort: { coordinates: VectorTileCoordinates };
+  tileerror: { coordinates: VectorTileCoordinates; error: unknown };
+}
+
+export class VectorTileLayer extends LayerGroup<VectorTileEventMap> {
   readonly options: Required<VectorTileLayerOptions>;
   readonly tiles = new Map<string, TileState>();
   readonly _render = () => this.render();

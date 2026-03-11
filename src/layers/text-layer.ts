@@ -34,7 +34,11 @@ interface VisibleLabel {
 
 interface Box { left: number; top: number; right: number; bottom: number }
 
-export class TextLayer extends Layer<Required<TextLayerOptions>> {
+export interface TextLayerEventMap {
+  layout: { count: number };
+}
+
+export class TextLayer extends Layer<Required<TextLayerOptions>, TextLayerEventMap> {
   private features: GeoJSONFeature[];
   private readonly source: ReadonlyFeatureSource<GeoJSONFeature> | null;
   private sourceUnsubscribe: (() => void) | null = null;

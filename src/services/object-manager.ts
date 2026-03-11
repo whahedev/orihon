@@ -405,7 +405,23 @@ interface WebGLSyncProfile {
 
 type ResolvedObjectManagerOptions = Required<ObjectManagerOptions>;
 
-export class ObjectManager extends Evented {
+export interface ObjectManagerEventMap {
+  objectstatechange: { id: ObjectId; state: Readonly<ObjectState>; changedKeys: string[] };
+  stylechange: { style: ObjectStyleResolver | null };
+  iconregister: { name: string };
+  iconremove: { name: string };
+  timerangechange: { from: number | null; to: number | null };
+  visualizationchange: { visualization: ObjectVisualizationMode };
+  spiderfy: { clusterId: string; objectIds: ObjectId[] };
+  unspiderfy: { clusterId: string | null };
+  render: { stats: ObjectManagerStats };
+  error: { error: unknown; phase: "layout" };
+  click: { objectId: ObjectId; object: ManagedObject | undefined; layer?: Marker; latlng?: LatLngLike; originalEvent?: MouseEvent | PointerEvent };
+  hover: { objectId: ObjectId | null; object: ManagedObject | null | undefined; latlng?: LatLngLike | null; originalEvent?: MouseEvent | PointerEvent };
+  clusterclick: { clusterId: string; objectIds: ObjectId[]; count: number; latlng: LatLngLike; originalEvent?: MouseEvent | PointerEvent };
+}
+
+export class ObjectManager<TEvents extends object = ObjectManagerEventMap> extends Evented<TEvents> {
   #destroyed = false;
   readonly #imports = new Set<AbortableOperation>();
   readonly #mapUnload = (): void => { this.detach(); };

@@ -4,7 +4,7 @@ export { snapLatLng } from "./snap.js";
 export { drawHandle } from "./handles.js";
 export { resolveDrawLocale, drawLocaleFromMapLabel, enDrawLocale } from "./locale.js";
 
-export type { DrawMode, DrawHandlerOptions } from "./handler.js";
+export type { DrawMode, DrawHandlerOptions, DrawEventMap, DrawEditVertexDetail } from "./handler.js";
 export type { DrawControlOptions } from "./control.js";
 export type { DrawSnapOptions, SnapResult } from "./snap.js";
 export type { DrawHandle, DrawHandleKind } from "./handles.js";

@@ -137,7 +137,16 @@ export function markerShapeMetrics(appearance: MarkerAppearance = {}): {
   };
 }
 
-export class Marker extends Layer<ResolvedMarkerOptions> {
+export interface MarkerEventMap {
+  click: { originalEvent: MouseEvent | PointerEvent; latlng: LatLng };
+  mouseover: { originalEvent: PointerEvent; latlng: LatLng };
+  mouseout: { originalEvent: PointerEvent; latlng: LatLng };
+  dragstart: { latlng: LatLng };
+  drag: { latlng: LatLng };
+  dragend: { latlng: LatLng };
+}
+
+export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
   #customAnchor: boolean;
   #customRotationOrigin: boolean;
   position: LatLng;

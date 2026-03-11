@@ -65,10 +65,10 @@ registerLocalePacks(localePacks);
 export type { RendererOptions } from "./renderer.js";
 export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-layer.js";
 export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts-tile-layer.js";
-export type { MarkerOptions, MarkerAppearance, MarkerShape } from "./layers/marker.js";
+export type { MarkerOptions, MarkerAppearance, MarkerShape, MarkerEventMap } from "./layers/marker.js";
 export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
-export type { TextLayerOptions } from "./layers/text-layer.js";
-export type { PathOptions, CircleMarkerOptions, CircleRadius } from "./layers/vector.js";
+export type { TextLayerOptions, TextLayerEventMap } from "./layers/text-layer.js";
+export type { PathOptions, CircleMarkerOptions, CircleRadius, PathEventMap } from "./layers/vector.js";
 export type {
   GeoJSONInput,
   GeoJSONAsyncInput,
@@ -93,11 +93,14 @@ export type {
   OverlayMountable,
   OverlayRenderable,
   DivOverlayOptions,
+  DivOverlayEventMap,
+  OverlayLifecycleEventMap,
   PopupOptions,
   TooltipOptions
 } from "./overlays/div-overlay.js";
-export type { ImageOverlayOptions } from "./overlays/image-overlay.js";
-export type { VideoOverlayOptions } from "./overlays/video-overlay.js";
+export type { MediaOverlayEventMap } from "./overlays/media-overlay.js";
+export type { ImageOverlayOptions, ImageOverlayEventMap } from "./overlays/image-overlay.js";
+export type { VideoOverlayOptions, VideoOverlayEventMap } from "./overlays/video-overlay.js";
 export type { SVGOverlayContent, SVGOverlayOptions } from "./overlays/svg-overlay.js";
 export type {
   ControlOptions,

@@ -100,7 +100,16 @@ export interface SuggestWidgetOptions<TResult> {
   emptyText?: string;
 }
 
-export class SuggestWidget<TResult = unknown> extends Evented {
+export interface SuggestWidgetEventMap<TResult = unknown> {
+  cancel: {};
+  select: { item: TResult; index: number };
+  loading: { query: string };
+  results: { query: string; items: TResult[] };
+  abort: { query: string; error: unknown };
+  error: { query: string; error: unknown };
+}
+
+export class SuggestWidget<TResult = unknown> extends Evented<SuggestWidgetEventMap<TResult>> {
   readonly input: HTMLInputElement;
   readonly list: HTMLElement;
   readonly provider: SuggestProvider<TResult>;

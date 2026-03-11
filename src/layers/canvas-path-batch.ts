@@ -42,7 +42,11 @@ interface PathRecord {
  * Single-canvas batch drawer for many polylines/polygons.
  * Used by GeoJSON `renderer: "canvas"` to avoid one SVG root per feature.
  */
-export class CanvasPathBatch extends Layer<CanvasPathBatchOptions> {
+export interface CanvasPathBatchEventMap {
+  click: { originalEvent: MouseEvent | PointerEvent; latlng: ReturnType<typeof latLng>; feature: unknown; index: number | undefined };
+}
+
+export class CanvasPathBatch extends Layer<CanvasPathBatchOptions, CanvasPathBatchEventMap> {
   private canvas: HTMLCanvasElement | null = null;
   private records: PathRecord[] = [];
   private _cssW = 0;

@@ -19,7 +19,7 @@ export interface ResolvedGridLayerOptions extends LayerOptions {
   className: string;
 }
 
-export class GridLayer<TOptions extends ResolvedGridLayerOptions = ResolvedGridLayerOptions> extends Layer<TOptions> {
+export class GridLayer<TOptions extends ResolvedGridLayerOptions = ResolvedGridLayerOptions, TEvents extends object = {}> extends Layer<TOptions, TEvents> {
   container: HTMLDivElement | null = null;
 
   constructor(options: GridLayerOptions = {}) {

@@ -40,7 +40,16 @@ export interface RoutingLayerOptions {
 
 type ResolvedRoutingLayerOptions = Required<RoutingLayerOptions>;
 
-export class RoutingLayer extends FeatureGroup {
+export interface RoutingEventMap {
+  loading: { waypoints: RouteWaypoint[] };
+  load: { routes: RouteResult[]; waypoints: RouteWaypoint[] };
+  abort: { error: unknown; waypoints: RouteWaypoint[] };
+  error: { error: unknown; waypoints: RouteWaypoint[] };
+  select: { index: number; route: RouteResult };
+  routeclick: { index: number; route: RouteResult; layer: Polyline; latlng?: LatLngLike; originalEvent?: MouseEvent | PointerEvent };
+}
+
+export class RoutingLayer extends FeatureGroup<RoutingEventMap> {
   readonly routingOptions: ResolvedRoutingLayerOptions;
   routes: RouteResult[] = [];
   selectedIndex = 0;

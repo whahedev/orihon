@@ -8,6 +8,7 @@ import type { Layer, QueryHit, QueryOptions, ResolvedQueryOptions } from "./laye
 import { AttributionControl, ScaleControl, ZoomControl, type Control } from "./ui/control.js";
 import { ensureLocalePacks, resolveLocale, type OrihonLocale, type LocaleInput } from "./ui/locale.js";
 import type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
+import type { Popup, Tooltip } from "./overlays/div-overlay.js";
 
 export interface MapOptions {
   center?: LatLngLike;
@@ -148,7 +149,33 @@ export class BehaviorManager {
   }
 }
 
-export class Orihon extends Evented {
+/** Payloads emitted by the map and its built-in controls. Custom events may augment this interface. */
+export interface MapEventMap {
+  click: { originalEvent: MouseEvent; containerPoint: Point; latlng: LatLng };
+  movestart: { center: LatLng };
+  move: { center: LatLng };
+  moveend: { center: LatLng };
+  zoomstart: { zoom: number };
+  zoom: { zoom: number };
+  zoomend: { zoom: number };
+  resize: { oldSize: Point; newSize: Point };
+  boxzoomstart: { containerPoint: Point };
+  boxzoomend: { containerPoint: Point; bounds: LatLngBounds };
+  behaviorchange: { name: MapBehaviorName; enabled: boolean; behaviors: MapBehaviorName[] };
+  localechange: { locale: OrihonLocale };
+  layeradd: { layer: Layer };
+  layerremove: { layer: Layer };
+  attributionchange: { attributions: string[] };
+  locationfound: { latlng: LatLngLike; accuracy: number; position: GeolocationPosition };
+  locationerror: { error: Error | GeolocationPositionError };
+  unload: {};
+  popupopen: { popup: Popup };
+  popupclose: { popup: Popup };
+  tooltipopen: { tooltip: Tooltip };
+  tooltipclose: { tooltip: Tooltip };
+}
+
+export class Orihon extends Evented<MapEventMap> {
   readonly options: ResolvedMapOptions;
   readonly container: HTMLElement;
   viewport!: HTMLDivElement;

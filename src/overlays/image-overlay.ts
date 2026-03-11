@@ -28,7 +28,12 @@ interface ResolvedImageOverlayOptions extends LayerOptions {
   zIndex: number;
 }
 
-export class ImageOverlay extends MediaOverlay<HTMLImageElement, ResolvedImageOverlayOptions> {
+export interface ImageOverlayEventMap {
+  load: { originalEvent: Event };
+  error: { originalEvent: Event; url: string };
+}
+
+export class ImageOverlay extends MediaOverlay<HTMLImageElement, ResolvedImageOverlayOptions, ImageOverlayEventMap> {
   url: string;
   image: HTMLImageElement | null = null;
   private _fallbackUsed = false;

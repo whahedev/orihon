@@ -273,7 +273,98 @@ options instead). Direct RemoteObjectManager construction also rejects a source
 or points. `LocalObjectManagerOptions` and the updated unified union expose the
 factory constraints while overloads retain their precise result classes.
 
+## Typed event subscriptions
+
+`on()`, `once()` and `off()` infer payloads from literal event names. Map, Marker,
+base layer attachment events, Draw, ObjectManager, RemoteObjectManager, routing,
+SuggestWidget and PerformanceInspector now export event maps. React `useMapEvent()`
+and Map `onClick` use the map's event contract too. SuggestWidget preserves its
+result-item type in `select` and `results`.
+
+The declarations use TypeScript's built-in `NoInfer`; consumers need TypeScript
+5.4 or newer.
+
+```ts
+import type { EventFor, EventHandler, MapEventMap, Orihon } from "orihon";
+
+map.on("click", (event) => {
+  console.log(event.latlng.lat, event.detail.containerPoint.x);
+});
+const onZoom: EventHandler<EventFor<MapEventMap, "zoom", Orihon>> = (event) => {
+  console.log(event.zoom.toFixed(1));
+};
+map.on("zoom", onZoom);
+map.off("zoom", onZoom);
+```
+
+Remove old `on<MyEvent>(...)` / `once<MyEvent>(...)` / `off<MyEvent>(...)`
+payload assertions: their type parameter is now the event name. Incompatible
+callback annotations no longer override a known event's shape. For your own
+emitter, declare its payload map instead:
+
+```ts
+import { Evented } from "orihon";
+interface PluginEvents { ready: { count: number }; }
+class Plugin extends Evented<PluginEvents> {}
+new Plugin().on("ready", (event) => console.log(event.count.toFixed()));
+
+// Plugins can add names to an existing public event map.
+declare module "orihon" {
+  interface MapEventMap { "plugin:ready": { count: number }; }
+}
+map.on("plugin:ready", (event) => console.log(event.count));
+```
+
+Payload fields remain available both directly and under `detail`. `target` is
+the current receiving emitter; `sourceTarget` may be a propagated child and must
+be narrowed before using a concrete layer API. DrawControl delegates subscriptions
+to its DrawHandler, so its events' `target` is the handler, not the control.
+Remote `error` is a union: request failures carry `context`, while layout failures
+carry `phase: "layout"`. Provider errors remain `unknown`, not necessarily Error.
+Marker drag events do not promise an `originalEvent`; manager hover-out positions
+can be null or absent.
+
+Dynamic strings, unregistered names and extra payload fields retain `unknown`,
+not `any`. Event-name unions support narrowing via `event.type`. This is a
+subscription typing change, not runtime payload validation: low-level `emit()`
+and event-parent wiring remain permissive. Plugin authors must emit compatible
+payloads and avoid propagating conflicting event names. `off()` clears all
+listeners; use `off(type)` for just one name.
+
+### Layer and overlay event payloads
+
+Named events are also typed for SVG paths (Polyline, Polygon, Circle and
+CircleMarker), raster/vector tiles, TrafficLayer, TextLayer, HeatLayer, WebGL
+points/symbols and image/video/SVG overlays. Popup and Tooltip expose typed
+`open`, `close` and `contenterror`; the map exposes `popupopen`, `popupclose`,
+`tooltipopen` and `tooltipclose`. Common base events are inherited by concrete
+classes. Renderer, SvgLayer, GridLayer, TileLayer and DivOverlay accept a trailing
+event-map type parameter for custom subclass events.
+
+- Raster `tileloadstart`, `tileload`, `tileerror` and `tileabort` expose `x`, `y`,
+  `z` and `url`. Treat `tile` as optional: the unified factory may choose a GPU
+  backend with no HTMLImageElement. Raster `tileerror` does not supply an Error.
+  The aggregate `load` event belongs to the DOM tile implementation.
+- Vector tiles instead provide `coordinates` (including the provider signal),
+  `features` on success and an `unknown` error on failure.
+- Heat and WebGL point events contain plain `{ x, y }` screen coordinates, not
+  Point class instances. WebGL point/symbol positions are named coordinate
+  objects, not LatLng class instances. Do not call class methods on them.
+- Heat hover-out can contain null position/feature; `mouseout` still carries
+  the previous feature. Packed WebGL points have no original per-point `data`
+  object, even when a click hits a valid index. Hover can also have null data.
+- Popup/Tooltip `close.map` can be null when `onRemove()` is called while
+  detached. Content factories may throw any value; narrow `contenterror.error`
+  before accessing Error properties. Image errors include `url`; video errors
+  only include the original DOM event.
+
+FeatureGroup and GeoJSON may contain custom child layers (`pointToLayer` included),
+so their propagated payloads remain `unknown` by default. For a group with a
+controlled set of children, use `new FeatureGroup<MyEvents>()` to declare its map.
+Layers without their own events retain typed base add/remove events and the
+custom-name fallback; no synthetic load/click events have been added.
+
 ## Remaining review work
 
-Event typing, mutable public state
-and renderer registration remain open and must be completed before a next-major release.
+Mutable public state and renderer registration/factory return types remain open
+and must be completed before a next-major release.

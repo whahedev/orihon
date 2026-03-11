@@ -12,6 +12,7 @@ import { createEl } from "../dom.js";
 import { cameraWarpCoversViewport, cameraWarpCss } from "../camera.js";
 import { TILE_SIZE, LatLngBounds, unproject, type LatLngBoundsLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
+import type { RasterTileEventDetail } from "./tile-layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { compileShader } from "../webgl-utils.js";
@@ -185,7 +186,14 @@ interface GL2Locs {
   uTexture: WebGLUniformLocation | null;
 }
 
-export class GPUTileLayer extends Layer<ResolvedOptions> {
+export interface GPUTileLayerEventMap {
+  tileloadstart: Omit<RasterTileEventDetail, "tile">;
+  tileload: Omit<RasterTileEventDetail, "tile">;
+  tileerror: Omit<RasterTileEventDetail, "tile">;
+  tileabort: Omit<RasterTileEventDetail, "tile">;
+}
+
+export class GPUTileLayer extends Layer<ResolvedOptions, GPUTileLayerEventMap> {
   template: TileTemplate;
   canvas: HTMLCanvasElement | null = null;
   gl: WebGLRenderingContext | null = null;

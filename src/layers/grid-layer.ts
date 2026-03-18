@@ -55,13 +55,13 @@ export class GridLayer<TOptions extends ResolvedGridLayerOptions = ResolvedGridL
 
   setOpacity(opacity: number): this {
     const next = Number(opacity);
-    this.options.opacity = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
+    this.writableOptions.opacity = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
     if (this.container) this.container.style.opacity = String(this.options.opacity);
     return this;
   }
 
   setZIndex(zIndex: number): this {
-    this.options.zIndex = Number(zIndex);
+    this.writableOptions.zIndex = Number(zIndex);
     if (this.container) this.container.style.zIndex = String(this.options.zIndex);
     return this;
   }

@@ -1,40 +1,48 @@
-import type { GeoJSONFeature } from "./layers/geojson.js";
+import type { IdentifiedGeoJSONFeature } from "./geojson-types.js";
 import type {
   FeatureId,
   FeatureSourceChange,
+  FeatureSourceDelta,
   FeatureSourceListener,
   ReadonlyFeatureSource,
   SourceSnapshot
 } from "./source-types.js";
 
-export type FeatureCollectionInput<TFeature extends GeoJSONFeature> = {
+export type FeatureCollectionInput<TFeature extends IdentifiedGeoJSONFeature> = {
   type: "FeatureCollection";
   features: TFeature[];
   bbox?: number[];
 };
 
-export type FeatureSourceInput<TFeature extends GeoJSONFeature> =
+export type FeatureSourceInput<TFeature extends IdentifiedGeoJSONFeature> =
   | TFeature
   | FeatureCollectionInput<TFeature>
   | Iterable<TFeature>;
 
-export type FeatureUpdate<TFeature extends GeoJSONFeature> =
+export type FeatureUpdate<TFeature extends IdentifiedGeoJSONFeature> =
   | TFeature
   | Partial<Omit<TFeature, "type" | "id">>;
 
 type PendingFeatureSourceChange<TFeature> =
-  | { type: "add" | "update"; features: readonly TFeature[] }
+  | { type: "add"; features: readonly TFeature[] }
+  | { type: "update"; features: readonly TFeature[] }
   | { type: "remove"; ids: readonly FeatureId[] }
   | { type: "reset" };
 
+type BatchIntent<TFeature> =
+  | { type: "add" | "update"; feature: TFeature }
+  | { type: "remove" };
+
 /** Reactive, renderer-independent GeoJSON feature storage. */
-export class FeatureSource<TFeature extends GeoJSONFeature = GeoJSONFeature>
+export class FeatureSource<TFeature extends IdentifiedGeoJSONFeature = IdentifiedGeoJSONFeature>
 implements ReadonlyFeatureSource<TFeature> {
   readonly #features = new Map<FeatureId, TFeature>();
   readonly #listeners = new Set<FeatureSourceListener<TFeature>>();
   #version = 0;
   #batchDepth = 0;
-  #batchChanged = false;
+  #batchReset = false;
+  #batchIntents: Map<FeatureId, BatchIntent<TFeature>> | null = null;
+  #snapshot: SourceSnapshot<TFeature> | null = null;
 
   constructor(input?: FeatureSourceInput<TFeature> | null) {
     if (input) this.#insert(input, false);
@@ -46,19 +54,29 @@ implements ReadonlyFeatureSource<TFeature> {
   get(id: FeatureId): TFeature | undefined { return this.#features.get(id); }
 
   getSnapshot(): SourceSnapshot<TFeature> {
-    return { version: this.#version, features: [...this.#features.values()] };
+    if (!this.#snapshot) {
+      this.#snapshot = {
+        version: this.#version,
+        features: [...this.#features.values()]
+      };
+    }
+    return this.#snapshot;
   }
 
-  /** Convenience alias for callers that need only the snapshot features. */
+  /** Return only the feature collection, without the snapshot version. */
   getFeatures(): readonly TFeature[] { return this.getSnapshot().features; }
 
   toGeoJSON(): FeatureCollectionInput<TFeature> {
-    return { type: "FeatureCollection", features: [...this.#features.values()] };
+    return { type: "FeatureCollection", features: [...this.getSnapshot().features] };
   }
 
   add(feature: TFeature): this { return this.#insert(feature, true); }
   addMany(features: Iterable<TFeature>): this { return this.#insert(features, true); }
 
+  /**
+   * Shallow-merge a full feature or a patch into an existing id.
+   * Both overloads preserve unspecified optional fields from the current value.
+   */
   update(feature: TFeature): this;
   update(id: FeatureId, update: FeatureUpdate<TFeature>): this;
   update(idOrFeature: FeatureId | TFeature, update?: FeatureUpdate<TFeature>): this {
@@ -97,16 +115,17 @@ implements ReadonlyFeatureSource<TFeature> {
     return this;
   }
 
+  /** Run synchronous nested mutations as one versioned `batch` (or `reset`). */
   batch(callback: () => void): this {
     this.#batchDepth++;
     try {
-      callback();
+      const result = callback() as unknown;
+      if (result != null && typeof (result as PromiseLike<unknown>).then === "function") {
+        throw new TypeError("FeatureSource.batch() callback must be synchronous");
+      }
     } finally {
       this.#batchDepth--;
-      if (this.#batchDepth === 0 && this.#batchChanged) {
-        this.#batchChanged = false;
-        this.#dispatch({ type: "reset", version: ++this.#version });
-      }
+      if (this.#batchDepth === 0) this.#flushBatch();
     }
     return this;
   }
@@ -150,10 +169,69 @@ implements ReadonlyFeatureSource<TFeature> {
 
   #emit(change: PendingFeatureSourceChange<TFeature>): void {
     if (this.#batchDepth > 0) {
-      this.#batchChanged = true;
+      this.#recordBatchChange(change);
       return;
     }
+    this.#invalidateSnapshot();
     this.#dispatch({ ...change, version: ++this.#version } as FeatureSourceChange<TFeature>);
+  }
+
+  #recordBatchChange(change: PendingFeatureSourceChange<TFeature>): void {
+    if (change.type === "reset") {
+      this.#batchReset = true;
+      this.#batchIntents = null;
+      return;
+    }
+    if (this.#batchReset) return;
+    if (!this.#batchIntents) this.#batchIntents = new Map();
+    if (change.type === "remove") {
+      for (const id of change.ids) {
+        const previous = this.#batchIntents.get(id);
+        if (previous?.type === "add") this.#batchIntents.delete(id);
+        else this.#batchIntents.set(id, { type: "remove" });
+      }
+      return;
+    }
+    for (const feature of change.features) {
+      const previous = this.#batchIntents.get(feature.id);
+      if (change.type === "add" || previous?.type === "add") {
+        this.#batchIntents.set(feature.id, { type: "add", feature });
+      } else {
+        this.#batchIntents.set(feature.id, { type: "update", feature });
+      }
+    }
+  }
+
+  #flushBatch(): void {
+    if (this.#batchReset) {
+      this.#batchReset = false;
+      this.#batchIntents = null;
+      this.#invalidateSnapshot();
+      this.#dispatch({ type: "reset", version: ++this.#version });
+      return;
+    }
+    const intents = this.#batchIntents;
+    this.#batchIntents = null;
+    if (!intents?.size) return;
+    const added: TFeature[] = [];
+    const updated: TFeature[] = [];
+    const removed: FeatureId[] = [];
+    for (const [id, intent] of intents) {
+      if (intent.type === "add") added.push(intent.feature);
+      else if (intent.type === "update") updated.push(intent.feature);
+      else removed.push(id);
+    }
+    const changes: FeatureSourceDelta<TFeature>[] = [];
+    if (added.length) changes.push({ type: "add", features: added });
+    if (updated.length) changes.push({ type: "update", features: updated });
+    if (removed.length) changes.push({ type: "remove", ids: removed });
+    if (!changes.length) return;
+    this.#invalidateSnapshot();
+    this.#dispatch({ type: "batch", version: ++this.#version, changes });
+  }
+
+  #invalidateSnapshot(): void {
+    this.#snapshot = null;
   }
 
   #dispatch(change: FeatureSourceChange<TFeature>): void {
@@ -161,17 +239,18 @@ implements ReadonlyFeatureSource<TFeature> {
   }
 }
 
-export function featureSource<TFeature extends GeoJSONFeature = GeoJSONFeature>(
+export function featureSource<TFeature extends IdentifiedGeoJSONFeature = IdentifiedGeoJSONFeature>(
   input?: FeatureSourceInput<TFeature> | null
 ): FeatureSource<TFeature> {
   return new FeatureSource(input);
 }
 
-export const createFeatureSource = featureSource;
+export type { IdentifiedGeoJSONFeature } from "./geojson-types.js";
 
 export type {
   FeatureId,
   FeatureSourceChange,
+  FeatureSourceDelta,
   FeatureSourceListener,
   ReadonlyFeatureSource,
   SourceSnapshot

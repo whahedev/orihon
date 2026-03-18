@@ -2,10 +2,10 @@ import { LatLngBounds, bounds, type LatLngBoundsLike, type LatLngLike } from "./
 import { Layer, type LayerOptions } from "./layer.js";
 import type { Orihon } from "./map.js";
 
-export class LayerGroup<TEvents extends object = {}> extends Layer<LayerOptions, TEvents> {
+export class LayerGroup<TEvents extends object = {}, TOptions extends LayerOptions = LayerOptions> extends Layer<TOptions, TEvents> {
   protected readonly groupLayers = new Set<Layer>();
 
-  constructor(layers: Iterable<Layer> = [], options: LayerOptions = {}) {
+  constructor(layers: Iterable<Layer> = [], options: TOptions = {} as TOptions) {
     super(options);
     for (const layer of layers) this.addLayer(layer);
   }
@@ -32,8 +32,9 @@ export class LayerGroup<TEvents extends object = {}> extends Layer<LayerOptions,
     return this;
   }
 
-  eachLayer(callback: (layer: Layer) => void, context?: unknown): this {
-    for (const layer of [...this.groupLayers]) callback.call(context, layer);
+  /** Visit a snapshot of child layers. Prefer `for (const layer of group.getLayers())` in new code. */
+  eachLayer(callback: (layer: Layer) => void): this {
+    for (const layer of [...this.groupLayers]) callback(layer);
     return this;
   }
 

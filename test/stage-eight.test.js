@@ -16,7 +16,6 @@ import {
   createGeometryWorkerPool,
   decodeMVT,
   defineOrihonElement,
-  geometryWorkerPool,
   objectManager,
   offlineTileCache,
   performanceInspector,
@@ -403,7 +402,7 @@ test("GeometryWorkerPool prepares typed point batches with fallback", async () =
   assert.equal(batch.skipped, 1);
   assert.ok(batch.points instanceof Float32Array);
 
-  const pool = geometryWorkerPool({ useWorker: false });
+  const pool = createGeometryWorkerPool({ useWorker: false });
   const progress = [];
   const prepared = await pool.preparePoints([{ lat: 5, lng: 6 }, { lat: 7, lng: 8 }, { lat: 9, lng: 10 }], {
     chunkSize: 2,
@@ -418,16 +417,11 @@ test("GeometryWorkerPool prepares typed point batches with fallback", async () =
 test("geometry worker pool factories return caller-owned instances", () => {
   const first = createGeometryWorkerPool({ useWorker: false });
   const second = createGeometryWorkerPool({ useWorker: false });
-  const deprecatedFirst = geometryWorkerPool({ useWorker: false });
-  const deprecatedSecond = geometryWorkerPool({ useWorker: false });
 
   assert.notEqual(first, second);
-  assert.notEqual(deprecatedFirst, deprecatedSecond);
 
   first.destroy();
   second.destroy();
-  deprecatedFirst.destroy();
-  deprecatedSecond.destroy();
 });
 
 test("destroying an owned geometry pool does not affect the library shared pool", async () => {
@@ -694,7 +688,7 @@ test("GeometryWorkerPool.clusterLayout matches sync buildClusterLayout", async (
     clusterize: true,
     clusterMaxZoom: 18
   };
-  const pool = geometryWorkerPool({ useWorker: false });
+  const pool = createGeometryWorkerPool({ useWorker: false });
   const result = await pool.clusterLayout(request);
   assert.equal(result.clusters.length, 1);
   assert.equal(result.singles.length, 1);
@@ -711,7 +705,7 @@ test("GeometryWorkerPool.greedyClusterLayout preserves caller ids", async () => 
     clusterize: true,
     clusterMaxZoom: 18
   };
-  const pool = geometryWorkerPool({ useWorker: false });
+  const pool = createGeometryWorkerPool({ useWorker: false });
   const result = await pool.greedyClusterLayout(request);
   assert.equal(result.clusters.length, 1);
   assert.deepEqual(new Set(result.clusters[0].ids), new Set(["near-a", "near-b"]));
@@ -736,7 +730,7 @@ test("GeometryWorkerPool.clusterIndex matches sync buildClusterIndex", async () 
     clusterMaxZoom: 18
   };
   const sync = buildClusterIndex(request);
-  const pool = geometryWorkerPool({ useWorker: false });
+  const pool = createGeometryWorkerPool({ useWorker: false });
   const viaPool = await pool.clusterIndex(request);
   assert.equal(viaPool.leafCount, sync.leafCount);
   assert.equal(viaPool.nodeCount, sync.nodeCount);

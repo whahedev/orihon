@@ -494,13 +494,6 @@
       "url": "./functions/fromGeoJSONPosition/"
     },
     {
-      "name": "geometryWorkerPool",
-      "group": "Производительность и инфраструктура",
-      "entry": "orihon",
-      "summary": "Устаревший alias createGeometryWorkerPool; создаёт отдельный пул, принадлежащий вызывающему.",
-      "url": "./functions/geometryWorkerPool/"
-    },
-    {
       "name": "offlineTileCache",
       "group": "Производительность и инфраструктура",
       "entry": "orihon",

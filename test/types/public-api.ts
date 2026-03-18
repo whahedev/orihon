@@ -1,8 +1,14 @@
 import {
   GeometryWorkerError,
   createGeometryWorkerPool,
-  type PrefetchTileLayerOptions
+  createMapAdapter,
+  tileLayer,
+  type IdentifiedGeoJSONFeature,
+  type MapUpdateOptions,
+  type PrefetchTileLayerOptions,
+  type RasterTileLayer
 } from "../../src/index.js";
+import { featureSource } from "../../src/feature-source.js";
 import { DrawHandler, drawControl } from "../../src/draw/index.js";
 const draw = new DrawHandler();
 draw.remove().destroy();
@@ -26,6 +32,32 @@ ownedPool.destroy();
 
 const workerError: Error = new GeometryWorkerError("worker failed", { cause: new Error("root cause") });
 void workerError;
+
+const raster: RasterTileLayer = tileLayer("https://example.test/{z}/{x}/{y}.png", { renderer: "dom" });
+raster.setUrl("https://example.test/b/{z}/{x}/{y}.png", { redraw: false });
+void raster.rendererKind;
+
+const adapter = createMapAdapter("map", { center: { lat: 1, lng: 2 }, zoom: 3 });
+const mapUpdate: MapUpdateOptions = { zoom: 4, behaviors: { drag: false } };
+adapter.update(mapUpdate);
+// @ts-expect-error Adapter update only accepts center/zoom/behaviors.
+adapter.update({ locale: "ru" });
+adapter.destroy();
+
+const identified: IdentifiedGeoJSONFeature = {
+  type: "Feature",
+  id: "truck-1",
+  geometry: { type: "Point", coordinates: [37.62, 55.75] },
+  properties: {}
+};
+featureSource(identified);
+const anonymousFeature = {
+  type: "Feature" as const,
+  geometry: { type: "Point" as const, coordinates: [37.62, 55.75] },
+  properties: {}
+};
+// @ts-expect-error FeatureSource requires IdentifiedGeoJSONFeature with id.
+featureSource(anonymousFeature);
 
 const boundsPrefetch: PrefetchTileLayerOptions = {
   bounds: [{ lat: 55.7, lng: 37.5 }, { lat: 55.8, lng: 37.7 }],
@@ -69,6 +101,8 @@ marker(managedPoint.coordinates);
 import { circle, circleMarker, objectManager, type CircleRadius, type RouteResult, type WebGLSymbolInstance } from "../../src/index.js";
 const radius: CircleRadius = { radiusMapUnits: 10 };
 circle(namedPosition, radius).setRadius({ radiusMeters: 100 });
+circle(namedPosition, { radiusMeters: 50 }).setRadiusMeters(75).getRadiusMeters();
+circle(namedPosition, { radiusMapUnits: 4 }).setRadiusMapUnits(6).getRadiusMapUnits();
 circleMarker(namedPosition, { radiusPixels: 12 }).setRadiusPixels(10);
 objectManager({ clusterRadiusPixels: 50 }).setClusterRadiusPixels(60);
 const camera = createMap("map", { zoomAnimationDurationMs: 250 });
@@ -131,7 +165,7 @@ localManager.isDestroyed = false;
 void destroyed;
 
 import { icon, type Icon, type DivIcon, type MarkerOptions, type ObjectManager as LocalManager, type RemoteObjectManager, type MarkerCollection, type UnifiedObjectManagerOptions } from "../../src/index.js";
-import { createMap as createEasyMap, type EasyMarkerLayerOptions } from "../../src/easy-entry.js";
+import { createMap as createEasyMap, type EasyMarkerOptions } from "../../src/easy-entry.js";
 import type { MarkerProps } from "../../src/react/layers.js";
 const imageIcon: Icon = icon({ iconUrl: "pin.png" });
 const textIcon: DivIcon = icon({ content: "" });
@@ -143,9 +177,13 @@ marker(namedPosition, mixedMarker);
 // @ts-expect-error Built-in appearance cannot be hidden behind an icon.
 const mixedAppearance: MarkerOptions = { icon: imageIcon, color: "red" };
 // @ts-expect-error Icon owns its anchor.
-marker(namedPosition, { icon: imageIcon, anchor: [1, 2] });
+  marker(namedPosition, { icon: imageIcon, anchor: [1, 2] });
 // @ts-expect-error Null is not a visual selector; use setIcon(null) to reset a live marker.
 marker(namedPosition, { icon: null });
+const liveMarker = marker(namedPosition);
+// @ts-expect-error Options are a read-only snapshot; mutate through setters.
+liveMarker.options.opacity = 0.5;
+liveMarker.setOpacity(0.5);
 const legacyHtml = { html: "old", title: "title" };
 // @ts-expect-error Legacy html is forbidden on variables too.
 marker(namedPosition, legacyHtml);
@@ -158,13 +196,13 @@ icon(mixedIcon);
 icon({ content: "text", shadowUrl: "shadow.png" });
 // @ts-expect-error React preserves the full mutually exclusive union.
 const mixedReactMarker: MarkerProps = { position: namedPosition, ...mixedMarker };
-// @ts-expect-error Easy's position-less options must not collapse the union through Omit.
-const mixedEasyMarker: EasyMarkerLayerOptions = mixedMarker;
+// @ts-expect-error Easy keeps exclusivity and nests built-in visuals under appearance.
+const mixedEasyMarker: EasyMarkerOptions = { position: namedPosition, ...mixedMarker };
 const easy = createEasyMap("map");
-// @ts-expect-error Easy positional overload keeps visual exclusivity.
-easy.addMarker(namedPosition, mixedMarker);
-// @ts-expect-error Easy declarative overload keeps visual exclusivity.
-easy.add({ type: "marker", position: namedPosition, ...mixedMarker });
+// @ts-expect-error Easy rejects flat color beside icon.
+easy.addMarker({ position: namedPosition, icon: imageIcon, color: "red" });
+// @ts-expect-error Easy object form keeps visual exclusivity.
+easy.addMarker({ position: namedPosition, ...mixedMarker });
 const localResult: LocalManager = objectManager();
 const remoteResult: RemoteObjectManager = objectManager({ loader: () => [] });
 const pointResult: MarkerCollection = objectManager({ points: [namedPosition] });

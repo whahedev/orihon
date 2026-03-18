@@ -4,6 +4,7 @@ import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } fr
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions } from "../overlays/div-overlay.js";
 import { densifyLatLngs, normalizeDashArray, type PathOptions } from "./vector.js";
+import { rejectStyleAliases } from "../style-contract.js";
 
 export interface CanvasPathBatchOptions extends LayerOptions, PathOptions {
   className?: string;
@@ -54,6 +55,7 @@ export class CanvasPathBatch extends Layer<CanvasPathBatchOptions, CanvasPathBat
   private _interactionUnsub: (() => void) | null = null;
 
   constructor(options: CanvasPathBatchOptions = {}) {
+    rejectStyleAliases(options, "line");
     super({
       pane: "overlay",
       className: "oh-canvas-path-batch",
@@ -85,6 +87,7 @@ export class CanvasPathBatch extends Layer<CanvasPathBatchOptions, CanvasPathBat
    * `closed` true draws a filled polygon (evenodd).
    */
   addPath(rings: LatLngLike[][], closed: boolean, style: PathOptions = {}, feature?: unknown): this {
+    rejectStyleAliases(style, "line");
     const prepared: PathRing[] = [];
     const geodesicPrepared: PathRing[] = [];
     let minLat = Number.POSITIVE_INFINITY;
@@ -161,7 +164,7 @@ export class CanvasPathBatch extends Layer<CanvasPathBatchOptions, CanvasPathBat
   }
 
   setInteractive(value: boolean): this {
-    this.options.interactive = Boolean(value);
+    this.writableOptions.interactive = Boolean(value);
     this.#syncInteraction();
     return this;
   }

@@ -22,13 +22,14 @@ test("public API exports stage one additions", () => {
 test("geometry worker ownership is explicit in the public API", () => {
   assert.equal(typeof Orihon.createGeometryWorkerPool, "function");
   assert.equal(typeof Orihon.GeometryWorkerError, "function");
+  assert.equal("geometryWorkerPool" in Orihon, false);
   assert.equal("getSharedGeometryWorkerPool" in Orihon, false);
 });
 
 test("feature source is isolated in its optional entry", () => {
   assert.equal(typeof Source.FeatureSource, "function");
   assert.equal(typeof Source.featureSource, "function");
-  assert.equal(Source.createFeatureSource, Source.featureSource);
+  assert.equal("createFeatureSource" in Source, false);
   assert.equal("featureSource" in Standard, false);
   assert.equal("featureSource" in Orihon, false);
 });

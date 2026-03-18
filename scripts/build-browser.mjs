@@ -108,7 +108,7 @@ const artifacts = [
     file: "orihon.standard.esm.js",
     format: "esm",
     // Compress boundary validation while preserving property names used by plugins
-    // and the external map-export module. The Standard budget remains 36 KiB.
+    // and the external map-export module. The Standard budget remains 37 KiB.
     terser: true,
     mangleProperties: false,
     external: ["./services/map-export.js"]

@@ -60,7 +60,7 @@ export abstract class MediaOverlay<
   }
 
   override bindPopup(content: OverlayContent, options?: PopupOptions): this {
-    this.options.interactive = true;
+    this.writableOptions.interactive = true;
     this.syncInteractive();
     return super.bindPopup(content, options);
   }
@@ -76,14 +76,14 @@ export abstract class MediaOverlay<
   }
 
   setOpacity(opacity: number): this {
-    this.options.opacity = Math.max(0, Math.min(1, Number(opacity)));
+    this.writableOptions.opacity = Math.max(0, Math.min(1, Number(opacity)));
     const element = this.mediaElement();
     if (element) element.style.opacity = String(this.options.opacity);
     return this;
   }
 
   setZIndex(zIndex: number): this {
-    this.options.zIndex = Number(zIndex);
+    this.writableOptions.zIndex = Number(zIndex);
     const element = this.mediaElement();
     if (element) element.style.zIndex = String(this.options.zIndex);
     return this;

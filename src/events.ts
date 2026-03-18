@@ -1,16 +1,18 @@
-interface EventMetadata<T extends object, TType extends string, TTarget> {
+interface EventMetadata<TType extends string, TTarget> {
   type: TType;
   target: TTarget;
   sourceTarget: Evented<any>;
   propagatedFrom?: Evented<any>;
   layer?: Evented<any>;
-  detail: T & Record<string, unknown>;
-  [key: string]: unknown;
 }
 
-/** Payload fields are available both on the event and on event.detail. */
+/** Flat event object: payload fields live on the event itself (e.g. `event.latlng`). */
 export type OrihonEvent<T extends object = Record<string, unknown>, TType extends string = string, TTarget = Evented<any>> =
-  T extends unknown ? Omit<T, "type" | "target" | "sourceTarget" | "detail" | "propagatedFrom"> & EventMetadata<T, TType, TTarget> : never;
+  T extends unknown
+    ? Omit<T, "type" | "target" | "sourceTarget" | "detail"> &
+      EventMetadata<TType, TTarget> &
+      Record<string, unknown>
+    : never;
 
 /** Known literal names infer their payload; dynamic/custom names retain unknown fields. */
 export type EventFor<TEvents extends object, TName extends string, TTarget = Evented<any>> =
@@ -70,25 +72,27 @@ export class Evented<TEvents extends object = {}> {
     return this;
   }
 
-  emit<T extends Record<string, unknown> = Record<string, unknown>>(type: string, detail = {} as T, propagate = true): this {
-    const sourceTarget = detail.sourceTarget instanceof Evented ? detail.sourceTarget : this;
+  emit<T extends Record<string, unknown> = Record<string, unknown>>(type: string, payload = {} as T, propagate = true): this {
+    const sourceTarget = payload.sourceTarget instanceof Evented ? payload.sourceTarget : this;
     const event = {
-      ...detail,
+      ...payload,
       type,
       target: this,
-      sourceTarget,
-      detail
-    } as unknown as OrihonEvent<T>;
+      sourceTarget
+    } as unknown as OrihonEvent<T> & { detail?: unknown };
+    // Drop any accidental `detail` key — payloads are flat only.
+    delete event.detail;
     const list = this.#events.get(type);
     if (list) for (const handler of [...list]) handler(event);
 
     if (propagate) {
+      const { detail: _ignored, ...rest } = payload as T & { detail?: unknown };
       for (const parent of this.#eventParents) {
         parent.emit(type, {
-          ...detail,
+          ...rest,
           sourceTarget,
           propagatedFrom: this,
-          layer: detail.layer instanceof Evented ? detail.layer : this
+          layer: payload.layer instanceof Evented ? payload.layer : this
         }, true);
       }
     }

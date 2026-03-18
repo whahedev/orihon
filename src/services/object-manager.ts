@@ -5,7 +5,7 @@ import { rafThrottle } from "../dom.js";
 import { ClusterCanvasLayer, clusterCanvasLayer } from "../layers/cluster-canvas-layer.js";
 import { DivIcon, type MarkerIcon } from "../layers/icon.js";
 import { Marker, validateMarkerOptions, type MarkerOptions } from "../layers/marker.js";
-import type { GeoJSONFeature } from "../layers/geojson.js";
+import type { GeoJSONFeature } from "../geojson-types.js";
 import { Polyline, polyline } from "../layers/vector.js";
 import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js";
 import { LatLng, LatLngBounds, Point, clampLat, latLng, bounds, wrapLng, type LatLngBoundsLike, type LatLngLike, type PointLike } from "../geo.js";
@@ -30,6 +30,7 @@ import {
 import { GeometryWorkerPool, getSharedGeometryWorkerPool } from "./geometry-worker.js";
 import { SpatialGridIndex, type SpatialRecord } from "./spatial-grid-index.js";
 import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
+import { layerOptions } from "../layer.js";
 import { parseCssColor } from "../webgl-utils.js";
 import {
   DEFAULT_MAX_VERTICES_PER_GEOMETRY,
@@ -44,7 +45,7 @@ import {
 } from "./object-geometry.js";
 import type { LabelCandidate } from "./object-label-layout.js";
 import { ObjectSceneController } from "./object-scene.js";
-import { normalizeLabel, styleTint } from "./object-style-helpers.js";
+import { normalizeLabel, styleTint, validateObjectStyle } from "./object-style-helpers.js";
 import type { ObjectVisualizationByZoom, ObjectVisualizationMode } from "./object-scene.js";
 import type { HeatBackend, HeatMode, HeatEvaluation } from "./heat.js";
 import type { ManagedIconOptions, ManagedIconSource } from "./object-icon-atlas.js";
@@ -703,6 +704,19 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     }
     if (change.type === "remove") {
       this.removeObjects([...change.ids]);
+      return;
+    }
+    if (change.type === "batch") {
+      this.beginBulk();
+      try {
+        for (const delta of change.changes) {
+          if (delta.type === "add") this.add(delta.features.map((feature) => this.#sourceObject(feature)));
+          else if (delta.type === "update") this.update(delta.features.map((feature) => this.#sourceObject(feature)));
+          else this.removeObjects([...delta.ids]);
+        }
+      } finally {
+        this.endBulk();
+      }
       return;
     }
     const features = this.options.source?.getSnapshot().features ?? [];
@@ -1810,8 +1824,8 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
   }
 
   /**
-   * Paint clusters for the current (or given) zoom quickly, then build the zoom hierarchy
-   * in the background (worker when enabled). Zoom changes use the index once it is ready.
+   * Paint clusters for the current (or given) zoom quickly, then finish the zoom hierarchy
+   * before resolving (worker when enabled). First paint still happens before the await.
    */
   async prepareLayout(zoom?: number): Promise<this> {
     this.assertAlive();
@@ -1830,7 +1844,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     const generation = ++this._layoutGeneration;
     const request = this.#collectLayoutRequest(zoomBucket);
 
-    // Fast O(n) first paint — do not block on the full hierarchy.
+    // Fast O(n) first paint — do not block the caller's microtask on the full hierarchy.
     const greedy = buildGreedyClusterLayout(request);
     this._greedyCache.set(zoomBucket, greedy);
     this.#applyLayoutResult(zoomBucket, greedy);
@@ -1857,7 +1871,8 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       return this;
     }
 
-    // Defer hierarchy so Worker blob compile / heavy sync build never blocks first paint.
+    // Defer hierarchy so Worker blob compile / heavy sync build never blocks first paint,
+    // then wait so `await prepareLayout()` means the hierarchy is settled.
     const task = new Promise<void>((resolve, reject) => {
       deferClusterHierarchy(() => {
         this.#buildHierarchy(request, generation, zoomBucket).then(resolve, reject);
@@ -1870,6 +1885,8 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     void settled.catch((error) => {
       if (!this.#destroyed && generation === this._layoutGeneration) this.emit("error", { error, phase: "layout" });
     });
+    await settled;
+    this.assertAlive();
     return this;
   }
 
@@ -2315,8 +2332,9 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
           current.setIcon(this.#clusterIcon(count, spec.ids));
           const title = this.options.clusterTitle(count, spec.ids);
           const aria = this.options.clusterAriaLabel(count, spec.ids);
-          current.options.title = title;
-          current.options.ariaLabel = aria;
+          const markerOpts = layerOptions(current);
+          markerOpts.title = title;
+          markerOpts.ariaLabel = aria;
           if (current.el) {
             current.el.title = title;
             current.el.setAttribute("aria-label", aria);
@@ -2341,9 +2359,10 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       this._clusterMarkerKey.set(pooled, key);
       pooled.setLatLng(spec.position);
       pooled.setIcon(icon);
-      pooled.options.title = title;
-      pooled.options.ariaLabel = aria;
-      pooled.options.className = this.options.clusterClassName;
+      const pooledOpts = layerOptions(pooled);
+      pooledOpts.title = title;
+      pooledOpts.ariaLabel = aria;
+      pooledOpts.className = this.options.clusterClassName;
       if (pooled.el) {
         pooled.el.title = title;
         pooled.el.setAttribute("aria-label", aria);
@@ -2564,7 +2583,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       this._webglLayer.on("hover", (event) => this.#webglHover(event));
       this._webglLayer.addTo(this.map as Orihon);
     } else {
-      this._webglLayer.options.maxDpr = maxDpr;
+      layerOptions(this._webglLayer).maxDpr = maxDpr;
       this._webglLayer.setInteractive(interactive);
     }
     const packedLat = i === count ? latlng : latlng.subarray(0, i * 2);
@@ -2878,7 +2897,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       this._webglLayer.on("hover", (event) => this.#webglHover(event));
       this._webglLayer.addTo(this.map as Orihon);
     } else {
-      this._webglLayer.options.maxDpr = maxDpr;
+      layerOptions(this._webglLayer).maxDpr = maxDpr;
       this._webglLayer.setInteractive(interactive);
     }
     this._webglLayer.setData(points, { colors, sizes });
@@ -3135,8 +3154,9 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       };
       const custom = this._styleResolver(object, state, context);
       if (custom) {
-        const customFill = custom.fill ?? custom.color;
-        const customFillOpacity = custom.fillOpacity ?? custom.opacity;
+        validateObjectStyle(custom);
+        const customFill = custom.fill;
+        const customFillOpacity = custom.fillOpacity;
         if (customFill !== undefined) color = customFill;
         if (customFillOpacity !== undefined) opacity = customFillOpacity;
         if (custom.size !== undefined) size = custom.size;
@@ -3305,11 +3325,11 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       visualization: this.scene.getActiveVisualization()
     };
 
-    const legacy = legacyObjectStyle(object, state, context, this.options.styleByCategory);
+    const defaults = defaultObjectStyle(object, state, context, this.options.styleByCategory);
     let merged: ObjectStyle = {
-      color: legacy.color ?? DEFAULT_OBJECT_COLOR,
-      opacity: legacy.opacity ?? DEFAULT_OBJECT_OPACITY,
-      size: legacy.size ?? DEFAULT_OBJECT_SIZE,
+      fill: defaults.fill ?? DEFAULT_OBJECT_COLOR,
+      fillOpacity: defaults.fillOpacity ?? DEFAULT_OBJECT_OPACITY,
+      size: defaults.size ?? DEFAULT_OBJECT_SIZE,
       icon: null,
       rotation: 0,
       visible: true,
@@ -3323,10 +3343,9 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     if (this._styleResolver) {
       const custom = this._styleResolver(object, state, context);
       if (custom) {
+        validateObjectStyle(custom);
         if (custom.fill !== undefined) merged.fill = custom.fill;
-        else if (custom.color !== undefined) merged.color = custom.color;
         if (custom.fillOpacity !== undefined) merged.fillOpacity = custom.fillOpacity;
-        else if (custom.opacity !== undefined) merged.opacity = custom.opacity;
         if (custom.size !== undefined) merged.size = custom.size;
         if (custom.icon !== undefined) merged.icon = custom.icon;
         if (custom.iconTint !== undefined) merged.iconTint = custom.iconTint;
@@ -3522,8 +3541,8 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
             rotation: resolved.rotation,
             opacity: resolved.opacity,
             tint: styleTint({
-              color: resolved.color,
-              opacity: resolved.opacity,
+              fill: resolved.color,
+              fillOpacity: resolved.opacity,
               iconTint: resolved.iconTint ?? undefined
             }),
             prevLat: motion?.fromLat ?? geometry.lat,
@@ -3616,9 +3635,9 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
           positions,
           distances: geometry.distances,
           style: {
-            color: resolved.line?.stroke ?? resolved.line?.color ?? resolved.color,
-            opacity: resolved.line?.strokeOpacity ?? resolved.line?.opacity ?? resolved.opacity,
-            width: resolved.line?.strokeWidth ?? resolved.line?.width ?? 2,
+            stroke: resolved.line?.stroke ?? resolved.color,
+            strokeOpacity: resolved.line?.strokeOpacity ?? resolved.opacity,
+            strokeWidth: resolved.line?.strokeWidth ?? 2,
             dashArray: resolved.line?.dashArray,
             dashOffset: resolved.line?.dashOffset,
             gradient: resolved.line?.gradient
@@ -3653,9 +3672,9 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       paths.push({
         positions: trail.points.map((point) => ({ lat: point.lat, lng: point.lng })),
         style: {
-          color: trail.style.color,
-          width: trail.style.width,
-          opacity: trail.style.opacity
+          stroke: trail.style.stroke,
+          strokeWidth: trail.style.strokeWidth,
+          strokeOpacity: trail.style.strokeOpacity
         }
       });
     }
@@ -4096,7 +4115,7 @@ function assertObjectStateValue(key: string, value: unknown): asserts value is O
   throw new TypeError(`ObjectManager: state "${key}" must be a string, number, boolean, or null`);
 }
 
-function legacyObjectStyle(
+function defaultObjectStyle(
   object: ManagedObject,
   state: Readonly<ObjectState>,
   context: Readonly<ObjectStyleContext>,
@@ -4104,36 +4123,36 @@ function legacyObjectStyle(
 ): ObjectStyle {
   if (!styleByCategory) {
     return {
-      color: DEFAULT_OBJECT_COLOR,
-      opacity: DEFAULT_OBJECT_OPACITY,
+      fill: DEFAULT_OBJECT_COLOR,
+      fillOpacity: DEFAULT_OBJECT_OPACITY,
       size: DEFAULT_OBJECT_SIZE
     };
   }
   if (context.selected || state.selected) {
-    return { color: PALETTE_HEX.selected, opacity: OBJECT_MANAGER_PALETTE.selected[3], size: DEFAULT_OBJECT_SIZE };
+    return { fill: PALETTE_HEX.selected, fillOpacity: OBJECT_MANAGER_PALETTE.selected[3], size: DEFAULT_OBJECT_SIZE };
   }
   if (context.hovered || state.hovered) {
-    return { color: PALETTE_HEX.hover, opacity: OBJECT_MANAGER_PALETTE.hover[3], size: DEFAULT_OBJECT_SIZE };
+    return { fill: PALETTE_HEX.hover, fillOpacity: OBJECT_MANAGER_PALETTE.hover[3], size: DEFAULT_OBJECT_SIZE };
   }
   if (object.properties?.alert) {
-    return { color: PALETTE_HEX.alert, opacity: OBJECT_MANAGER_PALETTE.alert[3], size: DEFAULT_OBJECT_SIZE };
+    return { fill: PALETTE_HEX.alert, fillOpacity: OBJECT_MANAGER_PALETTE.alert[3], size: DEFAULT_OBJECT_SIZE };
   }
   const category = String(object.properties?.category || "alpha");
   if (category === "beta") {
-    return { color: PALETTE_HEX.beta, opacity: OBJECT_MANAGER_PALETTE.beta[3], size: DEFAULT_OBJECT_SIZE };
+    return { fill: PALETTE_HEX.beta, fillOpacity: OBJECT_MANAGER_PALETTE.beta[3], size: DEFAULT_OBJECT_SIZE };
   }
   if (category === "gamma") {
-    return { color: PALETTE_HEX.gamma, opacity: OBJECT_MANAGER_PALETTE.gamma[3], size: DEFAULT_OBJECT_SIZE };
+    return { fill: PALETTE_HEX.gamma, fillOpacity: OBJECT_MANAGER_PALETTE.gamma[3], size: DEFAULT_OBJECT_SIZE };
   }
-  return { color: PALETTE_HEX.alpha, opacity: OBJECT_MANAGER_PALETTE.alpha[3], size: DEFAULT_OBJECT_SIZE };
+  return { fill: PALETTE_HEX.alpha, fillOpacity: OBJECT_MANAGER_PALETTE.alpha[3], size: DEFAULT_OBJECT_SIZE };
 }
 
 function normalizeResolvedStyle(style: ObjectStyle): ResolvedObjectStyle {
   const fallbackRgb = parseCssColor(DEFAULT_OBJECT_COLOR, { r: 15, g: 118, b: 110 });
-  const requestedFill = style.fill ?? style.color;
+  const requestedFill = style.fill;
   const color = typeof requestedFill === "string" && requestedFill.trim() ? requestedFill : DEFAULT_OBJECT_COLOR;
   const rgb = parseCssColor(color, fallbackRgb);
-  let opacity = Number(style.fillOpacity ?? style.opacity);
+  let opacity = Number(style.fillOpacity);
   if (!Number.isFinite(opacity)) opacity = DEFAULT_OBJECT_OPACITY;
   opacity = Math.max(0, Math.min(1, opacity));
   let size = Number(style.size);

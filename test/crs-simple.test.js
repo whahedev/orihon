@@ -34,7 +34,7 @@ test("Simple maps use Euclidean units and viewport-local projection", () => {
   assert.equal(map.distance({ lat: 0, lng: 0 }, { lat: 3, lng: 4 }), 5);
   map.fitWorld({ padding: 0 });
   assert.deepEqual(map.getCenter().toArray(), [128, 128]);
-  map.remove();
+  map.destroy();
 });
 
 test("CRS compatibility errors are typed", () => {

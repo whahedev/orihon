@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+- **Breaking — flat events:** `emit()` no longer mirrors the payload under
+  `event.detail`. Use `event.latlng` / `event.zoom` / … only.
+
+- **Breaking — Easy object-first:** Easy `addMarker` / `addPolyline` / `addPolygon` /
+  `addTileLayer` / `addGeoJSON` each take one options object. Positional forms are
+  removed. Markers use nested `appearance`; polylines use `{ points, style }`;
+  polygons use `{ rings, style }`; tiles use `{ url }`; GeoJSON uses `{ data }`.
+
+- **Breaking — Layer `options`:** public `layer.options` is a `Readonly` snapshot.
+  Assigning fields (e.g. `marker.options.opacity = 0.5`) no longer type-checks and
+  never updated rendering. Use setters (`setOpacity`, `setStyle`, `setIcon`, …).
+
+- **Breaking — layer iteration:** `eachLayer(callback)` no longer takes a
+  `thisArg`/`context`. Prefer `for (const layer of map.layers)`. `map.layers` is
+  now a `ReadonlySet` (no `add`/`delete`/`clear`); use `addLayer` / `removeLayer`.
+
+- **FeatureSource performance:** `GeoJSONLayer` applies source `add` / `update` /
+  `remove` / `batch` incrementally (SVG); `batch()` emits coalesced `batch`
+  deltas instead of `reset`; `getSnapshot()` is cached per version; async
+  `batch()` callbacks throw; `update()` is documented as always shallow-merge.
+  GeoJSON domain types live in `geojson-types.ts`. `orihon/source` has a 5 KiB
+  gzip CI budget. Standard gzip ceiling is 37 KiB.
+
+- **Breaking — Easy dialects:** removed Easy `map.add({ type, ... })` and the
+  description types (`EasyAddDescription`, …). Easy is map-centric only
+  (`addMarker`, `addPolyline`, `addPolygon`, `addGeoJSON`, `addTileLayer`).
+  Standard stays layer-centric (`marker(…).addTo(map)`). Inherited `addLayer`
+  remains for deliberate mixing; there is no `map.add(layer)` alias.
+
+- Circle radius accessors now mirror CircleMarker naming: `getRadiusMeters()` /
+  `setRadiusMeters()` and `getRadiusMapUnits()` / `setRadiusMapUnits()`. The
+  `CircleRadius` object API (`getRadius` / `setRadius`) remains for dual-unit
+  switching; reading the inactive unit throws.
+
+- DX quick wins: `MapAdapter.update()` is typed to center/zoom/behaviors; WMS
+  `setParams` and raster `setUrl` accept `{ redraw }`; `IdentifiedGeoJSONFeature`
+  tightens FeatureSource; `tileLayer()` returns `RasterTileLayer` with
+  `rendererKind`; `prepareLayout()` awaits hierarchy settle; developer-guide
+  examples for `createMapAdapter` / `createGeometryWorkerPool` match the live API.
+
 - Event contracts now cover SVG paths, raster/vector tiles, traffic, text, heat, WebGL points/symbols and overlays, including popup/tooltip notifications on maps. Declarations preserve renderer differences: optional DOM tiles, nested vector coordinates, plain coordinate objects, nullable hover and absent packed-point data. Added compile-time rejection tests and DOM/GPU/heat payload regressions without changing runtime dispatch. See [layer event migration](docs/MIGRATION-NEXT-MAJOR.md#layer-and-overlay-event-payloads).
 
 - **Breaking — event subscriptions:** `on` / `once` / `off` infer payloads and concrete receiver targets from literal names, with exported event maps for map, Marker, layer attachment, Draw and main services. React map callbacks share the contract; SuggestWidget retains its item type. Dynamic/custom names remain `unknown`. Old explicit payload type arguments must migrate to event maps. Runtime dispatch and permissive low-level `emit` remain unchanged. See [migration](docs/MIGRATION-NEXT-MAJOR.md#typed-event-subscriptions).

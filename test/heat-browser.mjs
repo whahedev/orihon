@@ -142,7 +142,7 @@ try {
       rebuild: rebuilt?.target === layer && typeof rebuilt?.stats?.rings === "number"
     };
     layer.remove();
-    map.remove();
+    map.destroy();
     host.remove();
     return { worker: stats.worker, backend: stats.backend, rings: stats.rings, frameDriven, events };
   });

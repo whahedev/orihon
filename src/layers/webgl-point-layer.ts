@@ -628,7 +628,7 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions, WebGL
   setInteractive(enabled: boolean): this {
     const next = Boolean(enabled);
     const was = this.options.interactive;
-    this.options.interactive = next;
+    this.writableOptions.interactive = next;
     if (this.canvas) this.canvas.style.pointerEvents = next ? "auto" : "none";
     if (next && !was) this.#rebuildPickIndex();
     else if (!next && was) this._pickIndex.clear();
@@ -637,8 +637,8 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions, WebGL
   }
 
   setViewTransform(options: { rotation?: number; pitch?: number }): this {
-    if (typeof options.rotation === "number") this.options.rotation = options.rotation;
-    if (typeof options.pitch === "number") this.options.pitch = Math.max(0, Math.min(60, options.pitch));
+    if (typeof options.rotation === "number") this.writableOptions.rotation = options.rotation;
+    if (typeof options.pitch === "number") this.writableOptions.pitch = Math.max(0, Math.min(60, options.pitch));
     this.render();
     return this;
   }

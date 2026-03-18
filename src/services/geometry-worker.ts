@@ -604,11 +604,6 @@ export function getSharedGeometryWorkerPool(): GeometryWorkerPool {
   return sharedGeometryWorkerPool;
 }
 
-/** @deprecated Use createGeometryWorkerPool(). This alias now creates a caller-owned pool. */
-export function geometryWorkerPool(options: GeometryWorkerOptions = {}): GeometryWorkerPool {
-  return createGeometryWorkerPool(options);
-}
-
 export function preparePointBatch(points: Iterable<GeometryPointInput>): PreparedPointBatch {
   const values: number[] = [];
   let skipped = 0;

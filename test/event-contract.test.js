@@ -32,7 +32,7 @@ test("built-in map/marker events match the declared fields and propagation targe
   assert.equal(click.originalEvent, originalEvent);
   assert.ok(click.latlng instanceof LatLng);
   assert.ok(click.containerPoint instanceof Point);
-  assert.equal(click.detail.latlng, click.latlng);
+  assert.equal("detail" in click, false);
   const pin = marker({ lat: 1, lng: 2 });
   const group = featureGroup([pin]);
   let added, removed, pinClick, groupClick;
@@ -49,7 +49,7 @@ test("built-in map/marker events match the declared fields and propagation targe
   assert.ok(groupClick.latlng instanceof LatLng);
   group.remove();
   assert.equal(added.map, map);
-  assert.equal(removed.detail.map, map);
+  assert.equal(removed.map, map);
 });
 
 test("DrawControl listeners receive DrawHandler events and preserve off identity", (t) => {
@@ -65,7 +65,7 @@ test("DrawControl listeners receive DrawHandler events and preserve off identity
   map.container.dispatchEvent(new dom.window.MouseEvent("click", { clientX: 20, clientY: 30, bubbles: true }));
   assert.equal(mode.target, control.handler);
   assert.equal(mode.mode, "point");
-  assert.equal(mode.detail.previous, "off");
+  assert.equal(mode.previous, "off");
   assert.equal(count, 0);
   assert.equal(complete.target, control.handler);
   assert.equal(complete.geojson.type, "Feature");
@@ -90,7 +90,6 @@ test("routing emits route/waypoint payloads and retains arbitrary provider error
   broken.once("error", (event) => { error = event; });
   await assert.rejects(broken.route(loaded.waypoints), (value) => value === failure);
   assert.equal(error.error, failure);
-  assert.equal(error.detail.error, failure);
 });
 
 test("ObjectManager state events expose copied state and changed keys", () => {
@@ -102,7 +101,6 @@ test("ObjectManager state events expose copied state and changed keys", () => {
   assert.equal(change.target, manager);
   assert.equal(change.id, "pin");
   assert.deepEqual(change.changedKeys, ["selected"]);
-  assert.equal(change.state, change.detail.state);
   assert.equal(change.state.selected, true);
   change.state.selected = false;
   assert.equal(manager.getObjectState("pin").selected, true);
@@ -119,7 +117,6 @@ test("SVG path click events carry geographic instances and the original DOM even
   assert.equal(click.target, layer);
   assert.equal(click.originalEvent, original);
   assert.ok(click.latlng instanceof LatLng);
-  assert.equal(click.detail.latlng, click.latlng);
 });
 
 test("popup/tooltip lifecycle events distinguish map notifications and detached close", (t) => {
@@ -190,7 +187,7 @@ test("DOM raster events include tiles and Traffic inherits those fields", (t) =>
     pending.el.dispatchEvent(new dom.window.Event("load"));
     assert.equal(loaded.target, layer);
     assert.equal(loaded.z, 3);
-    assert.equal(loaded.detail.tile, pending.el);
+    assert.equal(loaded.tile, pending.el);
     layer.remove();
   }
 });

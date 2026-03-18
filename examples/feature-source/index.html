@@ -22,7 +22,7 @@
   </main>
   <div id="map"><span class="fallback">Подложка зависит от доступа к openstreetmap.org</span></div>
   <script type="module">
-    import { createFeatureSource } from "/dist/feature-source.js";
+    import { featureSource } from "/dist/feature-source.js";
     import {
       createMap, tileLayer, geoJSON, textLayer, circleMarker, objectManager
     } from "/dist/index.js";
@@ -41,7 +41,7 @@
       courier("courier-4", "Дима", 37.6611, 55.7791, "busy", 31)
     ];
     const clone = (feature) => structuredClone(feature);
-    const source = createFeatureSource(initial.map(clone));
+    const source = featureSource(initial.map(clone));
 
     const map = createMap("map", { center: ({ lat: 55.759, lng: 37.625 }), zoom: 12, controls: true });
     tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {

@@ -5,7 +5,25 @@ import type { Orihon } from "../map.js";
 import {
   isReadonlyFeatureSource
 } from "../source-protocol.js";
-import type { ReadonlyFeatureSource } from "../source-types.js";
+import type {
+  FeatureId,
+  FeatureSourceChange,
+  FeatureSourceDelta,
+  ReadonlyFeatureSource
+} from "../source-types.js";
+import type {
+  GeoJSONFeature,
+  GeoJSONFeatureCollection,
+  GeoJSONGeometry,
+  GeoJSONGeometryCollection,
+  GeoJSONLineStringGeometry,
+  GeoJSONMultiLineStringGeometry,
+  GeoJSONMultiPointGeometry,
+  GeoJSONMultiPolygonGeometry,
+  GeoJSONPointGeometry,
+  GeoJSONPolygonGeometry,
+  GeoJSONPosition
+} from "../geojson-types.js";
 import {
   asyncAbortError,
   isAsyncIterable,
@@ -32,6 +50,21 @@ import {
   type PathOptions
 } from "./vector.js";
 
+export type {
+  GeoJSONFeature,
+  GeoJSONFeatureCollection,
+  GeoJSONGeometry,
+  GeoJSONGeometryCollection,
+  GeoJSONLineStringGeometry,
+  GeoJSONMultiLineStringGeometry,
+  GeoJSONMultiPointGeometry,
+  GeoJSONMultiPolygonGeometry,
+  GeoJSONPointGeometry,
+  GeoJSONPolygonGeometry,
+  GeoJSONPosition,
+  IdentifiedGeoJSONFeature
+} from "../geojson-types.js";
+
 /**
  * Optional GPU path batch for GeoJSON (Advanced tier).
  * Standard keeps SVG/canvas only — register from `orihon` entry, not `orihon/standard`.
@@ -56,66 +89,6 @@ export function registerGeoJSONWebGLBatch(factory: GeoJSONWebGLBatchFactory | nu
 function isPathBatch(layer: Layer): layer is GeoJSONPathBatch {
   const candidate = layer as Layer & Partial<GeoJSONPathBatch>;
   return typeof candidate.addPath === "function" && typeof candidate.clearPaths === "function";
-}
-
-export type GeoJSONPosition = [number, number, ...number[]];
-
-export interface GeoJSONPointGeometry {
-  type: "Point";
-  coordinates: GeoJSONPosition;
-}
-
-export interface GeoJSONMultiPointGeometry {
-  type: "MultiPoint";
-  coordinates: GeoJSONPosition[];
-}
-
-export interface GeoJSONLineStringGeometry {
-  type: "LineString";
-  coordinates: GeoJSONPosition[];
-}
-
-export interface GeoJSONMultiLineStringGeometry {
-  type: "MultiLineString";
-  coordinates: GeoJSONPosition[][];
-}
-
-export interface GeoJSONPolygonGeometry {
-  type: "Polygon";
-  coordinates: GeoJSONPosition[][];
-}
-
-export interface GeoJSONMultiPolygonGeometry {
-  type: "MultiPolygon";
-  coordinates: GeoJSONPosition[][][];
-}
-
-export interface GeoJSONGeometryCollection {
-  type: "GeometryCollection";
-  geometries: GeoJSONGeometry[];
-}
-
-export type GeoJSONGeometry =
-  | GeoJSONPointGeometry
-  | GeoJSONMultiPointGeometry
-  | GeoJSONLineStringGeometry
-  | GeoJSONMultiLineStringGeometry
-  | GeoJSONPolygonGeometry
-  | GeoJSONMultiPolygonGeometry
-  | GeoJSONGeometryCollection;
-
-export interface GeoJSONFeature {
-  type: "Feature";
-  geometry: GeoJSONGeometry | null;
-  properties?: Record<string, unknown> | null;
-  id?: string | number;
-  bbox?: number[];
-}
-
-export interface GeoJSONFeatureCollection {
-  type: "FeatureCollection";
-  features: GeoJSONFeature[];
-  bbox?: number[];
 }
 
 export type GeoJSONData = GeoJSONGeometry | GeoJSONFeature | GeoJSONFeatureCollection | GeoJSONData[];
@@ -357,7 +330,10 @@ export class GeoJSONLayer extends FeatureGroup {
   private _pathBatchFeatureCount = 0;
   private readonly _source: ReadonlyFeatureSource<GeoJSONFeature> | null;
   private _sourceUnsubscribe: (() => void) | null = null;
-  private readonly _sourceChanged = (): void => { this.#syncSource(); };
+  private readonly _layersByFeatureId = new Map<FeatureId, FeatureEntry>();
+  private readonly _sourceChanged = (change: FeatureSourceChange<GeoJSONFeature>): void => {
+    this.#applySourceChange(change);
+  };
 
   constructor(data?: GeoJSONInput | null, options: GeoJSONOptions = {}) {
     super();
@@ -426,7 +402,9 @@ export class GeoJSONLayer extends FeatureGroup {
     const retain = !batch || this.geoJSONOptions.retainFeatures !== false;
     if (retain) {
       (layer as FeatureLayer).feature = feature;
-      this.featureEntries.push({ feature, layer });
+      const entry = { feature, layer };
+      this.featureEntries.push(entry);
+      if (feature.id != null) this._layersByFeatureId.set(feature.id, entry);
     }
     this._featureCount++;
     if (this.geoJSONOptions.popup !== undefined && !isPathBatch(layer)) {
@@ -497,12 +475,20 @@ export class GeoJSONLayer extends FeatureGroup {
     let removed = 0;
     for (let i = this.featureEntries.length - 1; i >= 0; i--) {
       if (this.featureEntries[i].layer !== layer) continue;
+      const entry = this.featureEntries[i];
+      if (entry.feature.id != null) this._layersByFeatureId.delete(entry.feature.id);
       this.featureEntries.splice(i, 1);
       removed++;
     }
     const removedCount = layer === this._pathBatch ? this._pathBatchFeatureCount : removed;
     this._featureCount = Math.max(0, this._featureCount - removedCount);
-    if (layer === this._pathBatch) this._pathBatchFeatureCount = 0;
+    if (layer === this._pathBatch) {
+      this._pathBatchFeatureCount = 0;
+      // Batch shares one layer across many ids — drop the whole index of batch-backed entries.
+      for (const [id, entry] of this._layersByFeatureId) {
+        if (entry.layer === layer) this._layersByFeatureId.delete(id);
+      }
+    }
     this.defaultStyles.delete(layer);
     if (layer === this._pathBatch) this._pathBatch = null;
     return super.removeLayer(layer);
@@ -510,6 +496,7 @@ export class GeoJSONLayer extends FeatureGroup {
 
   override clearLayers(): this {
     this.featureEntries.length = 0;
+    this._layersByFeatureId.clear();
     this._featureCount = 0;
     this._pathBatchFeatureCount = 0;
     this.defaultStyles.clear();
@@ -555,6 +542,39 @@ export class GeoJSONLayer extends FeatureGroup {
         return clone;
       })
     };
+  }
+
+  #applySourceChange(change: FeatureSourceChange<GeoJSONFeature>): void {
+    if (!this._source) return;
+    if (this._pathBatch || change.type === "reset") {
+      this.#syncSource();
+      return;
+    }
+    const deltas = change.type === "batch" ? change.changes : [change];
+    for (const delta of deltas) {
+      this.#applySourceDelta(delta);
+      if (this._pathBatch) {
+        this.#syncSource();
+        return;
+      }
+    }
+  }
+
+  #applySourceDelta(change: FeatureSourceDelta<GeoJSONFeature>): void {
+    if (change.type === "remove") {
+      for (const id of change.ids) {
+        const existing = this._layersByFeatureId.get(id);
+        if (existing) this.removeLayer(existing.layer);
+      }
+      return;
+    }
+    for (const feature of change.features) {
+      if (change.type === "update" && feature.id != null) {
+        const existing = this._layersByFeatureId.get(feature.id);
+        if (existing) this.removeLayer(existing.layer);
+      }
+      this.addData(feature);
+    }
   }
 
   #syncSource(): void {

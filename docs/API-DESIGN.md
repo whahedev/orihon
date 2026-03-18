@@ -2,6 +2,15 @@
 
 These rules describe the conventions used by the public Orihon API. New APIs must follow them; existing deviations should either be migrated or documented explicitly.
 
+## Sentence subjects (API dialects)
+
+Orihon keeps two complementary sentence subjects. Do not add a third grammar for the same operation.
+
+- **Layer API (Standard):** the layer is the subject — `marker(position).addTo(map)`.
+- **Easy API:** the map is the subject — object-first `map.addMarker({ position, appearance })`, `map.addPolyline({ points, style })`, ….
+
+`map.addLayer(layer)` is the container attach method used by `addTo` and by deliberate mixing. Do not invent `map.add(layer)` or a declarative `map.add({ type, … })` DSL alongside Easy `addX` methods.
+
 ## Creation and ownership
 
 - A `create...()` factory returns a new caller-owned instance unless its documentation explicitly says otherwise.
@@ -37,6 +46,7 @@ These rules describe the conventions used by the public Orihon API. New APIs mus
 - Mutation methods return `this` when chaining is already the local convention; computation functions return their computed value.
 - Inputs accepted as multiple structural forms are normalized at the public boundary and represented by a named public type.
 - Public results must not expose mutable internal buffers unless ownership transfer is explicit in the method name or options.
+- Live configuration is exposed as a read-only `options` snapshot. Mutating `layer.options.foo` does not update rendering; use documented setters. Do not add Leaflet-style `callback, context` / `thisArg` parameters. Prefer iterables (`for…of`) or a single-callback visitor; callers use arrows for `this`.
 
 ## Options and extensibility
 

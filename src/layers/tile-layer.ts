@@ -30,6 +30,29 @@ export interface TileCoordinates {
 
 export type TileTemplate = string | ((coordinates: TileCoordinates) => string);
 
+/** Common redraw flag for raster URL/param updates. Prefer `{ redraw }` over polarity-inverted booleans. */
+export type TileRedrawFlag = boolean | { redraw?: boolean };
+
+export function shouldRedrawTiles(flag: TileRedrawFlag | undefined, defaultRedraw = true): boolean {
+  if (flag == null) return defaultRedraw;
+  if (typeof flag === "object") return flag.redraw !== false;
+  return Boolean(flag);
+}
+
+export type RasterTileRendererKind = "dom" | "webgl" | "webgpu" | "none";
+
+/**
+ * Shared public contract for DOM and GPU raster basemaps returned by `tileLayer()`.
+ * Runtime may be `TileLayer` or `GPUTileLayer`; use `rendererKind` to discriminate.
+ */
+export interface RasterTileLayer extends Layer {
+  readonly rendererKind: RasterTileRendererKind;
+  getTileUrl(x: number, y: number, z: number): string;
+  setUrl(template: TileTemplate, redraw?: TileRedrawFlag): this;
+  setOpacity(opacity: number): this;
+  redraw(): this;
+}
+
 export interface TileLayerOptions extends GridLayerOptions {
   minZoom?: number;
   maxZoom?: number;
@@ -126,7 +149,7 @@ export interface TileLayerEventMap {
   load: {};
 }
 
-export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTileOptions, TileLayerEventMap & TEvents> {
+export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTileOptions, TileLayerEventMap & TEvents> implements RasterTileLayer {
   template: TileTemplate;
   tiles = new Map<string, TileRecord>();
   previousTiles = new Map<string, TileRecord>();
@@ -151,6 +174,7 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
   /** Current-zoom tile plane; camera applied once via CSS transform. */
   level: HTMLDivElement | null = null;
   readonly _retina: boolean;
+  readonly rendererKind: RasterTileRendererKind = "dom";
 
   constructor(template: TileTemplate, options: TileLayerOptions = {}) {
     const resolved = {
@@ -232,9 +256,9 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
     return url;
   }
 
-  setUrl(template: TileTemplate, redraw = true): this {
+  setUrl(template: TileTemplate, redraw: TileRedrawFlag = true): this {
     this.template = template;
-    if (redraw) this.redraw();
+    if (shouldRedrawTiles(redraw, true)) this.redraw();
     return this;
   }
 
@@ -664,14 +688,14 @@ export function nativeTileZoom(maxNativeZoom: unknown, maxZoom: number): number 
   return Number.isFinite(native) ? native : maxZoom;
 }
 
-export function tileLayer(template: TileTemplate, options?: TileLayerOptions): TileLayer {
+export function tileLayer(template: TileTemplate, options?: TileLayerOptions): RasterTileLayer {
   const requested = options?.renderer ?? "auto";
   if (requested === "dom") return new TileLayer(template, options);
   const available = requested === "webgpu" ? gpuContextAvailable()
     : requested === "webgl" ? webglContextAvailable()
       : gpuContextAvailable() || webglContextAvailable();
   if (gpuTileFactory && available) {
-    return gpuTileFactory(template, options) as TileLayer;
+    return gpuTileFactory(template, options) as RasterTileLayer;
   }
   return new TileLayer(template, options);
 }
@@ -680,7 +704,7 @@ export function tileLayer(template: TileTemplate, options?: TileLayerOptions): T
  * Optional GPU raster basemap (Advanced tier).
  * Standard/Core keep DOM `<img>` tiles — register from `orihon` entry, not `orihon/core`.
  */
-export type GPUTileFactory = (template: TileTemplate, options?: TileLayerOptions) => Layer;
+export type GPUTileFactory = (template: TileTemplate, options?: TileLayerOptions) => RasterTileLayer;
 
 let gpuTileFactory: GPUTileFactory | null = null;
 

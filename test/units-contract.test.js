@@ -86,6 +86,15 @@ test("circles require one finite explicit unit and return isolated radius values
   assert.equal(shape.getBounds().toBBoxString(), "-5,-5,5,5");
   shape.setRadius({ radiusMapUnits: 0 });
   assert.equal(shape.getBounds().toBBoxString(), "0,0,0,0");
+  assert.equal(shape.getRadiusMapUnits(), 0);
+  assert.throws(() => shape.getRadiusMeters(), /using radiusMapUnits/);
+  shape.setRadiusMapUnits(8);
+  assert.equal(shape.getRadiusMapUnits(), 8);
+  assert.deepEqual(shape.getRadius(), { radiusMapUnits: 8 });
+  shape.setRadiusMeters(100);
+  assert.equal(shape.getRadiusMeters(), 100);
+  assert.throws(() => shape.getRadiusMapUnits(), /using radiusMeters/);
+  assert.deepEqual(shape.getRadius(), { radiusMeters: 100 });
 });
 
 test("circle CRS mismatch leaves neither ghost layers nor partial radius changes", (t) => {
@@ -99,7 +108,9 @@ test("circle CRS mismatch leaves neither ghost layers nor partial radius changes
   shape.setRadius({ radiusMapUnits: 5 }).addTo(map);
   assert.equal(map.hasLayer(shape), true);
   assert.throws(() => shape.setRadius({ radiusMeters: 100 }), /radiusMapUnits/);
+  assert.throws(() => shape.setRadiusMeters(100), /radiusMapUnits/);
   assert.deepEqual(shape.getRadius(), { radiusMapUnits: 5 });
+  assert.equal(shape.getRadiusMapUnits(), 5);
 });
 
 test("geographic maps reject map-unit circles and pixel markers retain zero", (t) => {

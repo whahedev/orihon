@@ -108,7 +108,6 @@ export {
   GeometryWorkerPool,
   GeometryWorkerError,
   createGeometryWorkerPool,
-  geometryWorkerPool,
   preparePointBatch,
   preparePointBatchAsync
 } from "./services/geometry-worker.js";
@@ -151,7 +150,7 @@ export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
 export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
-export type { TileCoordinates, TileTemplate, TileLayerOptions, GPUTileFactory, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
+export type { TileCoordinates, TileTemplate, TileLayerOptions, TileRedrawFlag, RasterTileRendererKind, RasterTileLayer, GPUTileFactory, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
 export type { GPUTileBackend, GPUTileLayerOptions, GPUTileLayerStats, GPUTileLayerEventMap } from "./layers/gpu-tile-layer.js";
 export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-layer.js";
 export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts-tile-layer.js";
@@ -168,6 +167,7 @@ export type {
   GeoJSONAsyncOptions,
   GeoJSONData,
   GeoJSONFeature,
+  IdentifiedGeoJSONFeature,
   GeoJSONFeatureCollection,
   GeoJSONGeometry,
   GeoJSONGeometryCollection,
@@ -294,4 +294,4 @@ export type {
   PrefetchTileLayerOptions
 } from "./services/offline-cache.js";
 export type { PerformanceInspectorOptions, PerformanceSnapshot, PerformanceEventMap } from "./services/performance.js";
-export type { OrihonElementOptions, MapAdapter } from "./services/framework-adapters.js";
+export type { OrihonElementOptions, MapAdapter, MapUpdateOptions } from "./services/framework-adapters.js";

@@ -64,7 +64,7 @@ test("orihon/easy creates a Standard map with an owned basemap", () => {
 
   map.setBasemap(false);
   assert.equal(map.getBasemap(), null);
-  map.remove();
+  map.destroy();
 });
 
 test("orihon/easy accepts any ready Layer as its basemap", () => {
@@ -96,14 +96,15 @@ test("orihon/easy accepts any ready Layer as its basemap", () => {
   map.setBasemap(null);
   assert.equal(custom.map, null);
   assert.equal(map.getBasemap(), null);
-  map.remove();
+  map.destroy();
 });
 
-test("orihon/easy addMarker composes marker, popup and tooltip", () => {
+test("orihon/easy addMarker is object-first with nested appearance", () => {
   const map = createMap(container(), { center: { lat: 55.75, lng: 37.62 }, zoom: 10 });
   const layer = map.addMarker({
     position: { lat: 55.751244, lng: 37.618423 },
     title: "Москва",
+    appearance: { shape: "pin", color: "#2563eb" },
     popup: "Москва",
     tooltip: "Столица"
   });
@@ -111,86 +112,68 @@ test("orihon/easy addMarker composes marker, popup and tooltip", () => {
   assert.ok(layer instanceof Marker);
   assert.equal(layer.map, map);
   assert.deepEqual(layer.getLatLng().toArray(), [55.751244, 37.618423]);
+  assert.equal(layer.options.color, "#2563eb");
   assert.ok(layer.getPopup());
   assert.ok(layer.getTooltip());
 
-  const positional = map.addMarker({ lat: 55.76, lng: 37.63 }, { popup: "Positional overload" });
-  assert.ok(positional instanceof Marker);
-  assert.ok(positional.getPopup());
+  assert.throws(() => map.addMarker({ lat: 55.76, lng: 37.63 }), /position is required/);
 
   const detached = marker({ lat: 55.77, lng: 37.64 });
-  assert.equal(map.add(detached), map);
+  assert.equal(map.addLayer(detached), map);
   assert.equal(map.hasLayer(detached), true);
+  assert.equal(typeof map.add, "undefined");
 
-  map.remove();
+  class WeatherLayer extends Layer {
+    type = "weather";
+  }
+  const weather = new WeatherLayer();
+  assert.equal(weather.addTo(map), weather);
+  assert.equal(map.hasLayer(weather), true);
+
+  map.destroy();
 });
 
-test("orihon/easy map-centric addX methods return regular layers", () => {
+test("orihon/easy map-centric addX methods are object-first", () => {
   const map = createMap(container(), { center: { lat: 52.52, lng: 13.405 }, zoom: 10 });
-  const tiles = map.addTileLayer("https://example.test/{z}/{x}/{y}.png");
-  const line = map.addPolyline([{ lat: 52.50, lng: 13.38 }, { lat: 52.54, lng: 13.43 }], { stroke: "#2563eb" });
-  const area = map.addPolygon([
-    { lat: 52.50, lng: 13.38 }, { lat: 52.50, lng: 13.43 }, { lat: 52.54, lng: 13.43 }, { lat: 52.50, lng: 13.38 }
-  ], { fill: "#2563eb", fillOpacity: 0.2 });
+  const tiles = map.addTileLayer({ url: "https://example.test/{z}/{x}/{y}.png" });
+  const line = map.addPolyline({
+    points: [{ lat: 52.50, lng: 13.38 }, { lat: 52.54, lng: 13.43 }],
+    style: { stroke: "#2563eb" }
+  });
+  const area = map.addPolygon({
+    rings: [
+      { lat: 52.50, lng: 13.38 }, { lat: 52.50, lng: 13.43 }, { lat: 52.54, lng: 13.43 }, { lat: 52.50, lng: 13.38 }
+    ],
+    style: { fill: "#2563eb", fillOpacity: 0.2 }
+  });
   const data = map.addGeoJSON({
-    type: "Feature",
-    properties: { name: "Berlin" },
-    geometry: { type: "Point", coordinates: [13.405, 52.52] }
+    data: {
+      type: "Feature",
+      properties: { name: "Berlin" },
+      geometry: { type: "Point", coordinates: [13.405, 52.52] }
+    }
+  });
+  const withPopup = map.addMarker({
+    position: { lng: 37.6176, lat: 55.7558 },
+    popup: "Москва"
+  });
+  const styled = map.addPolyline({
+    points: [
+      { lng: 37.60, lat: 55.75 },
+      { lng: 37.65, lat: 55.77 }
+    ],
+    style: { strokeWidth: 4, strokeOpacity: 0.8 }
   });
 
   assert.ok(tiles instanceof TileLayer);
   assert.ok(line instanceof Polyline);
   assert.ok(area instanceof Polygon);
   assert.ok(data instanceof GeoJSONLayer);
-  for (const layer of [tiles, line, area, data]) assert.equal(map.hasLayer(layer), true);
+  assert.ok(withPopup instanceof Marker);
+  assert.ok(withPopup.getPopup());
+  assert.equal(styled.options.strokeWidth, 4);
+  assert.equal(styled.options.strokeOpacity, 0.8);
+  for (const layer of [tiles, line, area, data, withPopup, styled]) assert.equal(map.hasLayer(layer), true);
 
-  map.remove();
-});
-
-test("orihon/easy map.add accepts declarative layer descriptions", () => {
-  const map = createMap(container(), { center: { lat: 55.7558, lng: 37.6176 }, zoom: 10 });
-  const point = map.add({
-    type: "marker",
-    position: { lng: 37.6176, lat: 55.7558 },
-    popup: "Москва"
-  });
-  const line = map.add({
-    type: "polyline",
-    coordinates: [
-      { lng: 37.60, lat: 55.75 },
-      { lng: 37.65, lat: 55.77 }
-    ],
-    style: { width: 4, opacity: 0.8 }
-  });
-  const area = map.add({
-    type: "polygon",
-    coordinates: [
-      { lat: 55.74, lng: 37.59 }, { lat: 55.74, lng: 37.66 }, { lat: 55.78, lng: 37.66 }, { lat: 55.74, lng: 37.59 }
-    ],
-    style: { fill: "#2563eb", fillOpacity: 0.2 }
-  });
-  const data = map.add({
-    type: "geojson",
-    data: {
-      type: "Feature",
-      properties: {},
-      geometry: { type: "Point", coordinates: [37.6176, 55.7558] }
-    }
-  });
-  const raster = map.add({
-    type: "raster",
-    url: "https://example.test/{z}/{x}/{y}.png"
-  });
-
-  assert.ok(point instanceof Marker);
-  assert.ok(point.getPopup());
-  assert.ok(line instanceof Polyline);
-  assert.equal(line.options.strokeWidth, 4);
-  assert.equal(line.options.strokeOpacity, 0.8);
-  assert.ok(area instanceof Polygon);
-  assert.ok(data instanceof GeoJSONLayer);
-  assert.ok(raster instanceof TileLayer);
-  for (const layer of [point, line, area, data, raster]) assert.equal(map.hasLayer(layer), true);
-
-  map.remove();
+  map.destroy();
 });

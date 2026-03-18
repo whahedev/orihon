@@ -87,7 +87,7 @@ try {
       plainPoint: Object.getPrototypeOf(pointClick?.containerPoint ?? {}) === Object.prototype,
       nullHover: pointLeave?.latlng === null && pointLeave?.containerPoint === null && pointLeave?.data === null
     };
-    map.remove();
+    map.destroy();
     host.remove();
     return { webgl: webglResult, webgpu: webgpuResult, hasWebGpu, webglEvent, webgpuEvent, pointEvents };
   });

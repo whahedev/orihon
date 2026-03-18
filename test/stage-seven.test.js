@@ -74,7 +74,7 @@ test("Map exposes Yandex-style behavior controls", () => {
 
   assert.deepEqual(map.behaviors.getEnabled().sort(), ["boxZoom", "drag", "pinchZoom", "scrollZoom"].sort());
   assert.equal(changes.length, 2);
-  map.remove();
+  map.destroy();
 });
 
 test("RemoteObjectManager loads viewport objects and cancels stale work", async () => {

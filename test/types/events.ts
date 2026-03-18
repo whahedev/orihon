@@ -24,9 +24,11 @@ declare const unionName: "zoom" | "move";
 
 const click: EventHandler<EventFor<MapEventMap, "click", Orihon>> = (event) => {
   const position: LatLng = event.latlng;
-  const point: Point = event.detail.containerPoint;
+  const point: Point = event.containerPoint;
   const target: Orihon = event.target;
   const name: "click" = event.type;
+  // @ts-expect-error Mirrored detail bags are gone — use flat fields.
+  const legacy: LatLng = event.detail.latlng;
   // @ts-expect-error Unknown fields are unknown, not any.
   const missing: number = event.missing;
   // @ts-expect-error The source may be a propagated child, not necessarily a map.
@@ -55,7 +57,7 @@ map.on(dynamicName, (event) => {
 });
 map.on("plugin:unregistered", (event) => {
   // @ts-expect-error Custom names without an event-map entry remain unknown.
-  const value: number = event.detail.value;
+  const value: number = event.value;
 });
 // @ts-expect-error A wrong callback must not widen the known literal name.
 map.on("zoom", (event: { type: "zoom"; zoom: string }) => {});
@@ -70,7 +72,7 @@ interface PluginEvents { ready: { value: number }; }
 class Plugin extends Evented<PluginEvents> {}
 new Plugin().on("ready", (event) => {
   const value: number = event.value;
-  const detail: number = event.detail.value;
+  const detail: number = event.value;
   const target: Plugin = event.target;
 });
 // Event maps can also be augmented by a plugin at the owning module.
@@ -79,7 +81,7 @@ map.on("plugin:ready", (event) => { const value: number = event.value; });
 
 draw.on("modechange", (event) => {
   const mode: DrawMode = event.mode;
-  const previous: DrawMode = event.detail.previous;
+  const previous: DrawMode = event.previous;
 });
 control.once("drawcomplete", (event) => {
   const type: "Feature" = event.geojson.type;
@@ -91,7 +93,7 @@ draw.on("editvertex", (event) => {
   if (event.role === "radius") {
     const circle: Circle = event.layer;
     const meters: number | undefined = event.radiusMeters;
-    const units: number | undefined = event.detail.radiusMapUnits;
+    const units: number | undefined = event.radiusMapUnits;
   }
 });
 manager.on("objectstatechange", (event) => { const keys: string[] = event.changedKeys; });
@@ -115,7 +117,7 @@ suggest.on("results", (event) => { const labels: string[] = event.items.map((ite
 inspector.on("measure", (event) => { const fps: number | null = event.snapshot.fps; });
 
 useMapEvent("click", (event) => { const position: LatLng = event.latlng; });
-useMapEvent("zoom", (event) => { const zoom: number = event.detail.zoom; });
+useMapEvent("zoom", (event) => { const zoom: number = event.zoom; });
 // @ts-expect-error React does not widen known names to accept an incompatible callback.
 useMapEvent("zoom", (event: { type: "zoom"; zoom: string }) => {});
 const props: MapProps = { center: { lat: 0, lng: 0 }, zoom: 3, onClick: (event) => { const position: LatLng = event.latlng; } };

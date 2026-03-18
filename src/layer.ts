@@ -39,6 +39,11 @@ export function registerOverlayFactories(popupFactory: PopupFactory, tooltipFact
   createTooltip = tooltipFactory;
 }
 
+/** @internal Writable options view for in-package updates outside the class. */
+export function layerOptions<T extends LayerOptions>(layer: Layer<T>): T {
+  return layer.options as T;
+}
+
 interface LocatedLayer {
   getLatLng(): LatLngLike;
 }
@@ -54,13 +59,28 @@ export interface LayerEventMap {
 
 export class Layer<TOptions extends LayerOptions = LayerOptions, TEvents extends object = {}> extends Evented<LayerEventMap & TEvents> {
   map: Orihon | null = null;
+  readonly #options: TOptions;
   protected _popup: Popup | null = null;
   protected _tooltip: Tooltip | null = null;
   private _popupHandlers: Array<[string, EventHandler]> = [];
   private _tooltipHandlers: Array<[string, EventHandler]> = [];
 
-  constructor(public options = {} as TOptions) {
+  /**
+   * Configuration snapshot. Treat as read-only: assigning fields does not update
+   * the DOM or renderer. Use documented setters (`setOpacity`, `setStyle`, …).
+   */
+  get options(): Readonly<TOptions> {
+    return this.#options;
+  }
+
+  /** Mutable options bag for subclass setters and in-package lifecycle code. */
+  protected get writableOptions(): TOptions {
+    return this.#options;
+  }
+
+  constructor(options: TOptions = {} as TOptions) {
     super();
+    this.#options = options;
   }
 
   addTo(map: Orihon): this {

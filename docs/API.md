@@ -13,7 +13,7 @@ Core view methods:
 - `setView(center, zoom)`, `panTo(center)`, `panBy(offset)` and `setZoomAround(point, zoom)` update the current view.
 - `fitBounds(bounds)`, `fitWorld()`, `flyTo(center, zoom)`, `flyToBounds(bounds)` and `stop()` implement animated and bounded navigation.
 - `getCenter()`, `getZoom()`, `getSize()`, `getBounds()` and coordinate conversion methods inspect the view.
-- `add(layer)` is the short map-centric alias for `addLayer(layer)`; `removeLayer(layer)`, `hasLayer(layer)` and `eachLayer(callback)` manage the same layer lifecycle. Object-centric `layer.addTo(map)` remains equivalent.
+- `addLayer(layer)`, `removeLayer(layer)`, `hasLayer(layer)` and `eachLayer(callback)` manage the layer lifecycle. Prefer iterating with `for (const layer of map.layers)`. `map.layers` is a `ReadonlySet` — mutate only through `addLayer` / `removeLayer`. The Layer API prefers object-centric `layer.addTo(map)`. Easy maps add map-centric `addMarker` / `addPolyline` / … helpers (see Easy API); they do not add a declarative `map.add({ type })` dialect.
 - `query(containerPoint, options)` and `queryLatLng(latlng, options)` return renderer-independent hits from topmost to bottommost. Options are `tolerance` (default `8` CSS px), `layers`, `pane` and `limit` (default `1`; use `Infinity` for every hit). A hit exposes `layer`, `latlng`, `source`, and renderer-specific `id`, `index` or `feature` metadata.
 - `createPane(name)`, `getPane(name)` and `removePane(name)` manage rendering panes.
 - `behaviors.enable(name)`, `disable(name)` and `isEnabled(name)` control `drag`, `scrollZoom`, `pinchZoom`, `dblClick` and `boxZoom`.
@@ -49,7 +49,7 @@ Tile events are `tileloadstart`, `tileload`, `tileerror`, `tileabort` and `load`
 
 Factories are `marker`, `polyline`, `polygon`, `rectangle`, `circle`, `circleMarker` and `geoJSON`. Paths share SVG renderers, cull geometry outside the viewport and simplify long lines by zoom.
 
-`PathOptions` includes `dashArray` (`"8 4"` or `[8, 4]`), `dashOffset`, `lineJoin`, `lineCap`, `geodesic`, `arrow` (`true`, `"start"`, `"end"`, `"both"`) and `arrowSize`. `setStyle({ dashArray: null })` clears a dash. SVG and canvas paths support dash and arrows; WebGL path batches intentionally remain solid. Geographic polylines/polygons with `geodesic: true` are densified along great-circle segments. `circle(center, { radiusMeters: 500 }, { geodesic: true })` renders a sampled geographic ring on EPSG:3857. Simple maps require `{ radiusMapUnits: 50 }`; incompatible units throw before attachment. `Circle.getRadius()` returns a copy of the unit-bearing `CircleRadius` object and `setRadius()` accepts the same union. `circleMarker(center, { radiusPixels: 8 })` has a zoom-independent CSS-pixel radius, read and changed through `getRadiusPixels()` / `setRadiusPixels()`.
+`PathOptions` includes `dashArray` (`"8 4"` or `[8, 4]`), `dashOffset`, `lineJoin`, `lineCap`, `geodesic`, `arrow` (`true`, `"start"`, `"end"`, `"both"`) and `arrowSize`. `setStyle({ dashArray: null })` clears a dash. SVG and canvas paths support dash and arrows; WebGL path batches intentionally remain solid. Geographic polylines/polygons with `geodesic: true` are densified along great-circle segments. `circle(center, { radiusMeters: 500 }, { geodesic: true })` renders a sampled geographic ring on EPSG:3857. Simple maps require `{ radiusMapUnits: 50 }`; incompatible units throw before attachment. `Circle.getRadius()` / `setRadius()` still use the unit-bearing `CircleRadius` union; preferred unit-named accessors are `getRadiusMeters()` / `setRadiusMeters()` and `getRadiusMapUnits()` / `setRadiusMapUnits()` (a getter for the inactive unit throws). `circleMarker(center, { radiusPixels: 8 })` has a zoom-independent CSS-pixel radius, read and changed through `getRadiusPixels()` / `setRadiusPixels()`.
 
 Camera methods use `{ durationMs }` (default `zoomAnimationDurationMs: 250`), and ObjectManager motion uses `{ animate: true, durationMs }` (default 800). Zero jumps immediately. Routing results expose `durationMs`; adapters must convert provider seconds ×1000. Trail age is `maxAgeMs` (default 120000; zero disables age trimming). Path-batch camera timing uses `cameraRedrawIntervalMs` / `cameraSettleDelayMs`. See [migration](MIGRATION-NEXT-MAJOR.md) for the complete list of removed names.
 
@@ -95,7 +95,7 @@ Icons are created with one `icon()` function: `{ iconUrl }` creates an image ico
 
 `marker(position, options)` chooses exactly one visual mode: built-in appearance (`shape`, `color`, `strokeColor`, `size`, `strokeWidth`), `content`, or `icon`. No visual options means the default pin. Mixed modes throw `TypeError` before attachment. Legacy `html` is removed: use `content`. Empty string and `0` are valid explicit content; null content/icon selectors are rejected. Set `iconAnchor` on an icon rather than an ignored marker `anchor`.
 
-`setContent(value)`, `setIcon(icon)` and `setAppearance(appearance)` explicitly switch visual modes on the same Marker. `setIcon(null)` selects the built-in glyph; it does not revive old content. `getContent()` returns null outside content mode. Appearance settings are retained for later glyph selection, but no longer silently updated behind a custom icon. Switching modes resets the old marker anchor to the glyph-derived default; within a glyph mode, an explicitly supplied marker anchor survives rendering and appearance updates. Rotation origin remains a common option. Easy and React marker types preserve the same exclusive union; update custom interfaces extending `MarkerOptions` to intersection type aliases.
+`setContent(value)`, `setIcon(icon)` and `setAppearance(appearance)` explicitly switch visual modes on the same Marker. `setIcon(null)` selects the built-in glyph; it does not revive old content. `getContent()` returns null outside content mode. Appearance settings are retained for later glyph selection, but no longer silently updated behind a custom icon. Switching modes resets the old marker anchor to the glyph-derived default; within a glyph mode, an explicitly supplied marker anchor survives rendering and appearance updates. Rotation origin remains a common option. Easy and React marker types preserve the same exclusive union; update custom interfaces extending `MarkerOptions` to intersection type aliases. `marker.options` is a read-only snapshot — use `setOpacity` / `setIcon` / `setAppearance` / … instead of assigning fields.
 
 ## Data And Services
 
@@ -221,7 +221,7 @@ These tiers describe package capability and gzip size. API complexity is a separ
 Also available:
 
 - `orihon/source` — renderer-independent reactive GeoJSON storage with canonical `feature.id`, versioned snapshots, delta subscriptions, batching and `add` / `addMany` / `update` / `remove` / `replace` / `clear`; accepted structurally by `geoJSON`, `textLayer`, Easy `addGeoJSON` and Advanced `objectManager({ source })`; see [FeatureSource](FEATURE_SOURCE.md). The read-only `ReadonlyFeatureSource` protocol is exported as a Core type; Standard does not depend on the source implementation.
-- `orihon/easy` — Standard-powered `createMap()` adapter with declarative `basemap`, a discriminated `map.add({ type: "marker" | "polyline" | "polygon" | "geojson" | "raster", ... })` contract, and discoverable `map.addMarker()`, `map.addTileLayer()`, `map.addPolyline()`, `map.addPolygon()` and `map.addGeoJSON()` methods; see [Easy API](EASY.md). `basemap` and `setBasemap()` accept raster configuration or any ready `Layer` (for example WMS, WMTS or a custom layer) and `getBasemap()` returns that original layer. Descriptions return ordinary Standard layers and are suitable for component props/configuration. `addSource()` is reserved for a future named, independently managed, reusable source abstraction and is not an alias for a layer.
+- `orihon/easy` — Standard-powered `createMap()` adapter with declarative `basemap` and map-centric `addMarker()`, `addTileLayer()`, `addPolyline()`, `addPolygon()`, `addGeoJSON()`, `setBasemap()` and `getBasemap()`; see [Easy API](EASY.md). The Layer API stays layer-centric (`marker().addTo(map)`). There is no `map.add({ type, ... })` description DSL. `basemap` and `setBasemap()` accept raster configuration or any ready `Layer` (for example WMS, WMTS or a custom layer) and `getBasemap()` returns that original layer. `addSource()` is reserved for a future named, independently managed, reusable source abstraction and is not an alias for a layer.
 - `orihon/bundle` — single-file complete ESM bundle
 - `orihon/global` — standalone IIFE exposing `Orihon` and resolved `OrihonReady`
 - `orihon/orihon.css` — required map styles
@@ -248,13 +248,14 @@ remote loading, routing, SuggestWidget and performance events. React's
 
 ```ts
 map.on("click", (event) => console.log(event.latlng.lat));
-map.once("zoomend", (event) => console.log(event.detail.zoom));
+map.once("zoomend", (event) => console.log(event.zoom));
 ```
 
-Known payload fields appear on the event and `detail`. `target` is the current
-receiver, while `sourceTarget` can be a propagated child. DrawControl forwards
-subscriptions to its handler, which remains the target. Dynamic/custom names and
-extra fields are `unknown` unless declared in an event map. Plugins can extend
+Known payload fields appear directly on the event (for example `event.latlng`).
+There is no mirrored `event.detail` bag. `target` is the current receiver, while
+`sourceTarget` can be a propagated child. DrawControl forwards subscriptions to
+its handler, which remains the target. Dynamic/custom names and extra fields are
+`unknown` unless declared in an event map. Plugins can extend
 `Evented<TheirEventMap>` or augment exported maps. Low-level `emit()` is permissive
 and does not validate payloads. See [event migration](MIGRATION-NEXT-MAJOR.md#typed-event-subscriptions)
 for reusable callback types, plugin augmentation and error/propagation caveats.
@@ -340,7 +341,7 @@ Every `Layer` supports the following lifecycle and content methods:
 | `fitBounds`, `fitWorld`, `flyTo`, `flyToBounds`, `stop` | Fit/animated navigation |
 | `setMaxBounds`, `getMaxBounds`, `panInsideBounds` | Restrict and correct the camera |
 | `latLngToLayerPoint`, `latLngToContainerPoint`, `containerPointToLatLng` | Convert geographic and screen coordinates |
-| `add`, `addLayer`, `removeLayer`, `hasLayer`, `eachLayer` | Add and manage layers; `add` is the short map-centric alias |
+| `addLayer`, `removeLayer`, `hasLayer`, `eachLayer` | Add and manage layers; prefer `for (const layer of map.layers)` |
 | `query(point, options?)`, `queryLatLng(latlng, options?)` | Return top-to-bottom renderer-independent hit results |
 | `addControl`, `removeControl` | Manage UI controls |
 | `createPane`, `getPane`, `getPanes`, `removePane` | Manage rendering panes |
@@ -458,7 +459,7 @@ Create with `objectManager(options?)`; pass `loader` for viewport loading or `po
 | `bindPopup`, `unbindPopup`, `openPopup`, `closePopup`, `hasOpenPopup` | Object popup lifecycle |
 | `bindClusterPopup`, `unbindClusterPopup` | Cluster popup lifecycle |
 | `setClusterize`, `setClusterRadiusPixels`, `setClusterRenderer` | Change cluster behavior/rendering |
-| `prepareLayout(zoom?)` | Await initial/off-thread hierarchy preparation |
+| `prepareLayout(zoom?)` | Await first paint plus settled hierarchy preparation |
 | `spiderfyCluster(id)`, `unspiderfy()` | Expand/collapse overlapping maximum-zoom members |
 | `getStats()` | Return object/index/visible/renderer/layout counters |
 
@@ -471,9 +472,9 @@ Promise pending; its `return()` cleanup is requested without waiting indefinitel
 External cancellation preserves the accepted prefix and leaves the manager reusable;
 destruction clears all data. `detach()` pauses rendering, not data ingestion.
 Background hierarchy work is generation-guarded and cannot revive destroyed state;
-the shared worker remains library-owned. `prepareLayout()` retains its first-paint
-contract and may continue hierarchy construction in the background; current background
-failures emit `error` with `phase: "layout"`. React creates and destroys its own manager
+the shared worker remains library-owned. `prepareLayout()` paints a greedy interim layout
+immediately, then awaits hierarchy construction before resolving; background failures emit
+`error` with `phase: "layout"`. React creates and destroys its own manager
 per effect lifetime, including Strict Mode replay, so no source subscription survives unmount.
 
 ### GPU, heat and geometry processing
@@ -521,8 +522,8 @@ try {
 
 `PrefetchTileLayerOptions` requires either geographic `bounds` or both `xRange` and `yRange`; TypeScript rejects a single explicit axis without bounds before the request can reach runtime validation.
 | `performanceInspector(map, options?)` | `snapshot`, `measureFrames`, `start`, `stop` |
-| `createMapAdapter(container, options?)` | Framework-neutral create/update/destroy adapter |
-| `defineOrihonElement(name?, options?)` | Registers the optional custom element |
+| `createMapAdapter(container, options?)` | Framework-neutral create/update/destroy adapter (`update` accepts center/zoom/behaviors) |
+| `defineOrihonElement(options?)` | Registers the optional custom element |
 
 `OfflineTileCacheOptions` includes `cacheName`, `fetcher`, `maxTiles`, `concurrency` (default 8, maximum 32) and `urlPrefixes`. See `SECURITY.md` before caching remote URLs.
 

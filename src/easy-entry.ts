@@ -12,18 +12,20 @@ import {
   Layer,
   type MapOptions,
   type Marker,
-  type MarkerOptions,
+  type MarkerAppearance,
+  type MarkerIcon,
   type Orihon,
   type OverlayContent,
   type PathOptions,
   type Polygon,
   type Polyline,
   type PopupOptions,
-  type TileLayer,
   type TileLayerOptions,
   type TileTemplate,
-  type TooltipOptions
+  type TooltipOptions,
+  type RasterTileLayer
 } from "./standard.js";
+import { validateMarkerOptions, type MarkerOptions } from "./layers/marker.js";
 
 export type EasyBasemapOptions = Omit<TileLayerOptions, "attribution"> & {
   url: TileTemplate;
@@ -38,91 +40,104 @@ export interface EasyMapOptions extends MapOptions {
   basemap?: EasyBasemap | false | null;
 }
 
-interface EasyMarkerExtras {
+interface EasyOverlayExtras {
+  popup?: OverlayContent;
+  popupOptions?: PopupOptions;
+  tooltip?: OverlayContent;
+  tooltipOptions?: TooltipOptions;
+}
+
+interface EasyMarkerShared extends EasyOverlayExtras {
   position: LatLngLike;
-  popup?: OverlayContent;
-  popupOptions?: PopupOptions;
-  tooltip?: OverlayContent;
-  tooltipOptions?: TooltipOptions;
-}
-
-export type EasyMarkerOptions = MarkerOptions & EasyMarkerExtras;
-export type EasyMarkerLayerOptions = MarkerOptions & Omit<EasyMarkerExtras, "position">;
-
-export type EasyMarkerDescription = EasyMarkerOptions & {
-  type: "marker";
-}
-
-export interface EasyPathStyle extends PathOptions {
-  /** Easy alias for `strokeWidth`; the canonical name wins when both are present. */
-  width?: number;
-  /** Easy alias for `strokeOpacity`; the canonical name wins when both are present. */
+  title?: string;
+  className?: string;
+  draggable?: boolean;
+  ariaLabel?: string;
   opacity?: number;
+  zIndexOffset?: number;
+  keyboard?: boolean;
+  interactive?: boolean;
+  rotation?: number;
+  rotationOrigin?: string;
+  pane?: string;
+  attribution?: string;
+  /** Flat appearance fields belong under `appearance`. */
+  shape?: never;
+  color?: never;
+  strokeColor?: never;
+  size?: never;
+  strokeWidth?: never;
+  html?: never;
 }
 
-interface EasyPathDescription {
-  coordinates: LatLngLike[];
-  style?: EasyPathStyle;
-  popup?: OverlayContent;
-  popupOptions?: PopupOptions;
-  tooltip?: OverlayContent;
-  tooltipOptions?: TooltipOptions;
+/** Object-first Easy marker: exactly one of appearance / content / icon. */
+export type EasyMarkerOptions = EasyMarkerShared & (
+  | { appearance?: MarkerAppearance; content?: never; icon?: never; anchor?: [number, number] }
+  | { appearance?: never; content: Node | string | number; icon?: never; anchor?: [number, number] }
+  | { appearance?: never; content?: never; icon: MarkerIcon; anchor?: never }
+);
+
+export interface EasyPolylineOptions extends EasyOverlayExtras {
+  points: LatLngLike[];
+  style?: PathOptions;
 }
 
-export interface EasyPolylineDescription extends EasyPathDescription {
-  type: "polyline";
+export interface EasyPolygonOptions extends EasyOverlayExtras {
+  /** Outer ring, or rings with holes. */
+  rings: LatLngLike[] | LatLngLike[][];
+  style?: PathOptions;
 }
 
-export interface EasyPolygonDescription extends Omit<EasyPathDescription, "coordinates"> {
-  type: "polygon";
-  coordinates: LatLngLike[] | LatLngLike[][];
-}
-
-export interface EasyGeoJSONDescription {
-  type: "geojson";
-  data?: GeoJSONInput | null;
-  options?: GeoJSONOptions;
-}
-
-export interface EasyRasterDescription {
-  type: "raster";
+export interface EasyTileLayerOptions extends TileLayerOptions {
   url: TileTemplate;
-  options?: TileLayerOptions;
 }
 
-export type EasyAddDescription =
-  | EasyMarkerDescription
-  | EasyPolylineDescription
-  | EasyPolygonDescription
-  | EasyGeoJSONDescription
-  | EasyRasterDescription;
+export interface EasyGeoJSONOptions extends GeoJSONOptions {
+  data?: GeoJSONInput | null;
+}
 
-export type EasyAddResult = Marker | Polyline | Polygon | GeoJSONLayer | TileLayer;
-
+/**
+ * Map-centric Standard adapter. Easy sentences are object-first:
+ * `map.addMarker({ position, appearance })`, `map.addPolyline({ points, style })`.
+ */
 export interface EasyMap extends Orihon {
-  /** Add an existing layer and return the map. */
-  add(layer: Layer): this;
-  /** Create and add a layer from a declarative, discriminated description. */
-  add(description: EasyMarkerDescription): Marker;
-  add(description: EasyPolylineDescription): Polyline;
-  add(description: EasyPolygonDescription): Polygon;
-  add(description: EasyGeoJSONDescription): GeoJSONLayer;
-  add(description: EasyRasterDescription): TileLayer;
-  /** Create, configure and add a marker in one call. */
   addMarker(options: EasyMarkerOptions): Marker;
-  addMarker(position: LatLngLike, options?: EasyMarkerLayerOptions): Marker;
-  /** Create and add a raster tile layer. */
-  addTileLayer(template: TileTemplate, options?: TileLayerOptions): TileLayer;
-  /** Create and add a polyline. */
-  addPolyline(points: LatLngLike[], options?: PathOptions): Polyline;
-  /** Create and add a polygon, including optional inner rings. */
-  addPolygon(points: LatLngLike[] | LatLngLike[][], options?: PathOptions): Polygon;
-  /** Create and add a GeoJSON layer. */
-  addGeoJSON(data?: GeoJSONInput | null, options?: GeoJSONOptions): GeoJSONLayer;
-  /** Replace the convenience basemap without affecting other map layers. */
+  addTileLayer(options: EasyTileLayerOptions): RasterTileLayer;
+  addPolyline(options: EasyPolylineOptions): Polyline;
+  addPolygon(options: EasyPolygonOptions): Polygon;
+  addGeoJSON(options?: EasyGeoJSONOptions): GeoJSONLayer;
   setBasemap(basemap: EasyBasemap | false | null): this;
-  /** Return the basemap managed by the Easy adapter, if one is active. */
   getBasemap(): Layer | null;
+}
+
+function bindEasyOverlays<T extends { bindPopup(content: OverlayContent, options?: PopupOptions): unknown; bindTooltip(content: OverlayContent, options?: TooltipOptions): unknown }>(
+  layer: T,
+  options: EasyOverlayExtras
+): T {
+  if ("popup" in options) layer.bindPopup(options.popup as OverlayContent, options.popupOptions);
+  if ("tooltip" in options) layer.bindTooltip(options.tooltip as OverlayContent, options.tooltipOptions);
+  return layer;
+}
+
+function toMarkerOptions(options: EasyMarkerOptions): MarkerOptions {
+  const {
+    position: _position,
+    popup: _popup,
+    popupOptions: _popupOptions,
+    tooltip: _tooltip,
+    tooltipOptions: _tooltipOptions,
+    appearance,
+    content,
+    icon,
+    ...rest
+  } = options;
+  const modes = Number(appearance !== undefined) + Number(content !== undefined) + Number(icon !== undefined);
+  if (modes > 1) {
+    throw new TypeError("Easy addMarker accepts exactly one visual mode: appearance, content or icon");
+  }
+  if (icon !== undefined) return { ...rest, icon } as MarkerOptions;
+  if (content !== undefined) return { ...rest, content } as MarkerOptions;
+  return { ...rest, ...appearance } as MarkerOptions;
 }
 
 /**
@@ -132,84 +147,61 @@ export interface EasyMap extends Orihon {
 export function createMap(container: string | HTMLElement, options: EasyMapOptions = {}): EasyMap {
   const { basemap, ...mapOptions } = options;
   const map = createStandardMap(container, mapOptions) as EasyMap;
-  const addExistingLayer = map.add.bind(map);
   let activeBasemap: Layer | null = null;
 
   Object.defineProperties(map, {
-    add: {
-      configurable: true,
-      value(input: Layer | EasyAddDescription): EasyMap | EasyAddResult {
-        if (!input || typeof input !== "object" || !("type" in input)) {
-          return addExistingLayer(input as Layer);
-        }
-        switch (input.type) {
-          case "marker": {
-            const { type: _type, position, popup, popupOptions, tooltip, tooltipOptions, ...appearance } = input;
-            const layer = marker(position, appearance);
-            if ("popup" in input) layer.bindPopup(popup, popupOptions);
-            if ("tooltip" in input) layer.bindTooltip(tooltip, tooltipOptions);
-            return layer.addTo(map);
-          }
-          case "polyline":
-          case "polygon": {
-            const { coordinates, style, popup, popupOptions, tooltip, tooltipOptions } = input;
-            const { width, opacity, ...pathOptions } = style ?? {};
-            if (pathOptions.strokeWidth === undefined && width !== undefined) pathOptions.strokeWidth = width;
-            if (pathOptions.strokeOpacity === undefined && opacity !== undefined) pathOptions.strokeOpacity = opacity;
-            const layer = input.type === "polyline"
-              ? polyline(coordinates as LatLngLike[], pathOptions)
-              : polygon(coordinates, pathOptions);
-            if ("popup" in input) layer.bindPopup(popup, popupOptions);
-            if ("tooltip" in input) layer.bindTooltip(tooltip, tooltipOptions);
-            return layer.addTo(map);
-          }
-          case "geojson":
-            return geoJSON(input.data, input.options).addTo(map);
-          case "raster":
-            return tileLayer(input.url, { renderer: "dom", ...input.options }).addTo(map);
-          default:
-            throw new TypeError(`Unsupported map.add description type: ${String((input as { type?: unknown }).type)}`);
-        }
-      }
-    },
     addMarker: {
       configurable: true,
-      value(input: EasyMarkerOptions | LatLngLike, options: EasyMarkerLayerOptions = {}): Marker {
-        if (!input || typeof input !== "object") throw new TypeError("addMarker position or options are required");
-        const markerOptions: EasyMarkerOptions = !Array.isArray(input) && "position" in input
-          ? input as EasyMarkerOptions
-          : { ...options, position: input as LatLngLike };
-        const { position, popup, popupOptions, tooltip, tooltipOptions, ...appearance } = markerOptions;
-        if (position === undefined || position === null) {
+      value(options: EasyMarkerOptions): Marker {
+        if (!options || typeof options !== "object" || Array.isArray(options)) {
+          throw new TypeError("addMarker({ position, ... }) options object is required");
+        }
+        if (options.position === undefined || options.position === null) {
           throw new TypeError("addMarker position is required");
         }
-        const layer = marker(position, appearance);
-        if ("popup" in markerOptions) layer.bindPopup(popup, popupOptions);
-        if ("tooltip" in markerOptions) layer.bindTooltip(tooltip, tooltipOptions);
-        return layer.addTo(map);
+        const markerOptions = toMarkerOptions(options);
+        validateMarkerOptions(markerOptions);
+        const layer = marker(options.position, markerOptions);
+        return bindEasyOverlays(layer, options).addTo(map);
       }
     },
     addTileLayer: {
       configurable: true,
-      value(template: TileTemplate, tileOptions: TileLayerOptions = {}): TileLayer {
-        return tileLayer(template, { renderer: "dom", ...tileOptions }).addTo(map);
+      value(options: EasyTileLayerOptions): RasterTileLayer {
+        if (!options || typeof options !== "object" || !("url" in options)) {
+          throw new TypeError("addTileLayer({ url, ... }) options object is required");
+        }
+        const { url, ...tileOptions } = options;
+        return tileLayer(url, { renderer: "dom", ...tileOptions }).addTo(map);
       }
     },
     addPolyline: {
       configurable: true,
-      value(points: LatLngLike[], pathOptions: PathOptions = {}): Polyline {
-        return polyline(points, pathOptions).addTo(map);
+      value(options: EasyPolylineOptions): Polyline {
+        if (!options || typeof options !== "object" || !Array.isArray(options.points)) {
+          throw new TypeError("addPolyline({ points, style? }) options object is required");
+        }
+        const layer = polyline(options.points, options.style ?? {});
+        return bindEasyOverlays(layer, options).addTo(map);
       }
     },
     addPolygon: {
       configurable: true,
-      value(points: LatLngLike[] | LatLngLike[][], pathOptions: PathOptions = {}): Polygon {
-        return polygon(points, pathOptions).addTo(map);
+      value(options: EasyPolygonOptions): Polygon {
+        if (!options || typeof options !== "object" || options.rings == null) {
+          throw new TypeError("addPolygon({ rings, style? }) options object is required");
+        }
+        const layer = polygon(options.rings, options.style ?? {});
+        return bindEasyOverlays(layer, options).addTo(map);
       }
     },
     addGeoJSON: {
       configurable: true,
-      value(data?: GeoJSONInput | null, geojsonOptions: GeoJSONOptions = {}): GeoJSONLayer {
+      value(options: EasyGeoJSONOptions = {}): GeoJSONLayer {
+        if (!options || typeof options !== "object" || Array.isArray(options)) {
+          throw new TypeError("addGeoJSON({ data?, ... }) options object is required");
+        }
+        const { data = null, ...geojsonOptions } = options;
         return geoJSON(data, geojsonOptions).addTo(map);
       }
     },

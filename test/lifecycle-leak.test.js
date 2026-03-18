@@ -77,8 +77,8 @@ function runCycles(count) {
     });
     map.panBy([index % 17, index % 11]);
     map.setZoom((index + 1) % 18);
-    map.remove();
-    map.remove();
+    map.destroy();
+    map.destroy();
 
     assert.equal(container.children.length, 0, `DOM nodes after cycle ${index}`);
     assert.equal(container.listenerCount(), 0, `container listeners after cycle ${index}`);

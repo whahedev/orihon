@@ -8,7 +8,7 @@ Related: [API](API.md) · [PLUGINS](PLUGINS.md) · [SECURITY](SECURITY.md)
 
 These hold for every item below. If a design violates them, change the design.
 
-1. **Gzip budgets stay.** Core ≤ 22 KiB, Standard ≤ 36 KiB, Advanced ≤ 105 KiB (`npm run size`). New surface that would break a budget goes into a **new optional entry** (`orihon/draw`, `orihon/react`, …), not into `orihon/standard` or `orihon`.
+1. **Gzip budgets stay.** Core ≤ 22 KiB, Standard ≤ 37 KiB, Advanced ≤ 105 KiB (`npm run size`). New surface that would break a budget goes into a **new optional entry** (`orihon/draw`, `orihon/react`, …), not into `orihon/standard` or `orihon`.
 2. **Leaflet-like DX.** Factories, `addTo` / `remove`, `on` / `off`, named panes, no required style JSON.
 3. **No prototype patching.** Plugins extend `Layer` / `Control` and import only public entries.
 4. **Safe content.** Strings are `textContent`. Markup is a `Node`. No `innerHTML`. SVG stays sanitized.

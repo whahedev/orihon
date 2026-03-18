@@ -22,18 +22,17 @@ test("Evented once runs once", () => {
   assert.equal(count, 1);
 });
 
-test("Evented preserves payload identity while protecting event metadata", () => {
+test("Evented flattens payload fields and protects event metadata", () => {
   const target = new Evented();
-  const detail = { value: 42, type: "fake", target: "fake", sourceTarget: "fake", detail: "fake" };
+  const payload = { value: 42, type: "fake", target: "fake", sourceTarget: "fake" };
   target.on("ready", (event) => {
     assert.equal(event.type, "ready");
     assert.equal(event.target, target);
     assert.equal(event.sourceTarget, target);
     assert.equal(event.value, 42);
-    assert.equal(event.detail, detail);
-    assert.equal(event.detail.type, "fake");
+    assert.equal("detail" in event, false);
   });
-  target.emit("ready", detail);
+  target.emit("ready", payload);
 });
 
 test("Evented distinguishes the current target from the original propagated source", () => {
@@ -44,7 +43,7 @@ test("Evented distinguishes the current target from the original propagated sour
   for (const instance of [child, parent, grandparent]) instance.on("ready", (event) => events.push(event));
   child.emit("ready", { value: 7 });
   assert.deepEqual(events.map((event) => event.target), [child, parent, grandparent]);
-  assert.ok(events.every((event) => event.sourceTarget === child && event.detail.value === 7));
+  assert.ok(events.every((event) => event.sourceTarget === child && event.value === 7));
   assert.equal(events[1].propagatedFrom, child);
   assert.equal(events[2].propagatedFrom, parent);
   assert.equal(events[2].layer, child);

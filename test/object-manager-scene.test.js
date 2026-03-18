@@ -268,7 +268,7 @@ test("motion interrupt starts from interpolated position", () => {
 
 test("trails append, dedupe, maxPoints, remove", () => {
   const trails = new ObjectTrailStore();
-  trails.configure("a", { enabled: true, maxPoints: 3, maxAgeMs: 60_000, color: "#2563eb", width: 2, opacity: 0.5 });
+  trails.configure("a", { enabled: true, maxPoints: 3, maxAgeMs: 60_000, stroke: "#2563eb", strokeWidth: 2, strokeOpacity: 0.5 });
   trails.append("a", 1, 2);
   trails.append("a", 1, 2); // duplicate
   trails.append("a", 2, 3);
@@ -385,7 +385,7 @@ test("ObjectManager accepts mixed geometry and preserves legacy points", () => {
 
 test("rotation normalizes degrees in style resolution", () => {
   const manager = objectManager({
-    style: () => ({ rotation: 450, icon: null, size: 12, color: "#fff" })
+    style: () => ({ rotation: 450, icon: null, size: 12, fill: "#fff" })
   });
   manager.add({ id: 1, coordinates: { lat: 55, lng: 37 } });
   const map = createFakeMap(14);
@@ -477,7 +477,7 @@ test("mixed scene does not pack LineString/Polygon as WebGL points", async () =>
     clusterize: false,
     webglThreshold: 1,
     clusterRenderer: "webgl",
-    style: () => ({ color: "#fff", size: 8 })
+    style: () => ({ fill: "#fff", size: 8 })
   });
   manager.add([
     { id: "pt", coordinates: { lat: 55.75, lng: 37.61 } },

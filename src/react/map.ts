@@ -42,7 +42,7 @@ export function Map(props: MapProps) {
     onMapReady?.(instance);
     return () => {
       setMap(null);
-      instance.remove();
+      instance.destroy();
     };
   }, []);
 

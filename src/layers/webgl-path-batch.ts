@@ -7,6 +7,7 @@ import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { compileShader, parseCssColor, type RgbColor } from "../webgl-utils.js";
 import type { PathOptions } from "./vector.js";
+import { rejectStyleAliases } from "../style-contract.js";
 
 export interface WebGLPathBatchOptions extends LayerOptions, PathOptions {
   className?: string;
@@ -89,6 +90,7 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
   private _maxLng = Number.NEGATIVE_INFINITY;
 
   constructor(options: WebGLPathBatchOptions = {}) {
+    rejectStyleAliases(options, "line");
     super({
       pane: "overlay",
       className: "oh-webgl-path-batch",
@@ -137,8 +139,8 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
 
   addPath(rings: LatLngLike[][], _closed = false, style: PathOptions = {}): this {
     if (style.stroke) this.color = parseCssColor(String(style.stroke), { r: 15, g: 118, b: 110 });
-    if (style.strokeWidth != null) this.options.strokeWidth = style.strokeWidth;
-    if (style.strokeOpacity != null) this.options.strokeOpacity = style.strokeOpacity;
+    if (style.strokeWidth != null) this.writableOptions.strokeWidth = style.strokeWidth;
+    if (style.strokeOpacity != null) this.writableOptions.strokeOpacity = style.strokeOpacity;
 
     for (const ring of rings) {
       if (ring.length < 2) continue;

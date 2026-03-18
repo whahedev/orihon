@@ -1,8 +1,16 @@
-import { createMap, type Orihon, type MapOptions } from "../map.js";
+import { createMap, type Orihon, type MapOptions, type BehaviorOptions } from "../map.js";
+import type { LatLngLike } from "../geo.js";
+
+/** Fields that `MapAdapter.update()` actually applies. */
+export interface MapUpdateOptions {
+  center?: LatLngLike;
+  zoom?: number;
+  behaviors?: BehaviorOptions;
+}
 
 export interface MapAdapter {
   map: Orihon;
-  update(options: Partial<MapOptions>): Orihon;
+  update(options: MapUpdateOptions): Orihon;
   destroy(): void;
 }
 
@@ -10,15 +18,17 @@ export function createMapAdapter(container: HTMLElement | string, options: MapOp
   const map = createMap(container, options);
   return {
     map,
-    update(next: Partial<MapOptions>) {
-      if (next.center || typeof next.zoom === "number") map.setView(next.center ?? map.getCenter(), next.zoom ?? map.getZoom());
+    update(next: MapUpdateOptions) {
+      if (next.center || typeof next.zoom === "number") {
+        map.setView(next.center ?? map.getCenter(), next.zoom ?? map.getZoom());
+      }
       for (const [name, enabled] of Object.entries(next.behaviors ?? {})) {
         map.behaviors.toggle(name as never, Boolean(enabled));
       }
       return map;
     },
     destroy() {
-      map.remove();
+      map.destroy();
     }
   };
 }
@@ -47,7 +57,7 @@ export function defineOrihonElement(options: OrihonElementOptions = {}): CustomE
     }
 
     disconnectedCallback(): void {
-      this.map?.remove();
+      this.map?.destroy();
       this.map = null;
     }
   }

@@ -76,7 +76,6 @@ const clearSummaries = {
   geoJSON: "Создаёт отображаемый слой из GeoJSON Geometry, Feature или FeatureCollection.",
   geolocationControl: "Добавляет кнопку определения текущего положения пользователя и перемещения карты к найденной координате.",
   createGeometryWorkerPool: "Создаёт принадлежащий вызывающему пул Web Workers для подготовки больших массивов геометрии вне main thread.",
-  geometryWorkerPool: "Устаревший alias createGeometryWorkerPool; создаёт отдельный пул, принадлежащий вызывающему.",
   heatLayer: "Показывает тепловую поверхность, изолинии или оба представления одного поля значений.",
   heatSupport: "Проверяет, доступны ли в текущем браузере ускоренные WASM- и WebGPU-backend теплового pipeline.",
   icon: "Создаёт иконку маркера из изображения либо безопасного текста/Node; задаёт размер и anchor.",
@@ -379,6 +378,23 @@ function pathBatch(options: FeaturePathBatchOptions): WebGLStyledPathBatch`,
 };
 
 const explicitExamples = {
+  createMapAdapter: `import { createMapAdapter } from "orihon";
+
+const adapter = createMapAdapter(container, {
+  center: { lat: 55.75, lng: 37.62 },
+  zoom: 10
+});
+adapter.update({ zoom: 11 });
+adapter.destroy();`,
+  createGeometryWorkerPool: `import { createGeometryWorkerPool } from "orihon";
+
+const pool = createGeometryWorkerPool();
+try {
+  const prepared = await pool.preparePoints(rawPoints);
+  // use prepared
+} finally {
+  pool.destroy();
+}`,
   wmtsTileLayer: `import { wmtsTileLayer } from "orihon";
 
 wmtsTileLayer("https://example.test/wmts", {

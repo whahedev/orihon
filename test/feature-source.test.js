@@ -72,8 +72,12 @@ test("FeatureSource provides stable ids and mutation events", () => {
   const changes = [];
   const unsubscribe = source.subscribe((change) => changes.push(change));
 
-  assert.deepEqual(source.getSnapshot(), { version: 0, features: [source.get("a")] });
+  const snapA = source.getSnapshot();
+  assert.equal(source.getSnapshot(), snapA);
+  assert.deepEqual(snapA, { version: 0, features: [source.get("a")] });
   source.addMany([point("b", "B"), point("c", "C")]);
+  assert.notEqual(source.getSnapshot(), snapA);
+  assert.equal(source.getSnapshot(), source.getSnapshot());
   source.update("a", { properties: { name: "A2" } });
   source.remove(["c", "missing"]);
   source.batch(() => {
@@ -84,10 +88,54 @@ test("FeatureSource provides stable ids and mutation events", () => {
   unsubscribe();
   source.clear();
 
-  assert.deepEqual(changes.map((change) => change.type), ["add", "update", "remove", "reset", "reset"]);
+  assert.deepEqual(changes.map((change) => change.type), ["add", "update", "remove", "batch", "reset"]);
   assert.deepEqual(changes.map((change) => change.version), [1, 2, 3, 4, 5]);
+  assert.equal(changes[3].type, "batch");
+  assert.equal(changes[3].changes[0].type, "add");
+  assert.equal(changes[3].changes[0].features[0].id, "d");
+  assert.equal(changes[3].changes[1].type, "update");
+  assert.equal(changes[3].changes[1].features[0].properties.name, "B2");
   assert.equal(source.version, 6);
   assert.equal(source.size, 0);
+});
+
+test("FeatureSource.batch rejects async callbacks after flushing sync work", () => {
+  const source = featureSource([point("a", "A")]);
+  const changes = [];
+  source.subscribe((change) => changes.push(change));
+  assert.throws(() => source.batch(async () => {
+    source.update("a", { properties: { name: "A2" } });
+  }), /synchronous/);
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].type, "batch");
+  assert.equal(source.get("a").properties.name, "A2");
+});
+
+test("GeoJSONLayer applies source deltas without rebuilding untouched layers", () => {
+  const source = featureSource([point("a", "A"), point("b", "B")]);
+  const map = createMap(container(), {
+    center: { lat: 55.751244, lng: 37.618423 },
+    zoom: 12,
+    controls: false
+  });
+  const shapes = geoJSON(source, { renderer: "svg" }).addTo(map);
+  const layerB = shapes.featureEntries.find((entry) => entry.feature.id === "b")?.layer;
+  assert.ok(layerB);
+
+  source.update("a", { properties: { name: "A2" } });
+  assert.equal(shapes.featureEntries.find((entry) => entry.feature.id === "b")?.layer, layerB);
+  assert.equal(shapes.data.features.find((feature) => feature.id === "a")?.properties?.name, "A2");
+
+  source.add(point("c", "C"));
+  assert.equal(shapes.featureEntries.find((entry) => entry.feature.id === "b")?.layer, layerB);
+  assert.equal(shapes.data.features.length, 3);
+
+  source.remove("c");
+  assert.equal(shapes.data.features.length, 2);
+  assert.equal(shapes.featureEntries.find((entry) => entry.feature.id === "b")?.layer, layerB);
+
+  shapes.remove();
+  map.destroy();
 });
 
 test("one FeatureSource drives GeoJSON, TextLayer and ObjectManager", () => {
@@ -128,5 +176,5 @@ test("one FeatureSource drives GeoJSON, TextLayer and ObjectManager", () => {
   shapes.remove();
   labels.remove();
   manager.destroy();
-  map.remove();
+  map.destroy();
 });

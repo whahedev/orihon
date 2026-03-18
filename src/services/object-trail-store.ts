@@ -1,6 +1,7 @@
 import type { ObjectId } from "./object-types.js";
 import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import type { ObjectTrailStyle } from "./object-types.js";
+import { rejectStyleAliases } from "../style-contract.js";
 
 export interface TrailPoint {
   lat: number;
@@ -11,13 +12,13 @@ export interface TrailPoint {
 export interface TrailPolyline {
   id: ObjectId;
   points: TrailPoint[];
-  style: Required<Pick<ObjectTrailStyle, "color" | "width" | "opacity">>;
+  style: Required<Pick<ObjectTrailStyle, "stroke" | "strokeWidth" | "strokeOpacity">>;
 }
 
 const DEFAULT_TRAIL = {
-  color: "#2563eb",
-  width: 2,
-  opacity: 0.5,
+  stroke: "#2563eb",
+  strokeWidth: 2,
+  strokeOpacity: 0.5,
   maxPoints: 40,
   maxAgeMs: 120_000
 };
@@ -47,6 +48,7 @@ export class ObjectTrailStore {
 
   configure(id: ObjectId, style: ObjectTrailStyle | null | undefined): void {
     if (style) {
+      rejectStyleAliases(style, "line");
       rejectLegacyUnit(style, "maxAge", "maxAgeMs");
       nonNegativeFinite(style.maxAgeMs ?? DEFAULT_TRAIL.maxAgeMs, "maxAgeMs");
     }
@@ -55,9 +57,9 @@ export class ObjectTrailStore {
       return;
     }
     this.styles.set(id, {
-      color: style.color ?? DEFAULT_TRAIL.color,
-      width: style.width ?? DEFAULT_TRAIL.width,
-      opacity: style.opacity ?? DEFAULT_TRAIL.opacity,
+      stroke: style.stroke ?? DEFAULT_TRAIL.stroke,
+      strokeWidth: style.strokeWidth ?? DEFAULT_TRAIL.strokeWidth,
+      strokeOpacity: style.strokeOpacity ?? DEFAULT_TRAIL.strokeOpacity,
       maxPoints: Math.min(
         MAX_TRAIL_POINTS,
         Math.max(2, Math.floor(style.maxPoints ?? DEFAULT_TRAIL.maxPoints))
@@ -94,7 +96,7 @@ export class ObjectTrailStore {
       out.push({
         id,
         points: points.slice(),
-        style: { color: style.color, width: style.width, opacity: style.opacity }
+        style: { stroke: style.stroke, strokeWidth: style.strokeWidth, strokeOpacity: style.strokeOpacity }
       });
     }
     return out;

@@ -251,7 +251,7 @@ test("custom panes and ResizeObserver lifecycle are managed by the map", () => {
 
   map.removePane("labels");
   assert.equal(map.getPane("labels"), null);
-  map.remove();
+  map.destroy();
   assert.equal(disconnected, true);
   delete globalThis.ResizeObserver;
 });

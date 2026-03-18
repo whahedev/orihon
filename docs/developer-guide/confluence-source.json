@@ -55,7 +55,7 @@
       "id": "8716347",
       "title": "Orihon API - createMapAdapter",
       "url": "http://confluence.home/pages/viewpage.action?pageId=8716347",
-      "markdown": "createMapAdapter\n================\n\nНазначение\n----------\n\nСоздает adapter для framework lifecycle.\n\nПример\n------\n\nDefaultnoneimport { createMapAdapter } from \"orihon\";\nconst adapter = createMapAdapter({\ntarget: container,\noptions: { center: { lat: 55.75, lng: 37.62 }, zoom: 10 }\n});\nadapter.mount();\nadapter.map.addLayer(layer);\nadapter.destroy();\n\nГде применять\n-------------\n\nReact/Vue/Svelte/Web Components, где важен корректный cleanup."
+      "markdown": "createMapAdapter\n================\n\nНазначение\n----------\n\nСоздает adapter для framework lifecycle.\n\nПример\n------\n\nDefaultnoneimport { createMapAdapter } from \"orihon\";\nconst adapter = createMapAdapter(container, {\ncenter: { lat: 55.75, lng: 37.62 },\nzoom: 10\n});\nadapter.update({ zoom: 11 });\nadapter.destroy();\n\nГде применять\n-------------\n\nReact/Vue/Svelte/Web Components, где важен корректный cleanup."
     },
     {
       "id": "8716330",

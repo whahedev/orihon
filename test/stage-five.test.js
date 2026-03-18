@@ -333,4 +333,6 @@ test("WMSTileLayer builds projected and axis-ordered requests", () => {
   assert.equal(geographicUrl.searchParams.get("BBOX"), "0,-180,85.0511287798066,0");
   geographic.setParams({ layers: "temperature" }, true);
   assert.equal(geographic.getParams().layers, "temperature");
+  geographic.setParams({ layers: "humidity" }, { redraw: false });
+  assert.equal(geographic.getParams().layers, "humidity");
 });

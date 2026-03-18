@@ -281,7 +281,7 @@ export class Popup extends DivOverlay<ResolvedPopupOptions, OverlayLifecycleEven
       ariaLabel: "",
       ...options
     } as PopupOptions);
-    Object.assign(this.options, {
+    Object.assign(this.writableOptions, {
       closeButton: options.closeButton ?? true,
       autoClose: options.autoClose ?? true,
       closeOnClick: options.closeOnClick ?? true,
@@ -424,7 +424,7 @@ export class Tooltip extends DivOverlay<ResolvedTooltipOptions, OverlayLifecycle
       opacity: 0.94,
       ...options
     } as TooltipOptions);
-    Object.assign(this.options, {
+    Object.assign(this.writableOptions, {
       permanent: options.permanent ?? false,
       direction: options.direction ?? "top",
       opacity: options.opacity ?? 0.94

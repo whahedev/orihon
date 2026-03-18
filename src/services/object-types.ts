@@ -1,3 +1,5 @@
+import type { RemovedLineStyleAliases, RemovedPointStyleAliases } from "../style-contract.js";
+
 export type ObjectId = string | number;
 
 export type ObjectStateValue =
@@ -27,11 +29,11 @@ export interface ObjectLabelStyle {
   maxZoom?: number;
 }
 
-export interface ObjectTrailStyle {
+export interface ObjectTrailStyle extends RemovedLineStyleAliases {
   enabled?: boolean;
-  color?: string;
-  width?: number;
-  opacity?: number;
+  stroke?: string;
+  strokeWidth?: number;
+  strokeOpacity?: number;
   maxPoints?: number;
   /** Trail retention in milliseconds. Default 120000; zero disables age trimming. */
   maxAgeMs?: number;
@@ -42,19 +44,13 @@ export interface ObjectGradientStop {
   color: string;
 }
 
-export interface ObjectLineStyle {
+export interface ObjectLineStyle extends RemovedLineStyleAliases {
   /** Canonical line color, matching PathOptions. */
   stroke?: string;
   /** Canonical line opacity, matching PathOptions. */
   strokeOpacity?: number;
   /** Canonical line width in CSS pixels, matching PathOptions. */
   strokeWidth?: number;
-  /** @deprecated Compatibility alias for `stroke`. */
-  color?: string;
-  /** @deprecated Compatibility alias for `strokeOpacity`. */
-  opacity?: number;
-  /** @deprecated Compatibility alias for `strokeWidth`. */
-  width?: number;
   dashArray?: readonly number[];
   dashOffset?: number;
   gradient?: readonly ObjectGradientStop[];
@@ -70,18 +66,14 @@ export interface ObjectPolygonStyle {
 
 export type ObjectCollisionMode = "auto" | "always" | "hide";
 
-export interface ObjectStyle {
-  /** Canonical point fill color. Takes precedence over `color`. */
+export interface ObjectStyle extends RemovedPointStyleAliases {
+  /** Point fill color. */
   fill?: string;
-  /** Canonical point fill opacity from 0 to 1. Takes precedence over `opacity`. */
+  /** Point fill opacity from 0 to 1. */
   fillOpacity?: number;
-  /** Compatibility alias for `fill`. */
-  color?: string;
-  /** Compatibility alias for `fillOpacity`. */
-  opacity?: number;
   size?: number;
   icon?: string | null;
-  /** Explicit icon tint; when omitted, `fill` (or legacy `color`) is used for tintable icons. */
+  /** Explicit icon tint; when omitted, `fill` is used for tintable icons. */
   iconTint?: string;
   /** Degrees: 0 up, 90 right, 180 down, 270 left. */
   rotation?: number;

@@ -6,10 +6,11 @@ import type { Orihon } from "../map.js";
 import { SpatialGridIndex } from "../services/spatial-grid-index.js";
 import { Marker, validateMarkerOptions, type MarkerOptions } from "./marker.js";
 import { WebGLPointLayer, webglPointLayer } from "./webgl-point-layer.js";
+import { rejectStyleAliases, type RemovedPointStyleAliases } from "../style-contract.js";
 
 export type MarkerCollectionRenderer = "auto" | "dom" | "svg" | "webgl" | "hybrid";
 
-export interface MarkerCollectionOptions extends LayerOptions {
+export interface MarkerCollectionOptions extends LayerOptions, RemovedPointStyleAliases {
   /**
    * - `dom` — Marker elements (fine for hundreds / low thousands)
    * - `svg` — one real SVG DOM node per point, with shared style/transform
@@ -36,19 +37,15 @@ export interface MarkerCollectionOptions extends LayerOptions {
   viewportCull?: boolean;
   marker?: MarkerOptions;
   pointSize?: number;
-  /** Canonical point fill color. Takes precedence over `color`. */
+  /** Point fill color. */
   fill?: string;
-  /** Canonical point fill opacity. Takes precedence over `opacity`. */
+  /** Point fill opacity. */
   fillOpacity?: number;
-  /** Compatibility alias for `fill`. */
-  color?: string;
-  /** Compatibility alias for `fillOpacity`. */
-  opacity?: number;
   indexCellSize?: number;
 }
 
 type ResolvedMarkerCollectionOptions = LayerOptions &
-  Required<Omit<MarkerCollectionOptions, "marker" | keyof LayerOptions>> & {
+  Required<Omit<MarkerCollectionOptions, "marker" | keyof LayerOptions | keyof RemovedPointStyleAliases>> & {
     marker: MarkerOptions;
   };
 
@@ -78,9 +75,10 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
   private readonly _onView = (): void => this.#scheduleViewLayout();
 
   constructor(points: Iterable<LatLngLike> = [], options: MarkerCollectionOptions = {}) {
+    rejectStyleAliases(options, "point");
     validateMarkerOptions(options.marker ?? {});
-    const fill = options.fill ?? options.color ?? "#0f766e";
-    const fillOpacity = options.fillOpacity ?? options.opacity ?? 0.88;
+    const fill = options.fill ?? "#0f766e";
+    const fillOpacity = options.fillOpacity ?? 0.88;
     const markerOpts: MarkerOptions = {
       keyboard: false,
       interactive: false,
@@ -106,16 +104,14 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
       ...options,
       fill,
       fillOpacity,
-      color: fill,
-      opacity: fillOpacity,
       marker: markerOpts
     });
-    this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
-    this.options.domLimit = Math.max(0, Math.floor(this.options.domLimit));
-    this.options.htmlButtonLimit = Math.max(0, Math.floor(this.options.htmlButtonLimit));
-    this.options.buttonCellSize = Math.max(0, Number(this.options.buttonCellSize) || 0);
+    this.writableOptions.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
+    this.writableOptions.domLimit = Math.max(0, Math.floor(this.options.domLimit));
+    this.writableOptions.htmlButtonLimit = Math.max(0, Math.floor(this.options.htmlButtonLimit));
+    this.writableOptions.buttonCellSize = Math.max(0, Number(this.options.buttonCellSize) || 0);
     const iconMinZoom = Number(this.options.iconMinZoom);
-    this.options.iconMinZoom = Number.isFinite(iconMinZoom) ? iconMinZoom : Number.POSITIVE_INFINITY;
+    this.writableOptions.iconMinZoom = Number.isFinite(iconMinZoom) ? iconMinZoom : Number.POSITIVE_INFINITY;
     this.index = new SpatialGridIndex(this.options.indexCellSize);
     this._schedule = rafThrottle(() => this.redraw());
     this.setLatLngs(points);
@@ -276,8 +272,8 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
     if (!this._webgl) {
       this._webgl = webglPointLayer(pts, {
         pointSize: this.options.pointSize,
-        color: this.options.color,
-        opacity: this.options.opacity,
+        color: this.options.fill,
+        opacity: this.options.fillOpacity,
         interactive: false,
         maxDpr: 1.5
       });
@@ -429,8 +425,8 @@ export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
     const svg = createSvgEl("svg");
     svg.classList.add("oh-svg-marker-collection");
     const group = createSvgEl("g", svg);
-    group.setAttribute("fill", this.options.color);
-    group.setAttribute("fill-opacity", String(this.options.opacity));
+    group.setAttribute("fill", this.options.fill);
+    group.setAttribute("fill-opacity", String(this.options.fillOpacity));
     this._domContainer.appendChild(svg);
     this._svg = svg;
     this._svgGroup = group;

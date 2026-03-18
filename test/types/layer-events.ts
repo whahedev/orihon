@@ -37,14 +37,14 @@ path.on("click", (event) => {
   const position: LatLng = event.latlng;
   const original: MouseEvent | PointerEvent = event.originalEvent;
 });
-circle.once("mouseover", (event) => { const original: PointerEvent = event.detail.originalEvent; });
+circle.once("mouseover", (event) => { const original: PointerEvent = event.originalEvent; });
 const pathListener: EventHandler<EventFor<PathEventMap, "mouseout", Polyline>> = () => {};
 path.on("mouseout", pathListener).off("mouseout", pathListener);
 // @ts-expect-error The callback cannot override a literal event's position type.
 path.on("click", (event: { type: "click"; latlng: string }) => {});
 popup.on("open", (event) => { const owner: Orihon = event.map; });
 popup.on("close", (event) => {
-  const owner: Orihon | null = event.detail.map;
+  const owner: Orihon | null = event.map;
   // @ts-expect-error onRemove can also be called while detached.
   const required: Orihon = event.map;
 });
@@ -63,11 +63,11 @@ video.on("error", (event) => {
   const url: string = event.url;
 });
 svg.on("click", (event) => { const position: LatLng = event.latlng; });
-image.on("click", (event) => { const position: LatLng = event.detail.latlng; });
+image.on("click", (event) => { const position: LatLng = event.latlng; });
 text.on("layout", (event) => { const count: number = event.count; });
 tiles.on("tileload", (event) => {
   const x: number = event.x;
-  const url: string = event.detail.url;
+  const url: string = event.url;
   const tile: HTMLImageElement | undefined = event.tile;
   // @ts-expect-error The unified tile factory may choose a GPU backend.
   const requiredTile: HTMLImageElement = event.tile;

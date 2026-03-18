@@ -73,8 +73,11 @@ circleMarker({ lat: 55.75, lng: 37.62 }, { radiusPixels: 8 });
 `Circle` / `circle()` and `setRadius()` now require the exported `CircleRadius`
 union: exactly one of `radiusMeters` or `radiusMapUnits`. Numeric radii are
 rejected. `getRadius()` returns a copy of that unit-bearing object, not a number;
-the old mutable `radiusMeters` field is removed. A mismatched CRS rejects before
-attachment or radius mutation. Detached map-unit circles retain correct bounds.
+the old mutable `radiusMeters` field is removed. Prefer the unit-named methods
+`getRadiusMeters()` / `setRadiusMeters()` and `getRadiusMapUnits()` /
+`setRadiusMapUnits()`; asking for the inactive unit throws. A mismatched CRS
+rejects before attachment or radius mutation. Detached map-unit circles retain
+correct bounds.
 
 `CircleMarker` replaces `radius` with `radiusPixels`, `getRadius()` with
 `getRadiusPixels()`, and `setRadius()` with `setRadiusPixels()`. Its public
@@ -228,6 +231,107 @@ commit a late feature, and browser `pointercancel` now discards the draft rather
 than treating it as pointer-up. Toolbar transfers remove the previous DOM/control
 registration; failed control attachment rolls back the new registration.
 
+## Layer options are read-only
+
+`layer.options` is a `Readonly` configuration snapshot. Direct field writes do not
+update rendering and are rejected by TypeScript:
+
+```js
+// Before (compiled, but did not refresh DOM)
+marker.options.opacity = 0.5;
+
+// After
+marker.setOpacity(0.5);
+path.setStyle({ stroke: "#2563eb" });
+```
+
+## Layer iteration
+
+`eachLayer(callback, context)` no longer accepts a second `thisArg`. Use an arrow
+function or `for…of`:
+
+```js
+// Before
+map.eachLayer(function (layer) { this.handle(layer); }, this);
+
+// After
+for (const layer of map.layers) this.handle(layer);
+// or
+map.eachLayer((layer) => this.handle(layer));
+```
+
+`map.layers` is a `ReadonlySet`. `layers.clear()` / `layers.add()` no longer type-check;
+mutate through `addLayer` / `removeLayer`.
+
+## FeatureSource batch deltas
+
+`FeatureSource.batch()` no longer collapses every transaction to `reset`. Nested
+`add` / `update` / `remove` coalesce into one `{ type: "batch", changes }` event.
+`replace()` and `clear()` (including inside `batch`) still emit `reset`.
+`getSnapshot()` returns a cached object for the current version. Async `batch`
+callbacks throw `TypeError`. `update()` always shallow-merges.
+
+Custom `ReadonlyFeatureSource` consumers must handle `type: "batch"` (or treat
+unknown types as a full snapshot refresh).
+
+## Easy object-first commands
+
+Easy `addX` methods are object-first only:
+
+```js
+// Before
+map.addMarker(position, { popup: "Москва", color: "#2563eb" });
+map.addPolyline(route, { stroke: "#2563eb" });
+map.addPolygon(area, { fill: "#2563eb" });
+map.addTileLayer(url, { opacity: 0.8 });
+map.addGeoJSON(data, { style });
+
+// After
+map.addMarker({
+  position,
+  appearance: { color: "#2563eb" },
+  popup: "Москва"
+});
+map.addPolyline({ points: route, style: { stroke: "#2563eb" } });
+map.addPolygon({ rings: area, style: { fill: "#2563eb" } });
+map.addTileLayer({ url, opacity: 0.8 });
+map.addGeoJSON({ data, style });
+```
+
+Built-in marker glyph fields belong under `appearance`, not at the top level.
+
+## Easy map-centric dialect
+
+Easy no longer offers a declarative `map.add({ type, ... })` DSL or a
+`map.add(layer)` overload. Prefer one subject per API level:
+
+```js
+// Easy — map is the subject
+map.addMarker({ position: { lat: 55.75, lng: 37.62 }, appearance: { color: "#2563eb" }, popup: "Москва" });
+map.addPolyline({ points: route, style: { stroke: "#2563eb" } });
+
+// Standard — layer is the subject
+marker({ lat: 55.75, lng: 37.62 }).addTo(map);
+```
+
+```js
+// Before
+map.add({ type: "marker", position, popup: "Москва" });
+map.add({ type: "polyline", coordinates: route, style });
+map.add({ type: "geojson", data });
+map.add({ type: "raster", url });
+
+// After
+map.addMarker({ position, appearance: { color: "#2563eb" }, popup: "Москва" });
+map.addPolyline({ points: route, style });
+map.addGeoJSON({ data });
+map.addTileLayer({ url });
+```
+
+Attach a ready layer with `layer.addTo(map)` or `map.addLayer(layer)` when mixing
+with the Layer API. Description types (`EasyAddDescription`,
+`EasyMarkerDescription`, …) are removed.
+
 ## Exclusive marker and factory modes
 
 Marker visuals now have three mutually exclusive forms:
@@ -273,6 +377,22 @@ options instead). Direct RemoteObjectManager construction also rejects a source
 or points. `LocalObjectManagerOptions` and the updated unified union expose the
 factory constraints while overloads retain their precise result classes.
 
+## Flat event objects
+
+Event payloads are no longer mirrored under `event.detail`. Use the flat fields:
+
+```ts
+// Before
+map.on("click", (event) => {
+  console.log(event.detail.latlng, event.latlng);
+});
+
+// After
+map.on("click", (event) => {
+  console.log(event.latlng);
+});
+```
+
 ## Typed event subscriptions
 
 `on()`, `once()` and `off()` infer payloads from literal event names. Map, Marker,
@@ -288,7 +408,7 @@ The declarations use TypeScript's built-in `NoInfer`; consumers need TypeScript
 import type { EventFor, EventHandler, MapEventMap, Orihon } from "orihon";
 
 map.on("click", (event) => {
-  console.log(event.latlng.lat, event.detail.containerPoint.x);
+  console.log(event.latlng.lat, event.containerPoint.x);
 });
 const onZoom: EventHandler<EventFor<MapEventMap, "zoom", Orihon>> = (event) => {
   console.log(event.zoom.toFixed(1));
@@ -315,14 +435,14 @@ declare module "orihon" {
 map.on("plugin:ready", (event) => console.log(event.count));
 ```
 
-Payload fields remain available both directly and under `detail`. `target` is
-the current receiving emitter; `sourceTarget` may be a propagated child and must
-be narrowed before using a concrete layer API. DrawControl delegates subscriptions
-to its DrawHandler, so its events' `target` is the handler, not the control.
-Remote `error` is a union: request failures carry `context`, while layout failures
-carry `phase: "layout"`. Provider errors remain `unknown`, not necessarily Error.
-Marker drag events do not promise an `originalEvent`; manager hover-out positions
-can be null or absent.
+Payload fields live only on the flat event object (`event.latlng`, not
+`event.detail.latlng`). `target` is the current receiving emitter; `sourceTarget`
+may be a propagated child and must be narrowed before using a concrete layer API.
+DrawControl delegates subscriptions to its DrawHandler, so its events' `target`
+is the handler, not the control. Remote `error` is a union: request failures carry
+`context`, while layout failures carry `phase: "layout"`. Provider errors remain
+`unknown`, not necessarily Error. Marker drag events do not promise an
+`originalEvent`; manager hover-out positions can be null or absent.
 
 Dynamic strings, unregistered names and extra payload fields retain `unknown`,
 not `any`. Event-name unions support narrowing via `event.type`. This is a
@@ -366,5 +486,8 @@ custom-name fallback; no synthetic load/click events have been added.
 
 ## Remaining review work
 
-Mutable public state and renderer registration/factory return types remain open
-and must be completed before a next-major release.
+Renderer registration / import-order capability coupling, ObjectManager identity
+(`create` / strict `update` / `upsert`), and broader I/O error hierarchy remain open
+and must be completed before a next-major release. `tileLayer()` now returns the
+shared `RasterTileLayer` contract; explicit backend failures still fall back to DOM
+for `"auto"` / unavailable GPU.

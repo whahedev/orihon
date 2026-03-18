@@ -171,11 +171,9 @@ test("Easy marker overloads enforce the same visual contract without leaving gho
   const map = mapFor(t, createEasyMap);
   const count = map.layers.size;
   const options = { icon: icon({ content: "icon" }), content: "mixed" };
-  assert.throws(() => map.addMarker(position, options), TypeError);
   assert.throws(() => map.addMarker({ position, ...options }), TypeError);
-  assert.throws(() => map.add({ type: "marker", position, ...options }), TypeError);
   assert.equal(map.layers.size, count);
-  assert.equal(map.addMarker(position, { content: "" }).el.textContent, "");
+  assert.equal(map.addMarker({ position, content: "" }).el.textContent, "");
 });
 
 test("React validates visual mode props before hook initialization on every render", () => {

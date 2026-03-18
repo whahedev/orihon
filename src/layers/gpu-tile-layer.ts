@@ -16,7 +16,7 @@ import type { RasterTileEventDetail } from "./tile-layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { compileShader } from "../webgl-utils.js";
-import { modulo, nativeTileZoom, normalizeTileBounds, type TileTemplate } from "./tile-layer.js";
+import { modulo, nativeTileZoom, normalizeTileBounds, shouldRedrawTiles, type RasterTileLayer, type RasterTileRendererKind, type TileRedrawFlag, type TileTemplate } from "./tile-layer.js";
 import {
   forEachTileInRect,
   forEachTileRectDelta,
@@ -193,7 +193,7 @@ export interface GPUTileLayerEventMap {
   tileabort: Omit<RasterTileEventDetail, "tile">;
 }
 
-export class GPUTileLayer extends Layer<ResolvedOptions, GPUTileLayerEventMap> {
+export class GPUTileLayer extends Layer<ResolvedOptions, GPUTileLayerEventMap> implements RasterTileLayer {
   template: TileTemplate;
   canvas: HTMLCanvasElement | null = null;
   gl: WebGLRenderingContext | null = null;
@@ -311,6 +311,10 @@ export class GPUTileLayer extends Layer<ResolvedOptions, GPUTileLayerEventMap> {
     };
   }
 
+  get rendererKind(): RasterTileRendererKind {
+    return this.renderer;
+  }
+
   getTileUrl(x: number, y: number, z: number): string {
     const worldSize = 2 ** z;
     const urlX = this.options.noWrap ? x : modulo(x, worldSize);
@@ -338,15 +342,15 @@ export class GPUTileLayer extends Layer<ResolvedOptions, GPUTileLayerEventMap> {
     return this;
   }
 
-  setUrl(template: TileTemplate, redraw = true): this {
+  setUrl(template: TileTemplate, redraw: TileRedrawFlag = true): this {
     this.template = template;
-    if (redraw) this.redraw();
+    if (shouldRedrawTiles(redraw, true)) this.redraw();
     return this;
   }
 
   setOpacity(opacity: number): this {
     const next = Number(opacity);
-    this.options.opacity = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
+    this.writableOptions.opacity = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
     if (this.canvas) this.canvas.style.opacity = String(this.options.opacity);
     this._forceGpu = true;
     this._dirty = true;

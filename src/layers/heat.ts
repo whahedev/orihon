@@ -321,7 +321,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions, HeatEventMap> {
       throw new TypeError(`Invalid heat mode: ${String(mode)}`);
     }
     if (this.options.mode === mode) return this;
-    this.options.mode = mode;
+    this.writableOptions.mode = mode;
     this.#queueRebuild();
     return this;
   }
@@ -331,7 +331,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions, HeatEventMap> {
       throw new TypeError(`Invalid heatmap backend: ${String(backend)}`);
     }
     if (this.options.backend === backend) return this;
-    this.options.backend = backend;
+    this.writableOptions.backend = backend;
     this.#queueRebuild();
     return this;
   }
@@ -339,7 +339,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions, HeatEventMap> {
   setEvaluation(evaluation: HeatEvaluation): this {
     assertHeatEvaluation(evaluation);
     if (this.options.evaluation === evaluation) return this;
-    this.options.evaluation = evaluation;
+    this.writableOptions.evaluation = evaluation;
     this._field = null;
     this._rings = [];
     this._thresholds = [];
@@ -348,7 +348,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions, HeatEventMap> {
   }
 
   setLabels(enabled: boolean): this {
-    this.options.labels = Boolean(enabled);
+    this.writableOptions.labels = Boolean(enabled);
     this.render();
     return this;
   }
@@ -364,7 +364,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions, HeatEventMap> {
   }
 
   setInteractive(enabled: boolean): this {
-    this.options.interactive = Boolean(enabled);
+    this.writableOptions.interactive = Boolean(enabled);
     this.#syncInteraction();
     return this;
   }
@@ -442,7 +442,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions, HeatEventMap> {
   }
 
   setGradient(gradient: HeatGradient): this {
-    this.options.gradient = { ...gradient };
+    this.writableOptions.gradient = { ...gradient };
     this._palette = null;
     this.#refreshFieldCanvas();
     this.render();

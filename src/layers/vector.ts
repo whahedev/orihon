@@ -6,8 +6,9 @@ import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions, TooltipOptions } from "../overlays/div-overlay.js";
 import { Renderer, type RendererOptions } from "../renderer.js";
+import { rejectStyleAliases, type RemovedLineStyleAliases } from "../style-contract.js";
 
-export interface PathOptions extends RendererOptions {
+export interface PathOptions extends RendererOptions, RemovedLineStyleAliases {
   stroke?: string;
   strokeWidth?: number;
   strokeOpacity?: number;
@@ -77,6 +78,7 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions, PathEventMap> {
   private arrowMarkerId = "";
 
   constructor(options: PathOptions = {}) {
+    rejectStyleAliases(options, "line");
     super({
       pane: "overlay",
       stroke: "#2563eb",
@@ -122,7 +124,8 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions, PathEventMap> {
   }
 
   setStyle(style: PathOptions): this {
-    Object.assign(this.options, style);
+    rejectStyleAliases(style, "line");
+    Object.assign(this.writableOptions, style);
     this.#style();
     this.render();
     return this;
@@ -139,7 +142,7 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions, PathEventMap> {
   }
 
   setInteractive(interactive: boolean): this {
-    this.options.interactive = Boolean(interactive);
+    this.writableOptions.interactive = Boolean(interactive);
     this.#syncInteraction();
     return this;
   }
@@ -576,6 +579,20 @@ export class Circle extends PathLayer {
   getLatLng(): LatLng { return this.center.clone(); }
   getRadius(): CircleRadius { return { ...this.#radius }; }
 
+  getRadiusMeters(): number {
+    if (this.#radius.radiusMeters === undefined) {
+      throw new TypeError("Circle is using radiusMapUnits. Call getRadiusMapUnits() or setRadiusMeters().");
+    }
+    return this.#radius.radiusMeters;
+  }
+
+  getRadiusMapUnits(): number {
+    if (this.#radius.radiusMapUnits === undefined) {
+      throw new TypeError("Circle is using radiusMeters. Call getRadiusMeters() or setRadiusMapUnits().");
+    }
+    return this.#radius.radiusMapUnits;
+  }
+
   getBounds(): LatLngBounds {
     if (this.#radius.radiusMapUnits !== undefined) {
       return new LatLngBounds(
@@ -631,6 +648,14 @@ export class Circle extends PathLayer {
     this.#radius = next;
     this.render();
     return this;
+  }
+
+  setRadiusMeters(radiusMeters: number): this {
+    return this.setRadius({ radiusMeters });
+  }
+
+  setRadiusMapUnits(radiusMapUnits: number): this {
+    return this.setRadius({ radiusMapUnits });
   }
 
   override render(): void {

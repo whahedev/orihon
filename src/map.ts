@@ -187,7 +187,9 @@ export class Orihon extends Evented<MapEventMap> {
   pixelOrigin = new Point(0, 0);
   /** Screen-space pan velocity in px/s. Updated during drag / inertia; zero when idle. */
   panVelocity = new Point(0, 0);
-  readonly layers = new Set<Layer>();
+  readonly #layers = new Set<Layer>();
+  /** Attached layers; iterate with `for (const layer of map.layers)`. Mutation goes through `addLayer` / `removeLayer`. */
+  get layers(): ReadonlySet<Layer> { return this.#layers; }
   readonly controls = new Set<Control>();
   readonly locale: OrihonLocale;
   readonly behaviors: BehaviorManager;
@@ -690,7 +692,7 @@ export class Orihon extends Evented<MapEventMap> {
     if (this._destroyed) return;
     // Single camera snapshot for this frame — every wantsFrameRender layer reads these fields.
     this.pixelOrigin = this.#pixelOriginFor();
-    for (const layer of this.layers) {
+    for (const layer of this.#layers) {
       if (layer.wantsFrameRender()) layer.render();
     }
     for (const control of this.controls) control.render();
@@ -773,13 +775,13 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   addLayer(layer: Layer): this {
-    if (this.layers.has(layer)) return this;
-    this.layers.add(layer);
+    if (this.#layers.has(layer)) return this;
+    this.#layers.add(layer);
     try {
       layer.onAdd(this);
       layer.render();
     } catch (error) {
-      this.layers.delete(layer);
+      this.#layers.delete(layer);
       if (layer.map === this) layer.onRemove();
       throw error;
     }
@@ -788,13 +790,8 @@ export class Orihon extends Evented<MapEventMap> {
     return this;
   }
 
-  /** Short map-centric alias for `addLayer`; complements `layer.addTo(map)`. */
-  add(layer: Layer): this {
-    return this.addLayer(layer);
-  }
-
   removeLayer(layer: Layer): this {
-    if (!this.layers.delete(layer)) return this;
+    if (!this.#layers.delete(layer)) return this;
     layer.onRemove();
     layer.emit("remove", { map: this }, false);
     this.emit("layerremove", { layer });
@@ -802,17 +799,18 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   hasLayer(layer: Layer): boolean {
-    return this.layers.has(layer);
+    return this.#layers.has(layer);
   }
 
-  eachLayer(callback: (layer: Layer) => void, context?: unknown): this {
-    for (const layer of [...this.layers]) callback.call(context, layer);
+  /** Visit a snapshot of attached layers. Prefer `for (const layer of map.layers)` in new code. */
+  eachLayer(callback: (layer: Layer) => void): this {
+    for (const layer of [...this.#layers]) callback(layer);
     return this;
   }
 
   query(containerPoint: PointLike, options: QueryOptions = {}): QueryHit[] {
     const target = point(containerPoint);
-    const candidates = options.layers ? [...options.layers] : [...this.layers];
+    const candidates = options.layers ? [...options.layers] : [...this.#layers];
     const normalized: ResolvedQueryOptions = {
       tolerance: Math.max(0, Number(options.tolerance ?? 8)),
       layers: candidates,
@@ -1017,16 +1015,12 @@ export class Orihon extends Evented<MapEventMap> {
     return Math.max(0, Math.min(this.options.maxZoom, Math.floor(Math.min(zx, zy))));
   }
 
-  remove(): this {
-    return this.destroy();
-  }
-
   destroy(): this {
     if (this._destroyed) return this;
     if (this._wheelTimer) clearTimeout(this._wheelTimer);
     this.stop();
     this.#endViewSession(true, true);
-    for (const layer of [...this.layers]) this.removeLayer(layer);
+    for (const layer of [...this.#layers]) this.removeLayer(layer);
     for (const control of [...this.controls]) this.removeControl(control);
     for (const unsubscribe of this._unsub.splice(0)) unsubscribe();
     this._resizeObserver?.disconnect();

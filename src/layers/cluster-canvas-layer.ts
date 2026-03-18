@@ -37,8 +37,7 @@ export interface ClusterCanvasEventMap {
   clusterclick: { originalEvent: MouseEvent; clusterKey: string; latlng: LatLngLike; count: number };
 }
 
-export class ClusterCanvasLayer extends Layer<LayerOptions, ClusterCanvasEventMap> {
-  declare options: ClusterCanvasLayerOptions;
+export class ClusterCanvasLayer extends Layer<ClusterCanvasLayerOptions, ClusterCanvasEventMap> {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private items: ClusterCanvasItem[] = [];

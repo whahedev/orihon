@@ -71,8 +71,14 @@ export class WMSTileLayer extends TileLayer {
     return `${this.baseUrl}${this.baseUrl.includes("?") ? "&" : "?"}${query.toString()}`;
   }
 
-  setParams(params: Record<string, WMSParameterValue>, noRedraw = false): this {
+  setParams(params: Record<string, WMSParameterValue>, options?: { redraw?: boolean }): this;
+  /** @deprecated Prefer `setParams(params, { redraw: false })`. */
+  setParams(params: Record<string, WMSParameterValue>, noRedraw?: boolean): this;
+  setParams(params: Record<string, WMSParameterValue>, noRedrawOrOptions: boolean | { redraw?: boolean } = false): this {
     Object.assign(this.wmsParams, params);
+    const noRedraw = typeof noRedrawOrOptions === "object"
+      ? noRedrawOrOptions.redraw === false
+      : Boolean(noRedrawOrOptions);
     if (!noRedraw && this.map) {
       const map = this.map;
       map.removeLayer(this);

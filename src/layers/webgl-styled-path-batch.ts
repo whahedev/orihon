@@ -7,11 +7,12 @@ import { clampOpacity, parseCssColor } from "../webgl-utils.js";
 import { normalizeDashArray } from "./vector.js";
 import type { ObjectGradientStop } from "../services/object-types.js";
 import { approxHaversineMeters } from "../services/object-geometry.js";
+import { rejectStyleAliases, type RemovedLineStyleAliases } from "../style-contract.js";
 
-export interface StyledPathStyle {
-  color?: string;
-  opacity?: number;
-  width?: number;
+export interface StyledPathStyle extends RemovedLineStyleAliases {
+  stroke?: string;
+  strokeOpacity?: number;
+  strokeWidth?: number;
   dashArray?: readonly number[] | string | null;
   dashOffset?: number;
   gradient?: readonly ObjectGradientStop[] | null;
@@ -23,6 +24,8 @@ export interface StyledPathInput {
   style?: StyledPathStyle;
   id?: string | number;
 }
+
+type ResolvedStyledPathStyle = Required<Omit<StyledPathStyle, keyof RemovedLineStyleAliases>>;
 
 export interface WebGLStyledPathBatchOptions extends LayerOptions {
   maxDpr?: number;
@@ -41,7 +44,7 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
     lat: Float64Array;
     lng: Float64Array;
     distances: Float64Array;
-    style: Required<StyledPathStyle>;
+    style: ResolvedStyledPathStyle;
     id: string | number | null;
     bbox: readonly [number, number, number, number];
   }> = [];
@@ -141,7 +144,7 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
     let best: { index: number; dist: number } | null = null;
     for (let i = this.paths.length - 1; i >= 0; i--) {
       const path = this.paths[i];
-      const hitTol = Math.max(tolerance, path.style.width * 0.5 + 2);
+      const hitTol = Math.max(tolerance, path.style.strokeWidth * 0.5 + 2);
       const dist = this.#distanceToPath(point, path);
       if (dist == null || dist > hitTol) continue;
       if (!best || dist < best.dist) best = { index: i, dist };
@@ -209,7 +212,7 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
 
   #strokePath(
     ctx: CanvasRenderingContext2D,
-    path: { lat: Float64Array; lng: Float64Array; distances: Float64Array; style: Required<StyledPathStyle> }
+    path: { lat: Float64Array; lng: Float64Array; distances: Float64Array; style: ResolvedStyledPathStyle }
   ): void {
     if (!this.map || path.lat.length < 2) return;
     const total = Math.max(path.distances[path.distances.length - 1], 1e-6);
@@ -222,8 +225,8 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
         const b = this.map.latLngToContainerPoint({ lat: path.lat[i], lng: path.lng[i] });
         const t = path.distances[i] / total;
         ctx.strokeStyle = sampleGradient(path.style.gradient!, t);
-        ctx.globalAlpha = path.style.opacity;
-        ctx.lineWidth = path.style.width;
+        ctx.globalAlpha = path.style.strokeOpacity;
+        ctx.lineWidth = path.style.strokeWidth;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         if (dash.length) {
@@ -246,9 +249,9 @@ export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOpt
       if (i === 0) ctx.moveTo(pt.x, pt.y);
       else ctx.lineTo(pt.x, pt.y);
     }
-    ctx.strokeStyle = path.style.color;
-    ctx.globalAlpha = path.style.opacity;
-    ctx.lineWidth = path.style.width;
+    ctx.strokeStyle = path.style.stroke;
+    ctx.globalAlpha = path.style.strokeOpacity;
+    ctx.lineWidth = path.style.strokeWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     if (dash.length) {
@@ -280,11 +283,12 @@ export function webglStyledPathBatch(options?: WebGLStyledPathBatchOptions): Web
   return new WebGLStyledPathBatch(options);
 }
 
-function normalizeStyle(style: StyledPathStyle | undefined): Required<StyledPathStyle> {
+function normalizeStyle(style: StyledPathStyle | undefined): ResolvedStyledPathStyle {
+  if (style) rejectStyleAliases(style, "line");
   return {
-    color: style?.color ?? "#2563eb",
-    opacity: clampOpacity(style?.opacity ?? 0.85),
-    width: Math.max(0.5, Number(style?.width) || 2),
+    stroke: style?.stroke ?? "#2563eb",
+    strokeOpacity: clampOpacity(style?.strokeOpacity ?? 0.85),
+    strokeWidth: Math.max(0.5, Number(style?.strokeWidth) || 2),
     dashArray: normalizeDashArray((style?.dashArray as string | number[] | null | undefined) ?? null),
     dashOffset: Number(style?.dashOffset) || 0,
     gradient: style?.gradient ? normalizeGradient(style.gradient) : null

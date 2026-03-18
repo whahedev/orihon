@@ -492,9 +492,9 @@ test("custom style receives object state zoom selected hovered", () => {
 
       return {
 
-        color: context.selected ? "#7c3aed" : state.alarm ? "#dc2626" : "#16a34a",
+        fill: context.selected ? "#7c3aed" : state.alarm ? "#dc2626" : "#16a34a",
 
-        opacity: 0.5,
+        fillOpacity: 0.5,
 
         size: context.zoom >= 10 ? 20 : 5
 
@@ -628,9 +628,9 @@ test("WebGL setObjectState patches styles without full setData rebuild", () => {
 
     style: (object, state) => ({
 
-      color: state.alarm ? "#dc2626" : "#2563eb",
+      fill: state.alarm ? "#dc2626" : "#2563eb",
 
-      opacity: 1,
+      fillOpacity: 1,
 
       size: state.alarm ? 20 : 8
 
@@ -773,8 +773,8 @@ test("WebGL filtered hidden style stays synchronized in the canonical pack", () 
     style: (_object, state) => {
       styleCalls++;
       return {
-        color: state.alarm ? "#dc2626" : "#2563eb",
-        opacity: 1,
+        fill: state.alarm ? "#dc2626" : "#2563eb",
+        fillOpacity: 1,
         size: state.alarm ? 20 : 8
       };
     }
@@ -861,9 +861,9 @@ test("setObjectStates batch triggers a single WebGL render", () => {
 
     style: (_object, state) => ({
 
-      color: state.active ? "#16a34a" : "#64748b",
+      fill: state.active ? "#16a34a" : "#64748b",
 
-      opacity: 1,
+      fillOpacity: 1,
 
       size: 8
 
@@ -931,7 +931,7 @@ test("zoom-dependent style updates size without rebuilding spatial index", () =>
 
     style: (_object, _state, { zoom }) => ({
 
-      color: "#2563eb",
+      fill: "#2563eb",
 
       size: zoom >= 10 ? 20 : 5
 
@@ -1176,7 +1176,7 @@ test("public ObjectManager style API surface", () => {
 
   const manager = new ObjectManager({
 
-    style: () => ({ color: "#000000", size: 9 })
+    style: () => ({ fill: "#000000", size: 9 })
 
   });
 

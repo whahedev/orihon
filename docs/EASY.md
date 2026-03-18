@@ -2,6 +2,17 @@
 
 `orihon/easy` is a beginner-oriented API adapter over the **Standard** package tier. It is not a fourth engine build and does not create a second map implementation. The returned value is the regular `Orihon` map, with a few instance-local convenience methods.
 
+## One sentence language
+
+Orihon keeps **two** public sentence subjects:
+
+| Level | Subject | Canonical form |
+| --- | --- | --- |
+| **Easy** | the map | `map.addMarker({ position, appearance })` |
+| **Standard (Layer API)** | the layer | `marker(position).addTo(map)` |
+
+Easy is **object-first only**: every `addX` takes one options object (self-documenting fields + autocomplete). There is no positional `addMarker(latlng, options)`, no `addPolyline(points, style)`, and no declarative `map.add({ type })`.
+
 ```ts
 import { createMap } from "orihon/easy";
 import "orihon/orihon.css";
@@ -15,9 +26,19 @@ const map = createMap("map", {
   }
 });
 
-map.addMarker({
+const office = map.addMarker({
   position: { lat: 55.751244, lng: 37.618423 },
-  popup: "Москва"
+  appearance: { shape: "pin", color: "#2563eb" },
+  popup: "Office",
+  draggable: true
+});
+
+map.addPolyline({
+  points: [
+    { lat: 55.75, lng: 37.61 },
+    { lat: 55.76, lng: 37.63 }
+  ],
+  style: { stroke: "#2563eb", strokeWidth: 4 }
 });
 ```
 
@@ -51,161 +72,62 @@ String basemaps use the Standard DOM tile renderer by default. An explicit `rend
 
 ## Map-centric methods
 
-The Easy map groups the most common creation operations under `map.add…`, so IDE autocomplete can act as a compact catalogue:
+| Method | Options object | Returns |
+| --- | --- | --- |
+| `addMarker` | `{ position, appearance? \| content \| icon, popup?, … }` | `Marker` |
+| `addPolyline` | `{ points, style?, popup?, … }` | `Polyline` |
+| `addPolygon` | `{ rings, style?, popup?, … }` | `Polygon` |
+| `addTileLayer` | `{ url, …TileLayerOptions }` | `RasterTileLayer` |
+| `addGeoJSON` | `{ data?, …GeoJSONOptions }` | `GeoJSONLayer` |
+| `setBasemap` / `getBasemap` | basemap config or ready `Layer` | map / layer |
 
-| Method | Creates and returns |
-| --- | --- |
-| `addMarker(options)` or `addMarker(position, options?)` | A normal interactive `Marker`; the object form can also bind a popup and tooltip. |
-| `addTileLayer(template, options?)` | A normal Standard `TileLayer`. |
-| `addPolyline(points, options?)` | A normal `Polyline`. |
-| `addPolygon(rings, options?)` | A normal `Polygon`, including polygons with inner rings. |
-| `addGeoJSON(data, options?)` | A normal `GeoJSONLayer`. |
-| `add(layer)` | Adds any already-created `Layer`; this short alias is available on every Orihon map. |
-| `addLayer(layer)` / `addControl(control)` | The existing explicit lifecycle methods remain available. |
+Built-in marker visuals use nested `appearance` (`shape`, `color`, …). Flat `color` / `shape` on the Easy options object are rejected so autocomplete points at one place.
 
 The returned objects are not Easy wrappers. They retain their complete layer API, events and removal lifecycle.
 
-## One declarative `map.add(description)`
-
-Component frameworks and configuration-driven applications can express the same objects through one discriminated description. TypeScript narrows the valid fields from `type`, and `map.add()` returns the created normal Orihon layer.
-
-```ts
-const moscow = map.add({
-  type: "marker",
-  position: { lng: 37.6176, lat: 55.7558 },
-  popup: "Москва"
-});
-
-const route = map.add({
-  type: "polyline",
-  coordinates: [
-    { lng: 37.60, lat: 55.75 },
-    { lng: 37.65, lat: 55.77 }
-  ],
-  style: {
-    width: 4,
-    opacity: 0.8,
-    stroke: "#2563eb"
-  }
-});
-
-const places = map.add({ type: "geojson", data });
-const basemap = map.add({ type: "raster", url });
-```
-
-Supported descriptions:
-
-| `type` | Required data | Options | Result |
-| --- | --- | --- | --- |
-| `marker` | `position` | Normal marker fields plus `popup`, `popupOptions`, `tooltip`, `tooltipOptions` | `Marker` |
-| `polyline` | `coordinates` | `style`, popup and tooltip fields | `Polyline` |
-| `polygon` | `coordinates` (one ring or rings with holes) | `style`, popup and tooltip fields | `Polygon` |
-| `geojson` | `data` (`GeoJSONData` or `FeatureSource`) | `options: GeoJSONOptions` | `GeoJSONLayer` |
-| `raster` | `url` | `options: TileLayerOptions` | `TileLayer` |
-
-Polyline and polygon styles use the normal `stroke`, `strokeWidth`, `strokeOpacity`, `fill` and `fillOpacity` vocabulary. Inside Easy descriptions, `width` and `opacity` are concise aliases for `strokeWidth` and `strokeOpacity`; canonical fields win if both forms are supplied.
-
-This shape maps directly to a component prop or reactive configuration object. Framework integrations only need to retain the returned layer and call `remove()` when the component unmounts; they do not need a second renderer or a framework-specific map implementation.
-
-### `map.addMarker(options)`
-
-Creates a normal `Marker`, optionally binds its popup and tooltip, adds it to the map and returns it. The returned marker still supports the complete Layer API.
+### Examples
 
 ```ts
 const marker = map.addMarker({
   position: { lat: 52.52, lng: 13.405 },
   title: "Berlin",
-  color: "#0f766e",
+  appearance: { shape: "pin", color: "#0f766e" },
   popup: "Berlin",
   tooltip: "Open details"
 });
 
-marker.setOpacity(0.8).bindPopup("Updated content");
-```
-
-### `map.addTileLayer()`, `map.addPolyline()`, `map.addPolygon()` and `map.addGeoJSON()`
-
-Each method combines a regular Standard factory with `addTo(map)` and returns the created layer:
-
-```ts
-const route = map.addPolyline(
-  [[52.50, 13.38], [52.54, 13.43]],
-  { stroke: "#2563eb", strokeWidth: 3 }
-);
-
-const district = map.addPolygon(area, {
-  fill: "#2563eb",
-  fillOpacity: 0.2
+const route = map.addPolyline({
+  points: [{ lat: 52.50, lng: 13.38 }, { lat: 52.54, lng: 13.43 }],
+  style: { stroke: "#2563eb", strokeWidth: 3 }
 });
 
-const places = map.addGeoJSON(featureCollection, {
+const district = map.addPolygon({
+  rings: area,
+  style: { fill: "#2563eb", fillOpacity: 0.2 }
+});
+
+const places = map.addGeoJSON({
+  data: featureCollection,
   pointToLayer: (feature, position) => marker(position)
 });
 
-// A shared reactive source from `orihon/source` is accepted too.
-const livePlaces = map.addGeoJSON(placeSource);
-
-const labels = map.addTileLayer("https://example.test/{z}/{x}/{y}.png", {
+const labels = map.addTileLayer({
+  url: "https://example.test/{z}/{x}/{y}.png",
   opacity: 0.8
 });
 ```
 
-### `map.add(layer)`
-
-Use `add()` when a layer already exists or comes from another function. It returns the map, like `addLayer()`, so both composition styles remain equivalent:
-
-```ts
-const place = marker(({ lat: 52.52, lng: 13.405 }));
-
-map.add(place);                    // map-centric
-marker(({ lat: 52.52, lng: 13.405 })).addTo(map); // object-centric
-```
-
-The overload is intentional: `map.add(existingLayer)` returns the map, preserving the normal layer lifecycle; `map.add(description)` returns the newly created layer so an application can subscribe to it, update it or remove it later.
-
-### `map.setBasemap(basemap)`
-
-Replaces only the basemap owned by the Easy adapter. Other layers are not removed. Pass `false` or `null` to remove it.
-
-A ready Standard or custom layer is accepted unchanged. This keeps provider-specific methods available on the original object:
-
-```ts
-import { createMap } from "orihon/easy";
-import { wmtsTileLayer } from "orihon/standard";
-
-const basemap = wmtsTileLayer(url, {
-  layer: "basemap",
-  tileMatrixSet: "EPSG:3857"
-});
-
-const map = createMap("map", {
-  center: { lat: 55.751244, lng: 37.618423 },
-  zoom: 12,
-  basemap
-});
-
-map.getBasemap() === basemap; // true
-```
-
-### `map.getBasemap()`
-
-Returns the active Easy basemap as the original `Layer`, or `null`. URL/template basemaps return the `TileLayer` created by Easy.
-
-## Moving between API levels
-
-Easy and Layer API can be mixed because they use the same objects:
+### Mixing with the Layer API
 
 ```ts
 import { createMap } from "orihon/easy";
 import { polygon } from "orihon/standard";
 
-const map = createMap("map", { center: ({ lat: 52.52, lng: 13.405 }), zoom: 10 });
+const map = createMap("map", { center: { lat: 52.52, lng: 13.405 }, zoom: 10 });
 
-map.addMarker({ position: [52.52, 13.405] });
-map.add(polygon(area));
+map.addMarker({ position: { lat: 52.52, lng: 13.405 } }); // Easy sentence
+polygon(area).addTo(map);                                  // Layer sentence
 ```
-
-Applications can migrate to explicit layers gradually; there is no separate Easy runtime to replace.
 
 ## Why there is no `map.addSource()` yet
 

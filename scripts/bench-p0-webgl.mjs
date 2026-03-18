@@ -442,8 +442,8 @@ function runObjectManagerBench() {
     sceneFeatures: false,
     styleByCategory: false,
     style: (_object, state) => ({
-      color: state.active ? "#dc2626" : "#2563eb",
-      opacity: 1,
+      fill: state.active ? "#dc2626" : "#2563eb",
+      fillOpacity: 1,
       size: state.active ? 20 : 8
     })
   });

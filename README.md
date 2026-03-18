@@ -99,23 +99,23 @@ const map = createMap("map", {
 
 map.addMarker({
   position: { lat: 55.751244, lng: 37.618423 },
+  appearance: { shape: "pin", color: "#2563eb" },
   popup: "Москва"
 });
 
-map.addPolyline(route, { stroke: "#2563eb" });
-map.addPolygon(district, { fill: "#2563eb", fillOpacity: 0.2 });
-map.addGeoJSON(places);
-map.addTileLayer("https://example.test/{z}/{x}/{y}.png");
-
-// The same Easy surface can be configuration-driven:
-const routeLayer = map.add({
-  type: "polyline",
-  coordinates: route,
-  style: { stroke: "#2563eb", width: 4, opacity: 0.8 }
+map.addPolyline({
+  points: route,
+  style: { stroke: "#2563eb", strokeWidth: 4 }
 });
+map.addPolygon({
+  rings: district,
+  style: { fill: "#2563eb", fillOpacity: 0.2 }
+});
+map.addGeoJSON({ data: places });
+map.addTileLayer({ url: "https://example.test/{z}/{x}/{y}.png" });
 ```
 
-`orihon/easy` supports one discriminated `map.add(description)` contract for `marker`, `polyline`, `polygon`, `geojson` and `raster`, which maps naturally to React/Vue/Svelte props and configuration. The returned layers are normal Standard objects. `basemap` / `setBasemap()` accept either raster configuration or any ready `Layer`, including WMS, WMTS and custom implementations. Every map also accepts an already-created layer through `map.add(layer)`, while `layer.addTo(map)` remains unchanged. A MapLibre-style `addSource()` is deliberately deferred until Orihon has a real named, reusable source lifecycle instead of disguising a layer as a source. See the [Easy API guide](./docs/EASY.md).
+`orihon/easy` is map-centric and **object-first**: `addMarker`, `addPolyline`, `addPolygon`, `addGeoJSON` and `addTileLayer` each take one options object (nested `appearance` / `style` / `points` / `rings` / `url`). The Layer API remains layer-centric (`marker(position).addTo(map)`). There is no third declarative `map.add({ type, ... })` dialect and no positional Easy overloads. `basemap` / `setBasemap()` accept either raster configuration or any ready `Layer`, including WMS, WMTS and custom implementations. A MapLibre-style `addSource()` is deliberately deferred until Orihon has a real named, reusable source lifecycle instead of disguising a layer as a source. See the [Easy API guide](./docs/EASY.md).
 
 For data reused by several renderers, `orihon/source` provides a small reactive `FeatureSource`. One source can drive `geoJSON`, `textLayer` and `ObjectManager`, so an application can change rendering strategy without replacing its update model. Consumers depend only on the read-only structural protocol exported from Core; mutation, batching and storage remain optional. See the [FeatureSource guide](./docs/FEATURE_SOURCE.md).
 
@@ -143,7 +143,7 @@ import { fullscreenControl, measureControl, miniMap, graticuleLayer } from "orih
 import { bufferPoint } from "orihon/geo";
 ```
 
-Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 36 KiB, full (Advanced + WebGL/WebGPU) ≤ 105 KiB. Prefer the smallest entry that covers the feature set.
+Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 37 KiB, full (Advanced + WebGL/WebGPU) ≤ 105 KiB. Prefer the smallest entry that covers the feature set.
 
 **ObjectManager** is the Advanced-tier answer to heavy datasets: render and manage 100,000+ map objects without keeping 100,000 DOM markers alive.
 
@@ -650,7 +650,7 @@ For a script-tag/global setup:
 | Artifact | Budget |
 | --- | --- |
 | `orihon.core.esm.js` | ≤ 22 KiB gzip |
-| `orihon.standard.esm.js` | ≤ 36 KiB gzip |
+| `orihon.standard.esm.js` | ≤ 37 KiB gzip |
 | `orihon.esm.js` | ≤ 141 KiB gzip (Advanced + WebGL/WebGPU/WASM) |
 | `orihon.controls.esm.js` | ≤ 8 KiB gzip (imports shared modules) |
 | `orihon.geo.esm.js` | ≤ 2 KiB gzip (imports shared geometry) |

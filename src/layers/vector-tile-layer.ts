@@ -48,16 +48,14 @@ export interface VectorTileEventMap {
   tileerror: { coordinates: VectorTileCoordinates; error: unknown };
 }
 
-export class VectorTileLayer extends LayerGroup<VectorTileEventMap> {
-  readonly options: Required<VectorTileLayerOptions>;
+export class VectorTileLayer extends LayerGroup<VectorTileEventMap, Required<VectorTileLayerOptions>> {
   readonly tiles = new Map<string, TileState>();
   readonly _render = () => this.render();
   private _rect: TileRect | null = null;
 
   constructor(options: VectorTileLayerOptions) {
-    super();
     if (typeof options.provider !== "function") throw new TypeError("VectorTileLayer provider is required");
-    this.options = {
+    super([], {
       minZoom: 0,
       maxZoom: 19,
       buffer: 1,
@@ -67,7 +65,7 @@ export class VectorTileLayer extends LayerGroup<VectorTileEventMap> {
       pointToLayer: undefined,
       onEachFeature: undefined,
       ...options
-    } as Required<VectorTileLayerOptions>;
+    } as Required<VectorTileLayerOptions>);
   }
 
   override onAdd(map: Orihon): void {

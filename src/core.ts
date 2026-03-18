@@ -37,11 +37,12 @@ export type { BehaviorOptions, MapBehaviorName, MapEventMap, MapOptions, MapSize
 export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
-export type { TileCoordinates, TileTemplate, TileLayerOptions, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
+export type { TileCoordinates, TileTemplate, TileLayerOptions, TileRedrawFlag, RasterTileRendererKind, RasterTileLayer, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
 export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
 export type {
   FeatureId,
   FeatureSourceChange,
+  FeatureSourceDelta,
   FeatureSourceListener,
   ReadonlyFeatureSource,
   SourceSnapshot

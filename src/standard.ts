@@ -75,6 +75,7 @@ export type {
   GeoJSONAsyncOptions,
   GeoJSONData,
   GeoJSONFeature,
+  IdentifiedGeoJSONFeature,
   GeoJSONFeatureCollection,
   GeoJSONGeometry,
   GeoJSONGeometryCollection,

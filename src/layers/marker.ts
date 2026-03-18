@@ -197,11 +197,11 @@ export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
     this.#customAnchor = options.anchor !== undefined;
     this.#customRotationOrigin = options.rotationOrigin !== undefined;
     this.position = latLng(position);
-    this.options.opacity = Math.max(0, Math.min(1, Number(this.options.opacity)));
-    this.options.zIndexOffset = Number.isFinite(Number(this.options.zIndexOffset)) ? Number(this.options.zIndexOffset) : 0;
-    this.options.shape = normalizeShape(this.options.shape);
-    this.options.size = normalizeSize(this.options.size);
-    this.options.strokeWidth = normalizeStrokeWidth(this.options.strokeWidth);
+    this.writableOptions.opacity = Math.max(0, Math.min(1, Number(this.options.opacity)));
+    this.writableOptions.zIndexOffset = Number.isFinite(Number(this.options.zIndexOffset)) ? Number(this.options.zIndexOffset) : 0;
+    this.writableOptions.shape = normalizeShape(this.options.shape);
+    this.writableOptions.size = normalizeSize(this.options.size);
+    this.writableOptions.strokeWidth = normalizeStrokeWidth(this.options.strokeWidth);
   }
 
   override onAdd(map: Orihon, parent?: HTMLElement | DocumentFragment): void {
@@ -239,7 +239,7 @@ export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
 
   /** Enables or disables pointer dragging without recreating the marker. */
   setDraggable(draggable: boolean): this {
-    this.options.draggable = Boolean(draggable);
+    this.writableOptions.draggable = Boolean(draggable);
     if (!this.el) return this;
     this.#syncInteraction();
     if (this.options.draggable) this.#enableDrag();
@@ -252,7 +252,7 @@ export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
   }
 
   setInteractive(interactive: boolean): this {
-    this.options.interactive = Boolean(interactive);
+    this.writableOptions.interactive = Boolean(interactive);
     this.#syncInteraction();
     return this;
   }
@@ -284,8 +284,8 @@ export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
 
   setIcon(value: MarkerIcon | null): this {
     if (value !== null) validateIcon(value);
-    this.options.icon = value;
-    this.options.content = null;
+    this.writableOptions.icon = value;
+    this.writableOptions.content = null;
     this.#resetVisualGeometry();
     this.#setContent();
     this.render();
@@ -300,8 +300,8 @@ export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
   setContent(content: Node | string | number): this {
     validateContent(content);
     if (this.options.content === null) this.#resetVisualGeometry();
-    this.options.icon = null;
-    this.options.content = content;
+    this.writableOptions.icon = null;
+    this.writableOptions.content = content;
     this.#setContent();
     this.render();
     return this;
@@ -314,30 +314,30 @@ export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
     validateMarkerOptions(appearance);
     if ("icon" in appearance || "content" in appearance) throw new TypeError("setAppearance accepts only built-in glyph properties");
     const switched = this.options.icon !== null || this.options.content !== null;
-    this.options.icon = null;
-    this.options.content = null;
-    if (appearance.shape != null) this.options.shape = normalizeShape(appearance.shape);
-    if (appearance.color != null) this.options.color = String(appearance.color);
-    if (appearance.strokeColor != null) this.options.strokeColor = String(appearance.strokeColor);
-    if (appearance.size != null) this.options.size = normalizeSize(appearance.size);
-    if (appearance.strokeWidth != null) this.options.strokeWidth = normalizeStrokeWidth(appearance.strokeWidth);
+    this.writableOptions.icon = null;
+    this.writableOptions.content = null;
+    if (appearance.shape != null) this.writableOptions.shape = normalizeShape(appearance.shape);
+    if (appearance.color != null) this.writableOptions.color = String(appearance.color);
+    if (appearance.strokeColor != null) this.writableOptions.strokeColor = String(appearance.strokeColor);
+    if (appearance.size != null) this.writableOptions.size = normalizeSize(appearance.size);
+    if (appearance.strokeWidth != null) this.writableOptions.strokeWidth = normalizeStrokeWidth(appearance.strokeWidth);
     if (switched) this.#resetVisualGeometry();
     const metrics = markerShapeMetrics(this.options);
-    if (!this.#customAnchor) this.options.anchor = metrics.anchor;
-    if (!this.#customRotationOrigin) this.options.rotationOrigin = metrics.rotationOrigin;
+    if (!this.#customAnchor) this.writableOptions.anchor = metrics.anchor;
+    if (!this.#customRotationOrigin) this.writableOptions.rotationOrigin = metrics.rotationOrigin;
     this.#setContent();
     this.render();
     return this;
   }
 
   setOpacity(opacity: number): this {
-    this.options.opacity = Math.max(0, Math.min(1, Number(opacity)));
+    this.writableOptions.opacity = Math.max(0, Math.min(1, Number(opacity)));
     if (this.el) this.el.style.opacity = String(this.options.opacity);
     return this;
   }
 
   setZIndexOffset(offset: number): this {
-    this.options.zIndexOffset = Number.isFinite(Number(offset)) ? Number(offset) : 0;
+    this.writableOptions.zIndexOffset = Number.isFinite(Number(offset)) ? Number(offset) : 0;
     this.render();
     return this;
   }
@@ -359,8 +359,8 @@ export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
   #resetVisualGeometry(): void {
     this.#customAnchor = false;
     const metrics = markerShapeMetrics(this.options);
-    this.options.anchor = metrics.anchor;
-    if (!this.#customRotationOrigin) this.options.rotationOrigin = metrics.rotationOrigin;
+    this.writableOptions.anchor = metrics.anchor;
+    if (!this.#customRotationOrigin) this.writableOptions.rotationOrigin = metrics.rotationOrigin;
   }
 
   #setContent(): void {
@@ -396,7 +396,7 @@ export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
       return;
     }
     const metrics = markerShapeMetrics(this.options);
-    if (!this.#customAnchor) this.options.anchor = metrics.anchor;
+    if (!this.#customAnchor) this.writableOptions.anchor = metrics.anchor;
     this.el.style.width = `${metrics.width}px`;
     this.el.style.height = `${metrics.height}px`;
     if (!this.options.interactive && !this.options.draggable && metrics.shape === "dot") {

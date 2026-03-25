@@ -1,6 +1,6 @@
 import { createEl, listenTap } from "../dom.js";
 import { LatLngBounds, latLng, type LatLngLike, type Point } from "../geo.js";
-import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions } from "../overlays/div-overlay.js";
 import { densifyLatLngs, normalizeDashArray, type PathOptions } from "./vector.js";
@@ -47,7 +47,7 @@ export interface CanvasPathBatchEventMap {
   click: { originalEvent: MouseEvent | PointerEvent; latlng: ReturnType<typeof latLng>; feature: unknown; index: number | undefined };
 }
 
-export class CanvasPathBatch extends Layer<CanvasPathBatchOptions, CanvasPathBatchEventMap> {
+export class CanvasPathBatch extends InteractiveLayer<CanvasPathBatchOptions, CanvasPathBatchEventMap> {
   private canvas: HTMLCanvasElement | null = null;
   private records: PathRecord[] = [];
   private _cssW = 0;
@@ -368,8 +368,4 @@ function drawCanvasArrows(
   };
   if (arrow === "start" || arrow === "both") draw(points[0], points[1]);
   if (arrow === true || arrow === "end" || arrow === "both") draw(points.at(-1)!, points.at(-2)!);
-}
-
-export function canvasPathBatch(options?: CanvasPathBatchOptions): CanvasPathBatch {
-  return new CanvasPathBatch(options);
 }

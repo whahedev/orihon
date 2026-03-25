@@ -42,6 +42,25 @@ export function shouldRedrawTiles(flag: TileRedrawFlag | undefined, defaultRedra
 export type RasterTileRendererKind = "dom" | "webgl" | "webgpu" | "none";
 
 /**
+ * Diagnostics every raster basemap reports. This is the supported way to observe tile
+ * bookkeeping: the tile maps themselves are implementation detail and stay private.
+ */
+export interface RasterTileStats {
+  /** Which raster implementation is running. */
+  renderer: RasterTileRendererKind;
+  /** Zoom the attached tiles were requested at; `null` before the first render. */
+  tileZoom: number | null;
+  /** Tiles attached for the active zoom. */
+  active: number;
+  /** Tiles kept from the previous zoom while the new level fills in. */
+  retained: number;
+  /** Tiles held for reuse without being drawn. */
+  cached: number;
+  /** Tile requests in flight. */
+  loading: number;
+}
+
+/**
  * Shared public contract for DOM and GPU raster basemaps returned by `tileLayer()`.
  * Runtime may be `TileLayer` or `GPUTileLayer`; use `rendererKind` to discriminate.
  */
@@ -51,6 +70,7 @@ export interface RasterTileLayer extends Layer {
   setUrl(template: TileTemplate, redraw?: TileRedrawFlag): this;
   setOpacity(opacity: number): this;
   redraw(): this;
+  getStats(): RasterTileStats;
 }
 
 export interface TileLayerOptions extends GridLayerOptions {
@@ -71,9 +91,11 @@ export interface TileLayerOptions extends GridLayerOptions {
   detectRetina?: boolean;
   bounds?: LatLngBoundsLike | null;
   /**
-   * Advanced `orihon` registers WebGL and WebGPU so `"auto"` / `"webgl"` / `"webgpu"` can use the GPU path.
-   * `"auto"` prefers WebGPU when `navigator.gpu` exists, then WebGL, then DOM.
-   * Standard/Core stay on DOM unless the app also imports `orihon/webgpu`.
+   * Defaults to `"dom"` in every tier, so the same `tileLayer(url)` call builds the same
+   * renderer from `orihon/core`, `orihon/standard` and `orihon`. GPU rasters are opt-in.
+   * `"auto"` prefers WebGPU when `navigator.gpu` exists, then WebGL, then DOM; it needs a
+   * registered GPU implementation (the Advanced `orihon` entry, or `orihon/webgpu` on top of
+   * Standard). Without one, `"auto"` / `"webgl"` / `"webgpu"` fall back to DOM rather than throw.
    */
   renderer?: "auto" | "dom" | "webgl" | "webgpu";
   /** GPU path: maximum new tile textures uploaded in one frame. */
@@ -150,30 +172,31 @@ export interface TileLayerEventMap {
 }
 
 export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTileOptions, TileLayerEventMap & TEvents> implements RasterTileLayer {
-  template: TileTemplate;
-  tiles = new Map<string, TileRecord>();
-  previousTiles = new Map<string, TileRecord>();
-  readonly cache = new Map<number, HTMLImageElement>();
-  _tileZoom: number | null = null;
-  _generation = 0;
-  _cacheId = 0;
-  _loading = 0;
-  _loadCycleActive = false;
-  _needed = new Set<string>();
-  _queue: TileRecord[] = [];
-  _pendingSourceZoom: number | null = null;
-  _zoomSwitchTimer: ReturnType<typeof setTimeout> | null = null;
-  _fillFrame = 0;
-  _fillPending = false;
-  _rect: TileRect | null = null;
+  /** URL template. Subclasses build their own request URLs from it; apps use `setUrl` / `getTileUrl`. */
+  protected template: TileTemplate;
+  #tiles = new Map<string, TileRecord>();
+  #previousTiles = new Map<string, TileRecord>();
+  readonly #cache = new Map<number, HTMLImageElement>();
+  #tileZoom: number | null = null;
+  #generation = 0;
+  #cacheId = 0;
+  #loading = 0;
+  #loadCycleActive = false;
+  #needed = new Set<string>();
+  #queue: TileRecord[] = [];
+  #pendingSourceZoom: number | null = null;
+  #zoomSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+  #fillFrame = 0;
+  #fillPending = false;
+  #rect: TileRect | null = null;
   /** Throttle DOM tile create/release during continuous camera (setView every frame). */
-  _lastHeavyMs = 0;
-  /** Level-local origin in world pixels at `_tileZoom` (snapped to tile grid). */
-  _levelOriginX = 0;
-  _levelOriginY = 0;
+  #lastHeavyMs = 0;
+  /** Level-local origin in world pixels at the active tile zoom (snapped to tile grid). */
+  #levelOriginX = 0;
+  #levelOriginY = 0;
   /** Current-zoom tile plane; camera applied once via CSS transform. */
-  level: HTMLDivElement | null = null;
-  readonly _retina: boolean;
+  #level: HTMLDivElement | null = null;
+  readonly #retina: boolean;
   readonly rendererKind: RasterTileRendererKind = "dom";
 
   constructor(template: TileTemplate, options: TileLayerOptions = {}) {
@@ -206,15 +229,15 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
     );
     super(resolved);
     this.template = template;
-    this._retina = Boolean(
+    this.#retina = Boolean(
       this.options.detectRetina && typeof devicePixelRatio !== "undefined" && devicePixelRatio > 1
     );
   }
 
   override onAdd(map: Orihon): void {
     super.onAdd(map);
-    if (this.container && !this.level) {
-      this.level = createEl("div", "oh-tile-level", this.container);
+    if (this.container && !this.#level) {
+      this.#level = createEl("div", "oh-tile-level", this.container);
     }
     this.render();
   }
@@ -222,19 +245,19 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
   override onRemove(): void {
     this.#clearZoomSwitchTimer();
     this.#clearFillFrame();
-    this._generation++;
-    this.#clearTileMap(this.tiles, false);
-    this.#clearTileMap(this.previousTiles, false);
-    for (const element of this.cache.values()) this.#resetElement(element);
-    this.cache.clear();
-    this._tileZoom = null;
-    this._pendingSourceZoom = null;
-    this._needed.clear();
-    this._queue.length = 0;
-    this._rect = null;
-    this._loading = 0;
-    this._loadCycleActive = false;
-    this.level = null;
+    this.#generation++;
+    this.#clearTileMap(this.#tiles, false);
+    this.#clearTileMap(this.#previousTiles, false);
+    for (const element of this.#cache.values()) this.#resetElement(element);
+    this.#cache.clear();
+    this.#tileZoom = null;
+    this.#pendingSourceZoom = null;
+    this.#needed.clear();
+    this.#queue.length = 0;
+    this.#rect = null;
+    this.#loading = 0;
+    this.#loadCycleActive = false;
+    this.#level = null;
     super.onRemove();
   }
 
@@ -246,9 +269,9 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
       ? this.options.subdomains
       : String(this.options.subdomains || "").split("");
     const s = subdomains[modulo(x + y, Math.max(1, subdomains.length))] || "";
-    const r = this._retina ? "@2x" : "";
+    const r = this.#retina ? "@2x" : "";
     if (typeof this.template === "function") {
-      return this.template({ x: urlX, y: urlY, z, s, r, retina: this._retina });
+      return this.template({ x: urlX, y: urlY, z, s, r, retina: this.#retina });
     }
     const values = { x: urlX, y: urlY, z, s, r };
     let url = this.template;
@@ -269,6 +292,17 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
     return this;
   }
 
+  getStats(): RasterTileStats {
+    return {
+      renderer: this.rendererKind,
+      tileZoom: this.#tileZoom,
+      active: this.#tiles.size,
+      retained: this.#previousTiles.size,
+      cached: this.#cache.size,
+      loading: this.#loading
+    };
+  }
+
   override render(): void {
     if (!this.map || !this.container) return;
     const displayZoom = Math.round(this.map.zoom);
@@ -280,14 +314,14 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
 
     this.container.hidden = false;
     const nativeLimit = nativeTileZoom(this.options.maxNativeZoom, this.options.maxZoom);
-    const sourceZoom = Math.max(0, Math.min(nativeLimit, displayZoom + (this._retina ? 1 : 0)));
-    if (this._tileZoom === null) {
+    const sourceZoom = Math.max(0, Math.min(nativeLimit, displayZoom + (this.#retina ? 1 : 0)));
+    if (this.#tileZoom === null) {
       this.#clearZoomSwitchTimer();
       this.#switchZoom(sourceZoom);
-    } else if (sourceZoom !== this._tileZoom) {
+    } else if (sourceZoom !== this.#tileZoom) {
       // Continuous zoom (bench / wheel): keep current tiles and CSS-scale them until zoom settles.
       // Large jumps still switch immediately so discrete setView stays sharp.
-      if (Math.abs(sourceZoom - this._tileZoom) > 2) {
+      if (Math.abs(sourceZoom - this.#tileZoom) > 2) {
         this.#clearZoomSwitchTimer();
         this.#switchZoom(sourceZoom);
       } else {
@@ -295,8 +329,8 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
       }
     }
 
-    const activeZoom = this._tileZoom;
-    if (activeZoom === null || !this.level) return;
+    const activeZoom = this.#tileZoom;
+    if (activeZoom === null || !this.#level) return;
 
     const size = this.options.tileSize;
     const liveZoom = this.map.zoom;
@@ -310,25 +344,25 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
     // If the last pass still has uncreated needed tiles, do not skip — otherwise holes stick.
     // After #switchZoom the level origin is invalid (NaN) until a heavy pass — never CSS-warp with NaN.
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const levelOriginValid = Number.isFinite(this._levelOriginX) && Number.isFinite(this._levelOriginY);
-    const heavyDue = !levelOriginValid || now - this._lastHeavyMs >= 32 || this._fillPending;
+    const levelOriginValid = Number.isFinite(this.#levelOriginX) && Number.isFinite(this.#levelOriginY);
+    const heavyDue = !levelOriginValid || now - this.#lastHeavyMs >= 32 || this.#fillPending;
     if (!heavyDue) {
-      this.level.style.transform = tileLevelWarpCss(
-        { x: this._levelOriginX, y: this._levelOriginY },
+      this.#level.style.transform = tileLevelWarpCss(
+        { x: this.#levelOriginX, y: this.#levelOriginY },
         activeZoom,
         origin,
         liveZoom
       );
-      for (const tile of this.previousTiles.values()) this.#positionRetainedTile(tile);
+      for (const tile of this.#previousTiles.values()) this.#positionRetainedTile(tile);
       this.#scheduleFillFrame();
       return;
     }
-    this._lastHeavyMs = now;
+    this.#lastHeavyMs = now;
 
-    const originMoved = levelOriginX !== this._levelOriginX || levelOriginY !== this._levelOriginY;
-    this._levelOriginX = levelOriginX;
-    this._levelOriginY = levelOriginY;
-    this.level.style.transform = tileLevelWarpCss(
+    const originMoved = levelOriginX !== this.#levelOriginX || levelOriginY !== this.#levelOriginY;
+    this.#levelOriginX = levelOriginX;
+    this.#levelOriginY = levelOriginY;
+    this.#level.style.transform = tileLevelWarpCss(
       { x: levelOriginX, y: levelOriginY },
       activeZoom,
       origin,
@@ -356,24 +390,24 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
       if (wrapLocked && (x < 0 || x > worldMax)) return;
       if (!this.#tileIntersectsBounds(x, y, activeZoom)) return;
       const key = `${activeZoom}:${x}:${y}`;
-      this._needed.add(key);
+      this.#needed.add(key);
     };
     const forget = (x: number, y: number): void => {
       const key = `${activeZoom}:${x}:${y}`;
-      this._needed.delete(key);
-      const tile = this.tiles.get(key);
+      this.#needed.delete(key);
+      const tile = this.#tiles.get(key);
       if (tile) this.#releaseTile(key, tile);
     };
 
-    if (!this._rect || this._rect.z !== nextRect.z) {
-      this._needed.clear();
+    if (!this.#rect || this.#rect.z !== nextRect.z) {
+      this.#needed.clear();
       forEachTileInRect(nextRect, consider);
     } else {
-      forEachTileRectDelta(this._rect, nextRect, consider, forget);
+      forEachTileRectDelta(this.#rect, nextRect, consider, forget);
     }
-    this._rect = nextRect;
+    this.#rect = nextRect;
 
-    forEachMissingNeeded(this._needed, (key) => this.tiles.has(key), (x, y, key) => {
+    forEachMissingNeeded(this.#needed, (key) => this.#tiles.has(key), (x, y, key) => {
       candidates.push({ x, y, key, distance: tilePriority(x, y, centerX, centerY, vx, vy, size) });
     });
 
@@ -384,66 +418,66 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
       const candidate = candidates[i];
       this.#addTile(candidate.x, candidate.y, activeZoom, candidate.key, candidate.distance);
     }
-    this._fillPending = candidates.length > maxNew;
-    if (this._fillPending) this.#scheduleFillFrame();
+    this.#fillPending = candidates.length > maxNew;
+    if (this.#fillPending) this.#scheduleFillFrame();
 
     if (originMoved) {
-      for (const tile of this.tiles.values()) this.#placeTileOnLevel(tile);
+      for (const tile of this.#tiles.values()) this.#placeTileOnLevel(tile);
     }
 
-    for (const [key, tile] of this.tiles) if (!this._needed.has(key)) this.#releaseTile(key, tile);
-    for (const tile of this.previousTiles.values()) this.#positionRetainedTile(tile);
+    for (const [key, tile] of this.#tiles) if (!this.#needed.has(key)) this.#releaseTile(key, tile);
+    for (const tile of this.#previousTiles.values()) this.#positionRetainedTile(tile);
     this.#pumpQueue();
     this.#checkLoadComplete();
     this.#retirePreviousWhenReady();
   }
 
   #scheduleFillFrame(): void {
-    if (this._fillFrame) return;
+    if (this.#fillFrame) return;
     if (typeof requestAnimationFrame !== "function") {
       queueMicrotask(() => {
         if (this.map) this.render();
       });
       return;
     }
-    this._fillFrame = requestAnimationFrame(() => {
-      this._fillFrame = 0;
+    this.#fillFrame = requestAnimationFrame(() => {
+      this.#fillFrame = 0;
       if (this.map) this.render();
     });
   }
 
   #clearFillFrame(): void {
-    if (this._fillFrame && typeof cancelAnimationFrame === "function") {
-      cancelAnimationFrame(this._fillFrame);
+    if (this.#fillFrame && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this.#fillFrame);
     }
-    this._fillFrame = 0;
+    this.#fillFrame = 0;
   }
 
   #scheduleZoomSwitch(sourceZoom: number): void {
-    this._pendingSourceZoom = sourceZoom;
-    if (this._zoomSwitchTimer != null) return;
-    this._zoomSwitchTimer = setTimeout(() => {
-      this._zoomSwitchTimer = null;
-      const pending = this._pendingSourceZoom;
-      this._pendingSourceZoom = null;
-      if (pending == null || !this.map || pending === this._tileZoom) return;
+    this.#pendingSourceZoom = sourceZoom;
+    if (this.#zoomSwitchTimer != null) return;
+    this.#zoomSwitchTimer = setTimeout(() => {
+      this.#zoomSwitchTimer = null;
+      const pending = this.#pendingSourceZoom;
+      this.#pendingSourceZoom = null;
+      if (pending == null || !this.map || pending === this.#tileZoom) return;
       this.#switchZoom(pending);
       this.render();
     }, 140);
   }
 
   #clearZoomSwitchTimer(): void {
-    if (this._zoomSwitchTimer != null) {
-      clearTimeout(this._zoomSwitchTimer);
-      this._zoomSwitchTimer = null;
+    if (this.#zoomSwitchTimer != null) {
+      clearTimeout(this.#zoomSwitchTimer);
+      this.#zoomSwitchTimer = null;
     }
-    this._pendingSourceZoom = null;
+    this.#pendingSourceZoom = null;
   }
 
   #switchZoom(sourceZoom: number): void {
-    this.#clearTileMap(this.previousTiles, true);
+    this.#clearTileMap(this.#previousTiles, true);
     const retained = new Map<string, TileRecord>();
-    for (const [key, tile] of this.tiles) {
+    for (const [key, tile] of this.#tiles) {
       if (tile.loaded) {
         tile.el.onload = null;
         tile.el.onerror = null;
@@ -455,43 +489,43 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
         this.#disposeTile(tile, true, false);
       }
     }
-    this.previousTiles = retained;
-    this.tiles = new Map();
-    this._tileZoom = sourceZoom;
-    this._generation++;
+    this.#previousTiles = retained;
+    this.#tiles = new Map();
+    this.#tileZoom = sourceZoom;
+    this.#generation++;
     // Invalidate level snap so the next render() must take the heavy path (never warp with NaN).
-    this._levelOriginX = Number.NaN;
-    this._levelOriginY = Number.NaN;
-    this._lastHeavyMs = 0;
-    this._needed = new Set();
-    this._loading = 0;
-    this._queue.length = 0;
-    this._rect = null;
-    this._fillPending = false;
-    this._loadCycleActive = false;
+    this.#levelOriginX = Number.NaN;
+    this.#levelOriginY = Number.NaN;
+    this.#lastHeavyMs = 0;
+    this.#needed = new Set();
+    this.#loading = 0;
+    this.#queue.length = 0;
+    this.#rect = null;
+    this.#fillPending = false;
+    this.#loadCycleActive = false;
   }
 
   #resetView(): void {
-    if (this._tileZoom === null && !this.tiles.size && !this.previousTiles.size) return;
+    if (this.#tileZoom === null && !this.#tiles.size && !this.#previousTiles.size) return;
     this.#clearZoomSwitchTimer();
     this.#clearFillFrame();
-    this._generation++;
-    this.#clearTileMap(this.tiles, true);
-    this.#clearTileMap(this.previousTiles, true);
-    this._tileZoom = null;
-    this._needed.clear();
-    this._loading = 0;
-    this._queue.length = 0;
-    this._rect = null;
-    this._fillPending = false;
-    this._loadCycleActive = false;
+    this.#generation++;
+    this.#clearTileMap(this.#tiles, true);
+    this.#clearTileMap(this.#previousTiles, true);
+    this.#tileZoom = null;
+    this.#needed.clear();
+    this.#loading = 0;
+    this.#queue.length = 0;
+    this.#rect = null;
+    this.#fillPending = false;
+    this.#loadCycleActive = false;
   }
 
   #addTile(x: number, y: number, z: number, key: string, priority = 0): void {
-    if (!this.container || !this.level || this.tiles.has(key)) return;
+    if (!this.container || !this.#level || this.#tiles.has(key)) return;
     const element = this.#takeTile();
     const size = this.options.tileSize;
-    const generation = this._generation;
+    const generation = this.#generation;
     const url = this.getTileUrl(x, y, z);
     const tile: TileRecord = {
       el: element,
@@ -524,10 +558,10 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
     element.style.opacity = "0";
     this.#placeTileOnLevel(tile);
 
-    this.tiles.set(key, tile);
-    this.level.appendChild(element);
-    this._loadCycleActive = true;
-    this._queue.push(tile);
+    this.#tiles.set(key, tile);
+    this.#level.appendChild(element);
+    this.#loadCycleActive = true;
+    this.#queue.push(tile);
 
     element.onload = () => {
       if (!this.#isCurrent(tile)) return;
@@ -536,7 +570,7 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
       element.style.visibility = "";
       element.style.opacity = "";
       element.classList.add("oh-tile-loaded");
-      this._loading = Math.max(0, this._loading - 1);
+      this.#loading = Math.max(0, this.#loading - 1);
       this.emit("tileload", { tile: element, x, y, z, url: element.currentSrc || element.src });
       this.#pumpQueue();
       this.#checkLoadComplete();
@@ -552,7 +586,7 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
         return;
       }
       tile.settled = true;
-      this._loading = Math.max(0, this._loading - 1);
+      this.#loading = Math.max(0, this.#loading - 1);
       this.#pumpQueue();
       this.#checkLoadComplete();
     };
@@ -561,11 +595,11 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
 
   #pumpQueue(): void {
     const maxRequests = Math.max(1, this.options.maxRequests);
-    while (this._loading < maxRequests && this._queue.length) {
-      const tile = this._queue.pop()!;
+    while (this.#loading < maxRequests && this.#queue.length) {
+      const tile = this.#queue.pop()!;
       if (!this.#isCurrent(tile) || tile.started) continue;
       tile.started = true;
-      this._loading++;
+      this.#loading++;
       this.emit("tileloadstart", { tile: tile.el, x: tile.x, y: tile.y, z: tile.z, url: tile.url });
       tile.el.src = tile.url;
     }
@@ -575,8 +609,8 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
   #placeTileOnLevel(tile: TileRecord): void {
     const size = this.options.tileSize;
     tile.el.style.transform = geoTransformCss(
-      tile.x * size - this._levelOriginX,
-      tile.y * size - this._levelOriginY
+      tile.x * size - this.#levelOriginX,
+      tile.y * size - this.#levelOriginY
     );
   }
 
@@ -596,11 +630,11 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
   }
 
   #isCurrent(tile: TileRecord): boolean {
-    return Boolean(this.map && tile.generation === this._generation && this.tiles.get(tile.key) === tile);
+    return Boolean(this.map && tile.generation === this.#generation && this.#tiles.get(tile.key) === tile);
   }
 
   #releaseTile(key: string, tile: TileRecord): void {
-    this.tiles.delete(key);
+    this.#tiles.delete(key);
     this.#disposeTile(tile, !tile.settled, true);
     this.#checkLoadComplete();
   }
@@ -608,10 +642,10 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
   #disposeTile(tile: TileRecord, aborted: boolean, keepCache: boolean): void {
     tile.el.onload = null;
     tile.el.onerror = null;
-    this._queue = this._queue.filter((candidate) => candidate !== tile);
+    this.#queue = this.#queue.filter((candidate) => candidate !== tile);
     if (aborted) {
       tile.settled = true;
-      if (tile.started) this._loading = Math.max(0, this._loading - 1);
+      if (tile.started) this.#loading = Math.max(0, this.#loading - 1);
       this.emit("tileabort", { tile: tile.el, x: tile.x, y: tile.y, z: tile.z, url: tile.url });
     }
     tile.el.remove();
@@ -625,14 +659,14 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
   }
 
   #retirePreviousWhenReady(): void {
-    if (!this.previousTiles.size) return;
-    for (const key of this._needed) if (!this.tiles.get(key)?.loaded) return;
-    this.#clearTileMap(this.previousTiles, true);
+    if (!this.#previousTiles.size) return;
+    for (const key of this.#needed) if (!this.#tiles.get(key)?.loaded) return;
+    this.#clearTileMap(this.#previousTiles, true);
   }
 
   #checkLoadComplete(): void {
-    if (!this._loadCycleActive || this._loading !== 0 || this._queue.length !== 0) return;
-    this._loadCycleActive = false;
+    if (!this.#loadCycleActive || this.#loading !== 0 || this.#queue.length !== 0) return;
+    this.#loadCycleActive = false;
     this.emit("load");
   }
 
@@ -656,12 +690,12 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
   #cacheElement(element: HTMLImageElement): void {
     this.#resetElement(element);
     if (this.options.cacheSize <= 0) return;
-    while (this.cache.size >= this.options.cacheSize) {
-      const oldest = this.cache.keys().next().value as number | undefined;
+    while (this.#cache.size >= this.options.cacheSize) {
+      const oldest = this.#cache.keys().next().value as number | undefined;
       if (oldest === undefined) break;
-      this.cache.delete(oldest);
+      this.#cache.delete(oldest);
     }
-    this.cache.set(++this._cacheId, element);
+    this.#cache.set(++this.#cacheId, element);
   }
 
   #resetElement(element: HTMLImageElement): void {
@@ -674,8 +708,8 @@ export class TileLayer<TEvents extends object = {}> extends GridLayer<ResolvedTi
   }
 
   #takeTile(): HTMLImageElement {
-    for (const [key, element] of this.cache) {
-      this.cache.delete(key);
+    for (const [key, element] of this.#cache) {
+      this.#cache.delete(key);
       return element;
     }
     return document.createElement("img");
@@ -689,7 +723,10 @@ export function nativeTileZoom(maxNativeZoom: unknown, maxZoom: number): number 
 }
 
 export function tileLayer(template: TileTemplate, options?: TileLayerOptions): RasterTileLayer {
-  const requested = options?.renderer ?? "auto";
+  // DOM is the tier-independent default. Importing the Advanced entry registers a GPU
+  // implementation, but it must never change what an existing `tileLayer(url)` call builds:
+  // behaviour follows the arguments, not the module graph.
+  const requested = options?.renderer ?? "dom";
   if (requested === "dom") return new TileLayer(template, options);
   const available = requested === "webgpu" ? gpuContextAvailable()
     : requested === "webgl" ? webglContextAvailable()
@@ -717,12 +754,25 @@ function gpuContextAvailable(): boolean {
   return typeof navigator !== "undefined" && Boolean((navigator as Navigator & { gpu?: unknown }).gpu);
 }
 
+/**
+ * Probes WebGL once per document and releases the probe context immediately.
+ * Browsers cap live WebGL contexts; leaking one per `tileLayer()` call would
+ * force the oldest contexts — including real map layers — to be lost.
+ */
+let webglProbe: boolean | null = null;
+
 function webglContextAvailable(): boolean {
+  if (webglProbe !== null) return webglProbe;
   if (typeof document === "undefined") return false;
   try {
     const canvas = document.createElement("canvas");
-    return Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
+    const gl = (canvas.getContext("webgl2")
+      || canvas.getContext("webgl")
+      || canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    webglProbe = Boolean(gl);
   } catch {
-    return false;
+    webglProbe = false;
   }
+  return webglProbe;
 }

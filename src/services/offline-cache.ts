@@ -4,6 +4,22 @@ import { TileLayer } from "../layers/tile-layer.js";
 const DEFAULT_MAX_TILES = 4096;
 const DEFAULT_PREFETCH_CONCURRENCY = 8;
 
+/** Where a single prefetch URL was lost. */
+export type OfflineTileFailureStage =
+  /** Rejected by `urlPrefixes` or by the scheme allowlist before any request was made. */
+  | "url"
+  /** The request itself failed (network, CORS, abort). */
+  | "fetch"
+  /** The response arrived but Cache Storage refused it (quota, opaque limits). */
+  | "cache";
+
+export interface OfflineTileFailure {
+  url: string;
+  stage: OfflineTileFailureStage;
+  /** The thrown value, or `undefined` when the URL never left the allowlist check. */
+  cause?: unknown;
+}
+
 export interface OfflineTileCacheOptions {
   cacheName?: string;
   fetcher?: typeof fetch;
@@ -12,6 +28,12 @@ export interface OfflineTileCacheOptions {
   concurrency?: number;
   /** Same allowlist as the Service Worker. Empty = app-owned explicit URLs, still rejects javascript/data/blob/file. */
   urlPrefixes?: string[];
+  /**
+   * Called once per lost tile with the URL, the stage and the original cause. `stats.failed`
+   * alone cannot tell a blocked prefix from a quota error, and for offline work the failures
+   * are the interesting half. A throwing callback never aborts the prefetch.
+   */
+  onError?: (failure: OfflineTileFailure) => void;
 }
 
 export interface OfflineTileCacheStats {
@@ -56,6 +78,7 @@ export class OfflineTileCache {
   readonly maxTiles: number;
   readonly concurrency: number;
   readonly urlPrefixes: string[];
+  readonly #onError?: (failure: OfflineTileFailure) => void;
   queued = 0;
   cached = 0;
   failed = 0;
@@ -66,6 +89,17 @@ export class OfflineTileCache {
     this.maxTiles = positiveInteger(options.maxTiles, DEFAULT_MAX_TILES);
     this.concurrency = Math.min(32, positiveInteger(options.concurrency, DEFAULT_PREFETCH_CONCURRENCY));
     this.urlPrefixes = (options.urlPrefixes ?? []).map(String);
+    if (options.onError !== undefined) {
+      if (typeof options.onError !== "function") throw new TypeError("OfflineTileCache onError must be a function");
+      this.#onError = options.onError;
+    }
+  }
+
+  #fail(url: string, stage: OfflineTileFailureStage, cause?: unknown): void {
+    this.failed++;
+    if (!this.#onError) return;
+    // Reporting must never turn one lost tile into a failed prefetch run.
+    try { this.#onError({ url, stage, cause }); } catch { /* diagnostics only */ }
   }
 
   get supported(): boolean {
@@ -90,7 +124,7 @@ export class OfflineTileCache {
       if (seen.has(url)) continue;
       seen.add(url);
       if (!prefetchUrlAllowed(url, this.urlPrefixes)) {
-        this.failed++;
+        this.#fail(url, "url");
         continue;
       }
       unique.push(url);
@@ -105,13 +139,19 @@ export class OfflineTileCache {
     const worker = async (): Promise<void> => {
       while (cursor < unique.length) {
         const url = unique[cursor++];
+        let response: Response;
         try {
           // Prefetch targets are explicit tile URLs; no-cors yields opaque responses that Cache Storage can still serve.
-          const response = await this.fetcher(url, { mode: "no-cors" });
+          response = await this.fetcher(url, { mode: "no-cors" });
+        } catch (error) {
+          this.#fail(url, "fetch", error);
+          continue;
+        }
+        try {
           await cache.put(url, response.clone());
           this.cached++;
-        } catch {
-          this.failed++;
+        } catch (error) {
+          this.#fail(url, "cache", error);
         }
       }
     };

@@ -1,5 +1,5 @@
 import { createEl } from "../dom.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions } from "../layer.js";
 import { latLng, type LatLng, type LatLngLike, type Point } from "../geo.js";
 import type { Orihon } from "../map.js";
 import type { PointLike } from "../geo.js";
@@ -37,7 +37,7 @@ export interface ClusterCanvasEventMap {
   clusterclick: { originalEvent: MouseEvent; clusterKey: string; latlng: LatLngLike; count: number };
 }
 
-export class ClusterCanvasLayer extends Layer<ClusterCanvasLayerOptions, ClusterCanvasEventMap> {
+export class ClusterCanvasLayer extends InteractiveLayer<ClusterCanvasLayerOptions, ClusterCanvasEventMap> {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private items: ClusterCanvasItem[] = [];

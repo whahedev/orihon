@@ -23,8 +23,6 @@ export type ManagedGeometry =
   | ManagedLineStringGeometry
   | ManagedPolygonGeometry;
 
-export type GeometryKind = ManagedGeometry["type"];
-
 export interface NormalizedPoint {
   kind: "Point";
   lat: number;
@@ -249,21 +247,6 @@ export function pointInRing(lat: number, lng: number, ring: Float64Array): boole
     if (intersect) inside = !inside;
   }
   return inside;
-}
-
-export function pointInNormalizedPolygon(lat: number, lng: number, polygon: NormalizedPolygon): boolean {
-  if (!pointInRing(lat, lng, polygon.rings[0])) return false;
-  for (let r = 1; r < polygon.rings.length; r++) {
-    if (pointInRing(lat, lng, polygon.rings[r])) return false;
-  }
-  return true;
-}
-
-export function bboxIntersects(
-  a: readonly [number, number, number, number],
-  b: readonly [number, number, number, number]
-): boolean {
-  return !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
 }
 
 /**

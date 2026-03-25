@@ -17,7 +17,12 @@ export function registerLocalePacks(
   Object.assign(packCache, packs);
 }
 
-/** Ensure non-English built-ins are loaded (no-op if already registered). */
+/**
+ * Ensure non-English built-ins are loaded (no-op if already registered).
+ *
+ * A failed chunk load rejects: callers decide whether a missing translation is fatal.
+ * The cached promise is dropped first so a later call can retry the import.
+ */
 export function ensureLocalePacks(): Promise<void> {
   if (packCache.ru) return Promise.resolve();
   if (!packsLoading) {
@@ -25,17 +30,25 @@ export function ensureLocalePacks(): Promise<void> {
       .then((mod) => {
         registerLocalePacks(mod.localePacks);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         packsLoading = null;
+        throw error;
       });
   }
-  return packsLoading ?? Promise.resolve();
+  return packsLoading;
+}
+
+/** True when `resolveLocale(name)` can already return the real strings, not the English stand-in. */
+export function localePackLoaded(name: LocaleName): boolean {
+  return Boolean(packCache[name]);
 }
 
 function packedOrFallback(name: LocaleName): Readonly<OrihonLocale> {
   const hit = packCache[name];
   if (hit) return hit;
-  if (name !== "en") void ensureLocalePacks();
+  // Start the load, but never reject here: this is a synchronous accessor. Callers that need
+  // to know when the real strings arrive await `ensureLocalePacks()` (or `map.localeReady`).
+  if (name !== "en") void ensureLocalePacks().catch(() => {});
   // Until packs resolve, keep language/rtl correct with English strings.
   return { ...enLocale, language: name, rtl: name === "ar" };
 }

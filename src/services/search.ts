@@ -21,13 +21,28 @@ export interface SearchAdapter<TResult extends SearchResult = SearchResult> {
   reverse?(center: LatLngLike, context: SearchContext): Promise<TResult | null | undefined> | TResult | null | undefined;
 }
 
+/**
+ * What `reverse()` should do when the adapter implements no reverse geocoding.
+ * `"none"` (default) reports the missing capability as `null`. `"coordinates"` restores the
+ * older behaviour: a synthetic result whose `name` is the formatted latitude/longitude, which
+ * is useful for a UI field but is not a reverse-geocoded place.
+ */
+export type ReverseFallback = "none" | "coordinates";
+
+export interface SearchProviderConfig {
+  limit?: number;
+  fallbackReverse?: ReverseFallback;
+}
+
 export class SearchProvider<TResult extends SearchResult = SearchResult> {
   readonly adapter: SearchAdapter<TResult>;
   readonly limit: number;
+  readonly fallbackReverse: ReverseFallback;
 
-  constructor(adapter: SearchAdapter<TResult>, options: { limit?: number } = {}) {
+  constructor(adapter: SearchAdapter<TResult>, options: SearchProviderConfig = {}) {
     this.adapter = adapter;
     this.limit = Math.max(1, Number(options.limit ?? 8));
+    this.fallbackReverse = options.fallbackReverse ?? "none";
   }
 
   async search(query: string, context: SearchContext = {}): Promise<TResult[]> {
@@ -44,8 +59,14 @@ export class SearchProvider<TResult extends SearchResult = SearchResult> {
     return (await this.search(text, { ...context, limit: 1 }))[0] ?? null;
   }
 
+  /**
+   * `null` means "no reverse-geocoded place" — including the case where the adapter has no
+   * `reverse()` at all. An unsupported capability stays observable instead of being dressed up
+   * as a successful lookup; opt into the coordinate placeholder with `fallbackReverse`.
+   */
   async reverse(center: LatLngLike, context: SearchContext = {}): Promise<TResult | null> {
     if (this.adapter.reverse) return await this.adapter.reverse(center, context) ?? null;
+    if (this.fallbackReverse !== "coordinates") return null;
     const point = latLng(center);
     return {
       name: `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`,
@@ -56,14 +77,14 @@ export class SearchProvider<TResult extends SearchResult = SearchResult> {
 
 export function createSearchProvider<TResult extends SearchResult>(
   adapter: SearchAdapter<TResult>,
-  options?: { limit?: number }
+  options?: SearchProviderConfig
 ): SearchProvider<TResult> {
   return new SearchProvider(adapter, options);
 }
 
 export function createArraySearchProvider<TResult extends SearchResult>(
   items: TResult[],
-  options: { limit?: number; text?: (item: TResult) => string } = {}
+  options: SearchProviderConfig & { text?: (item: TResult) => string } = {}
 ): SearchProvider<TResult> {
   const text = options.text ?? ((item) => `${item.name} ${item.description || ""}`);
   return new SearchProvider<TResult>({
@@ -77,8 +98,7 @@ export function createArraySearchProvider<TResult extends SearchResult>(
 }
 
 export type SearchProviderSource<TResult extends SearchResult> = SearchAdapter<TResult> | TResult[];
-export type SearchProviderOptions<TResult extends SearchResult> = {
-  limit?: number;
+export type SearchProviderOptions<TResult extends SearchResult> = SearchProviderConfig & {
   text?: (item: TResult) => string;
 };
 
@@ -88,7 +108,7 @@ export function searchProvider<TResult extends SearchResult>(
 ): SearchProvider<TResult>;
 export function searchProvider<TResult extends SearchResult>(
   source: SearchAdapter<TResult>,
-  options?: { limit?: number }
+  options?: SearchProviderConfig
 ): SearchProvider<TResult>;
 export function searchProvider<TResult extends SearchResult>(
   source: SearchProviderSource<TResult>,

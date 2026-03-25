@@ -15,8 +15,8 @@ import { Layer, type LayerOptions } from "../layer.js";
 import type { RasterTileEventDetail } from "./tile-layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
-import { compileShader } from "../webgl-utils.js";
-import { modulo, nativeTileZoom, normalizeTileBounds, shouldRedrawTiles, type RasterTileLayer, type RasterTileRendererKind, type TileRedrawFlag, type TileTemplate } from "./tile-layer.js";
+import { compileShader, linkProgram } from "../webgl-utils.js";
+import { modulo, nativeTileZoom, normalizeTileBounds, shouldRedrawTiles, type RasterTileLayer, type RasterTileRendererKind, type RasterTileStats, type TileRedrawFlag, type TileTemplate } from "./tile-layer.js";
 import {
   forEachTileInRect,
   forEachTileRectDelta,
@@ -83,7 +83,7 @@ type ResolvedOptions = Required<
 > &
   GPUTileLayerOptions;
 
-export interface GPUTileLayerStats {
+export interface GPUTileLayerStats extends RasterTileStats {
   renderer: "webgpu" | "webgl" | "none";
   needed: number;
   visibleReady: number;
@@ -299,6 +299,9 @@ export class GPUTileLayer extends Layer<ResolvedOptions, GPUTileLayerEventMap> i
     const isReady = (key: string) => this.tiles.get(key)?.state === 2;
     return {
       renderer: this.renderer,
+      tileZoom: this._tileZoom,
+      active: this._needed.size,
+      retained: this._retained.size,
       needed: this._neededCount,
       visibleReady,
       preloadNeeded: this._preload.size,
@@ -614,17 +617,8 @@ export class GPUTileLayer extends Layer<ResolvedOptions, GPUTileLayerEventMap> i
       }
     `);
     if (!vertex || !fragment) return false;
-    const program = gl.createProgram();
+    const program = linkProgram(gl, vertex, fragment);
     if (!program) return false;
-    gl.attachShader(program, vertex);
-    gl.attachShader(program, fragment);
-    gl.linkProgram(program);
-    gl.deleteShader(vertex);
-    gl.deleteShader(fragment);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      gl.deleteProgram(program);
-      return false;
-    }
     this.program = program;
 
     const quad = new Float32Array([0, 0, 0, 1, 1, 0, 1, 1]);
@@ -679,17 +673,8 @@ export class GPUTileLayer extends Layer<ResolvedOptions, GPUTileLayerEventMap> i
       }
     `);
     if (!vertex || !fragment) return false;
-    const program = gl.createProgram();
+    const program = linkProgram(gl, vertex, fragment);
     if (!program) return false;
-    gl.attachShader(program, vertex);
-    gl.attachShader(program, fragment);
-    gl.linkProgram(program);
-    gl.deleteShader(vertex);
-    gl.deleteShader(fragment);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      gl.deleteProgram(program);
-      return false;
-    }
     const dim = this._retina ? this.options.tileSize * 2 : this.options.tileSize;
     const maxLayers = Math.min(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) || 64, Math.max(32, this.options.cacheSize));
     const texture = gl.createTexture();

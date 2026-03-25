@@ -8,7 +8,7 @@ Related: [API](API.md) · [PLUGINS](PLUGINS.md) · [SECURITY](SECURITY.md)
 
 These hold for every item below. If a design violates them, change the design.
 
-1. **Gzip budgets stay.** Core ≤ 22 KiB, Standard ≤ 37 KiB, Advanced ≤ 105 KiB (`npm run size`). New surface that would break a budget goes into a **new optional entry** (`orihon/draw`, `orihon/react`, …), not into `orihon/standard` or `orihon`.
+1. **Gzip budgets stay.** Core ≤ 18 KiB, Standard ≤ 38 KiB, Advanced ≤ 132 KiB, and nothing shipped crosses the advertised 150 KiB ceiling (`npm run size`, which also verifies the README table). New surface that would break a budget goes into a **new optional entry** (`orihon/draw`, `orihon/react`, …), not into `orihon/standard` or `orihon`.
 2. **Leaflet-like DX.** Factories, `addTo` / `remove`, `on` / `off`, named panes, no required style JSON.
 3. **No prototype patching.** Plugins extend `Layer` / `Control` and import only public entries.
 4. **Safe content.** Strings are `textContent`. Markup is a `Node`. No `innerHTML`. SVG stays sanitized.
@@ -130,7 +130,7 @@ interface PathOptions {
 
 - SVG: `stroke-dasharray`, `stroke-dashoffset`. Arrow: SVG `<marker>` in the layer’s SVG defs, reused per `SvgLayer` instance (not per path) to avoid marker leaks. Sanitize nothing extra — arrows are generated, not user SVG.
 - `CanvasPathBatch`: `setLineDash` / `lineDashOffset`. Arrows drawn as two-segment polylines at endpoints. Skip dash if array empty.
-- `WebGLPathBatch`: ignore `dashArray` / `arrow` (document it). Solid stroke only. Do not grow the 75 KiB budget for dashed GPU lines in this item.
+- `WebGLPathBatch`: ignore `dashArray` / `arrow` (document it). Solid stroke only. Do not grow the Advanced budget for dashed GPU lines in this item.
 - `geodesic` on `Polyline`: densify each segment in geographic space before project (`geodesicInterpolate(a, b, maxSegmentMeters)`). Cache densified points; invalidate on `setLatLngs`.
 - Circle already uses `metersToPixels` — keep that as the default (`geodesic: false`).
 
@@ -200,7 +200,7 @@ interface CoordinateReferenceSystem {
 
 - Floor-plan image overlay + markers in pixel coordinates pan/zoom without Mercator distortion.
 - Existing Mercator tests unchanged. `createMap` without `crs` is bit-identical in projection.
-- Core gzip ≤ 22 KiB. Target add ≤ 1.2 KiB.
+- Core gzip ≤ 18 KiB. Target add ≤ 1.2 KiB.
 
 **Non-goals.** Custom affine CRS, EPSG:4326 as *map* projection, wrapping worlds on Simple.
 
@@ -476,7 +476,7 @@ Do not start P1 GPU/MVT work before P0. Draw and React are what unblock adoption
 
 | Idea | Why not |
 | --- | --- |
-| MapLibre Style spec, glyphs, terrain, globe, map pitch/bearing | Different renderer; blows 75 KiB; breaks DOM ObjectManager |
+| MapLibre Style spec, glyphs, terrain, globe, map pitch/bearing | Different renderer; blows the size ceiling; breaks DOM ObjectManager |
 | Proj4 / arbitrary map CRS | OpenLayers territory |
 | Bundled geocoder / router / traffic tiles | No data business; keep providers |
 | Street panoramas | Needs imagery provider |

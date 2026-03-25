@@ -37,7 +37,7 @@ Latitude is clamped to Web Mercator limits. Longitudes can cross the antimeridia
 
 ## Raster Layers
 
-- `tileLayer(url, options)` is the only raster-tile factory. It supports `{z}`, `{x}`, `{y}`, `{s}`, `{r}`, TMS, Retina, `maxNativeZoom`, `bounds`, `noWrap`, request limits and bounded caches. `renderer` is `"auto"` (default), `"dom"`, `"webgl"` or `"webgpu"`; GPU-specific `maxDpr` and `maxNewPerFrame` are preserved by this same function. Core/Standard use DOM unless the Advanced/WebGPU registration is loaded. Advanced `auto` selects WebGPU, then WebGL, then DOM. Both GPU APIs share one cache, request queue, prefetch and zoom-backstop. `getStats()` is available on the selected GPU implementation and reports renderer, coverage, queues, cache and approximate GPU bytes.
+- `tileLayer(url, options)` is the only raster-tile factory. It supports `{z}`, `{x}`, `{y}`, `{s}`, `{r}`, TMS, Retina, `maxNativeZoom`, `bounds`, `noWrap`, request limits and bounded caches. `renderer` is `"dom"` (default in every tier), `"auto"`, `"webgl"` or `"webgpu"`; GPU-specific `maxDpr` and `maxNewPerFrame` are preserved by this same function. The default does not depend on which entry was imported: importing `orihon` registers a GPU implementation but never changes what `tileLayer(url)` builds. `"auto"` selects WebGPU, then WebGL, then DOM, and falls back to DOM when no GPU implementation is registered (Core/Standard without `orihon/webgpu`). Both GPU APIs share one cache, request queue, prefetch and zoom-backstop. `getStats()` is part of the `RasterTileLayer` contract and reports `renderer`, `tileZoom`, `active`, `retained`, `cached` and `loading`; the GPU implementation adds coverage, queues and approximate GPU bytes.
 - `wmsTileLayer(url, options)` supports WMS 1.1.1/1.3.0 and EPSG:3857/EPSG:4326 axis rules.
 - `wmtsTileLayer(template, options)` supports Web Mercator WMTS REST templates with `{TileMatrix}`, `{TileCol}` and `{TileRow}`. `createWMTSFromCapabilities(xml)` extracts the first REST tile resource and its layer/style/matrix-set options. The lab server exposes a live local GetCapabilities document and SVG tile endpoint for an offline-compatible integration example.
 - `GridLayer` is the extension class for custom tile grids; the empty `gridLayer()` factory was removed.
@@ -63,7 +63,7 @@ The WebGL path backend uses camera warping between throttled exact GPU frames an
 
 For large line sets in **Standard**, use `renderer: "canvas"` (or `"auto"`, which batches at ≥250 path features). Canvas batches support feature-aware hit testing, click events and popups; popup factories receive the clicked source feature. **WebGL** path batches (`renderer: "webgl"` / Advanced `auto`) are registered only from the full `orihon` entry — Core/Standard stay CPU/DOM.
 
-Layers support `bindPopup`, `bindTooltip`, `openPopup`, `closePopup`, `openTooltip`, `closeTooltip`, `addTo` and `remove`.
+Layers support `addTo` and `remove`. Overlay binding — `bindPopup`, `bindTooltip`, `openPopup`, `closePopup`, `openTooltip`, `closeTooltip` — lives on `InteractiveLayer`, the base of every layer that can anchor an overlay (markers, vectors, GeoJSON, groups, image/video/SVG overlays, heat, WebGL layers). Core's `Layer` and the raster tile layers do not carry these methods: `orihon/core` ships no overlay implementation, and a raster layer has no geographic anchor of its own.
 
 `bindPopup()` and `bindTooltip()` automatically enable interaction on a layer, including a path originally created with `interactive: false`; no extra click handler or Studio-specific bridge is required. A short pointer tap opens the overlay, while a drag that starts on a geometry still pans the map. Closed SVG geometries (`polygon`, `rectangle`, `circle`, `circleMarker`) use their complete interior as the hit area even when `fill: "none"`; polylines use their painted stroke.
 
@@ -99,10 +99,10 @@ Icons are created with one `icon()` function: `{ iconUrl }` creates an image ico
 
 ## Data And Services
 
-The unified `objectManager()` factory accepts one data mode: local options (including `source`), remote `{ loader }`, or a point collection `{ points }`. `loader` and `points` cannot coexist, and neither may coexist with a reactive `source`. Explicit invalid loader/points selectors fail rather than falling back to local mode. `debounceMs` / `replace` require loader mode. Point collections reject local `clusterize`, `clusterRenderer` and `style` options; use the point collection's `renderer` and marker options. `LocalObjectManagerOptions`, `RemoteObjectManagerOptions`, `PointObjectManagerOptions` and `UnifiedObjectManagerOptions` enforce these constraints even for variables, while overloads preserve precise return types. Selector validation occurs before source subscription or point iteration.
+`remoteObjectManager({ loader })` and `markerCollection(points, options?)` name the class they build; `objectManager()` builds the plain local manager. `objectManager(options)` also still accepts every mode, selecting the class from the option shape — prefer the named factories when the options are assembled dynamically. The unified `objectManager()` factory accepts one data mode: local options (including `source`), remote `{ loader }`, or a point collection `{ points }`. `loader` and `points` cannot coexist, and neither may coexist with a reactive `source`. Explicit invalid loader/points selectors fail rather than falling back to local mode. `debounceMs` / `replace` require loader mode. Point collections reject local `clusterize`, `clusterRenderer` and `style` options; use the point collection's `renderer` and marker options. `LocalObjectManagerOptions`, `RemoteObjectManagerOptions`, `PointObjectManagerOptions` and `UnifiedObjectManagerOptions` enforce these constraints even for variables, while overloads preserve precise return types. Selector validation occurs before source subscription or point iteration.
 
 - `objectManager` renders and clusters local feature collections through a spatial grid. Clustering is **hierarchical greedy within a pixel radius** (Leaflet-style; option name `clusterRadiusPixels` means radius in px, default `50`, clamp ≥ `20`). Up to `clusterHierarchyMaxObjects` (default `250000`) the all-zoom hierarchy is built once on data change; larger collections use compact, worker-built layouts only for integer zooms that are actually visited. Set the limit to `0` to force an unlimited hierarchy. `getStats().clusterStrategy` reports `"none"`, `"greedy"`, or `"hierarchy"`. Layout is pan-stable at integer zoom. Optional **WebGL** draws unclustered points (`clusterRenderer: "dom" | "webgl" | "auto"`); cluster count badges stay DOM with size/color tiers `<10` / `<100` / `≥100` (override via `clusterIcon`). Redraws are rAF-coalesced. Optional `maxObjects` caps ingest. `maxVerticesPerGeometry` (default 65536) rejects oversized LineString/Polygon. For **clustered 1M points** use `{ clusterize: true, sceneFeatures: false, styleByCategory: false, clusterRenderer: "webgl" }`; for flat points set `clusterize: false`. In both cases prefer `await manager.addAsync(iterable, { chunkSize:10000, yieldMode:"task", render:false })`, then call `prepareLayout()`.
-- Runtime **ObjectState** (`setObjectState` / `setObjectStates` / `getObjectState`) is separate from `ManagedObject.properties`. Data-driven `style(object, state, context)` resolves point `fill` / `fillOpacity` / `size` for DOM and WebGL. Legacy `color` / `opacity` remain aliases; canonical fields take precedence. Lines accept canonical `stroke` / `strokeOpacity` / `strokeWidth` with `color` / `opacity` / `width` aliases, while polygons use `fill` and `stroke`. Legacy `styleByCategory` remains the default when `style` is unset. Priority: base → legacy palette → custom `style` → normalize. `setSelected` / `setHovered` stay as single-selection convenience APIs over `ObjectState`. WebGL updates patch per-point color/size buffers when possible. `sceneFeatures: false` skips icon/label/trail/path layers and is the 1M fast path; `update` / `{ animate }` still patch GPU points via the spatial index.
+- Runtime **ObjectState** (`setObjectState` / `setObjectStates` / `getObjectState`) is separate from `ManagedObject.properties`. Data-driven `style(object, state, context)` resolves point `fill` / `fillOpacity` / `size` for DOM and WebGL. Lines use `stroke` / `strokeOpacity` / `strokeWidth` and polygons use `fill` and `stroke`. The removed `color` / `opacity` / `width` spellings are rejected with a `TypeError` naming the replacement, so a style object never carries two names for one property. Legacy `styleByCategory` remains the default when `style` is unset. Priority: base → legacy palette → custom `style` → normalize. `setSelected` / `setHovered` stay as single-selection convenience APIs over `ObjectState`. WebGL updates patch per-point color/size buffers when possible. `sceneFeatures: false` skips icon/label/trail/path layers and is the 1M fast path; `update` / `{ animate }` still patch GPU points via the spatial index.
 - `objectManager({ loader })` requests objects by viewport and cancels stale loads; no separate remote factory is required.
 - `createSuggestWidget`, search providers, `trafficLayer` and `routingLayer` keep network providers application-defined.
 - `webglPointLayer` renders large point arrays on the GPU (precomputed Web Mercator buffer + per-frame uniforms) and supports rotation/pitch transforms. Interactive hit-testing uses a mercator spatial hash (linear scan only for small or rotated sets). `setDataAsync()` projects large iterable/async-iterable inputs in private chunks and atomically swaps the completed buffers.
@@ -188,7 +188,7 @@ manager.setObjectStates([
 ]);
 ```
 
-Style resolution order: base defaults → legacy `styleByCategory` palette (category / alert / selected / hover) → custom `style` → clamp/normalize. Point vocabulary is `fill`, `fillOpacity`, `size`; `color` and `opacity` are compatibility aliases. With a custom resolver, selected/hover colors are **not** forced on top — read `context.selected` / `context.hovered` when needed. `setStyle(null)` restores legacy styling. `clear()` drops objects and states but keeps the style resolver. Events: `objectstatechange` (`id`, `state`, `changedKeys`), `stylechange`. In a `setObjectStates` batch, the last `selected: true` / `hovered: true` wins so only one object remains selected or hovered.
+Style resolution order: base defaults → legacy `styleByCategory` palette (category / alert / selected / hover) → custom `style` → clamp/normalize. Point vocabulary is `fill`, `fillOpacity`, `size`; the removed `color` / `opacity` spellings throw a `TypeError` naming the replacement. With a custom resolver, selected/hover colors are **not** forced on top — read `context.selected` / `context.hovered` when needed. `setStyle(null)` restores legacy styling. `clear()` drops objects and states but keeps the style resolver. Events: `objectstatechange` (`id`, `state`, `changedKeys`), `stylechange`. In a `setObjectStates` batch, the last `selected: true` / `hovered: true` wins so only one object remains selected or hovered.
 
 ### ObjectManager scene APIs
 
@@ -315,13 +315,20 @@ Coordinates passed to Orihon are named `{ lat, lng }` values or `LatLng` instanc
 
 `Evented` supplies `on(type, handler)`, `once(type, handler)`, `off(type?, handler?)` and `emit(type, payload?)`. Handlers receive an `OrihonEvent` with `type`, `target` and the emitted fields. `off()` without arguments clears all handlers owned by that instance.
 
-Every `Layer` supports the following lifecycle and content methods:
+Every `Layer` supports the following lifecycle methods:
 
 | Method | Result |
 | --- | --- |
 | `addTo(map)` | Adds the layer and returns it for chaining |
 | `remove()` | Detaches it; data/options remain reusable unless the class documents destruction |
 | `getPane(name?)` | Returns the configured map pane or `null` |
+
+`InteractiveLayer extends Layer` and adds overlay binding. It is exported from `orihon/standard`
+and `orihon`, and is the base of markers, vectors, GeoJSON, groups, image/video/SVG overlays,
+heat and the WebGL layers:
+
+| Method | Result |
+| --- | --- |
 | `bindPopup(content, options?)` / `unbindPopup()` | Attaches/removes safe popup content |
 | `openPopup(latlng?)` / `closePopup()` / `togglePopup()` | Controls a bound popup |
 | `isPopupOpen()` / `getPopup()` | Reads popup state |
@@ -380,7 +387,7 @@ Every `Layer` supports the following lifecycle and content methods:
 | `wmtsTileLayer(template, options?)` | WMTS KVP or REST-template tiles |
 | `createWMTSFromCapabilities(xml, options?)` | Parse capabilities and construct WMTS configuration |
 
-`GridLayer` exposes `getTileSize`, `setOpacity`, `setZIndex`, `bringToFront` and `bringToBack`. `TileLayer` adds `getTileUrl`, `setUrl` and `redraw`. Advanced `tileLayer({ renderer: "auto" })` chooses WebGPU → WebGL → DOM when registered/supported.
+`GridLayer` exposes `getTileSize`, `setOpacity`, `setZIndex`, `bringToFront` and `bringToBack`. `TileLayer` adds `getTileUrl`, `setUrl`, `redraw` and `getStats`. `tileLayer(url)` is DOM in every tier; `tileLayer(url, { renderer: "auto" })` chooses WebGPU → WebGL → DOM when registered/supported.
 
 ### Markers, vectors, GeoJSON and overlays
 
@@ -512,7 +519,7 @@ try {
 
 | Factory/class | Main methods and contract |
 | --- | --- |
-| `searchProvider(itemsOrAdapter, options?)` / `SearchProvider` | Local array or adapter-backed `search`, `geocode`, `reverse` |
+| `searchProvider(itemsOrAdapter, options?)` / `SearchProvider` | Local array or adapter-backed `search`, `geocode`, `reverse`. `search()` normalizes to `[]`; `geocode()` and `reverse()` to `null`. An adapter without `reverse()` makes `reverse()` return `null` — the missing capability stays visible; pass `{ fallbackReverse: "coordinates" }` for a formatted-coordinate placeholder |
 | `createSuggestProvider(fetcher, options?)` / `SuggestProvider` | Debounced `suggest`; reusable `cancel`; terminal, idempotent `destroy` rejects pending and future requests with `AbortError` |
 | `createSuggestWidget(options)` / `SuggestWidget` | `attach`, `select`, `cancel`, `destroy` |
 | `routingLayer(options)` | `route`, `select`, `getRoutes`, `cancel` |

@@ -1,7 +1,7 @@
 import { createEl, listen, listenTap } from "../dom.js";
 import { cameraWarpCss } from "../camera.js";
 import { TILE_SIZE, bounds, projectMercator01, unproject, type LatLngLike, type LatLngBoundsLike, type Point } from "../geo.js";
-import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions, TooltipOptions } from "../overlays/div-overlay.js";
 import {
@@ -165,7 +165,7 @@ export interface HeatEventMap {
 }
 
 /** One field, three views: continuous heat colors, isolines, or both. */
-export class HeatLayer extends Layer<ResolvedHeatLayerOptions, HeatEventMap> {
+export class HeatLayer extends InteractiveLayer<ResolvedHeatLayerOptions, HeatEventMap> {
   canvas: HTMLCanvasElement | null = null;
   private _fieldCanvas: HTMLCanvasElement | null = null;
   private _points: PackedHeatPoints = { data: new Float32Array(0), count: 0 };

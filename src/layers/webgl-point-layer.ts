@@ -1,6 +1,7 @@
 import { createEl, listen, listenTap } from "../dom.js";
+import { cameraWarpCoversViewport } from "../camera.js";
 import { TILE_SIZE, latLng, projectMercator01, type LatLngLike, type Point } from "../geo.js";
-import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import type { OverlayContent, PopupOptions } from "../overlays/div-overlay.js";
@@ -12,7 +13,7 @@ import {
   yieldAsyncBatch,
   type AsyncBatchOptions
 } from "../services/async-batch.js";
-import { compileShader, parseCssColor, type RgbColor } from "../webgl-utils.js";
+import { compileShader, linkProgram, parseCssColor, type RgbColor } from "../webgl-utils.js";
 
 export type WebGLPointInput = LatLngLike | { coordinates?: LatLngLike; latlng?: LatLngLike; lat?: number; lng?: number };
 
@@ -80,7 +81,7 @@ export interface WebGLPointEventMap {
   hover: { originalEvent: MouseEvent; latlng: LatLngLike | null; containerPoint: { x: number; y: number } | null; index: number; data: WebGLPointInput | null | undefined };
 }
 
-export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions, WebGLPointEventMap> {
+export class WebGLPointLayer extends InteractiveLayer<ResolvedWebGLPointLayerOptions, WebGLPointEventMap> {
   canvas: HTMLCanvasElement | null = null;
   gl: WebGLRenderingContext | null = null;
   program: WebGLProgram | null = null;
@@ -726,20 +727,23 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions, WebGL
       !this._sizeDirty;
 
     if (canWarp) {
-      const s = 2 ** (zoom - this._paintedZoom);
-      const tx = this._paintedOriginX * s - ox;
-      const ty = this._paintedOriginY * s - oy;
-      const cover = this._paintedPad * 0.68;
-      const uncovered = Math.abs(tx) > cover || Math.abs(ty) > cover || Math.abs(s - 1) > 0.04;
-      const minInterval = this.points.length / 2 >= 250_000 ? 150 : 80;
-      const throttled = uncovered && now - this._lastGpuMs < minInterval;
-      if (!uncovered || throttled) {
+      const warpCovers = cameraWarpCoversViewport(
+        { x: this._paintedOriginX, y: this._paintedOriginY },
+        this._paintedZoom,
+        { x: ox, y: oy },
+        zoom,
+        { width: cssW, height: cssH }
+      );
+      if (warpCovers) {
+        const s = 2 ** (zoom - this._paintedZoom);
+        const tx = this._paintedOriginX * s - ox;
+        const ty = this._paintedOriginY * s - oy;
         if (s === 1 && tx * tx + ty * ty < 1e-4) return;
         this.canvas.style.left = `${-this._paintedPad}px`;
         this.canvas.style.top = `${-this._paintedPad}px`;
         this.canvas.style.transformOrigin = "0 0";
         this.canvas.style.transform = `translate3d(${tx}px,${ty}px,0) scale(${s})`;
-        this.#scheduleSettledGpu(throttled ? Math.max(16, minInterval - (now - this._lastGpuMs)) : 120);
+        this.#scheduleSettledGpu(120);
         return;
       }
     }
@@ -918,14 +922,8 @@ export class WebGLPointLayer extends Layer<ResolvedWebGLPointLayerOptions, WebGL
       this.renderer = this.options.fallbackCanvas ? "canvas" : "none";
       return;
     }
-    this.program = gl.createProgram();
-    if (!this.program) return;
-    gl.attachShader(this.program, vertex);
-    gl.attachShader(this.program, fragment);
-    gl.linkProgram(this.program);
-    gl.deleteShader(vertex);
-    gl.deleteShader(fragment);
-    if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+    this.program = linkProgram(gl, vertex, fragment);
+    if (!this.program) {
       this.renderer = this.options.fallbackCanvas ? "canvas" : "none";
       return;
     }

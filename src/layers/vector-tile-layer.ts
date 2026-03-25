@@ -49,9 +49,16 @@ export interface VectorTileEventMap {
 }
 
 export class VectorTileLayer extends LayerGroup<VectorTileEventMap, Required<VectorTileLayerOptions>> {
-  readonly tiles = new Map<string, TileState>();
-  readonly _render = () => this.render();
-  private _rect: TileRect | null = null;
+  readonly #tiles = new Map<string, TileState>();
+  readonly #render = () => this.render();
+  #rect: TileRect | null = null;
+
+  /** Tile bookkeeping for diagnostics; the tile map itself stays private. */
+  getStats(): { active: number; retained: number; cached: number; loading: number } {
+    let loading = 0;
+    for (const tile of this.#tiles.values()) if (!tile.layer) loading += 1;
+    return { active: this.#tiles.size, retained: 0, cached: 0, loading };
+  }
 
   constructor(options: VectorTileLayerOptions) {
     if (typeof options.provider !== "function") throw new TypeError("VectorTileLayer provider is required");
@@ -70,26 +77,26 @@ export class VectorTileLayer extends LayerGroup<VectorTileEventMap, Required<Vec
 
   override onAdd(map: Orihon): void {
     super.onAdd(map);
-    map.on("moveend", this._render);
-    map.on("zoomend", this._render);
+    map.on("moveend", this.#render);
+    map.on("zoomend", this.#render);
     this.render();
   }
 
   override onRemove(): void {
     const map = this.map;
-    map?.off("moveend", this._render);
-    map?.off("zoomend", this._render);
+    map?.off("moveend", this.#render);
+    map?.off("zoomend", this.#render);
     this.clearTiles();
     super.onRemove();
   }
 
   clearTiles(): this {
-    for (const tile of this.tiles.values()) {
+    for (const tile of this.#tiles.values()) {
       tile.controller.abort();
       if (tile.layer) this.removeLayer(tile.layer);
     }
-    this.tiles.clear();
-    this._rect = null;
+    this.#tiles.clear();
+    this.#rect = null;
     return this;
   }
 
@@ -106,33 +113,33 @@ export class VectorTileLayer extends LayerGroup<VectorTileEventMap, Required<Vec
     const nextRect: TileRect = { z, left: range.minX, top: range.minY, right: range.maxX, bottom: range.maxY };
     const consider = (x: number, y: number): void => {
       const key = `${z}:${x}:${y}`;
-      if (!this.tiles.has(key)) void this.#loadTile(x, y, z, key);
+      if (!this.#tiles.has(key)) void this.#loadTile(x, y, z, key);
     };
     const forget = (x: number, y: number): void => {
       const key = `${z}:${x}:${y}`;
-      const tile = this.tiles.get(key);
+      const tile = this.#tiles.get(key);
       if (!tile) return;
       tile.controller.abort();
       if (tile.layer) this.removeLayer(tile.layer);
-      this.tiles.delete(key);
+      this.#tiles.delete(key);
     };
-    if (!this._rect || this._rect.z !== nextRect.z) {
+    if (!this.#rect || this.#rect.z !== nextRect.z) {
       this.clearTiles();
       forEachTileInRect(nextRect, consider);
     } else {
-      forEachTileRectDelta(this._rect, nextRect, consider, forget);
+      forEachTileRectDelta(this.#rect, nextRect, consider, forget);
     }
-    this._rect = nextRect;
+    this.#rect = nextRect;
   }
 
   async #loadTile(x: number, y: number, z: number, key: string): Promise<void> {
     const controller = new AbortController();
     const coordinates: VectorTileCoordinates = { x, y, z, bounds: tileBounds(x, y, z), signal: controller.signal };
-    this.tiles.set(key, { layer: null, controller });
+    this.#tiles.set(key, { layer: null, controller });
     this.emit("tileloadstart", { coordinates });
     try {
       const features = await this.options.provider(coordinates);
-      if (controller.signal.aborted || !this.map || !this.tiles.has(key)) return;
+      if (controller.signal.aborted || !this.map || !this.#tiles.has(key)) return;
       const sourceFeatures = features || [];
       const usePaint = this.options.style == null && this.options.paint.length > 0;
       const paintByFeature = new WeakMap<GeoJSONFeature, MVTPaintRule>();
@@ -168,13 +175,13 @@ export class VectorTileLayer extends LayerGroup<VectorTileEventMap, Required<Vec
           ? (feature) => (this.options.style as (feature: GeoJSONFeature, tile: VectorTileCoordinates) => Record<string, unknown>)(feature, coordinates)
           : this.options.style
       });
-      this.tiles.set(key, { layer, controller });
+      this.#tiles.set(key, { layer, controller });
       this.addLayer(layer);
       this.emit("tileload", { coordinates, features: features || [] });
     } catch (error) {
       if (controller.signal.aborted) this.emit("tileabort", { coordinates });
       else this.emit("tileerror", { coordinates, error });
-      this.tiles.delete(key);
+      this.#tiles.delete(key);
     }
   }
 }

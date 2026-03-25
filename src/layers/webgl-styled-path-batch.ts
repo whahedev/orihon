@@ -1,6 +1,6 @@
 import { createEl } from "../dom.js";
 import { latLng, bounds, type LatLngLike } from "../geo.js";
-import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { clampOpacity, parseCssColor } from "../webgl-utils.js";
@@ -37,7 +37,7 @@ export interface WebGLStyledPathBatchOptions extends LayerOptions {
  * Path batch with distance-along-line support for dash + gradient.
  * Canvas renderer guarantees dash+gradient combinations; API is WebGL-ready.
  */
-export class WebGLStyledPathBatch extends Layer<Required<WebGLStyledPathBatchOptions>> {
+export class WebGLStyledPathBatch extends InteractiveLayer<Required<WebGLStyledPathBatchOptions>> {
   canvas: HTMLCanvasElement | null = null;
   renderer: "canvas" | "none" = "none";
   private paths: Array<{

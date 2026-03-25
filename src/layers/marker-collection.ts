@@ -1,7 +1,7 @@
 import { cameraWarpCss } from "../camera.js";
 import { createEl, createSvgEl, rafThrottle } from "../dom.js";
 import { latLng, bounds, type LatLngLike } from "../geo.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { SpatialGridIndex } from "../services/spatial-grid-index.js";
 import { Marker, validateMarkerOptions, type MarkerOptions } from "./marker.js";
@@ -55,7 +55,7 @@ type ResolvedMarkerCollectionOptions = LayerOptions &
  * SVG keeps real addressable DOM nodes with one shared style/transform;
  * hybrid keeps a bounded HTML icon layer over a WebGL remainder.
  */
-export class MarkerCollection extends Layer<ResolvedMarkerCollectionOptions> {
+export class MarkerCollection extends InteractiveLayer<ResolvedMarkerCollectionOptions> {
   readonly index: SpatialGridIndex<{ i: number }, number>;
   private _points: LatLngLike[] = [];
   private _markers = new Map<number, Marker>();

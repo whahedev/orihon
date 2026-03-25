@@ -21,16 +21,24 @@ export function compileShader(gl: WebGLRenderingContext | WebGL2RenderingContext
   return shader;
 }
 
+/**
+ * Links a program and releases both shaders (they stay attached to the program).
+ * Returns null on any failure — the caller decides whether to fall back.
+ */
 export function linkProgram(
-  gl: WebGLRenderingContext,
+  gl: WebGLRenderingContext | WebGL2RenderingContext,
   vertex: WebGLShader,
   fragment: WebGLShader
 ): WebGLProgram | null {
   const program = gl.createProgram();
+  if (program) {
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+  }
+  gl.deleteShader(vertex);
+  gl.deleteShader(fragment);
   if (!program) return null;
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     gl.deleteProgram(program);
     return null;

@@ -1,3 +1,4 @@
+import { OrihonError } from "./errors.js";
 import {
   LatLng,
   Point,
@@ -57,9 +58,9 @@ export function resolveCRS(input: CRSInput | undefined): CoordinateReferenceSyst
   throw new TypeError(`Unsupported CRS: ${String((input as { code?: unknown }).code)}`);
 }
 
-export class CRSCompatibilityError extends Error {
+export class CRSCompatibilityError extends OrihonError {
   constructor(message = "WebGL layers require EPSG:3857") {
-    super(message);
+    super("ERR_CRS_INCOMPATIBLE", message);
     this.name = "CRSCompatibilityError";
   }
 }

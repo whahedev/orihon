@@ -70,7 +70,7 @@ export class RemoteObjectManager extends ObjectManager<RemoteObjectManagerEventM
 
   override addTo(map: RemoteObjectMap): this {
     this.assertAlive();
-    if ("_destroyed" in map && map._destroyed === true) throw abortError("Cannot attach RemoteObjectManager to a destroyed map");
+    if (map.isDestroyed === true) throw abortError("Cannot attach RemoteObjectManager to a destroyed map");
     if (this.map === map) return this;
     super.addTo(map);
     map.on("moveend", this.#remoteRender);

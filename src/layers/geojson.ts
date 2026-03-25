@@ -1,6 +1,6 @@
 import { LatLng, LatLngBounds, latLng, type LatLngLike } from "../geo.js";
 import { FeatureGroup } from "../layer-group.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer, Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import {
   isReadonlyFeatureSource
@@ -69,7 +69,7 @@ export type {
  * Optional GPU path batch for GeoJSON (Advanced tier).
  * Standard keeps SVG/canvas only — register from `orihon` entry, not `orihon/standard`.
  */
-export type GeoJSONPathBatch = Layer & {
+export type GeoJSONPathBatch = InteractiveLayer & {
   addPath(rings: LatLngLike[][], closed?: boolean, style?: PathOptions, feature?: GeoJSONFeature): unknown;
   clearPaths(): unknown;
   render(): void;
@@ -86,8 +86,8 @@ export function registerGeoJSONWebGLBatch(factory: GeoJSONWebGLBatchFactory | nu
   webglBatchFactory = factory;
 }
 
-function isPathBatch(layer: Layer): layer is GeoJSONPathBatch {
-  const candidate = layer as Layer & Partial<GeoJSONPathBatch>;
+function isPathBatch(layer: InteractiveLayer): layer is GeoJSONPathBatch {
+  const candidate = layer as InteractiveLayer & Partial<GeoJSONPathBatch>;
   return typeof candidate.addPath === "function" && typeof candidate.clearPaths === "function";
 }
 
@@ -95,10 +95,10 @@ export type GeoJSONData = GeoJSONGeometry | GeoJSONFeature | GeoJSONFeatureColle
 export type GeoJSONInput = GeoJSONData | ReadonlyFeatureSource<GeoJSONFeature>;
 export type GeoJSONAsyncInput = GeoJSONData | string | Blob | AsyncIterable<GeoJSONData>;
 export type GeoJSONStyleFunction = (feature: GeoJSONFeature) => PathOptions;
-export type GeoJSONPointToLayer = (feature: GeoJSONFeature, latlng: LatLng) => Layer;
+export type GeoJSONPointToLayer = (feature: GeoJSONFeature, latlng: LatLng) => InteractiveLayer;
 export type GeoJSONPopupFactory = (
   feature: GeoJSONFeature,
-  layer: Layer,
+  layer: InteractiveLayer,
   context: OverlayContentContext
 ) => OverlayRenderable | Promise<OverlayRenderable>;
 export type GeoJSONPopupContent = OverlayContent | GeoJSONPopupFactory;
@@ -146,10 +146,10 @@ export interface GeoJSONOptions extends PathOptions {
 
 interface FeatureEntry {
   feature: GeoJSONFeature;
-  layer: Layer;
+  layer: InteractiveLayer;
 }
 
-type FeatureLayer = Layer & { feature?: GeoJSONFeature };
+type FeatureLayer = InteractiveLayer & { feature?: GeoJSONFeature };
 
 type PathGeometry =
   | GeoJSONLineStringGeometry
@@ -584,7 +584,7 @@ export class GeoJSONLayer extends FeatureGroup {
     if (features.length) this.addData([...features]);
   }
 
-  #geometryToLayer(geometry: GeoJSONGeometry, feature: GeoJSONFeature): Layer | null {
+  #geometryToLayer(geometry: GeoJSONGeometry, feature: GeoJSONFeature): InteractiveLayer | null {
     const convert = (coordinates: GeoJSONPosition): LatLng => latLng(
       this.geoJSONOptions.coordsToLatLng?.(coordinates) ?? geoJSONCoordsToLatLng(coordinates)
     );
@@ -594,7 +594,7 @@ export class GeoJSONLayer extends FeatureGroup {
     }
     if (geometry.type === "GeometryCollection") {
       return new FeatureGroup(
-        geometry.geometries.map((child) => this.#geometryToLayer(child, feature)).filter((layer): layer is Layer => Boolean(layer))
+        geometry.geometries.map((child) => this.#geometryToLayer(child, feature)).filter((layer): layer is InteractiveLayer => Boolean(layer))
       );
     }
     const style = this.#featureStyle(feature);
@@ -666,7 +666,7 @@ export class GeoJSONLayer extends FeatureGroup {
     return this._pathBatch;
   }
 
-  #pointLayer(feature: GeoJSONFeature, position: LatLng): Layer {
+  #pointLayer(feature: GeoJSONFeature, position: LatLng): InteractiveLayer {
     return this.geoJSONOptions.pointToLayer?.(feature, position) ?? new Marker(position);
   }
 

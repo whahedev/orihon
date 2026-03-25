@@ -1,6 +1,6 @@
 import { createSvgEl } from "../dom.js";
 import { EARTH_RADIUS } from "../geo.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 
 const METERS_PER_MILE = 1609.344;
@@ -16,7 +16,7 @@ export interface GraticuleLayerOptions extends LayerOptions {
   maxLines?: number;
 }
 
-export class GraticuleLayer extends Layer<Required<GraticuleLayerOptions>> {
+export class GraticuleLayer extends InteractiveLayer<Required<GraticuleLayerOptions>> {
   svg: SVGSVGElement | null = null;
   path: SVGPathElement | null = null;
   private readonly update = (): void => this.render();

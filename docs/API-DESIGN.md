@@ -56,7 +56,7 @@ Orihon keeps two complementary sentence subjects. Do not add a third grammar for
 - Options objects are preferred once an operation has more than two independent arguments of the same primitive type.
 - Defaults represent the normal happy path and are documented in the public type or API guide.
 - Options that select mutually exclusive modes use a string union or discriminated union rather than several competing booleans.
-- When legacy aliases and canonical options coexist, the canonical option wins and the precedence is documented and tested.
+- Removed spellings are rejected with a `TypeError` naming the replacement (`rejectLegacyUnit`, `rejectStyleAliases`) instead of being silently accepted. One property has one name; where a legacy alias is deliberately retained, the canonical option wins and the precedence is documented and tested.
 - Unsupported option combinations fail early with an actionable error instead of silently selecting an unrelated mode.
 - Dependencies that perform I/O are accepted through provider interfaces so applications can supply fakes and deterministic implementations.
 

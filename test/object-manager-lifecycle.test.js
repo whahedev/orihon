@@ -165,10 +165,14 @@ test("destroy before deferred hierarchy dispatch never starts shared worker work
   let calls = 0;
   manager._workerPool = { clusterIndex() { calls++; return new Promise(() => {}); } };
   manager.add([point(1), point(2)]);
-  await manager.prepareLayout();
+
+  // `prepareLayout()` resolves only once the deferred hierarchy has settled, so
+  // the teardown has to happen while that promise is still in flight.
+  const pending = manager.prepareLayout();
   manager.destroy();
   t.mock.timers.tick(1);
-  await Promise.resolve();
+
+  await assert.rejects(pending, { name: "AbortError" });
   assert.equal(calls, 0);
   assert.equal(manager.getStats().objects, 0);
 });
@@ -181,11 +185,17 @@ test("late shared-worker failures do not resurrect state or escape as unhandled 
   let calls = 0;
   manager._workerPool = { clusterIndex() { calls++; return late.promise; } };
   manager.add([point(1), point(2)]);
-  await manager.prepareLayout();
+
+  const pending = manager.prepareLayout();
   t.mock.timers.tick(1);
+  await flush();
   assert.equal(calls, 1);
+
   manager.destroy();
   late.reject(new Error("worker failed after teardown"));
+
+  await assert.rejects(pending, /worker failed after teardown/);
   await flush();
   assert.equal(manager.getStats().objects, 0);
 });
+

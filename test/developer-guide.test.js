@@ -19,8 +19,6 @@ test("developer guide has one physical page per catalogued public function", asy
   for (const internalName of [
     "latLngBounds",
     "gpuTileLayer",
-    "remoteObjectManager",
-    "markerCollection",
     "createSearchProvider",
     "createArraySearchProvider",
     "webglPathBatch",
@@ -39,7 +37,8 @@ test("developer guide has one physical page per catalogued public function", asy
     assert.equal(manifest.functions.some((item) => item.name === internalName), false, `${internalName} is internal`);
   }
   for (const publicName of [
-    "tileLayer", "objectManager", "searchProvider", "pathBatch", "icon", "bounds",
+    "tileLayer", "objectManager", "remoteObjectManager", "markerCollection",
+    "searchProvider", "pathBatch", "icon", "bounds",
     "buildClusterIndex", "buildClusterLayout", "queryClusterLayout"
   ]) {
     assert.equal(manifest.functions.some((item) => item.name === publicName), true, `${publicName} must be documented`);

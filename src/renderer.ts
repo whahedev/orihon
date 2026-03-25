@@ -1,12 +1,12 @@
 import { createEl } from "./dom.js";
-import { Layer, type LayerOptions } from "./layer.js";
+import { InteractiveLayer, type LayerOptions } from "./layer.js";
 import type { Orihon } from "./map.js";
 
 export interface RendererOptions extends LayerOptions {
   className?: string;
 }
 
-export class Renderer<TOptions extends RendererOptions = RendererOptions, TEvents extends object = {}> extends Layer<TOptions, TEvents> {
+export class Renderer<TOptions extends RendererOptions = RendererOptions, TEvents extends object = {}> extends InteractiveLayer<TOptions, TEvents> {
   container: HTMLElement | SVGElement | null = null;
 
   constructor(options = {} as TOptions) {

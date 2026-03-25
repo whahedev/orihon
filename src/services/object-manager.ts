@@ -10,7 +10,7 @@ import { Polyline, polyline } from "../layers/vector.js";
 import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js";
 import { LatLng, LatLngBounds, Point, clampLat, latLng, bounds, wrapLng, type LatLngBoundsLike, type LatLngLike, type PointLike } from "../geo.js";
 import type { Orihon } from "../map.js";
-import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
+import { mergeOptions, nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { AbortableOperation, abortError } from "./abortable-operation.js";
 import {
   Popup,
@@ -27,7 +27,7 @@ import {
   type ClusterIndex,
   type ClusterLayoutResult
 } from "./cluster-layout.js";
-import { GeometryWorkerPool, getSharedGeometryWorkerPool } from "./geometry-worker.js";
+import { GeometryWorkerPool, acquireSharedGeometryWorkerPool, releaseSharedGeometryWorkerPool } from "./geometry-worker.js";
 import { SpatialGridIndex, type SpatialRecord } from "./spatial-grid-index.js";
 import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 import { layerOptions } from "../layer.js";
@@ -328,6 +328,8 @@ interface ObjectManagerMap extends Evented {
   setView(center: LatLngLike, zoom: number): unknown;
   fitBounds(bounds: LatLngBoundsLike, options?: { padding?: number }): unknown;
   crs?: { code: "EPSG:3857" | "Simple" };
+  /** Terminal-lifecycle flag from `Orihon`; optional so tests can pass a minimal map stub. */
+  isDestroyed?: boolean;
 }
 
 interface ClusterSpec {
@@ -531,7 +533,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     validateMarkerOptions(options.marker ?? {});
     super();
     rejectLegacyUnit(options, "clusterGridSize", "clusterRadiusPixels");
-    this.options = {
+    this.options = mergeOptions({
       minZoom: 0,
       marker: {},
       clusterize: false,
@@ -545,8 +547,8 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       indexCellSize: 1,
       clusterIcon: null,
       clusterClassName: "oh-cluster-marker",
-      clusterTitle: (count) => `${count} objects`,
-      clusterAriaLabel: (count) => `${count} map objects`,
+      clusterTitle: (count: number) => `${count} objects`,
+      clusterAriaLabel: (count: number) => `${count} map objects`,
       clusterRenderer: "auto",
       webglThreshold: 2000,
       layoutWorker: "auto",
@@ -570,9 +572,8 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       clusterStyle: null,
       sceneFeatures: true,
       maxVerticesPerGeometry: DEFAULT_MAX_VERTICES_PER_GEOMETRY,
-      source: null,
-      ...options
-    };
+      source: null
+    }, options);
     this.options.clusterRadiusPixels = Math.max(20, nonNegativeFinite(this.options.clusterRadiusPixels, "clusterRadiusPixels"));
     this.options.clusterMinPoints = Math.max(2, Math.floor(this.options.clusterMinPoints));
     this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
@@ -619,7 +620,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     this._render = () => this.render();
     this._scheduleRender = rafThrottle(() => this.render());
     this._scheduleLabelRedraw = rafThrottle(() => this.#redrawLabelsDuringMove());
-    this._workerPool = getSharedGeometryWorkerPool();
+    this._workerPool = acquireSharedGeometryWorkerPool();
     if (this.options.source) {
       this.add(this.options.source.getSnapshot().features.map((feature) => this.#sourceObject(feature)));
       this._sourceUnsubscribe = this.options.source.subscribe((change) => this.#applySourceChange(change));
@@ -628,7 +629,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
 
   addTo(map: ObjectManagerMap): this {
     this.assertAlive();
-    if ("_destroyed" in map && map._destroyed === true) throw abortError("Cannot attach ObjectManager to a destroyed map");
+    if (map.isDestroyed === true) throw abortError("Cannot attach ObjectManager to a destroyed map");
     if (this.map === map) return this;
     this.detach();
     this.assertAlive();
@@ -640,6 +641,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     map.on("move", this._scheduleLabelRedraw);
     map.on("zoom", this._scheduleLabelRedraw);
     map.on("moveend", this._scheduleRender);
+    map.on("zoom", this._scheduleRender);
     map.on("zoomend", this._scheduleRender);
     map.on("resize", this._scheduleRender);
     map.on("click", this._unspiderfyOnMapClick);
@@ -655,6 +657,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     this.map.off("move", this._scheduleLabelRedraw);
     this.map.off("zoom", this._scheduleLabelRedraw);
     this.map.off("moveend", this._scheduleRender);
+    this.map.off("zoom", this._scheduleRender);
     this.map.off("zoomend", this._scheduleRender);
     this.map.off("resize", this._scheduleRender);
     this.map.off("click", this._unspiderfyOnMapClick);
@@ -687,7 +690,9 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     this._bulkDepth = 0;
     this.#drainClusterPool();
     this._layoutGeneration++;
-    // The library-owned shared pool outlives individual managers.
+    // Release our reference: the worker thread and the coordinate dataset it holds
+    // are torn down once the last live manager lets go of the shared pool.
+    releaseSharedGeometryWorkerPool(this._workerPool);
     this.off();
     return this;
   }

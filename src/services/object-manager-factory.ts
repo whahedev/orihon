@@ -35,6 +35,26 @@ export type UnifiedObjectManagerOptions =
   | RemoteObjectManagerOptions
   | PointObjectManagerOptions;
 
+/** Remote object manager driven by a `loader`. Prefer this over `objectManager({ loader })`. */
+export function remoteObjectManager(options: RemoteObjectManagerOptions): RemoteObjectManager {
+  return objectManager(options);
+}
+
+/** Lightweight point collection. Prefer this over `objectManager({ points })`. */
+export function markerCollection(
+  points: Iterable<LatLngLike>,
+  options: MarkerCollectionOptions = {}
+): MarkerCollection {
+  return objectManager({ ...options, points } as PointObjectManagerOptions);
+}
+
+/**
+ * Option-shape facade over three different classes: `loader` → `RemoteObjectManager`,
+ * `points` → `MarkerCollection`, neither → `ObjectManager`. A factory whose runtime type depends
+ * on which key is present is hard to predict, especially for options assembled dynamically, so
+ * prefer `remoteObjectManager()` / `markerCollection()` by name and keep `objectManager()` for
+ * the plain local manager. Mixed configurations are rejected rather than resolved by precedence.
+ */
 export function objectManager(options: RemoteObjectManagerOptions): RemoteObjectManager;
 export function objectManager(options: PointObjectManagerOptions): MarkerCollection;
 export function objectManager(options?: LocalObjectManagerOptions): ObjectManager;

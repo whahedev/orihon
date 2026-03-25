@@ -12,7 +12,10 @@ import {
 } from "../dist/index.js";
 
 test("Marker exposes opacity and z-index controls", () => {
-  const layer = marker({ lat: 52.52, lng: 13.405 }, { fillOpacity: 0.7, zIndexOffset: 20, keyboard: false });
+  // Marker keeps its own appearance vocabulary (`color`, `opacity`, `size`,
+  // `strokeColor`, `strokeWidth`); `fill` / `fillOpacity` belong to the
+  // ObjectManager and MarkerCollection point styles, not here.
+  const layer = marker({ lat: 52.52, lng: 13.405 }, { opacity: 0.7, zIndexOffset: 20, keyboard: false });
   assert.ok(layer instanceof Marker);
   assert.equal(layer.options.opacity, 0.7);
   assert.equal(layer.options.zIndexOffset, 20);
@@ -25,7 +28,7 @@ test("Marker exposes opacity and z-index controls", () => {
 test("Marker built-in appearance supports shape color and size", () => {
   const layer = marker({ lat: 0, lng: 0 }, {
     shape: "circle",
-    fill: "#0f766e",
+    color: "#0f766e",
     strokeColor: "#ecfeff",
     size: 18,
     strokeWidth: 3

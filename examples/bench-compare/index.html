@@ -4086,10 +4086,11 @@ async function markersOrihon(points) {
       title: "Open map object",
       shape: "dot",
       size: 8,
-      strokeWidth: 0
+      strokeWidth: 0,
+      color: "#0f766e"
     },
     pointSize: 8,
-    color: "#0f766e"
+    fill: "#0f766e"
   }).addTo(map);
   await waitFrames(4);
   const loadMs = performance.now() - loadStart;

@@ -122,8 +122,12 @@ test("public API exports ObjectManager state and style types", () => {
   assert.equal(typeof Orihon.objectManager, "function");
   assert.equal(typeof Orihon.searchProvider, "function");
   assert.equal(typeof Orihon.pathBatch, "function");
+  // remoteObjectManager / markerCollection are not aliases of objectManager: they build
+  // different classes. Naming them keeps the choice of class in the call, not in the option shape.
+  assert.equal(typeof Orihon.remoteObjectManager, "function");
+  assert.equal(typeof Orihon.markerCollection, "function");
   for (const removed of [
-    "remoteObjectManager", "markerCollection", "createSearchProvider", "createArraySearchProvider",
+    "createSearchProvider", "createArraySearchProvider",
     "webglPathBatch", "webglStyledPathBatch", "divIcon", "gridLayer", "canvasBaseLayer", "extendBounds"
   ]) assert.equal(removed in Orihon, false, `${removed} must not remain in the main API`);
   assert.equal("gridLayer" in Core, false);
@@ -133,6 +137,9 @@ test("public API exports ObjectManager state and style types", () => {
   assert.ok(Orihon.icon({ iconUrl: "marker.png" }) instanceof Orihon.Icon);
   assert.ok(Orihon.objectManager({ points: [{ lat: 1, lng: 2 }], renderer: "svg" }) instanceof Orihon.MarkerCollection);
   assert.ok(Orihon.objectManager({ loader: async () => [] }) instanceof Orihon.RemoteObjectManager);
+  assert.ok(Orihon.markerCollection([{ lat: 1, lng: 2 }], { renderer: "svg" }) instanceof Orihon.MarkerCollection);
+  assert.ok(Orihon.remoteObjectManager({ loader: async () => [] }) instanceof Orihon.RemoteObjectManager);
+  assert.ok(Orihon.objectManager() instanceof Orihon.ObjectManager);
   assert.ok(Orihon.searchProvider([{ name: "A", center: { lat: 1, lng: 2 } }]) instanceof Orihon.SearchProvider);
   assert.ok(Orihon.OBJECT_MANAGER_PALETTE);
   const manager = Orihon.objectManager();

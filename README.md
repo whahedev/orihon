@@ -9,7 +9,7 @@
 [![npm](https://img.shields.io/npm/v/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![downloads](https://img.shields.io/npm/dm/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![CI](https://github.com/whahedev/orihon/actions/workflows/ci.yml/badge.svg)](https://github.com/whahedev/orihon/actions/workflows/ci.yml)
-[![full size](https://img.shields.io/badge/full-≤75_KiB_gzip-0f766e)](https://github.com/whahedev/orihon#tiers)
+[![full size](https://img.shields.io/badge/full-<150_KiB_gzip-0f766e)](https://github.com/whahedev/orihon#size)
 [![license](https://img.shields.io/badge/license-Apache%202.0-0f766e)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-ready-3178c6)](./tsconfig.json)
 
@@ -32,9 +32,9 @@ Geometry moves.
 Surfaces connect.  
 The world keeps unfolding.
 
-At less than **75 KiB gzipped**, Orihon stays small where it matters — without sacrificing speed or capability.
+Every build ships under **150 KiB gzipped** — and you rarely need the whole engine: a basemap costs **~15 KiB**, everyday GIS **~36 KiB**, and the full GPU stack **~123 KiB**. See [Size](#size) for the enforced budgets.
 
-In benchmarks, Orihon outperforms Leaflet, OpenLayers, and MapLibre, delivering faster rendering and interaction while keeping the core remarkably compact.
+On our own point-rendering workload, Orihon renders and pans faster than Leaflet, OpenLayers and MapLibre. Run it yourself rather than take our word for it: [`examples/bench-compare`](examples/bench-compare) drives the same dataset through all four engines in your browser ([live](https://whahedev.github.io/orihon/bench/)).
 
 No unnecessary weight.  
 No artificial boundaries.  
@@ -61,7 +61,7 @@ const berlin = lngLat(13.405, 52.52);        // longitude, latitude (MapLibre / 
 marker(berlin).addTo(map);
 ```
 
-Development and release tooling requires **Node.js 22 or newer**; the repository pins **Node.js 24.19.0 LTS** in `.node-version`. Browser consumers are unaffected by this build-time requirement.
+Development and release tooling requires **Node.js 22 or newer**; the repository pins **Node.js 24.20.0 LTS** in `.node-version`. Browser consumers are unaffected by this build-time requirement.
 
 ## Package complexity: tiers
 
@@ -143,7 +143,7 @@ import { fullscreenControl, measureControl, miniMap, graticuleLayer } from "orih
 import { bufferPoint } from "orihon/geo";
 ```
 
-Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 37 KiB, full (Advanced + WebGL/WebGPU) ≤ 105 KiB. Prefer the smallest entry that covers the feature set.
+Gzip budgets stay attached to the tiers: core ≤ 18 KiB, standard ≤ 38 KiB, full (Advanced + WebGL/WebGPU/WASM) ≤ 132 KiB. Prefer the smallest entry that covers the feature set — the [Size](#size) table lists every artifact and what CI enforces.
 
 **ObjectManager** is the Advanced-tier answer to heavy datasets: render and manage 100,000+ map objects without keeping 100,000 DOM markers alive.
 
@@ -151,8 +151,12 @@ For 100k–1M imports, prefer `await manager.addAsync(iterable, { chunkSize: 10_
 
 ## Quick Start
 
+Start at `orihon/standard`: it covers ordinary GIS work, and every symbol below keeps the same
+name and behaviour if you later move the import to the Advanced `orihon` root. For a first map
+with even less to learn, `orihon/easy` above is the shorter path.
+
 ```js
-import { createMap, tileLayer, marker, polyline } from "orihon";
+import { createMap, tileLayer, marker, polyline } from "orihon/standard";
 import "orihon/orihon.css";
 
 const map = createMap("map", {
@@ -173,13 +177,17 @@ polyline([
 ], { stroke: "#0f766e", strokeWidth: 4 }).addTo(map);
 ```
 
+Moving to `orihon` unlocks ObjectManager, WebGL/WebGPU renderers and packed tile formats; it does
+not change what the code above does. GPU raster tiles stay opt-in through
+`tileLayer(url, { renderer: "auto" })`.
+
 Script-tag / CDN build:
 
 ```html
 <link rel="stylesheet" href="./node_modules/orihon/dist/orihon.css" />
 <script src="./node_modules/orihon/dist/orihon.global.js"></script>
 <script>
-  const map = Orihon.createMap("map", { center: [52.52, 13.405], zoom: 10 });
+  const map = Orihon.createMap("map", { center: { lat: 52.52, lng: 13.405 }, zoom: 10 });
 </script>
 ```
 
@@ -641,21 +649,36 @@ For a script-tag/global setup:
 <link rel="stylesheet" href="./dist/orihon.css" />
 <script src="./dist/orihon.global.js"></script>
 <script>
-  const map = Orihon.createMap("map", { center: [52.52, 13.405], zoom: 10 });
+  const map = Orihon.createMap("map", { center: { lat: 52.52, lng: 13.405 }, zoom: 10 });
 </script>
 ```
 
-`npm run size` enforces gzip budgets in CI (current builds stay under them):
+## Size
 
-| Artifact | Budget |
-| --- | --- |
-| `orihon.core.esm.js` | ≤ 22 KiB gzip |
-| `orihon.standard.esm.js` | ≤ 37 KiB gzip |
-| `orihon.esm.js` | ≤ 141 KiB gzip (Advanced + WebGL/WebGPU/WASM) |
-| `orihon.controls.esm.js` | ≤ 8 KiB gzip (imports shared modules) |
-| `orihon.geo.esm.js` | ≤ 2 KiB gzip (imports shared geometry) |
+Nothing Orihon ships crosses **150 KiB gzip**, and `npm run size` fails the build
+if anything does. The same command also checks this table against
+`dist/release-manifest.json` and against the budgets in `scripts/check-size.mjs`,
+so a published size claim cannot drift away from the artifact it describes.
 
-Raw minified sizes are larger; production cost is the gzip figure. Prefer modular imports when you do not need the full surface.
+| Artifact | Budget | What it carries |
+| --- | --- | --- |
+| `orihon.geo.esm.js` | ≤ 2 KiB gzip | Geometry helpers only |
+| `orihon.popup-content.esm.js` | ≤ 5 KiB gzip | Popup content blocks |
+| `orihon.controls.esm.js` | ≤ 8 KiB gzip | Optional controls (imports shared modules) |
+| `orihon.draw.esm.js` | ≤ 12 KiB gzip | Draw/edit tools |
+| `orihon.core.esm.js` | ≤ 18 KiB gzip | Map, events, geometry, DOM tiles |
+| `orihon.standard.esm.js` | ≤ 38 KiB gzip | Core + markers, vectors, GeoJSON, popups, controls — no WebGL |
+| `orihon.esm.js` | ≤ 132 KiB gzip | Advanced: Standard + WebGL/WebGPU, MVT, ObjectManager, WASM |
+| `orihon.react.esm.js` | ≤ 118 KiB gzip | React bindings over the Advanced surface |
+| `orihon.global.js` | ≤ 149 KiB gzip | Script-tag build: no code splitting, lazy chunks inlined |
+
+Budgets sit a little above the current build on purpose: a zero-slack budget turns
+every unrelated change into a size incident. `dist/release-manifest.json` records
+the exact bytes of the build you install.
+
+Raw minified sizes are larger; production cost is the gzip figure. Prefer modular
+imports when you do not need the full surface — WebGPU compute, PNG export,
+non-English locales and adaptive isoline levels already load as separate chunks.
 
 ## Documentation
 

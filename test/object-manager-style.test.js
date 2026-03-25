@@ -521,67 +521,38 @@ test("custom style receives object state zoom selected hovered", () => {
 });
 
 test("DOM and WebGL style resolution stay aligned", () => {
-
   const style = (object, state, context) => ({
-
-    color: state.alarm ? "#dc2626" : context.selected ? "#7c3aed" : "#2563eb",
-
-    opacity: state.disabled ? 0.2 : 0.9,
-
+    fill: state.alarm ? "#dc2626" : context.selected ? "#7c3aed" : "#2563eb",
+    fillOpacity: state.disabled ? 0.2 : 0.9,
     size: 14
-
   });
-
   const dom = objectManager({ clusterize: false, clusterRenderer: "dom", style });
-
   const webgl = objectManager({ clusterize: false, clusterRenderer: "webgl", style, webglThreshold: 1 });
-
   const mapDom = createFakeMap(11);
-
   const mapGl = createFakeMap(11);
-
   const feature = { id: 7, coordinates: ({ lat: 55.75, lng: 37.61 }), properties: { status: "online" } };
-
   dom.add(feature);
-
   webgl.add({ ...feature });
-
   dom.addTo(mapDom);
-
   webgl.addTo(mapGl);
-
   dom.setObjectState(7, { alarm: true, disabled: true });
-
   webgl.setObjectState(7, { alarm: true, disabled: true });
-
   dom.setSelected(7);
-
   webgl.setSelected(7);
 
   const layer = [...mapGl.layers].find((entry) => entry.getColorBuf);
-
   assert.ok(layer);
-
   const colors = layer.getColorBuf();
-
   assert.ok(colors.length >= 4);
-
   assert.ok(Math.abs(colors[0] - 220 / 255) < 0.01);
-
   assert.ok(Math.abs(colors[3] - 0.2) < 0.01);
 
   const marker = dom.markers.get(7);
-
   assert.ok(marker?.el);
-
   assert.equal(marker.el.style.getPropertyValue("--oh-om-color") || marker.el.style.getPropertyValue("--oh-marker-fill"), "#dc2626");
-
   assert.equal(marker.el.style.opacity, "0.2");
-
   dom.destroy();
-
   webgl.destroy();
-
 });
 
 test("legacy styleByCategory palette remains available", () => {
@@ -1242,21 +1213,12 @@ test("setVisibleIds subsets WebGL draw list from the packed buffer", async () =>
 
 });
 
-test("point fill vocabulary overrides legacy color aliases in DOM and WebGL", () => {
-
-  const style = () => ({
-    fill: "#2563eb",
-    fillOpacity: 0.35,
-    color: "#dc2626",
-    opacity: 0.9,
-    size: 12
-  });
-
+test("point styles use the canonical fill vocabulary in DOM and WebGL", () => {
+  const style = () => ({ fill: "#2563eb", fillOpacity: 0.35, size: 12 });
   const dom = objectManager({ clusterize: false, clusterRenderer: "dom", style, styleByCategory: false });
   const webgl = objectManager({ clusterize: false, clusterRenderer: "webgl", style, styleByCategory: false, webglThreshold: 1 });
   const mapDom = createFakeMap();
   const mapGl = createFakeMap();
-
   dom.add({ id: 1, coordinates: { lat: 55.75, lng: 37.61 } }).addTo(mapDom);
   webgl.add({ id: 1, coordinates: { lat: 55.75, lng: 37.61 } }).addTo(mapGl);
 
@@ -1270,25 +1232,34 @@ test("point fill vocabulary overrides legacy color aliases in DOM and WebGL", ()
   assert.ok(Math.abs(colors[1] - 99 / 255) < 0.01);
   assert.ok(Math.abs(colors[2] - 235 / 255) < 0.01);
   assert.ok(Math.abs(colors[3] - 0.35) < 0.01);
-
   dom.destroy();
   webgl.destroy();
 });
 
-test("ObjectManager lines accept canonical stroke vocabulary with legacy aliases", () => {
+test("removed point spellings are rejected instead of silently losing to fill", () => {
+  // `color` / `opacity` used to be accepted aliases. They are removed: two
+  // spellings for one property is exactly the ambiguity this vocabulary drops.
+  for (const [legacy, replacement] of [["color", "fill"], ["opacity", "fillOpacity"]]) {
+    const manager = objectManager({
+      clusterize: false,
+      styleByCategory: false,
+      style: () => ({ fill: "#2563eb", fillOpacity: 0.35, size: 12, [legacy]: legacy === "color" ? "#dc2626" : 0.9 })
+    });
+    manager.add({ id: 1, coordinates: { lat: 55.75, lng: 37.61 } });
+    assert.throws(
+      () => manager.addTo(createFakeMap()),
+      new RegExp(`${legacy} was removed from point styles\\. Use ${replacement}\\.`)
+    );
+    manager.destroy();
+  }
+});
 
+test("ObjectManager lines use the canonical stroke vocabulary", () => {
   const manager = objectManager({
     clusterize: false,
     styleByCategory: false,
     style: () => ({
-      line: {
-        stroke: "#2563eb",
-        strokeOpacity: 0.4,
-        strokeWidth: 7,
-        color: "#dc2626",
-        opacity: 0.9,
-        width: 2
-      }
+      line: { stroke: "#2563eb", strokeOpacity: 0.4, strokeWidth: 7 }
     })
   });
   const map = createFakeMap();
@@ -1299,12 +1270,33 @@ test("ObjectManager lines accept canonical stroke vocabulary with legacy aliases
       coordinates: [[37.60, 55.74], [37.64, 55.77]]
     }
   }).addTo(map);
-
   const pathLayer = [...map.layers].find((entry) => Array.isArray(entry.paths));
   assert.ok(pathLayer);
-  assert.equal(pathLayer.paths[0].style.color, "#2563eb");
-  assert.equal(pathLayer.paths[0].style.opacity, 0.4);
-  assert.equal(pathLayer.paths[0].style.width, 7);
-
+  // The batch stores the same canonical vocabulary the resolver returns.
+  assert.equal(pathLayer.paths[0].style.stroke, "#2563eb");
+  assert.equal(pathLayer.paths[0].style.strokeOpacity, 0.4);
+  assert.equal(pathLayer.paths[0].style.strokeWidth, 7);
   manager.destroy();
 });
+
+test("removed line spellings are rejected on managed line styles", () => {
+  for (const [legacy, replacement] of [["color", "stroke"], ["opacity", "strokeOpacity"], ["width", "strokeWidth"]]) {
+    const manager = objectManager({
+      clusterize: false,
+      styleByCategory: false,
+      style: () => ({
+        line: { stroke: "#2563eb", strokeOpacity: 0.4, strokeWidth: 7, [legacy]: legacy === "color" ? "#dc2626" : 1 }
+      })
+    });
+    manager.add({
+      id: "route",
+      geometry: { type: "LineString", coordinates: [[37.60, 55.74], [37.64, 55.77]] }
+    });
+    assert.throws(
+      () => manager.addTo(createFakeMap()),
+      new RegExp(`${legacy} was removed from line styles\\. Use ${replacement}\\.`)
+    );
+    manager.destroy();
+  }
+});
+

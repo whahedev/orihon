@@ -181,13 +181,16 @@ test("DOM raster events include tiles and Traffic inherits those fields", (t) =>
       assert.equal(state.dataTime, null);
       assert.equal(state.target, layer);
     }
-    // A separate load exercises the successful native image path.
+    // A separate load exercises the successful native image path. The tile element arrives
+    // through the public tileloadstart event; the layer's tile map is private.
+    let restarted;
+    layer.on("tileloadstart", (event) => { restarted ??= event; });
     layer.redraw();
-    const pending = [...layer.tiles.values()].find((tile) => tile.started);
-    pending.el.dispatchEvent(new dom.window.Event("load"));
+    assert.ok(restarted?.tile instanceof dom.window.HTMLImageElement);
+    restarted.tile.dispatchEvent(new dom.window.Event("load"));
     assert.equal(loaded.target, layer);
     assert.equal(loaded.z, 3);
-    assert.equal(loaded.tile, pending.el);
+    assert.equal(loaded.tile, restarted.tile);
     layer.remove();
   }
 });

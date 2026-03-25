@@ -84,9 +84,11 @@ const clearSummaries = {
   lngLat: "Создаёт LatLng из longitude-first координат MapLibre, GeoJSON и совместимых API.",
   layersControl: "Добавляет панель выбора одной базовой подложки и включения независимых overlay-слоёв.",
   marker: "Создаёт интерактивный DOM-маркер в географической точке с popup, tooltip и обработчиками событий.",
+  markerCollection: "Создаёт лёгкую коллекцию однотипных точек — явная альтернатива вызову objectManager({ points }).",
   markerShapeMetrics: "Возвращает размеры и точки привязки встроенной формы маркера для собственного layout или renderer.",
   metersToPixels: "Переводит реальное расстояние в экранные пиксели для заданной широты и масштаба Web Mercator.",
   objectManager: "Хранит, индексирует, фильтрует, кластеризует и отображает большие наборы разнородных объектов карты.",
+  remoteObjectManager: "Создаёт менеджер объектов, который подгружает данные через loader по текущему виду карты.",
   offlineTileCache: "Управляет предварительной загрузкой тайлов в Cache Storage для последующей работы без сети.",
   performanceInspector: "Собирает и показывает FPS, задержки кадров, количество слоёв и другие показатели работающей карты.",
   point: "Создаёт двумерную точку в экранных или мировых пиксельных координатах; это не широта и долгота.",
@@ -322,7 +324,7 @@ const accessiblePoints = objectManager({
     note: "Для крупных iterable/async-iterable используйте \`setDataAsync()\`: слой готовит приватные packed buffers и атомарно заменяет активный GPU snapshot только после успешного импорта."
   },
   tileLayer: {
-    summary: "Создаёт растровую подложку и выбирает DOM, WebGL или WebGPU без отдельной GPU-фабрики.",
+    summary: "Создаёт растровую подложку: по умолчанию DOM во всех tier, а renderer \"auto\" дополнительно разрешает WebGL и WebGPU.",
     example: `import { tileLayer } from "orihon";
 
 const basemap = tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -944,7 +946,12 @@ function renderHome(items, navigation) {
   <aside class="callout">
     <strong>Package tier ≠ сложность API.</strong>
     Core, Standard и Advanced отвечают за состав и gzip budget. Easy, Layer API и Rendering API отвечают за уровень управления.
-    <code>orihon/easy</code> работает поверх Standard: единый декларативный <code>map.add({ type, ... })</code> подходит для React/Vue/Svelte, а автодополнение <code>map.add…</code> показывает специализированные методы для маркеров, линий, полигонов, GeoJSON и тайлов. Возвращаемые значения остаются обычными объектами Orihon. Для готового слоя доступны оба равнозначных стиля: <code>map.add(layer)</code> и <code>layer.addTo(map)</code>.
+    <code>orihon/easy</code> работает поверх Standard и остаётся map-centric / object-first:
+    <code>map.addMarker({ position, appearance })</code>, <code>map.addPolyline({ points, style })</code>,
+    <code>map.addPolygon({ rings, style })</code>, <code>map.addGeoJSON({ data })</code>,
+    <code>map.addTileLayer({ url })</code>. Декларативный <code>map.add({ type })</code> и позиционные Easy-формы удалены.
+    Возвращаемые значения — обычные объекты Orihon. Standard по-прежнему layer-centric:
+    <code>marker(…).addTo(map)</code>.
   </aside>
   <aside class="callout">
     <strong>Heat API обновлён.</strong>

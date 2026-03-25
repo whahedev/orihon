@@ -1,6 +1,6 @@
 import { createEl } from "../dom.js";
-import { latLng, bounds, type LatLngLike } from "../geo.js";
-import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { latLng, bounds } from "../geo.js";
+import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { clampOpacity, parseCssColor } from "../webgl-utils.js";
@@ -41,7 +41,7 @@ interface StoredPolygon {
  * Polygon fill/stroke batch (canvas).
  * Triangulation is deferred until a real WebGL fill path exists — canvas uses even-odd fill.
  */
-export class WebGLPolygonBatch extends Layer<Required<WebGLPolygonBatchOptions>> {
+export class WebGLPolygonBatch extends InteractiveLayer<Required<WebGLPolygonBatchOptions>> {
   canvas: HTMLCanvasElement | null = null;
   renderer: "canvas" | "none" = "none";
   private polygons: StoredPolygon[] = [];
@@ -238,89 +238,3 @@ export class WebGLPolygonBatch extends Layer<Required<WebGLPolygonBatchOptions>>
 export function webglPolygonBatch(options?: WebGLPolygonBatchOptions): WebGLPolygonBatch {
   return new WebGLPolygonBatch(options);
 }
-
-/** Simple ear clipping for a single ring packed as lat/lng pairs. Returns triangle lat/lng verts. */
-export function earcutRing(ring: Float64Array): Float32Array {
-  const n = ring.length / 2;
-  if (n < 3) return new Float32Array(0);
-  const indices: number[] = [];
-  for (let i = 0; i < n; i++) indices.push(i);
-  // Ensure CCW in lng/lat plane for ear clipping.
-  if (ringArea(ring) > 0) indices.reverse();
-  const tris: number[] = [];
-  let guard = 0;
-  while (indices.length > 3 && guard++ < n * n) {
-    let clipped = false;
-    for (let i = 0; i < indices.length; i++) {
-      const i0 = indices[(i + indices.length - 1) % indices.length];
-      const i1 = indices[i];
-      const i2 = indices[(i + 1) % indices.length];
-      if (!isEar(ring, indices, i0, i1, i2)) continue;
-      tris.push(ring[i0 * 2], ring[i0 * 2 + 1], ring[i1 * 2], ring[i1 * 2 + 1], ring[i2 * 2], ring[i2 * 2 + 1]);
-      indices.splice(i, 1);
-      clipped = true;
-      break;
-    }
-    if (!clipped) break;
-  }
-  if (indices.length === 3) {
-    const [a, b, c] = indices;
-    tris.push(ring[a * 2], ring[a * 2 + 1], ring[b * 2], ring[b * 2 + 1], ring[c * 2], ring[c * 2 + 1]);
-  }
-  return Float32Array.from(tris);
-}
-
-function ringArea(ring: Float64Array): number {
-  let area = 0;
-  const n = ring.length / 2;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    area += ring[j * 2 + 1] * ring[i * 2] - ring[i * 2 + 1] * ring[j * 2];
-  }
-  return area / 2;
-}
-
-function isEar(ring: Float64Array, indices: number[], i0: number, i1: number, i2: number): boolean {
-  const ax = ring[i0 * 2 + 1];
-  const ay = ring[i0 * 2];
-  const bx = ring[i1 * 2 + 1];
-  const by = ring[i1 * 2];
-  const cx = ring[i2 * 2 + 1];
-  const cy = ring[i2 * 2];
-  const cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-  if (cross <= 0) return false;
-  for (const idx of indices) {
-    if (idx === i0 || idx === i1 || idx === i2) continue;
-    if (pointInTriangle(ring[idx * 2 + 1], ring[idx * 2], ax, ay, bx, by, cx, cy)) return false;
-  }
-  return true;
-}
-
-function pointInTriangle(
-  px: number,
-  py: number,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-  cx: number,
-  cy: number
-): boolean {
-  const v0x = cx - ax;
-  const v0y = cy - ay;
-  const v1x = bx - ax;
-  const v1y = by - ay;
-  const v2x = px - ax;
-  const v2y = py - ay;
-  const dot00 = v0x * v0x + v0y * v0y;
-  const dot01 = v0x * v1x + v0y * v1y;
-  const dot02 = v0x * v2x + v0y * v2y;
-  const dot11 = v1x * v1x + v1y * v1y;
-  const dot12 = v1x * v2x + v1y * v2y;
-  const inv = 1 / Math.max(1e-12, dot00 * dot11 - dot01 * dot01);
-  const u = (dot11 * dot02 - dot01 * dot12) * inv;
-  const v = (dot00 * dot12 - dot01 * dot02) * inv;
-  return u >= 0 && v >= 0 && u + v <= 1;
-}
-
-// silence unused LatLngLike in public typings consumers
-export type { LatLngLike };

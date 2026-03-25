@@ -1,4 +1,10 @@
 export { Evented } from "./events.js";
+export { OrihonError, DestroyedError, UnsupportedCapabilityError } from "./errors.js";
+export type { OrihonErrorCode, OrihonErrorOptions } from "./errors.js";
+/**
+ * Core layer contract. Popup and tooltip binding lives on `InteractiveLayer`, exported from
+ * `orihon/standard` and `orihon` — the tiers that actually ship the overlay implementation.
+ */
 export { Layer } from "./layer.js";
 export { Orihon, createMap } from "./map.js";
 export { CRS, CRSCompatibilityError } from "./crs.js";
@@ -37,7 +43,7 @@ export type { BehaviorOptions, MapBehaviorName, MapEventMap, MapOptions, MapSize
 export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
-export type { TileCoordinates, TileTemplate, TileLayerOptions, TileRedrawFlag, RasterTileRendererKind, RasterTileLayer, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
+export type { TileCoordinates, TileTemplate, TileLayerOptions, TileRedrawFlag, RasterTileRendererKind, RasterTileLayer, RasterTileStats, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
 export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
 export type {
   FeatureId,

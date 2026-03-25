@@ -1,7 +1,7 @@
 import { createEl, listen, listenTap } from "../dom.js";
 import { geoTransformCss } from "../camera.js";
 import { LatLng, latLng, type LatLngLike, type Point } from "../geo.js";
-import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions, TooltipOptions } from "../overlays/div-overlay.js";
 import type { MarkerIcon } from "./icon.js";
@@ -146,7 +146,7 @@ export interface MarkerEventMap {
   dragend: { latlng: LatLng };
 }
 
-export class Marker extends Layer<ResolvedMarkerOptions, MarkerEventMap> {
+export class Marker extends InteractiveLayer<ResolvedMarkerOptions, MarkerEventMap> {
   #customAnchor: boolean;
   #customRotationOrigin: boolean;
   position: LatLng;

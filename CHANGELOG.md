@@ -2,6 +2,125 @@
 
 ## Unreleased
 
+- **Breaking — `tileLayer()` defaults to `renderer: "dom"` in every tier.** The default was
+  `"auto"`, and the Advanced `orihon` entry registers a GPU implementation as an import side
+  effect, so moving an import from `orihon/standard` to `orihon` silently switched an existing
+  `tileLayer(url)` call from DOM tiles to WebGPU/WebGL — a different renderer, memory profile and
+  fallback path, with no change to the call itself. What a call builds now follows its arguments.
+  GPU rasters stay one option away: `tileLayer(url, { renderer: "auto" })`.
+
+- **Breaking — popup and tooltip binding moved to `InteractiveLayer`.** `Layer` is exported from
+  `orihon/core`, but the overlay implementation ships in `orihon/standard`; `bindPopup()` on a
+  Core layer type-checked and then threw at runtime. `Layer` is now the capability-honest Core
+  base, and `InteractiveLayer` (exported from `orihon/standard` and `orihon`) carries
+  `bindPopup` / `bindTooltip` and their companions. Every layer that could usefully anchor an
+  overlay — markers, vectors, GeoJSON, groups, overlays, heat, WebGL layers — extends it, so
+  existing code keeps working. Raster tile layers (`TileLayer`, WMS, WMTS, `GPUTileLayer`,
+  `VectorTileLayer`) no longer advertise the methods; they had no geographic anchor of their own.
+
+- **Breaking — public classes no longer expose renderer internals.** `Orihon` (`panes`,
+  `controlCorners`, `controls`, `_attributions`, `_unsub`, `_viewSession`, `_wheelTimer`,
+  `_animationFrame`, `_resizeObserver`, `_destroyed`, `_initialA11y`), `TileLayer`
+  (`tiles`, `previousTiles`, `cache`, `level`, `_queue`, `_needed`, `_rect`, …) and
+  `VectorTileLayer` keep their bookkeeping private. `panes`, `controlCorners` and `controls`
+  remain readable as views; tile bookkeeping is reported by the new `getStats(): RasterTileStats`
+  on the `RasterTileLayer` contract. `test/public-instance-surface.test.js` guards the instance
+  surface the way `public-api.test.js` guards module exports.
+
+- **Breaking — `SearchProvider.reverse()` reports a missing capability as `null`.** With no
+  `reverse()` on the adapter it used to synthesise a result whose `name` was the formatted
+  coordinates, so an unsupported operation looked like a successful lookup. Pass
+  `{ fallbackReverse: "coordinates" }` to restore the placeholder.
+
+- **Added — `map.isDestroyed` and a programmatic error contract.** `destroy()` was already
+  terminal for `addLayer` / `addControl` / `createPane`, but there was no way to ask. Those
+  guards now throw `DestroyedError` (`code: "ERR_DESTROYED"`), `bindPopup` without the overlay
+  module throws `UnsupportedCapabilityError` (`code: "ERR_UNSUPPORTED_CAPABILITY"`), and both
+  extend a new `OrihonError` base carrying `code` and `context`. `CRSCompatibilityError` and
+  `GeometryWorkerError` extend it too, so library failures are discriminable without message
+  matching. Argument validation keeps using `TypeError` / `RangeError`.
+
+- **Added — `remoteObjectManager()` and `markerCollection()`.** `objectManager(options)`
+  returns one of three different classes depending on which key is present, which is hard to
+  predict and impossible to see at the call site when options are assembled dynamically. The two
+  named factories make the choice explicit; `objectManager()` stays for the plain local manager
+  and keeps accepting the other shapes.
+
+- **Added — `map.localeReady`.** Standard and Advanced register locale packs at import;
+  Core fetches them lazily, so `createMap(el, { locale: "ru" })` returned English strings
+  tagged `language: "ru"` with no way to know when the real ones arrived. `localeReady`
+  resolves once the requested locale is applied, in both tiers.
+
+- **Fixed — a failed locale chunk is no longer swallowed.** `ensureLocalePacks()` caught the
+  dynamic-import rejection and resolved as if the packs had loaded. It now rejects (and drops
+  its cached promise so a later call retries); the map itself still falls back to English.
+
+- **Added — `OfflineTileCache` `onError`.** `stats.failed` counted lost tiles without saying
+  which URLs, or whether the cause was the allowlist, the network or Cache Storage quota — for
+  offline work the failures are the interesting half. `onError(failure)` reports
+  `{ url, stage, cause }` with `stage` one of `"url" | "fetch" | "cache"`.
+
+- **Fixed — `map.query()` no longer depends on a private field.** It reads the public
+  `map.layers` view, so hit testing is expressible in terms of the documented surface
+  (attached layers plus pane order) rather than internal state.
+
+- **Fixed — `Map.remove()` came back.** The documented ecosystem-compatible alias of
+  `Map.destroy()` was dropped without a changelog entry while `docs/API.md`,
+  `docs/API-DESIGN.md` and the React lifecycle test still relied on it. Leaflet-shaped
+  `map.remove()` works again and is covered by a test.
+
+- **Size claims are now verified, not written by hand.** `npm run size` checks the
+  README budget table and the badge against `dist/release-manifest.json` and the
+  budgets in `scripts/check-size.mjs`, and fails if any artifact crosses the
+  advertised **150 KiB gzip** ceiling. `orihon/react` and `orihon.global.js` got
+  budgets of their own (they had none). Previous READMEs advertised 75 KiB for a
+  bundle that measured 123 KiB.
+
+- **Dead code removed.** `earcutRing` (plus its ear-clipping helpers), `canvasPathBatch`,
+  `tileRectContains`, `pointInNormalizedPolygon`, `bboxIntersects`, `ObjectSlotMap`,
+  `clearLabelMetricsCache` and the `GeometryKind` alias had no callers anywhere in
+  the library, tests or docs. Five identical WebGL program-link blocks now share the
+  existing `linkProgram()` helper, which also releases the shaders it links.
+
+- **Fixed — `tileLayer()` leaked a WebGL context per call.** The capability probe
+  created a fresh canvas and context on every `tileLayer()` and never released it.
+  Browsers cap live contexts, so a few basemap switches could force real map layers
+  to lose theirs. The probe now runs once per document and calls `WEBGL_lose_context`.
+
+- **Fixed — a no-op `setView()` cancelled a running animation.** `setView` stopped the
+  camera before checking whether the view actually changed, so `flyTo` and inertia died
+  on any React re-render that re-asserted the current `center` / `zoom`.
+
+- **Fixed — camera animation could rewind for one frame.** `requestAnimationFrame`
+  reports the frame's start time, which can predate the `performance.now()` captured
+  when the animation began; the resulting negative progress moved the camera backwards.
+  Progress is clamped in both `flyTo` and inertia, and `test/camera-animation.test.js`
+  now covers non-zero-duration flights, which no test asserted before.
+
+- **Fixed — `Evented` robustness.** A throwing listener no longer aborts the remaining
+  handlers (`emit` runs inside the render loop); failures are reported through
+  `reportError` instead. Cyclic `addEventParent` graphs propagate once instead of
+  overflowing the stack. `off(type, handler)` now cancels a pending `once` subscription
+  registered with the same function. `emit` also skips building the event object when
+  nothing is listening.
+
+- **Fixed — options explicitly set to `undefined` no longer break constructors.**
+  `createMap({ zoom: undefined })` produced a `NaN` zoom and threw on coordinates;
+  `objectManager({ clusterRadiusPixels: undefined })` threw a `RangeError`. Defaults
+  now merge through `mergeOptions()`, which treats `undefined` as "not supplied" —
+  the shape React props and conditional spreads produce constantly. `Circle`
+  discriminates its radius unit by value rather than key presence, so
+  `{ radiusMeters: undefined }` reports the real problem.
+
+- **Fixed — the shared geometry worker outlived every map.** `ObjectManager` now takes
+  and releases a reference (`acquireSharedGeometryWorkerPool` /
+  `releaseSharedGeometryWorkerPool`); the worker thread and the coordinate dataset
+  transferred into it are torn down when the last manager is destroyed.
+
+- **Lifecycle after `Orihon.destroy()` is explicit.** Attaching to a destroyed map
+  (`addLayer`, `addControl`, `createPane`) throws `Orihon map was destroyed` instead of
+  a confusing internal pane error. Camera and query methods stay inert as before.
+
 - **Breaking — flat events:** `emit()` no longer mirrors the payload under
   `event.detail`. Use `event.latlng` / `event.zoom` / … only.
 
@@ -66,7 +185,7 @@
 - Common data model: added the optional zero-dependency `orihon/source` entry with `featureSource()` / `createFeatureSource()` / `FeatureSource`. The read-only structural protocol (`ReadonlyFeatureSource`, versioned snapshots and delta changes) lives in Core types, so renderers do not depend on the implementation entry. Canonical GeoJSON `feature.id` drives `add`, `addMany`, `update`, `remove`, `replace`, `clear` and `batch`. The same source can drive `geoJSON(source)`, `textLayer(source, options)`, Easy `addGeoJSON(source)` and Advanced `objectManager({ source })`; renderer state stays consumer-local, layer subscriptions follow add/remove lifecycle, and ObjectManager stays data-bound until `destroy()`.
 - Easy basemaps: `createMap({ basemap })` and `map.setBasemap()` now accept any ready `Layer`, including WMS, WMTS and custom implementations, in addition to raster URL/templates and options. `getBasemap()` returns the original layer, and replacing it removes only the previously managed basemap.
 - Size audit: consolidated the shared image/video/SVG overlay lifecycle, embedded-WASM Base64/memory/alignment helpers, DOM/GPU tile-bounds validation, WebGL opacity/distance helpers and the MVT PBF reader used by the feature-level WASM fallback. Removed the redundant `TileLayer.setOpacity()` override while preserving the inherited contract. The npm allowlist now ships documentation pages without internal Confluence/playground source datasets.
-- Unified style vocabulary: ObjectManager points now use canonical `fill` / `fillOpacity` / `size`; `color` / `opacity` remain aliases. Managed lines likewise accept `stroke` / `strokeOpacity` / `strokeWidth` while preserving `color` / `opacity` / `width`. Canonical names win consistently in DOM, SVG, WebGL, icon tinting and style-state patches.
+- **Breaking — one spelling per style property.** ObjectManager points use `fill` / `fillOpacity` / `size` and managed lines use `stroke` / `strokeOpacity` / `strokeWidth`, consistently across DOM, SVG, WebGL, icon tinting and style-state patches. The former `color` / `opacity` / `width` aliases are **removed**: supplying one now throws `TypeError: color was removed from point styles. Use fill.` rather than silently losing to the canonical field. `MarkerCollection` point options follow the same rule. `marker()`'s own appearance options (`color`, `strokeColor`, `size`, `strokeWidth`) are a separate vocabulary and are unaffected.
 - Easy API: added the optional `orihon/easy` subpath. Its Standard-powered `createMap()` accepts a declarative `basemap` and a typed `map.add(description)` union for marker, polyline, polygon, GeoJSON and raster layers, while the returned regular Orihon instance also exposes discoverable `addMarker()`, `addTileLayer()`, `addPolyline()`, `addPolygon()`, `addGeoJSON()`, `setBasemap()` and `getBasemap()`. Every map has the short `add(layer)` alias alongside `layer.addTo(map)`. Documentation treats Core/Standard/Advanced package complexity separately from Easy/Layer/Rendering API complexity; `addSource()` remains reserved for a real reusable-source lifecycle.
 - Coordinate-order API: added `lngLat(longitude, latitude)` as an explicit MapLibre/GeoJSON migration boundary. It returns the regular Orihon `LatLng`, complements `latLng(latitude, longitude)`, and is exported from the main, Core, Standard, Geo and global browser entries.
 - Public API consolidation: `tileLayer()` now owns DOM/WebGL/WebGPU selection plus GPU-only `maxDpr` and `maxNewPerFrame`; `objectManager()` now accepts normal options, `{ loader }`, or `{ points }` with preserved DOM/SVG/WebGL/hybrid behavior; `pathBatch()` replaces the two renderer-named path factories; `searchProvider()` accepts an array or adapter; and `icon()` accepts `{ iconUrl }` or `{ content }`. The redundant public factories were removed while their specialized implementation classes remain available where useful.

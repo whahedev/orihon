@@ -113,7 +113,19 @@ test("SearchProvider normalizes search, geocode and reverse APIs", async () => {
   assert.ok(provider instanceof SearchProvider);
   assert.deepEqual((await provider.search("ber")).map((item) => item.name), ["Berlin"]);
   assert.equal((await provider.geocode("ham"))?.name, "Hamburg");
-  assert.equal((await provider.reverse({ lat: 1, lng: 2 }))?.name, "1.000000, 2.000000");
+  // The array adapter implements no reverse geocoding, so the missing capability stays visible.
+  assert.equal(await provider.reverse({ lat: 1, lng: 2 }), null);
+
+  const withFallback = searchProvider([
+    { name: "Berlin", center: { lat: 52.520, lng: 13.405 } }
+  ], { fallbackReverse: "coordinates" });
+  assert.equal((await withFallback.reverse({ lat: 1, lng: 2 }))?.name, "1.000000, 2.000000");
+
+  const reversible = searchProvider({
+    search: () => [],
+    reverse: () => ({ name: "Somewhere", center: { lat: 1, lng: 2 } })
+  });
+  assert.equal((await reversible.reverse({ lat: 1, lng: 2 }))?.name, "Somewhere");
 
   const custom = searchProvider({
     search: () => [{ name: "Only", center: ({ lat: 0, lng: 0 }) }]

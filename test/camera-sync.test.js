@@ -139,11 +139,10 @@ test("fractional zoomAround keeps anchor and marker/tile math glued", async () =
     assert.match(transform, /translate3d\(/);
     assert.doesNotMatch(transform, /NaN/);
 
-    const level = tiles.level?.style.transform || "";
-    assert.doesNotMatch(level, /NaN/);
-    assert.ok(Number.isFinite(tiles._levelOriginX), `level origin finite at z=${z}`);
+    const level = map.panes.tile.querySelector(".oh-tile-level")?.style.transform || "";
+    assert.doesNotMatch(level, /NaN/, `level transform finite at z=${z}`);
 
-    const tileZ = tiles._tileZoom;
+    const tileZ = tiles.getStats().tileZoom;
     assert.ok(tileZ != null);
     const world = map.crs.project({ lat: ll[0], lng: ll[1] }, tileZ);
     const tx = Math.floor(world.x / 256);
@@ -184,17 +183,22 @@ test("TileLayer zoom switch never emits NaN level transforms", async () => {
   }).addTo(map);
   await flushFrames(2);
 
+  const levelTransform = () => map.panes.tile.querySelector(".oh-tile-level").style.transform;
+
   map.setZoomAround({ x: 400, y: 300 }, 10.6);
   await flushFrames(2);
-  // Would previously take the light path with NaN after #switchZoom.
-  tiles._levelOriginX = Number.NaN;
-  tiles._levelOriginY = Number.NaN;
-  tiles._lastHeavyMs = Date.now();
+  assert.doesNotMatch(levelTransform(), /NaN/);
+
+  // A settled continuous zoom runs the deferred #switchZoom, which invalidates the level snap.
+  // The very next render() is inside the heavy-path throttle window, so it takes the light path:
+  // that path must recompute the origin instead of warping the level with the stale NaN.
+  map.setZoomAround({ x: 400, y: 300 }, 11.4);
+  await flushFrames(2);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(tiles.getStats().tileZoom, 11, "deferred zoom switch adopts the settled source zoom");
   tiles.render();
 
-  assert.ok(Number.isFinite(tiles._levelOriginX));
-  assert.ok(Number.isFinite(tiles._levelOriginY));
-  assert.doesNotMatch(tiles.level.style.transform, /NaN/);
+  assert.doesNotMatch(levelTransform(), /NaN/);
 
   map.destroy();
 });

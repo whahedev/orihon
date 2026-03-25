@@ -1,8 +1,8 @@
 import { LatLngBounds, bounds, type LatLngBoundsLike, type LatLngLike } from "./geo.js";
-import { Layer, type LayerOptions } from "./layer.js";
+import { InteractiveLayer, Layer, type LayerOptions } from "./layer.js";
 import type { Orihon } from "./map.js";
 
-export class LayerGroup<TEvents extends object = {}, TOptions extends LayerOptions = LayerOptions> extends Layer<TOptions, TEvents> {
+export class LayerGroup<TEvents extends object = {}, TOptions extends LayerOptions = LayerOptions> extends InteractiveLayer<TOptions, TEvents> {
   protected readonly groupLayers = new Set<Layer>();
 
   constructor(layers: Iterable<Layer> = [], options: TOptions = {} as TOptions) {

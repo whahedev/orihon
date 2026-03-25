@@ -2,10 +2,10 @@ import { createEl } from "../dom.js";
 import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { cameraWarpCss } from "../camera.js";
 import { TILE_SIZE, LatLngBounds, latLng, projectMercator01, type LatLngLike } from "../geo.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
-import { compileShader, parseCssColor, type RgbColor } from "../webgl-utils.js";
+import { compileShader, linkProgram, parseCssColor, type RgbColor } from "../webgl-utils.js";
 import type { PathOptions } from "./vector.js";
 import { rejectStyleAliases } from "../style-contract.js";
 
@@ -58,7 +58,7 @@ type InstancedExt = {
  * GPU stroked polylines: mercator segments uploaded once, camera via uniforms.
  * Uses ANGLE_instanced_arrays when available (one instance per segment).
  */
-export class WebGLPathBatch extends Layer<ResolvedOptions> {
+export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
   canvas: HTMLCanvasElement | null = null;
   gl: WebGLRenderingContext | null = null;
   renderer: "webgl" | "canvas" | "none" = "none";
@@ -385,17 +385,8 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       }
     `);
     if (!vertex || !fragment) return false;
-    const program = gl.createProgram();
+    const program = linkProgram(gl, vertex, fragment);
     if (!program) return false;
-    gl.attachShader(program, vertex);
-    gl.attachShader(program, fragment);
-    gl.linkProgram(program);
-    gl.deleteShader(vertex);
-    gl.deleteShader(fragment);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      gl.deleteProgram(program);
-      return false;
-    }
     this.program = program;
 
     // Unit quad as triangle strip: (along, side)

@@ -189,7 +189,7 @@
       "name": "tileLayer",
       "group": "Растровые тайлы",
       "entry": "orihon/core",
-      "summary": "Создаёт растровую подложку и выбирает DOM, WebGL или WebGPU без отдельной GPU-фабрики.",
+      "summary": "Создаёт растровую подложку: по умолчанию DOM во всех tier, а renderer \"auto\" дополнительно разрешает WebGL и WebGPU.",
       "url": "./functions/tileLayer/"
     },
     {
@@ -396,11 +396,25 @@
       "url": "./functions/createSuggestWidget/"
     },
     {
+      "name": "markerCollection",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Создаёт лёгкую коллекцию однотипных точек — явная альтернатива вызову objectManager({ points }).",
+      "url": "./functions/markerCollection/"
+    },
+    {
       "name": "objectManager",
       "group": "ObjectManager и поиск",
       "entry": "orihon",
       "summary": "Хранит, индексирует, фильтрует, кластеризует и отображает большие наборы разнородных объектов карты.",
       "url": "./functions/objectManager/"
+    },
+    {
+      "name": "remoteObjectManager",
+      "group": "ObjectManager и поиск",
+      "entry": "orihon",
+      "summary": "Создаёт менеджер объектов, который подгружает данные через loader по текущему виду карты.",
+      "url": "./functions/remoteObjectManager/"
     },
     {
       "name": "routingLayer",

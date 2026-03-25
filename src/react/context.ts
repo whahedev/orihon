@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect } from "react";
 import type { EventFor, EventHandler } from "../events.js";
-import type { Layer } from "../layer.js";
+import type { InteractiveLayer } from "../layer.js";
 import type { FeatureGroup } from "../layer-group.js";
 import type { MapEventMap, Orihon } from "../map.js";
 
 export const MapContext = createContext<Orihon | null>(null);
-export const LayerContext = createContext<Layer | null>(null);
+export const LayerContext = createContext<InteractiveLayer | null>(null);
 export const GroupContext = createContext<FeatureGroup | null>(null);
 
 export function useMap(): Orihon {

@@ -1,6 +1,6 @@
 import { listenTap } from "../dom.js";
 import { LatLngBounds, bounds, type LatLng, type LatLngBoundsLike } from "../geo.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions } from "../layer.js";
 import type { OverlayContent, PopupOptions } from "./div-overlay.js";
 
 export interface ResolvedMediaOverlayOptions extends LayerOptions {
@@ -21,7 +21,7 @@ export abstract class MediaOverlay<
   TElement extends HTMLElement | SVGElement,
   TOptions extends ResolvedMediaOverlayOptions,
   TEvents extends object = {}
-> extends Layer<TOptions, MediaOverlayEventMap & TEvents> {
+> extends InteractiveLayer<TOptions, MediaOverlayEventMap & TEvents> {
   overlayBounds: LatLngBounds;
   readonly _unsub: Array<() => void> = [];
   private _interactiveUnsub: (() => void) | null = null;

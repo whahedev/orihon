@@ -7,10 +7,6 @@ export interface TileRect {
   bottom: number;
 }
 
-export function tileRectContains(rect: TileRect, x: number, y: number): boolean {
-  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-}
-
 export function forEachTileInRect(rect: TileRect, visit: (x: number, y: number) => void): void {
   for (let y = rect.top; y <= rect.bottom; y++) {
     for (let x = rect.left; x <= rect.right; x++) visit(x, y);

@@ -39,6 +39,9 @@ export class Evented<TEvents extends object = {}> {
       this.off(type, wrap);
       handler(event);
     };
+    // Remember the caller's function so `off(type, handler)` can cancel a
+    // `once` subscription that has not fired yet.
+    (wrap as OnceHandler)[ONCE_SOURCE] = handler as unknown as EventHandler;
     return this.on(type, wrap);
   }
 
@@ -51,8 +54,16 @@ export class Evented<TEvents extends object = {}> {
     }
     const list = this.#events.get(type);
     if (!list) return this;
-    if (handler) list.delete(handler);
-    else list.clear();
+    if (handler) {
+      if (!list.delete(handler)) {
+        for (const registered of list) {
+          if ((registered as OnceHandler)[ONCE_SOURCE] === handler) {
+            list.delete(registered);
+            break;
+          }
+        }
+      }
+    } else list.clear();
     if (!list.size) this.#events.delete(type);
     return this;
   }
@@ -73,29 +84,63 @@ export class Evented<TEvents extends object = {}> {
   }
 
   emit<T extends Record<string, unknown> = Record<string, unknown>>(type: string, payload = {} as T, propagate = true): this {
-    const sourceTarget = payload.sourceTarget instanceof Evented ? payload.sourceTarget : this;
-    const event = {
-      ...payload,
-      type,
-      target: this,
-      sourceTarget
-    } as unknown as OrihonEvent<T> & { detail?: unknown };
-    // Drop any accidental `detail` key — payloads are flat only.
-    delete event.detail;
-    const list = this.#events.get(type);
-    if (list) for (const handler of [...list]) handler(event);
+    return this.#dispatch(type, payload, propagate, null);
+  }
 
-    if (propagate) {
-      const { detail: _ignored, ...rest } = payload as T & { detail?: unknown };
-      for (const parent of this.#eventParents) {
-        parent.emit(type, {
-          ...rest,
-          sourceTarget,
-          propagatedFrom: this,
-          layer: payload.layer instanceof Evented ? payload.layer : this
-        }, true);
+  #dispatch<T extends Record<string, unknown>>(
+    type: string,
+    payload: T,
+    propagate: boolean,
+    visited: Set<Evented<any>> | null
+  ): this {
+    const list = this.#events.get(type);
+    const parents = propagate && this.#eventParents.size ? this.#eventParents : null;
+    // Nobody is listening here and nothing to propagate to: skip building the event.
+    if (!list?.size && !parents) return this;
+
+    const sourceTarget = payload.sourceTarget instanceof Evented ? payload.sourceTarget : this;
+    // Payloads are flat only — strip any accidental `detail` while copying rather
+    // than `delete`-ing it afterwards, which would deoptimize the event object.
+    const { detail: _detail, ...rest } = payload as T & { detail?: unknown };
+    const event = { ...rest, type, target: this, sourceTarget } as unknown as OrihonEvent<T>;
+
+    if (list?.size) {
+      for (const handler of [...list]) {
+        try {
+          handler(event);
+        } catch (error) {
+          // A single broken listener must not abort the remaining handlers —
+          // `emit` runs inside the render loop. The error still surfaces.
+          reportHandlerError(error);
+        }
+      }
+    }
+
+    if (parents) {
+      const seen = visited ?? new Set<Evented<any>>();
+      seen.add(this);
+      const layer = payload.layer instanceof Evented ? payload.layer : this;
+      for (const parent of parents) {
+        if (seen.has(parent)) continue;
+        parent.#dispatch(type, { ...rest, sourceTarget, propagatedFrom: this, layer }, true, seen);
       }
     }
     return this;
   }
+}
+
+const ONCE_SOURCE = Symbol("orihon.once");
+
+type OnceHandler = EventHandler & { [ONCE_SOURCE]?: EventHandler };
+
+/**
+ * Reports a listener failure without unwinding the emit loop. `reportError` is
+ * the platform hook for exactly this — it reaches `window.onerror` and devtools
+ * like an uncaught error while leaving the dispatch loop intact. Environments
+ * without it (older browsers, Node) fall back to the console.
+ */
+function reportHandlerError(error: unknown): void {
+  const report = (globalThis as { reportError?: (value: unknown) => void }).reportError;
+  if (typeof report === "function") report(error);
+  else console.error(error);
 }

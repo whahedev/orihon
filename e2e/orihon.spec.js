@@ -88,7 +88,8 @@ test("continuous wheel zoom keeps markers glued to camera projection", async ({ 
 test("tiles and overlays stay viewport-local at maximum zoom", async ({ page }) => {
   await loadVisualMap(page);
   await page.evaluate(() => {
-    // Force DOM tiles — Advanced `tileLayer()` may pick WebGL, which has no `.oh-tile-loaded`.
+    // DOM tiles are the default in every tier; stated explicitly because this assertion reads
+    // `.oh-tile-loaded`, which only the DOM renderer produces.
     window.__orihonHighZoomTiles = Orihon.tileLayer(
       "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
       { maxZoom: 19, buffer: 1, renderer: "dom" }

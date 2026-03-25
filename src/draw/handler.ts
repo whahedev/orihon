@@ -97,7 +97,7 @@ export class DrawHandler extends Evented<DrawEventMap> {
 
   addTo(map: Orihon): this {
     this.#assertAlive();
-    if (map._destroyed) throw abortError("Cannot attach DrawHandler to a destroyed map");
+    if (map.isDestroyed) throw abortError("Cannot attach DrawHandler to a destroyed map");
     if (this.featureGroup.map && this.featureGroup.map !== map && (!this.addedGroup || this.featureGroup.map !== this.map)) {
       throw new Error("Remove the supplied featureGroup from its current map before attaching DrawHandler");
     }
@@ -149,7 +149,7 @@ export class DrawHandler extends Evented<DrawEventMap> {
         else map.container.removeEventListener("keydown", key);
       },
       () => {
-        if (!map._destroyed && changedTabIndex && map.container.getAttribute("tabindex") === "0") {
+        if (!map.isDestroyed && changedTabIndex && map.container.getAttribute("tabindex") === "0") {
           if (tabIndex === null) map.container.removeAttribute("tabindex");
           else map.container.setAttribute("tabindex", tabIndex);
         }
@@ -563,7 +563,7 @@ export class DrawHandler extends Evented<DrawEventMap> {
   }
 
   #syncBehaviors(): void {
-    if (!this.map || this.map._destroyed) { this.behaviors.clear(); return; }
+    if (!this.map || this.map.isDestroyed) { this.behaviors.clear(); return; }
     if (!this.options.capturePointer && this.mode !== "off") return;
     if (this.mode !== "off" && !this.behaviors.size) {
       for (const name of ["dblClick", "boxZoom"] as const) {

@@ -175,6 +175,15 @@ test("navigation helpers and maxBounds are exposed", () => {
   map.destroy();
 });
 
+test("remove() is a terminal alias of destroy()", () => {
+  const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });
+  assert.equal(map.remove(), map);
+  assert.equal(map.isDestroyed, true);
+  // Idempotent, like destroy(), and the two spellings stay interchangeable.
+  assert.equal(map.remove(), map);
+  assert.equal(map.destroy(), map);
+});
+
 test("destroy cancels in-flight flyTo animation", () => {
   let frames = 0;
   globalThis.requestAnimationFrame = (callback) => {
@@ -186,10 +195,10 @@ test("destroy cancels in-flight flyTo animation", () => {
 
   const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });
   map.flyTo({ lat: 10, lng: 10 }, 6, { durationMs: 1000 });
-  assert.equal(map._animationActive, true);
+  assert.equal(map.isAnimating, true);
   map.destroy();
-  assert.equal(map._destroyed, true);
-  assert.equal(map._animationActive, false);
+  assert.equal(map.isDestroyed, true);
+  assert.equal(map.isAnimating, false);
   assert.equal(map.setView({ lat: 20, lng: 20 }, 8), map);
   assert.equal(map.getZoom(), 2);
 });

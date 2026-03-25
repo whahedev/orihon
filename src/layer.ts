@@ -1,3 +1,4 @@
+import { UnsupportedCapabilityError } from "./errors.js";
 import { Evented, type OrihonEvent, type EventHandler } from "./events.js";
 import { latLng, type LatLng, type LatLngLike, type Point } from "./geo.js";
 import type { Orihon } from "./map.js";
@@ -60,10 +61,6 @@ export interface LayerEventMap {
 export class Layer<TOptions extends LayerOptions = LayerOptions, TEvents extends object = {}> extends Evented<LayerEventMap & TEvents> {
   map: Orihon | null = null;
   readonly #options: TOptions;
-  protected _popup: Popup | null = null;
-  protected _tooltip: Tooltip | null = null;
-  private _popupHandlers: Array<[string, EventHandler]> = [];
-  private _tooltipHandlers: Array<[string, EventHandler]> = [];
 
   /**
    * Configuration snapshot. Treat as read-only: assigning fields does not update
@@ -107,8 +104,33 @@ export class Layer<TOptions extends LayerOptions = LayerOptions, TEvents extends
     return this.map?.getPane(name) ?? null;
   }
 
+  /** Camera frames call `render()` only when this returns true. */
+  wantsFrameRender(): boolean {
+    return true;
+  }
+
+  render(): void {}
+
+  /** Optional renderer-specific hit-test used by map.query(). */
+  queryHit?(point: Point, options: ResolvedQueryOptions): QueryHit | QueryHit[] | null;
+}
+
+/**
+ * Layer that can carry a Popup and a Tooltip.
+ *
+ * The overlay implementation lives in `orihon/standard` and above; every entry that exports an
+ * `InteractiveLayer` subclass also loads the overlay module, so the binding methods are backed by
+ * a real implementation wherever this type is reachable. Core raster layers extend plain `Layer`
+ * instead of advertising a capability that tier does not ship.
+ */
+export class InteractiveLayer<TOptions extends LayerOptions = LayerOptions, TEvents extends object = {}> extends Layer<TOptions, TEvents> {
+  protected _popup: Popup | null = null;
+  protected _tooltip: Tooltip | null = null;
+  private _popupHandlers: Array<[string, EventHandler]> = [];
+  private _tooltipHandlers: Array<[string, EventHandler]> = [];
+
   bindPopup(content: OverlayContent, options?: PopupOptions): this {
-    if (!createPopup) throw new Error("Popup module is not registered");
+    if (!createPopup) throw new UnsupportedCapabilityError("Popup module is not registered: import an entry that ships overlays (orihon/standard or orihon)", { context: { capability: "popup" } });
     this.unbindPopup();
     this._popup = createPopup(content, options);
     const open: EventHandler = (event) => {
@@ -157,7 +179,7 @@ export class Layer<TOptions extends LayerOptions = LayerOptions, TEvents extends
   }
 
   bindTooltip(content: OverlayContent, options?: TooltipOptions): this {
-    if (!createTooltip) throw new Error("Tooltip module is not registered");
+    if (!createTooltip) throw new UnsupportedCapabilityError("Tooltip module is not registered: import an entry that ships overlays (orihon/standard or orihon)", { context: { capability: "tooltip" } });
     this.unbindTooltip();
     this._tooltip = createTooltip(content, options);
     const open: EventHandler = (event) => {
@@ -236,14 +258,4 @@ export class Layer<TOptions extends LayerOptions = LayerOptions, TEvents extends
     }
     return fallback ? this._overlayAnchor() : undefined;
   }
-
-  /** Camera frames call `render()` only when this returns true. */
-  wantsFrameRender(): boolean {
-    return true;
-  }
-
-  render(): void {}
-
-  /** Optional renderer-specific hit-test used by map.query(). */
-  queryHit?(point: Point, options: ResolvedQueryOptions): QueryHit | QueryHit[] | null;
 }

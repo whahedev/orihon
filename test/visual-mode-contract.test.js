@@ -189,7 +189,7 @@ test("compressed Standard keeps mode contracts and property compatibility with e
   assert.throws(() => standardBundle.marker(position, { content: "text", shape: "circle" }), TypeError);
   const draw = new DrawHandler().addTo(map).setMode("point");
   map.destroy();
-  assert.equal(map._destroyed, true);
+  assert.equal(map.isDestroyed, true);
   assert.equal(draw.map, null);
   assert.throws(() => draw.addTo(map), { name: "AbortError" });
   draw.destroy();

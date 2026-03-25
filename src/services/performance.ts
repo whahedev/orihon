@@ -1,5 +1,6 @@
 import { Evented } from "../events.js";
 import type { Orihon } from "../map.js";
+import type { RasterTileStats } from "../layers/tile-layer.js";
 
 export interface PerformanceSnapshot {
   timestamp: number;
@@ -94,14 +95,14 @@ export class PerformanceInspector extends Evented<PerformanceEventMap> {
     let retainedTiles = 0;
     let cachedTiles = 0;
     for (const layer of this.map.layers) {
-      const maybeTileLayer = layer as unknown as {
-        tiles?: Map<unknown, unknown>;
-        previousTiles?: Map<unknown, unknown>;
-        cache?: Map<unknown, unknown>;
-      };
-      activeTiles += maybeTileLayer.tiles?.size ?? 0;
-      retainedTiles += maybeTileLayer.previousTiles?.size ?? 0;
-      cachedTiles += maybeTileLayer.cache?.size ?? 0;
+      // Raster layers report their tile bookkeeping through the public stats contract;
+      // the tile maps themselves are private to each renderer.
+      const maybeTileLayer = layer as unknown as { getStats?: () => Partial<RasterTileStats> };
+      if (typeof maybeTileLayer.getStats !== "function") continue;
+      const stats = maybeTileLayer.getStats();
+      activeTiles += stats.active ?? 0;
+      retainedTiles += stats.retained ?? 0;
+      cachedTiles += stats.cached ?? 0;
     }
     const memory = this.options.includeMemory
       ? (performance as Performance & { memory?: PerformanceSnapshot["memory"] }).memory

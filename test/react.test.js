@@ -27,8 +27,11 @@ test("React Map survives Strict Mode without leaking map instances", async () =>
   const ready = (map) => {
     creates++;
     current = map;
-    const original = map.remove.bind(map);
-    map.remove = () => { removes++; return original(); };
+    // `destroy()` is the real teardown the binding calls; `remove()` is its
+    // documented ecosystem alias, asserted separately below.
+    assert.equal(typeof map.remove, "function");
+    const original = map.destroy.bind(map);
+    map.destroy = () => { removes++; return original(); };
   };
   const root = createRoot(document.getElementById("root"));
   await act(async () => {

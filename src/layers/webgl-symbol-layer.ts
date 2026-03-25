@@ -1,10 +1,10 @@
 import { createEl } from "../dom.js";
 import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { TILE_SIZE, latLng, projectMercator01, type LatLngLike, type Point } from "../geo.js";
-import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
-import { compileShader, parseCssColor } from "../webgl-utils.js";
+import { compileShader, linkProgram, parseCssColor } from "../webgl-utils.js";
 import type { ObjectIconAtlas, PackedIcon } from "../services/object-icon-atlas.js";
 
 export interface WebGLSymbolInstance {
@@ -59,7 +59,7 @@ export interface WebGLSymbolEventMap {
   click: { originalEvent: MouseEvent; index: number; latlng: LatLngLike; data: WebGLSymbolInstance };
 }
 
-export class WebGLSymbolLayer extends Layer<Resolved, WebGLSymbolEventMap> {
+export class WebGLSymbolLayer extends InteractiveLayer<Resolved, WebGLSymbolEventMap> {
   canvas: HTMLCanvasElement | null = null;
   gl: WebGLRenderingContext | null = null;
   renderer: "webgl" | "canvas" | "none" = "none";
@@ -307,14 +307,8 @@ export class WebGLSymbolLayer extends Layer<Resolved, WebGLSymbolEventMap> {
       this.renderer = this.options.fallbackCanvas ? "canvas" : "none";
       return;
     }
-    this.program = gl.createProgram();
-    if (!this.program) return;
-    gl.attachShader(this.program, vertex);
-    gl.attachShader(this.program, fragment);
-    gl.linkProgram(this.program);
-    gl.deleteShader(vertex);
-    gl.deleteShader(fragment);
-    if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+    this.program = linkProgram(gl, vertex, fragment);
+    if (!this.program) {
       this.renderer = this.options.fallbackCanvas ? "canvas" : "none";
       return;
     }

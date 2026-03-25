@@ -101,7 +101,3 @@ export function measureLabelText(
   textMetricsCache.set(key, metrics);
   return metrics;
 }
-
-export function clearLabelMetricsCache(): void {
-  textMetricsCache.clear();
-}

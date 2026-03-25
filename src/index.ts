@@ -1,5 +1,7 @@
 export { Evented } from "./events.js";
-export { Layer } from "./layer.js";
+export { OrihonError, DestroyedError, UnsupportedCapabilityError } from "./errors.js";
+export type { OrihonErrorCode, OrihonErrorOptions } from "./errors.js";
+export { Layer, InteractiveLayer } from "./layer.js";
 export { LayerGroup, FeatureGroup, featureGroup } from "./layer-group.js";
 export { Renderer } from "./renderer.js";
 export { Orihon, createMap } from "./map.js";
@@ -90,7 +92,7 @@ import { localePacks } from "./ui/locale-packs.js";
 registerLocalePacks(localePacks);
 export { ObjectManager, OBJECT_MANAGER_PALETTE } from "./services/object-manager.js";
 export { RemoteObjectManager } from "./services/remote-object-manager.js";
-export { objectManager } from "./services/object-manager-factory.js";
+export { objectManager, remoteObjectManager, markerCollection } from "./services/object-manager-factory.js";
 export { SpatialGridIndex, spatialGridIndex } from "./services/spatial-grid-index.js";
 export { TrafficLayer, trafficLayer } from "./services/traffic-layer.js";
 export { SearchProvider, searchProvider } from "./services/search.js";
@@ -150,7 +152,7 @@ export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
 export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
-export type { TileCoordinates, TileTemplate, TileLayerOptions, TileRedrawFlag, RasterTileRendererKind, RasterTileLayer, GPUTileFactory, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
+export type { TileCoordinates, TileTemplate, TileLayerOptions, TileRedrawFlag, RasterTileRendererKind, RasterTileLayer, RasterTileStats, GPUTileFactory, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
 export type { GPUTileBackend, GPUTileLayerOptions, GPUTileLayerStats, GPUTileLayerEventMap } from "./layers/gpu-tile-layer.js";
 export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-layer.js";
 export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts-tile-layer.js";
@@ -246,7 +248,7 @@ export type { RemoteObjectLoadContext, RemoteObjectLoader, RemoteObjectManagerOp
 export type { LocalObjectManagerOptions, PointObjectManagerOptions, UnifiedObjectManagerOptions } from "./services/object-manager-factory.js";
 export type { SpatialId, SpatialRecord } from "./services/spatial-grid-index.js";
 export type { TrafficLayerOptions, TrafficState, TrafficEventMap } from "./services/traffic-layer.js";
-export type { SearchAdapter, SearchContext, SearchResult, SearchProviderSource, SearchProviderOptions } from "./services/search.js";
+export type { SearchAdapter, SearchContext, SearchResult, SearchProviderSource, SearchProviderOptions, SearchProviderConfig, ReverseFallback } from "./services/search.js";
 export type { RouteResult, RouteWaypoint, RoutingContext, RoutingLayerOptions, RoutingProvider, RoutingEventMap } from "./services/routing.js";
 export type { SuggestOptions, SuggestContext, SuggestFetcher, SuggestWidgetOptions, SuggestWidgetEventMap } from "./services/suggest.js";
 export type { WebGLPointInput, WebGLPointDataOptions, WebGLPointAsyncDataOptions, WebGLPointLayerOptions, WebGLPointLayerStats, WebGLPointEventMap } from "./layers/webgl-point-layer.js";
@@ -291,6 +293,8 @@ export type {
   OfflineServiceWorkerOptions,
   OfflineTileCacheOptions,
   OfflineTileCacheStats,
+  OfflineTileFailure,
+  OfflineTileFailureStage,
   PrefetchTileLayerOptions
 } from "./services/offline-cache.js";
 export type { PerformanceInspectorOptions, PerformanceSnapshot, PerformanceEventMap } from "./services/performance.js";

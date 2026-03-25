@@ -6,7 +6,7 @@ This document defines the reproducible development environment for Orihon. Runti
 
 | Component | Policy |
 | --- | --- |
-| Node.js | `>=22`; Node 24.19.0 LTS is pinned in `.node-version` and recommended for development/release |
+| Node.js | `>=22`; Node 24.20.0 LTS is pinned in `.node-version` and recommended for development/release |
 | npm | Use the version bundled with the selected Node LTS release; commit `package-lock.json` changes |
 | TypeScript | 5.9.x until the TypeScript 7 migration is tested as a separate compatibility change |
 | React test fixture | 18.3.x intentionally tests the minimum supported React peer (`>=18`) |

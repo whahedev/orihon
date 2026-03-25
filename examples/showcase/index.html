@@ -943,7 +943,7 @@ async function loadProperties(map) {
     });
     return coords.map((pair, index) => ({
       id: `prop-${index}`,
-      coordinates: pair,
+      coordinates: mapPosition(pair),
       properties: { title: `Lot ${index}` }
     }));
   });

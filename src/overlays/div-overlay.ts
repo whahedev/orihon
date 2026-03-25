@@ -1,7 +1,7 @@
 import { createEl, listen } from "../dom.js";
 import type { OrihonEvent } from "../events.js";
 import { LatLng, Point, latLng, point, type LatLngLike, type PointLike } from "../geo.js";
-import { Layer, registerOverlayFactories, type LayerOptions } from "../layer.js";
+import { InteractiveLayer, registerOverlayFactories, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { resolveLocale, type LocaleInput } from "../ui/locale.js";
 
@@ -48,7 +48,7 @@ export interface OverlayLifecycleEventMap {
   close: { map: Orihon | null };
 }
 
-export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDivOverlayOptions, TEvents extends object = {}> extends Layer<TOptions, DivOverlayEventMap & TEvents> {
+export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDivOverlayOptions, TEvents extends object = {}> extends InteractiveLayer<TOptions, DivOverlayEventMap & TEvents> {
   container: HTMLDivElement | null = null;
   contentNode: HTMLDivElement | null = null;
   protected content: OverlayContent;

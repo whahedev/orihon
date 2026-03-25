@@ -1,6 +1,6 @@
 import { createEl } from "../dom.js";
 import { latLng, type LatLng } from "../geo.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import {
   isReadonlyFeatureSource
@@ -38,7 +38,7 @@ export interface TextLayerEventMap {
   layout: { count: number };
 }
 
-export class TextLayer extends Layer<Required<TextLayerOptions>, TextLayerEventMap> {
+export class TextLayer extends InteractiveLayer<Required<TextLayerOptions>, TextLayerEventMap> {
   private features: GeoJSONFeature[];
   private readonly source: ReadonlyFeatureSource<GeoJSONFeature> | null;
   private sourceUnsubscribe: (() => void) | null = null;

@@ -242,21 +242,32 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   large.remove();
 });
 
-test("MarkerCollection points prefer fill vocabulary over color aliases", () => {
+test("MarkerCollection points use the canonical fill vocabulary", () => {
   const collection = objectManager({
     points: [{ lat: 55.75, lng: 37.61 }],
     renderer: "svg",
     fill: "#2563eb",
-    fillOpacity: 0.4,
-    color: "#dc2626",
-    opacity: 0.9
+    fillOpacity: 0.4
   });
   assert.ok(collection instanceof MarkerCollection);
   assert.equal(collection.options.fill, "#2563eb");
-  assert.equal(collection.options.color, "#2563eb");
   assert.equal(collection.options.fillOpacity, 0.4);
-  assert.equal(collection.options.opacity, 0.4);
   collection.remove();
+});
+
+test("MarkerCollection rejects the removed color and opacity spellings", () => {
+  for (const [legacy, replacement, value] of [["color", "fill", "#dc2626"], ["opacity", "fillOpacity", 0.9]]) {
+    assert.throws(
+      () => objectManager({
+        points: [{ lat: 55.75, lng: 37.61 }],
+        renderer: "svg",
+        fill: "#2563eb",
+        fillOpacity: 0.4,
+        [legacy]: value
+      }),
+      new RegExp(`${legacy} was removed from point styles\\. Use ${replacement}\\.`)
+    );
+  }
 });
 
 test("WebGLPointLayer stores large point batches compactly", () => {
@@ -783,7 +794,7 @@ test("queryClusterLayout leafMask filters leaves without rebuilding the index", 
 test("PerformanceInspector snapshots map size, layers and tile cache stats", () => {
   const map = {
     container: new FakeElement(),
-    layers: new Set([{ tiles: new Map([[1, 1]]), previousTiles: new Map(), cache: new Map([[2, 2]]) }]),
+    layers: new Set([{ getStats: () => ({ active: 1, retained: 0, cached: 1, loading: 0 }) }]),
     controls: new Set([1, 2])
   };
   const inspector = performanceInspector(map);
@@ -899,7 +910,7 @@ test("prefetchTileLayer requires bounds and respects maxTiles", async () => {
 test("VectorTileLayer validates provider and exposes lifecycle container", () => {
   const layer = vectorTileLayer({ provider: () => [] });
   assert.ok(layer instanceof VectorTileLayer);
-  assert.equal(layer.tiles.size, 0);
+  assert.equal(layer.getStats().active, 0);
 });
 
 test("decodePackedMVT keeps tile-local vertices before GeoJSON conversion", () => {

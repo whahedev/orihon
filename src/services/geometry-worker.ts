@@ -1,3 +1,4 @@
+import { OrihonError } from "../errors.js";
 import { latLng, type LatLngLike } from "../geo.js";
 import {
   buildClusterIndex,
@@ -78,9 +79,9 @@ function geometryWorkerAbortError(): Error {
   return error;
 }
 
-export class GeometryWorkerError extends Error {
+export class GeometryWorkerError extends OrihonError {
   constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
+    super("ERR_WORKER", message, options);
     this.name = "GeometryWorkerError";
   }
 }
@@ -590,18 +591,43 @@ export class GeometryWorkerPool {
 }
 
 let sharedGeometryWorkerPool: GeometryWorkerPool | null = null;
+let sharedGeometryWorkerRefs = 0;
 
 /** Creates a caller-owned pool. The caller must eventually call destroy(). */
 export function createGeometryWorkerPool(options: GeometryWorkerOptions = {}): GeometryWorkerPool {
   return new GeometryWorkerPool(options);
 }
 
-/** @internal Shared infrastructure for library-managed services. */
+/**
+ * @internal Shared infrastructure for library-managed services. Does not take a
+ * reference — use {@link acquireSharedGeometryWorkerPool} for anything with a
+ * lifecycle, so the worker and its installed coordinate dataset can be released.
+ */
 export function getSharedGeometryWorkerPool(): GeometryWorkerPool {
   if (!sharedGeometryWorkerPool) {
     sharedGeometryWorkerPool = createGeometryWorkerPool();
   }
   return sharedGeometryWorkerPool;
+}
+
+/**
+ * @internal Takes a reference to the shared pool. Every call must be paired with
+ * {@link releaseSharedGeometryWorkerPool}; the worker thread and its transferred
+ * coordinate dataset are torn down once the last holder releases it.
+ */
+export function acquireSharedGeometryWorkerPool(): GeometryWorkerPool {
+  const pool = getSharedGeometryWorkerPool();
+  sharedGeometryWorkerRefs++;
+  return pool;
+}
+
+/** @internal Releases one reference; terminates the worker when none remain. */
+export function releaseSharedGeometryWorkerPool(pool: GeometryWorkerPool): void {
+  if (pool !== sharedGeometryWorkerPool || sharedGeometryWorkerRefs === 0) return;
+  sharedGeometryWorkerRefs--;
+  if (sharedGeometryWorkerRefs > 0) return;
+  sharedGeometryWorkerPool = null;
+  pool.destroy();
 }
 
 export function preparePointBatch(points: Iterable<GeometryPointInput>): PreparedPointBatch {

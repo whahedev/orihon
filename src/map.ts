@@ -1,12 +1,13 @@
 import { createEl, getContainer, listen, rafThrottle } from "./dom.js";
 import type { CameraState } from "./camera.js";
-import { nonNegativeFinite, rejectLegacyUnit } from "./units.js";
+import { mergeOptions, nonNegativeFinite, rejectLegacyUnit } from "./units.js";
 import { CRS, resolveCRS, type CoordinateReferenceSystem, type CRSInput } from "./crs.js";
+import { DestroyedError } from "./errors.js";
 import { Evented } from "./events.js";
 import { LatLng, LatLngBounds, Point, latLng, bounds, point, TILE_SIZE, distance, type LatLngBoundsLike, type LatLngLike, type PointLike } from "./geo.js";
 import type { Layer, QueryHit, QueryOptions, ResolvedQueryOptions } from "./layer.js";
 import { AttributionControl, ScaleControl, ZoomControl, type Control } from "./ui/control.js";
-import { ensureLocalePacks, resolveLocale, type OrihonLocale, type LocaleInput } from "./ui/locale.js";
+import { ensureLocalePacks, localePackLoaded, resolveLocale, type OrihonLocale, type LocaleInput } from "./ui/locale.js";
 import type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 import type { Popup, Tooltip } from "./overlays/div-overlay.js";
 
@@ -179,8 +180,12 @@ export class Orihon extends Evented<MapEventMap> {
   readonly options: ResolvedMapOptions;
   readonly container: HTMLElement;
   viewport!: HTMLDivElement;
-  panes: Record<string, HTMLElement> = {};
-  controlCorners = {} as Record<ControlPosition, HTMLDivElement>;
+  readonly #panes: Record<string, HTMLElement> = {};
+  /** Pane elements by name. Read-only view: create and drop panes with `createPane` / `removePane`. */
+  get panes(): Readonly<Record<string, HTMLElement>> { return this.#panes; }
+  #controlCorners = {} as Record<ControlPosition, HTMLDivElement>;
+  /** Control anchor elements by position. Read-only view: `addControl` places controls for you. */
+  get controlCorners(): Readonly<Record<ControlPosition, HTMLDivElement>> { return this.#controlCorners; }
   center: LatLng;
   zoom: number;
   size: MapSize = { width: 0, height: 0 };
@@ -190,44 +195,54 @@ export class Orihon extends Evented<MapEventMap> {
   readonly #layers = new Set<Layer>();
   /** Attached layers; iterate with `for (const layer of map.layers)`. Mutation goes through `addLayer` / `removeLayer`. */
   get layers(): ReadonlySet<Layer> { return this.#layers; }
-  readonly controls = new Set<Control>();
+  readonly #controls = new Set<Control>();
+  /** Attached controls; iterate with `for (const control of map.controls)`. Mutation goes through `addControl` / `removeControl`. */
+  get controls(): ReadonlySet<Control> { return this.#controls; }
   readonly locale: OrihonLocale;
+  #localeReady: Promise<void> = Promise.resolve();
+  /**
+   * Resolves once the locale requested by `options.locale` / `setLocale()` is actually applied.
+   * Core loads non-English packs lazily, so `map.locale` starts as English strings tagged with
+   * the requested `language`; Standard and Advanced register the packs at import and resolve
+   * immediately. Await this before asserting on control or accessibility text. Rejects with the
+   * import failure when the pack chunk cannot be loaded — the map keeps working in English.
+   */
+  get localeReady(): Promise<void> { return this.#localeReady; }
   readonly behaviors: BehaviorManager;
   readonly crs: CoordinateReferenceSystem;
-  readonly _attributions = new Map<string, number>();
-  readonly _viewSession: ViewSession = { move: false, zoom: false };
-  readonly _unsub: Array<() => void> = [];
-  readonly _frameRender: () => void;
-  _wheelTimer: ReturnType<typeof setTimeout> | null = null;
-  _animationFrame: number | null = null;
-  _animationActive = false;
-  _resizeObserver: ResizeObserver | null = null;
-  _destroyed = false;
-  readonly _initialA11y: { role: string | null; ariaLabel: string | null; tabIndex: string | null };
+  readonly #attributions = new Map<string, number>();
+  readonly #viewSession: ViewSession = { move: false, zoom: false };
+  readonly #unsub: Array<() => void> = [];
+  readonly #frameRender: () => void;
+  #wheelTimer: ReturnType<typeof setTimeout> | null = null;
+  #animationFrame: number | null = null;
+  #animationActive = false;
+  #resizeObserver: ResizeObserver | null = null;
+  #destroyed = false;
+  readonly #initialA11y: { role: string | null; ariaLabel: string | null; tabIndex: string | null };
 
   constructor(container: string | HTMLElement, options: MapOptions = {}) {
     super();
     rejectLegacyUnit(options, "zoomAnimationDuration", "zoomAnimationDurationMs");
     nonNegativeFinite(options.zoomAnimationDurationMs ?? DEFAULTS.zoomAnimationDurationMs, "zoomAnimationDurationMs");
     this.options = {
-      ...DEFAULTS,
-      ...options,
+      ...mergeOptions(DEFAULTS, options),
       maxBounds: normalizeMaxBounds(options.maxBounds),
       crs: resolveCRS(options.crs),
-      behaviors: { ...DEFAULT_BEHAVIORS, ...options.behaviors }
+      behaviors: mergeOptions(DEFAULT_BEHAVIORS, options.behaviors)
     };
     this.container = getContainer(container);
     this.locale = resolveLocale(this.options.locale);
     this.behaviors = new BehaviorManager(this, this.options.behaviors);
     this.crs = this.options.crs;
-    this._initialA11y = {
+    this.#initialA11y = {
       role: this.container.getAttribute("role"),
       ariaLabel: this.container.getAttribute("aria-label"),
       tabIndex: this.container.getAttribute("tabindex")
     };
     this.center = latLng(this.options.center);
     this.zoom = this.#clampZoom(this.options.zoom);
-    this._frameRender = rafThrottle(() => this.#render());
+    this.#frameRender = rafThrottle(() => this.#render());
     this.#initDom();
     this.#bindInput();
     this.#bindResize();
@@ -237,6 +252,7 @@ export class Orihon extends Evented<MapEventMap> {
       new ScaleControl({ locale: this.locale }).addTo(this);
       new AttributionControl({ locale: this.locale }).addTo(this);
     }
+    this.#trackLocale(this.options.locale);
     this.#render();
   }
 
@@ -252,22 +268,22 @@ export class Orihon extends Evented<MapEventMap> {
     this.createPane("tooltip", this.viewport, "oh-pane oh-tooltip-pane");
     this.createPane("popup", this.viewport, "oh-pane oh-popup-pane");
     this.createPane("control", this.container, "oh-control-pane");
-    this.controlCorners = {
-      "top-left": createEl("div", "oh-control-corner oh-top-left", this.panes.control),
-      "top-right": createEl("div", "oh-control-corner oh-top-right", this.panes.control),
-      "bottom-left": createEl("div", "oh-control-corner oh-bottom-left", this.panes.control),
-      "bottom-right": createEl("div", "oh-control-corner oh-bottom-right", this.panes.control)
+    this.#controlCorners = {
+      "top-left": createEl("div", "oh-control-corner oh-top-left", this.#panes.control),
+      "top-right": createEl("div", "oh-control-corner oh-top-right", this.#panes.control),
+      "bottom-left": createEl("div", "oh-control-corner oh-bottom-left", this.#panes.control),
+      "bottom-right": createEl("div", "oh-control-corner oh-bottom-right", this.#panes.control)
     };
   }
 
   #bindResize(): void {
     if (typeof ResizeObserver !== "undefined") {
-      this._resizeObserver = new ResizeObserver(() => this.invalidateSize());
-      this._resizeObserver.observe(this.container);
+      this.#resizeObserver = new ResizeObserver(() => this.invalidateSize());
+      this.#resizeObserver.observe(this.container);
       return;
     }
     if (typeof window !== "undefined") {
-      this._unsub.push(listen(window, "resize", () => this.invalidateSize(), { passive: true }));
+      this.#unsub.push(listen(window, "resize", () => this.invalidateSize(), { passive: true }));
     }
   }
 
@@ -319,7 +335,7 @@ export class Orihon extends Evented<MapEventMap> {
       this.#beginViewSession(true);
     };
 
-    this._unsub.push(listen(this.container, "pointerdown", (event) => {
+    this.#unsub.push(listen(this.container, "pointerdown", (event) => {
       if (event.button !== 0 && event.pointerType === "mouse") return;
       if ((event.target as Element | null)?.closest?.(".oh-control, .oh-marker")) return;
       const interactiveTarget = (event.target as Element | null)?.closest?.(".oh-interactive");
@@ -340,7 +356,7 @@ export class Orihon extends Evented<MapEventMap> {
       else if (pointers.size === 2 && this.behaviors.isEnabled("pinchZoom")) beginPinch();
     }));
 
-    this._unsub.push(listen(this.container, "pointermove", (event) => {
+    this.#unsub.push(listen(this.container, "pointermove", (event) => {
       const pointer = pointers.get(event.pointerId);
       if (!pointer || !gesture) return;
       pointer.x = event.clientX;
@@ -442,10 +458,10 @@ export class Orihon extends Evented<MapEventMap> {
       this.#endViewSession(false, true);
       if (dragVelocity && this.options.inertia) this.#startInertia(dragVelocity);
     };
-    this._unsub.push(listen(this.container, "pointerup", stopPointer));
-    this._unsub.push(listen(this.container, "pointercancel", stopPointer));
+    this.#unsub.push(listen(this.container, "pointerup", stopPointer));
+    this.#unsub.push(listen(this.container, "pointercancel", stopPointer));
 
-    this._unsub.push(listen(this.container, "wheel", (event) => {
+    this.#unsub.push(listen(this.container, "wheel", (event) => {
       if (!this.behaviors.isEnabled("scrollZoom")) return;
       event.preventDefault();
       if (pointers.size) return;
@@ -454,17 +470,17 @@ export class Orihon extends Evented<MapEventMap> {
       if (this.#clampZoom(next) === this.zoom) return;
       this.#beginViewSession(true);
       this.#applyZoomAround(anchor, next);
-      if (this._wheelTimer) clearTimeout(this._wheelTimer);
-      this._wheelTimer = setTimeout(() => this.#endViewSession(true, true), 140);
+      if (this.#wheelTimer) clearTimeout(this.#wheelTimer);
+      this.#wheelTimer = setTimeout(() => this.#endViewSession(true, true), 140);
     }, { passive: false }));
 
-    this._unsub.push(listen(this.container, "dblclick", (event) => {
+    this.#unsub.push(listen(this.container, "dblclick", (event) => {
       if (!this.behaviors.isEnabled("dblClick")) return;
       event.preventDefault();
       this.setZoomAround(containerPoint(event.clientX, event.clientY), this.zoom + 1);
     }));
 
-    this._unsub.push(listen(this.container, "click", (event) => {
+    this.#unsub.push(listen(this.container, "click", (event) => {
       if (suppressClick) {
         suppressClick = false;
         return;
@@ -478,7 +494,7 @@ export class Orihon extends Evented<MapEventMap> {
       });
     }));
 
-    this._unsub.push(listen(this.container, "keydown", (event) => {
+    this.#unsub.push(listen(this.container, "keydown", (event) => {
       if (!this.options.keyboard || event.target !== this.container) return;
       const delta = this.options.keyboardPanDelta;
       const panOffsets: Record<string, [number, number]> = {
@@ -550,14 +566,14 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   #cancelAnimation(): void {
-    if (this._animationFrame !== null && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(this._animationFrame);
-    this._animationFrame = null;
-    this._animationActive = false;
+    if (this.#animationFrame !== null && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(this.#animationFrame);
+    this.#animationFrame = null;
+    this.#animationActive = false;
   }
 
   #scheduleAnimation(callback: FrameRequestCallback): void {
-    if (typeof requestAnimationFrame !== "undefined") this._animationFrame = requestAnimationFrame(callback);
-    else this._animationFrame = setTimeout(() => callback(performance.now()), 16) as unknown as number;
+    if (typeof requestAnimationFrame !== "undefined") this.#animationFrame = requestAnimationFrame(callback);
+    else this.#animationFrame = setTimeout(() => callback(performance.now()), 16) as unknown as number;
   }
 
   #animateView(center: LatLngLike, zoom: number, durationMs = this.options.zoomAnimationDurationMs): this {
@@ -569,21 +585,23 @@ export class Orihon extends Evented<MapEventMap> {
     const duration = nonNegativeFinite(durationMs, "durationMs");
     this.stop();
     if (duration === 0) return this.setView(targetCenter, targetZoom);
-    this._animationActive = true;
+    this.#animationActive = true;
     this.#beginViewSession(zoomChanged);
     const startTime = performance.now();
     const ease = (t: number): number => 1 - (1 - t) ** 3;
     const frame = (now: number): void => {
-      if (!this._animationActive || this._destroyed) return;
-      const progress = Math.min(1, (now - startTime) / duration);
+      if (!this.#animationActive || this.#destroyed) return;
+      // rAF hands back the frame's start time, which can predate `startTime`
+      // when the animation was kicked off from inside an already-running frame.
+      const progress = Math.min(1, Math.max(0, (now - startTime) / duration));
       const eased = ease(progress);
       this.#applyView({ lat: startCenter.lat + (targetCenter.lat - startCenter.lat) * eased, lng: startCenter.lng + (targetCenter.lng - startCenter.lng) * eased }, startZoom + (targetZoom - startZoom) * eased);
       if (progress < 1) {
         this.#scheduleAnimation(frame);
         return;
       }
-      this._animationFrame = null;
-      this._animationActive = false;
+      this.#animationFrame = null;
+      this.#animationActive = false;
       this.#endViewSession(zoomChanged, true);
     };
     this.#scheduleAnimation(frame);
@@ -599,11 +617,11 @@ export class Orihon extends Evented<MapEventMap> {
     const origin = this.crs.project(this.center, this.zoom);
     const startTime = performance.now();
     this.stop();
-    this._animationActive = true;
+    this.#animationActive = true;
     this.#beginViewSession(false);
     const frame = (now: number): void => {
-      if (!this._animationActive || this._destroyed) return;
-      const progress = Math.min(1, (now - startTime) / (duration * 1000));
+      if (!this.#animationActive || this.#destroyed) return;
+      const progress = Math.min(1, Math.max(0, (now - startTime) / (duration * 1000)));
       const eased = 1 - (1 - progress) ** 2;
       const remain = 1 - progress;
       this.panVelocity.x = direction.x * speed * remain;
@@ -615,8 +633,8 @@ export class Orihon extends Evented<MapEventMap> {
       }
       this.panVelocity.x = 0;
       this.panVelocity.y = 0;
-      this._animationFrame = null;
-      this._animationActive = false;
+      this.#animationFrame = null;
+      this.#animationActive = false;
       this.#endViewSession(false, true);
     };
     this.#scheduleAnimation(frame);
@@ -633,24 +651,24 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   #beginViewSession(withZoom: boolean): void {
-    if (!this._viewSession.move) {
-      this._viewSession.move = true;
+    if (!this.#viewSession.move) {
+      this.#viewSession.move = true;
       this.emit("movestart", { center: this.center });
     }
-    if (withZoom && !this._viewSession.zoom) {
-      this._viewSession.zoom = true;
+    if (withZoom && !this.#viewSession.zoom) {
+      this.#viewSession.zoom = true;
       this.emit("zoomstart", { zoom: this.zoom });
     }
   }
 
   #endViewSession(withZoom: boolean, withMove: boolean): void {
-    if (withZoom && this._viewSession.zoom) {
-      this._viewSession.zoom = false;
+    if (withZoom && this.#viewSession.zoom) {
+      this.#viewSession.zoom = false;
       this.emit("zoomend", { zoom: this.zoom });
     }
-    if (withMove && this._viewSession.move) {
-      this._viewSession.move = false;
-      if (!this._animationActive) {
+    if (withMove && this.#viewSession.move) {
+      this.#viewSession.move = false;
+      if (!this.#animationActive) {
         this.panVelocity.x = 0;
         this.panVelocity.y = 0;
       }
@@ -659,7 +677,7 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   #applyView(center: LatLngLike, zoom: number, syncRender = false): boolean {
-    if (this._destroyed) return false;
+    if (this.#destroyed) return false;
     const nextZoom = this.#clampZoom(zoom);
     const nextCenter = this.#limitCenter(latLng(center), nextZoom);
     const zoomChanged = nextZoom !== this.zoom;
@@ -671,7 +689,7 @@ export class Orihon extends Evented<MapEventMap> {
     if (zoomChanged) this.emit("zoom", { zoom: this.zoom });
     this.emit("move", { center: this.center });
     if (syncRender) this.#render();
-    else this._frameRender();
+    else this.#frameRender();
     return true;
   }
 
@@ -689,43 +707,59 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   #render(): void {
-    if (this._destroyed) return;
+    if (this.#destroyed) return;
     // Single camera snapshot for this frame — every wantsFrameRender layer reads these fields.
     this.pixelOrigin = this.#pixelOriginFor();
     for (const layer of this.#layers) {
       if (layer.wantsFrameRender()) layer.render();
     }
-    for (const control of this.controls) control.render();
+    for (const control of this.#controls) control.render();
+  }
+
+  /**
+   * `destroy()` is terminal and idempotent. Afterwards camera and query methods are inert
+   * (they return `this` / `null`), while anything that would attach to the map fails fast with
+   * a `DestroyedError` (`code === "ERR_DESTROYED"`). Guard with `isDestroyed` when a map
+   * reference may outlive the map. This method and `addLayer` / `addControl` / `createPane`
+   * are the throwing side.
+   */
+  get isDestroyed(): boolean {
+    return this.#destroyed;
+  }
+
+  #assertAlive(): void {
+    if (this.#destroyed) throw new DestroyedError("Orihon map was destroyed", { context: { resource: "Orihon" } });
   }
 
   createPane(name: string, container: HTMLElement = this.viewport, className = `oh-pane oh-${name}-pane`): HTMLElement {
+    this.#assertAlive();
     if (!name) throw new TypeError("Pane name is required");
-    const existing = this.panes[name];
+    const existing = this.#panes[name];
     if (existing) return existing;
     const pane = createEl("div", className, container);
-    this.panes[name] = pane;
+    this.#panes[name] = pane;
     return pane;
   }
 
   getPane(name = "overlay"): HTMLElement | null {
-    return this.panes[name] ?? null;
+    return this.#panes[name] ?? null;
   }
 
   getPanes(): Readonly<Record<string, HTMLElement>> {
-    return this.panes;
+    return this.#panes;
   }
 
   removePane(name: string): this {
     if (DEFAULT_PANES.has(name)) return this;
-    const pane = this.panes[name];
+    const pane = this.#panes[name];
     if (!pane) return this;
     pane.remove();
-    delete this.panes[name];
+    delete this.#panes[name];
     return this;
   }
 
   invalidateSize(): this {
-    if (this._destroyed) return this;
+    if (this.#destroyed) return this;
     const previous = this.size;
     const rect = this.container.getBoundingClientRect();
     const next = {
@@ -755,26 +789,42 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   setLocale(input: LocaleInput): this {
-    const apply = (): void => {
-      Object.assign(this.locale, resolveLocale(input));
-      if (!this.options.ariaLabel) {
-        this.container.setAttribute("aria-label", this.locale.mapLabel);
-      }
-      for (const control of this.controls) {
-        Object.assign(control.locale, this.locale);
-        control.render();
-      }
-      this.emit("localechange", { locale: this.locale });
-    };
-    apply();
-    // Non-English built-ins may still be loading in slim bundles; re-apply when ready.
-    if (typeof input === "string" && input !== "en") {
-      void ensureLocalePacks().then(() => apply());
-    }
+    this.#applyLocale(input);
+    this.#trackLocale(input);
     return this;
   }
 
+  #applyLocale(input: LocaleInput): void {
+    Object.assign(this.locale, resolveLocale(input));
+    if (!this.options.ariaLabel) {
+      this.container.setAttribute("aria-label", this.locale.mapLabel);
+    }
+    for (const control of this.#controls) {
+      Object.assign(control.locale, this.locale);
+      control.render();
+    }
+    this.emit("localechange", { locale: this.locale });
+  }
+
+  /**
+   * Publishes one readiness contract for both entry points: `localeReady` settles as soon as
+   * the requested strings are in place, whether the pack was registered at import (Standard,
+   * Advanced) or still has to be fetched (Core).
+   */
+  #trackLocale(input: LocaleInput): void {
+    const pending = typeof input === "string" && input !== "en" && !localePackLoaded(input)
+      ? ensureLocalePacks().then(() => {
+        if (!this.#destroyed) this.#applyLocale(input);
+      })
+      : Promise.resolve();
+    // A missing translation is not fatal for the map, so the stored promise is always handled.
+    // Callers that do care still see the rejection through `await map.localeReady`.
+    pending.catch(() => {});
+    this.#localeReady = pending;
+  }
+
   addLayer(layer: Layer): this {
+    this.#assertAlive();
     if (this.#layers.has(layer)) return this;
     this.#layers.add(layer);
     try {
@@ -810,7 +860,9 @@ export class Orihon extends Evented<MapEventMap> {
 
   query(containerPoint: PointLike, options: QueryOptions = {}): QueryHit[] {
     const target = point(containerPoint);
-    const candidates = options.layers ? [...options.layers] : [...this.#layers];
+    // Reads the public `layers` view rather than the private field: hit testing
+    // depends only on the attached layers and the pane order, nothing else.
+    const candidates = options.layers ? [...options.layers] : [...this.layers];
     const normalized: ResolvedQueryOptions = {
       tolerance: Math.max(0, Number(options.tolerance ?? 8)),
       layers: candidates,
@@ -859,13 +911,14 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   addControl(control: Control): this {
-    if (this.controls.has(control)) return this;
-    this.controls.add(control);
+    this.#assertAlive();
+    if (this.#controls.has(control)) return this;
+    this.#controls.add(control);
     try {
       control.onAdd(this);
       control.render();
     } catch (error) {
-      this.controls.delete(control);
+      this.#controls.delete(control);
       if (control.map === this) control.onRemove();
       throw error;
     }
@@ -873,7 +926,7 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   removeControl(control: Control): this {
-    if (!this.controls.delete(control)) return this;
+    if (!this.#controls.delete(control)) return this;
     control.onRemove();
     return this;
   }
@@ -881,23 +934,23 @@ export class Orihon extends Evented<MapEventMap> {
   addAttribution(value: string): this {
     const text = String(value || "").trim();
     if (!text) return this;
-    this._attributions.set(text, (this._attributions.get(text) || 0) + 1);
+    this.#attributions.set(text, (this.#attributions.get(text) || 0) + 1);
     this.emit("attributionchange", { attributions: this.getAttributions() });
     return this;
   }
 
   removeAttribution(value: string): this {
     const text = String(value || "").trim();
-    const count = this._attributions.get(text);
+    const count = this.#attributions.get(text);
     if (!count) return this;
-    if (count === 1) this._attributions.delete(text);
-    else this._attributions.set(text, count - 1);
+    if (count === 1) this.#attributions.delete(text);
+    else this.#attributions.set(text, count - 1);
     this.emit("attributionchange", { attributions: this.getAttributions() });
     return this;
   }
 
   getAttributions(): string[] {
-    return [...this._attributions.keys()];
+    return [...this.#attributions.keys()];
   }
 
   setMaxBounds(value: LatLngBoundsLike | null): this {
@@ -918,17 +971,19 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   setView(center: LatLngLike, zoom = this.zoom, options?: SetViewOptions): this {
-    if (this._destroyed) return this;
+    if (this.#destroyed) return this;
     const settle = options?.settle !== false;
-    if (settle) this.stop();
     const nextCenter = latLng(center);
     const nextZoom = this.#clampZoom(zoom);
     const zoomChanged = nextZoom !== this.zoom;
     const centerChanged = !nextCenter.equals(this.center, 0);
+    // A no-op setView must not cancel a running flyTo / inertia: React effects
+    // re-run on every parent render and would otherwise kill camera animation.
     if (!zoomChanged && !centerChanged) {
-      if (settle) this.#endViewSession(false, true);
+      if (settle && !this.#animationActive) this.#endViewSession(false, true);
       return this;
     }
+    if (settle) this.stop();
     this.#beginViewSession(zoomChanged);
     // Settled jumps paint this frame; live follow pans coalesce on rAF.
     this.#applyView(nextCenter, nextZoom, settle);
@@ -979,8 +1034,13 @@ export class Orihon extends Evented<MapEventMap> {
     return this.flyTo(target.getCenter(), zoom, options);
   }
 
+  /** True while a `flyTo` / `panTo` animation or inertia is driving the camera. Pairs with `stop()`. */
+  get isAnimating(): boolean {
+    return this.#animationActive;
+  }
+
   stop(): this {
-    if (!this._animationActive && this._animationFrame === null) return this;
+    if (!this.#animationActive && this.#animationFrame === null) return this;
     this.#cancelAnimation();
     this.#endViewSession(true, true);
     return this;
@@ -1015,30 +1075,39 @@ export class Orihon extends Evented<MapEventMap> {
     return Math.max(0, Math.min(this.options.maxZoom, Math.floor(Math.min(zx, zy))));
   }
 
+  /**
+   * Ecosystem-compatible terminal alias of {@link destroy}. Leaflet-shaped code
+   * reaches for `map.remove()`; both spellings do the same irreversible teardown.
+   */
+  remove(): this {
+    return this.destroy();
+  }
+
   destroy(): this {
-    if (this._destroyed) return this;
-    if (this._wheelTimer) clearTimeout(this._wheelTimer);
+    if (this.#destroyed) return this;
+    if (this.#wheelTimer) clearTimeout(this.#wheelTimer);
     this.stop();
     this.#endViewSession(true, true);
     for (const layer of [...this.#layers]) this.removeLayer(layer);
-    for (const control of [...this.controls]) this.removeControl(control);
-    for (const unsubscribe of this._unsub.splice(0)) unsubscribe();
-    this._resizeObserver?.disconnect();
-    this._resizeObserver = null;
+    for (const control of [...this.#controls]) this.removeControl(control);
+    for (const unsubscribe of this.#unsub.splice(0)) unsubscribe();
+    this.#resizeObserver?.disconnect();
+    this.#resizeObserver = null;
     this.container.classList.remove("oh-map", "oh-dragging");
     for (const [name, value] of Object.entries({
-      role: this._initialA11y.role,
-      "aria-label": this._initialA11y.ariaLabel,
-      tabindex: this._initialA11y.tabIndex
+      role: this.#initialA11y.role,
+      "aria-label": this.#initialA11y.ariaLabel,
+      tabindex: this.#initialA11y.tabIndex
     })) {
       if (value === null) this.container.removeAttribute(name);
       else this.container.setAttribute(name, value);
     }
     this.viewport.remove();
-    this.panes.control?.remove();
-    this.panes = {};
-    this._attributions.clear();
-    this._destroyed = true;
+    this.#panes.control?.remove();
+    for (const name of Object.keys(this.#panes)) delete this.#panes[name];
+    this.#controlCorners = {} as Record<ControlPosition, HTMLDivElement>;
+    this.#attributions.clear();
+    this.#destroyed = true;
     try { this.emit("unload"); }
     finally { this.off(); }
     return this;

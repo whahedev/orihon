@@ -537,13 +537,16 @@ export type CircleRadius =
   | { readonly radiusMapUnits: number; readonly radiusMeters?: never };
 
 function normalizeCircleRadius(radius: CircleRadius): CircleRadius {
-  if (!radius || typeof radius !== "object" ||
-      ("radiusMeters" in radius) === ("radiusMapUnits" in radius)) {
+  // Discriminate on the value, not on key presence: `{ radiusMeters: undefined }`
+  // must read as "not supplied" rather than silently selecting the other unit.
+  const meters = radius && typeof radius === "object" ? radius.radiusMeters : undefined;
+  const mapUnits = radius && typeof radius === "object" ? radius.radiusMapUnits : undefined;
+  if ((meters === undefined) === (mapUnits === undefined)) {
     throw new TypeError("Circle requires exactly one of { radiusMeters } or { radiusMapUnits }.");
   }
-  return radius.radiusMeters !== undefined
-    ? { radiusMeters: nonNegativeFinite(radius.radiusMeters, "radiusMeters") }
-    : { radiusMapUnits: nonNegativeFinite(radius.radiusMapUnits!, "radiusMapUnits") };
+  return meters !== undefined
+    ? { radiusMeters: nonNegativeFinite(meters, "radiusMeters") }
+    : { radiusMapUnits: nonNegativeFinite(mapUnits!, "radiusMapUnits") };
 }
 
 export class Circle extends PathLayer {

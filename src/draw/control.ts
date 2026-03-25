@@ -88,13 +88,13 @@ export class DrawControl extends Control<DrawControlOptions> {
 
   override addTo(map: Orihon): this {
     this.#assertAlive();
-    if (map._destroyed) throw abortError("Cannot attach DrawControl to a destroyed map");
+    if (map.isDestroyed) throw abortError("Cannot attach DrawControl to a destroyed map");
     return super.addTo(map);
   }
 
   override onAdd(map: Orihon): void {
     this.#assertAlive();
-    if (map._destroyed) throw abortError("Cannot attach DrawControl to a destroyed map");
+    if (map.isDestroyed) throw abortError("Cannot attach DrawControl to a destroyed map");
     if (this.map && this.map !== map) this.remove();
     this.#assertAlive();
     super.onAdd(map);

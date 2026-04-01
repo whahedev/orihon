@@ -3,6 +3,7 @@ import { createEl } from "../dom.js";
 import { TILE_SIZE, LatLngBounds, bounds, type LatLngBoundsLike } from "../geo.js";
 import type { Layer } from "../layer.js";
 import type { Orihon } from "../map.js";
+import { UnsupportedCapabilityError } from "../errors.js";
 import { GridLayer, type GridLayerOptions, type ResolvedGridLayerOptions } from "./grid-layer.js";
 import {
   forEachTileInRect,
@@ -91,11 +92,20 @@ export interface TileLayerOptions extends GridLayerOptions {
   detectRetina?: boolean;
   bounds?: LatLngBoundsLike | null;
   /**
-   * Defaults to `"dom"` in every tier, so the same `tileLayer(url)` call builds the same
-   * renderer from `orihon/core`, `orihon/standard` and `orihon`. GPU rasters are opt-in.
-   * `"auto"` prefers WebGPU when `navigator.gpu` exists, then WebGL, then DOM; it needs a
-   * registered GPU implementation (the Advanced `orihon` entry, or `orihon/webgpu` on top of
-   * Standard). Without one, `"auto"` / `"webgl"` / `"webgpu"` fall back to DOM rather than throw.
+   * Which raster implementation to build. Defaults to `"dom"` in every tier, so the same
+   * `tileLayer(url)` call builds the same renderer from `orihon/core`, `orihon/standard` and
+   * `orihon`. GPU rasters are opt-in, and asking for one is a preference or a requirement
+   * depending on how specific the request is:
+   *
+   * - `"dom"` — DOM `<img>` tiles.
+   * - `"auto"` — a preference: WebGPU when `navigator.gpu` exists, then WebGL, then DOM.
+   *   Degrades quietly when no GPU implementation is registered or supported.
+   * - `"webgl"` / `"webgpu"` — a requirement: that implementation, or an
+   *   `UnsupportedCapabilityError`. A silent DOM fallback would look like a GPU path in
+   *   development and profile as a DOM path in production.
+   *
+   * A GPU implementation is registered by the Advanced `orihon` entry, or by importing
+   * `orihon/webgpu` on top of Standard.
    */
   renderer?: "auto" | "dom" | "webgl" | "webgpu";
   /** GPU path: maximum new tile textures uploaded in one frame. */
@@ -728,13 +738,31 @@ export function tileLayer(template: TileTemplate, options?: TileLayerOptions): R
   // behaviour follows the arguments, not the module graph.
   const requested = options?.renderer ?? "dom";
   if (requested === "dom") return new TileLayer(template, options);
-  const available = requested === "webgpu" ? gpuContextAvailable()
-    : requested === "webgl" ? webglContextAvailable()
-      : gpuContextAvailable() || webglContextAvailable();
-  if (gpuTileFactory && available) {
-    return gpuTileFactory(template, options) as RasterTileLayer;
+
+  // `"auto"` is a preference, so it degrades quietly.
+  if (requested === "auto") {
+    const available = gpuContextAvailable() || webglContextAvailable();
+    return gpuTileFactory && available
+      ? gpuTileFactory(template, options) as RasterTileLayer
+      : new TileLayer(template, options);
   }
-  return new TileLayer(template, options);
+
+  // `"webgl"` / `"webgpu"` name one implementation, which makes them a requirement. Falling
+  // back to DOM here would hand back a layer that profiles nothing the caller asked to profile,
+  // with no signal that it happened.
+  if (!gpuTileFactory) {
+    throw new UnsupportedCapabilityError(
+      `tileLayer renderer "${requested}" needs a registered GPU implementation: import the Advanced "orihon" entry, or "orihon/webgpu" on top of Standard. Use renderer "auto" to accept a DOM fallback.`,
+      { context: { renderer: requested, reason: "unregistered" } }
+    );
+  }
+  if (!(requested === "webgpu" ? gpuContextAvailable() : webglContextAvailable())) {
+    throw new UnsupportedCapabilityError(
+      `tileLayer renderer "${requested}" is not available in this browser. Use renderer "auto" to fall back to DOM tiles.`,
+      { context: { renderer: requested, reason: "unsupported" } }
+    );
+  }
+  return gpuTileFactory(template, options) as RasterTileLayer;
 }
 
 /**

@@ -48,8 +48,7 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
     const existing = this.records.get(id);
     if (existing) {
       existing.value = value;
-      existing.position.lat = lat;
-      existing.position.lng = lng;
+      existing.position = new LatLng(lat, lng);
       if (existing.cell === cell) return this;
       this.#unlink(existing);
       existing.cell = cell;

@@ -134,8 +134,13 @@ export function pointBounds(a?: PointLike | PointLike[], b?: PointLike): Bounds 
   return new Bounds(a, b);
 }
 
+/**
+ * A coordinate value. `lat` / `lng` are readonly: a `LatLng` handed out by `map.getCenter()`,
+ * `map.getCamera()` or a layer is a value, not a handle on that object's live state. Derive a
+ * changed coordinate with `new LatLng(...)` or `clone()` rather than assigning through one.
+ */
 export class LatLng {
-  constructor(public lat: number, public lng: number) {
+  constructor(public readonly lat: number, public readonly lng: number) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       throw new TypeError("Coordinates require finite numeric lat and lng values.");
     }

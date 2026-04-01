@@ -1,42 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TileLayer, tileLayer as coreTileLayer } from "../dist/core.js";
+import { TileLayer, tileLayer as coreTileLayer, UnsupportedCapabilityError } from "../dist/core.js";
 import { GPUTileLayer, tileLayer } from "../dist/index.js";
 
-test("Core tileLayer stays DOM even when renderer asks for webgl/auto", () => {
-  const defaultLayer = coreTileLayer("https://tiles/{z}/{x}/{y}.png");
-  const webglAsk = coreTileLayer("https://tiles/{z}/{x}/{y}.png", { renderer: "webgl" });
-  assert.ok(defaultLayer instanceof TileLayer);
-  assert.ok(webglAsk instanceof TileLayer);
-  assert.equal(defaultLayer instanceof GPUTileLayer, false);
-});
+const URL_TEMPLATE = "https://tiles/{z}/{x}/{y}.png";
 
-test("tileLayer default is DOM in every tier, GPU stays opt-in", () => {
-  // The Advanced entry registers the GPU factory as an import side effect. That must widen
-  // what `renderer` can select, never change what the default `tileLayer(url)` call builds.
-  const advancedDefault = tileLayer("https://tiles/{z}/{x}/{y}.png");
-  const coreDefault = coreTileLayer("https://tiles/{z}/{x}/{y}.png");
-  assert.ok(advancedDefault instanceof TileLayer);
-  assert.equal(advancedDefault instanceof GPUTileLayer, false);
-  assert.equal(advancedDefault.rendererKind, coreDefault.rendererKind);
-});
-
-test("Advanced tileLayer auto/webgl uses WebGL when factory is registered", () => {
-  const autoLayer = tileLayer("https://tiles/{z}/{x}/{y}.png", { renderer: "auto" });
-  const explicit = tileLayer("https://tiles/{z}/{x}/{y}.png", { renderer: "webgl" });
-  const forcedDom = tileLayer("https://tiles/{z}/{x}/{y}.png", { renderer: "dom" });
-  // jsdom / node may lack WebGL — then auto/webgl must fall back to DOM without throwing.
-  if (autoLayer instanceof GPUTileLayer) {
-    assert.ok(explicit instanceof GPUTileLayer);
-  } else {
-    assert.ok(autoLayer instanceof TileLayer);
-    assert.ok(explicit instanceof TileLayer);
-  }
-  assert.ok(forcedDom instanceof TileLayer);
-  assert.equal(forcedDom instanceof GPUTileLayer, false);
-});
-
-test("Advanced tileLayer uses WebGPU when navigator.gpu is present", () => {
+function withGpuNavigator(run) {
   const hadNav = globalThis.navigator != null;
   const nav = hadNav ? globalThis.navigator : {};
   if (!hadNav) globalThis.navigator = nav;
@@ -44,25 +13,72 @@ test("Advanced tileLayer uses WebGPU when navigator.gpu is present", () => {
   const prevGpu = nav.gpu;
   Object.defineProperty(nav, "gpu", { configurable: true, enumerable: true, writable: true, value: {} });
   try {
-    const autoLayer = tileLayer("https://tiles/{z}/{x}/{y}.png", { renderer: "auto" });
-    const defaultLayer = tileLayer("https://tiles/{z}/{x}/{y}.png");
-    const explicit = tileLayer("https://tiles/{z}/{x}/{y}.png", { renderer: "webgpu", maxDpr: 1.25, maxNewPerFrame: 7 });
-    const webglAsk = tileLayer("https://tiles/{z}/{x}/{y}.png", { renderer: "webgl" });
-    const forcedDom = tileLayer("https://tiles/{z}/{x}/{y}.png", { renderer: "dom" });
-    assert.ok(autoLayer instanceof GPUTileLayer);
-    assert.ok(defaultLayer instanceof TileLayer);
-    assert.equal(defaultLayer instanceof GPUTileLayer, false);
-    assert.ok(explicit instanceof GPUTileLayer);
-    assert.ok(webglAsk instanceof TileLayer);
-    assert.equal(explicit.options.backend, "webgpu");
-    assert.equal(explicit.options.maxDpr, 1.25);
-    assert.equal(explicit.options.maxNewPerFrame, 7);
-    assert.equal(webglAsk instanceof GPUTileLayer, false);
-    assert.ok(forcedDom instanceof TileLayer);
-    assert.equal(forcedDom instanceof GPUTileLayer, false);
+    run();
   } finally {
     if (hadGpu) Object.defineProperty(nav, "gpu", { configurable: true, enumerable: true, writable: true, value: prevGpu });
     else delete nav.gpu;
     if (!hadNav) delete globalThis.navigator;
   }
+}
+
+test("tileLayer default is DOM in every tier, GPU stays opt-in", () => {
+  // The Advanced entry registers the GPU factory as an import side effect. That must widen
+  // what `renderer` can select, never change what the default `tileLayer(url)` call builds.
+  const advancedDefault = tileLayer(URL_TEMPLATE);
+  const coreDefault = coreTileLayer(URL_TEMPLATE);
+  assert.ok(advancedDefault instanceof TileLayer);
+  assert.ok(coreDefault instanceof TileLayer);
+  assert.equal(advancedDefault instanceof GPUTileLayer, false);
+  assert.equal(advancedDefault.rendererKind, coreDefault.rendererKind);
+});
+
+test('renderer "auto" is a preference and degrades to DOM', () => {
+  // Core registers no GPU implementation at all; node/jsdom also has no WebGL context.
+  const coreAuto = coreTileLayer(URL_TEMPLATE, { renderer: "auto" });
+  assert.ok(coreAuto instanceof TileLayer);
+  assert.equal(coreAuto instanceof GPUTileLayer, false);
+
+  const advancedAuto = tileLayer(URL_TEMPLATE, { renderer: "auto" });
+  if (!(advancedAuto instanceof GPUTileLayer)) assert.ok(advancedAuto instanceof TileLayer);
+});
+
+test('renderer "webgl" / "webgpu" is a requirement and refuses rather than falling back', () => {
+  // A named implementation is what the caller wants to profile. Handing back DOM tiles would
+  // look like a GPU path in development and measure as a DOM path in production.
+  // This file imports the Advanced entry, so the factory is registered process-wide and the
+  // refusal comes from the missing browser support. The unregistered case lives in
+  // dx-contracts.test.js, which imports orihon/core alone.
+  for (const renderer of ["webgl", "webgpu"]) {
+    for (const build of [coreTileLayer, tileLayer]) {
+      assert.throws(() => build(URL_TEMPLATE, { renderer }), (error) => {
+        assert.ok(error instanceof UnsupportedCapabilityError);
+        assert.equal(error.code, "ERR_UNSUPPORTED_CAPABILITY");
+        assert.equal(error.context.renderer, renderer);
+        assert.equal(error.context.reason, "unsupported");
+        return true;
+      });
+    }
+  }
+});
+
+test("Advanced tileLayer uses WebGPU when navigator.gpu is present", () => {
+  withGpuNavigator(() => {
+    const autoLayer = tileLayer(URL_TEMPLATE, { renderer: "auto" });
+    const defaultLayer = tileLayer(URL_TEMPLATE);
+    const explicit = tileLayer(URL_TEMPLATE, { renderer: "webgpu", maxDpr: 1.25, maxNewPerFrame: 7 });
+    const forcedDom = tileLayer(URL_TEMPLATE, { renderer: "dom" });
+
+    assert.ok(autoLayer instanceof GPUTileLayer);
+    assert.ok(defaultLayer instanceof TileLayer);
+    assert.equal(defaultLayer instanceof GPUTileLayer, false);
+    assert.ok(explicit instanceof GPUTileLayer);
+    assert.equal(explicit.options.backend, "webgpu");
+    assert.equal(explicit.options.maxDpr, 1.25);
+    assert.equal(explicit.options.maxNewPerFrame, 7);
+    assert.ok(forcedDom instanceof TileLayer);
+    assert.equal(forcedDom instanceof GPUTileLayer, false);
+
+    // navigator.gpu says nothing about WebGL, so that request still refuses.
+    assert.throws(() => tileLayer(URL_TEMPLATE, { renderer: "webgl" }), { code: "ERR_UNSUPPORTED_CAPABILITY" });
+  });
 });

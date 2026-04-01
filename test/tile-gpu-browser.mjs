@@ -53,8 +53,19 @@ try {
     webgl.remove();
 
     const hasWebGpu = Boolean(navigator.gpu);
+    // Explicit "webgpu" is a requirement: without navigator.gpu it must refuse rather than hand
+    // back DOM tiles. "auto" is the preference form and still degrades.
+    let webgpuRefusal = null;
+    if (!hasWebGpu) {
+      try {
+        api.tileLayer("/assets/brand/png/orihon-mark-256.png", { renderer: "webgpu" });
+        webgpuRefusal = { threw: false };
+      } catch (error) {
+        webgpuRefusal = { threw: true, code: error.code, name: error.name };
+      }
+    }
     const webgpu = api.tileLayer("/assets/brand/png/orihon-mark-256.png", {
-      renderer: "webgpu",
+      renderer: hasWebGpu ? "webgpu" : "auto",
       maxDpr: 1.5,
       maxNewPerFrame: 5
     });
@@ -89,7 +100,7 @@ try {
     };
     map.destroy();
     host.remove();
-    return { webgl: webglResult, webgpu: webgpuResult, hasWebGpu, webglEvent, webgpuEvent, pointEvents };
+    return { webgl: webglResult, webgpu: webgpuResult, hasWebGpu, webgpuRefusal, webglEvent, webgpuEvent, pointEvents };
   });
 
   assert.equal(result.webgl.renderer, "webgl");
@@ -105,10 +116,13 @@ try {
     assert.equal(result.webgpu.maxDpr, 1.5);
     assert.equal(result.webgpu.maxNewPerFrame, 5);
   } else {
-    assert.equal(result.webgpu.hasStats, false);
-    assert.equal(result.webgpu.renderer, "dom");
+    assert.deepEqual(result.webgpuRefusal, {
+      threw: true,
+      code: "ERR_UNSUPPORTED_CAPABILITY",
+      name: "UnsupportedCapabilityError"
+    }, "explicit webgpu must refuse, not silently render DOM tiles");
   }
-  console.log(`tile GPU browser ok · webgl active · webgpu ${result.hasWebGpu ? result.webgpu.renderer : "DOM fallback"}`);
+  console.log(`tile GPU browser ok · webgl active · webgpu ${result.hasWebGpu ? result.webgpu.renderer : "refused, auto → " + result.webgpu.renderer}`);
 } finally {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));

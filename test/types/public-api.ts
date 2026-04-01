@@ -6,6 +6,8 @@ import {
   type IdentifiedGeoJSONFeature,
   type MapUpdateOptions,
   type PrefetchTileLayerOptions,
+  type LatLng,
+  type Orihon,
   type RasterTileLayer
 } from "../../src/index.js";
 import { featureSource } from "../../src/feature-source.js";
@@ -222,3 +224,36 @@ objectManager({ points: [], clusterize: true });
 declare const selectedManagerOptions: UnifiedObjectManagerOptions;
 const selectedManager: LocalManager | RemoteObjectManager | MarkerCollection = objectManager(selectedManagerOptions);
 void [textIcon, mixedAppearance, mixedReactMarker, mixedEasyMarker, localResult, remoteResult, pointResult, mixedManagerOptions, selectedManager];
+
+// --- Read-only public surface of the map -------------------------------------------------
+// These guarantees are compile-time only: `readonly` and getter-only properties leave no
+// runtime trap, so the type tests are where they are actually enforced.
+declare const liveMap: Orihon;
+// @ts-expect-error The live camera moves through setView / setZoom, not by assignment.
+liveMap.zoom = 12;
+// @ts-expect-error Same for the centre — assigning it would skip clamping and the render pass.
+liveMap.center = liveMap.getCenter();
+// @ts-expect-error Screen-space camera state is derived, never assigned.
+liveMap.pixelOrigin = liveMap.pixelOrigin;
+// @ts-expect-error Viewport size follows the container; use invalidateSize().
+liveMap.size = { width: 1, height: 1 };
+// @ts-expect-error Pan velocity is written by drag and inertia only.
+liveMap.panVelocity = liveMap.panVelocity;
+// @ts-expect-error Options are a configuration snapshot, matching Layer.options.
+liveMap.options = liveMap.options;
+// @ts-expect-error Assigning an option field changes no live state — use the setters.
+liveMap.options.maxZoom = 5;
+// @ts-expect-error Behavior flags change through enable / disable / toggle.
+liveMap.behaviors.states = liveMap.behaviors.states;
+// @ts-expect-error Writing one flag would skip the behaviorchange event.
+liveMap.behaviors.states.drag = false;
+
+// LatLng is a value type: a coordinate handed out is not a handle on live state.
+const liveCentre: LatLng = liveMap.getCenter();
+// @ts-expect-error Derive a changed coordinate instead of assigning through one.
+liveCentre.lat = 0;
+// @ts-expect-error Holds for the camera snapshot too.
+liveMap.getCamera().center.lat = 0;
+// @ts-expect-error And for the live centre view.
+liveMap.center.lng = 0;
+void liveCentre;

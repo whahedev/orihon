@@ -48,6 +48,22 @@ test("everything that attaches to a destroyed map fails with one discriminable e
   assert.equal(map.getZoom(), 2);
 });
 
+test("an explicit GPU renderer refuses when no implementation is registered", () => {
+  // orihon/core registers no GPU factory, and this file imports nothing that would.
+  for (const renderer of ["webgl", "webgpu"]) {
+    assert.throws(() => tileLayer("https://tiles.test/{z}/{x}/{y}.png", { renderer }), (error) => {
+      assert.ok(error instanceof UnsupportedCapabilityError);
+      assert.equal(error.code, "ERR_UNSUPPORTED_CAPABILITY");
+      assert.equal(error.context.reason, "unregistered");
+      assert.ok(error.message.includes("orihon/webgpu"));
+      return true;
+    });
+  }
+
+  // The preference form still degrades, so opting out of the requirement stays one word away.
+  assert.equal(tileLayer("https://tiles.test/{z}/{x}/{y}.png", { renderer: "auto" }).rendererKind, "dom");
+});
+
 test("Core layers do not advertise popup binding, and asking for it names the missing tier", () => {
   const el = installDom();
   const map = createMap(el, { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });

@@ -53,6 +53,27 @@ test("map instances do not expose renderer or lifecycle internals", () => {
   assert.throws(() => { map.controls = new Set(); }, TypeError);
   assert.throws(() => { map.panes = {}; }, TypeError);
 
+  // Live camera and configuration are views too: moving the camera or changing configuration
+  // outside the documented setters would skip clamping, events and the render pass.
+  assert.throws(() => { map.zoom = 15; }, TypeError);
+  assert.throws(() => { map.center = { lat: 0, lng: 0 }; }, TypeError);
+  assert.throws(() => { map.pixelOrigin = { x: 1, y: 2 }; }, TypeError);
+  assert.throws(() => { map.size = { width: 1, height: 1 }; }, TypeError);
+  assert.throws(() => { map.panVelocity = { x: 1, y: 1 }; }, TypeError);
+  assert.throws(() => { map.options = {}; }, TypeError);
+  assert.throws(() => { map.behaviors.states = {}; }, TypeError);
+
+  // LatLng.lat / LatLng.lng are readonly in the type surface — a compile-time guarantee
+  // checked in test/types/public-api.ts, since `readonly` leaves no runtime trap.
+
+  // getCamera() is a detached snapshot: writing it must not reach the live camera.
+  const camera = map.getCamera();
+  assert.notEqual(camera.center, map.center);
+  camera.pixelOrigin.x = 9999;
+  camera.size.width = 1;
+  assert.notEqual(map.pixelOrigin.x, 9999);
+  assert.notEqual(map.size.width, 1);
+
   assert.equal(map.isDestroyed, false);
   map.destroy();
   assert.equal(map.isDestroyed, true);

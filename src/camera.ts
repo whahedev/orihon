@@ -22,11 +22,16 @@ export interface CameraOrigin {
   y: number;
 }
 
+/**
+ * Detached camera snapshot. Every field is readonly because `getCamera()` copies the live
+ * state: writing through a snapshot would change nothing on the map, which is worse than
+ * failing. Move the camera with `setView` / `setZoom`.
+ */
 export interface CameraState {
-  center: { lat: number; lng: number };
-  zoom: number;
-  pixelOrigin: CameraOrigin;
-  size: { width: number; height: number };
+  readonly center: { readonly lat: number; readonly lng: number };
+  readonly zoom: number;
+  readonly pixelOrigin: Readonly<CameraOrigin>;
+  readonly size: { readonly width: number; readonly height: number };
 }
 
 /** CSS `translate3d` + optional `scale` without integer rounding. */

@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- **Breaking — an explicit GPU renderer refuses instead of falling back.**
+  `tileLayer(url, { renderer: "webgpu" })` returned DOM tiles when WebGPU was unavailable or no
+  GPU implementation was registered, so the same code read as a GPU path in development and
+  profiled as a DOM path in production, with nothing raised in between. `"auto"` is the
+  preference form and still degrades WebGPU → WebGL → DOM; `"webgl"` and `"webgpu"` name one
+  implementation, which makes them a requirement, and now throw `UnsupportedCapabilityError`
+  (`code: "ERR_UNSUPPORTED_CAPABILITY"`) with `context.reason` of `"unregistered"` or
+  `"unsupported"`. Omitted `renderer` is still DOM.
+
+- **Breaking — the map's live state is read-only on the public surface.** `center`, `zoom`,
+  `size`, `pixelOrigin` and `panVelocity` were writable fields, so the camera could be moved
+  past `setView` / `setZoom` without clamping, view-session events or a render pass. They are
+  private with read-only views now, joining `layers`, `controls` and `panes`. `map.options`
+  becomes `get options(): Readonly<ResolvedMapOptions>`, matching `Layer.options`: assigning
+  `options.controls = false` never removed the existing controls and `options.locale = "ru"`
+  never re-rendered them, so the setters are the only way. `BehaviorManager.states` is a
+  read-only view for the same reason — writing a flag skipped `behaviorchange`.
+
+- **Breaking — `LatLng.lat` and `LatLng.lng` are readonly.** A coordinate handed out by
+  `getCenter()`, `getCamera()` or a layer is a value, not a handle on that object's live state.
+  Derive a changed coordinate with `new LatLng(...)`, `clone()` or `latLng()`.
+
+- **Fixed — `getCamera()` is the immutable snapshot it documents.** `pixelOrigin` and `size`
+  were copied but `center` was handed out by reference, so writing through the snapshot could
+  reach the live camera. `center` is cloned, and `CameraState` is readonly throughout.
+
 - **Breaking — `tileLayer()` defaults to `renderer: "dom"` in every tier.** The default was
   `"auto"`, and the Advanced `orihon` entry registers a GPU implementation as an import side
   effect, so moving an import from `orihon/standard` to `orihon` silently switched an existing

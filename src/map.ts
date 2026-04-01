@@ -113,11 +113,17 @@ function normalizeMaxBounds(value: LatLngBoundsLike | null | undefined): LatLngB
 
 export class BehaviorManager {
   readonly map: Orihon;
-  readonly states: Record<MapBehaviorName, boolean>;
+  readonly #states: Record<MapBehaviorName, boolean>;
+  /**
+   * Read-only view of every behavior flag. Writing one directly would skip the
+   * `behaviorchange` event and the listener wiring, so changes go through
+   * `enable` / `disable` / `toggle`; `isEnabled` and `getEnabled` read single values.
+   */
+  get states(): Readonly<Record<MapBehaviorName, boolean>> { return this.#states; }
 
   constructor(map: Orihon, options: BehaviorOptions = {}) {
     this.map = map;
-    this.states = { ...DEFAULT_BEHAVIORS, ...options };
+    this.#states = { ...DEFAULT_BEHAVIORS, ...options };
   }
 
   enable(name: MapBehaviorName): this {
@@ -133,18 +139,18 @@ export class BehaviorManager {
   }
 
   isEnabled(name: MapBehaviorName): boolean {
-    return this.states[name] !== false;
+    return this.#states[name] !== false;
   }
 
   getEnabled(): MapBehaviorName[] {
-    return (Object.keys(this.states) as MapBehaviorName[]).filter((name) => this.isEnabled(name));
+    return (Object.keys(this.#states) as MapBehaviorName[]).filter((name) => this.isEnabled(name));
   }
 
   #set(name: MapBehaviorName, enabled: boolean): this {
-    if (!(name in this.states)) throw new TypeError(`Unknown map behavior: ${name}`);
+    if (!(name in this.#states)) throw new TypeError(`Unknown map behavior: ${name}`);
     const next = Boolean(enabled);
-    if (this.states[name] === next) return this;
-    this.states[name] = next;
+    if (this.#states[name] === next) return this;
+    this.#states[name] = next;
     this.map.emit("behaviorchange", { name, enabled: next, behaviors: this.getEnabled() });
     return this;
   }
@@ -177,7 +183,14 @@ export interface MapEventMap {
 }
 
 export class Orihon extends Evented<MapEventMap> {
-  readonly options: ResolvedMapOptions;
+  readonly #options: ResolvedMapOptions;
+  /**
+   * Configuration snapshot, matching `Layer.options`. Treat as read-only: assigning a field
+   * changes no live state — `controls` would not remove existing controls, `locale` would not
+   * re-render them. Use `setLocale`, `setMaxBounds`, `setMinZoom` / `setMaxZoom` and
+   * `map.behaviors` instead.
+   */
+  get options(): Readonly<ResolvedMapOptions> { return this.#options; }
   readonly container: HTMLElement;
   viewport!: HTMLDivElement;
   readonly #panes: Record<string, HTMLElement> = {};
@@ -186,12 +199,23 @@ export class Orihon extends Evented<MapEventMap> {
   #controlCorners = {} as Record<ControlPosition, HTMLDivElement>;
   /** Control anchor elements by position. Read-only view: `addControl` places controls for you. */
   get controlCorners(): Readonly<Record<ControlPosition, HTMLDivElement>> { return this.#controlCorners; }
-  center: LatLng;
-  zoom: number;
-  size: MapSize = { width: 0, height: 0 };
-  pixelOrigin = new Point(0, 0);
+  #center: LatLng;
+  #zoom: number;
+  #size: MapSize = { width: 0, height: 0 };
+  #pixelOrigin = new Point(0, 0);
+  #panVelocity = new Point(0, 0);
+  /**
+   * Live camera. These are views on the state the render loop owns, so they read cheaply from
+   * layers every frame but cannot be written: moving the camera without `setView` / `setZoom`
+   * would skip clamping, the view session and the render pass. `getCamera()` returns a detached
+   * snapshot when a value has to outlive the frame.
+   */
+  get center(): LatLng { return this.#center; }
+  get zoom(): number { return this.#zoom; }
+  get size(): Readonly<MapSize> { return this.#size; }
+  get pixelOrigin(): Readonly<Point> { return this.#pixelOrigin; }
   /** Screen-space pan velocity in px/s. Updated during drag / inertia; zero when idle. */
-  panVelocity = new Point(0, 0);
+  get panVelocity(): Readonly<Point> { return this.#panVelocity; }
   readonly #layers = new Set<Layer>();
   /** Attached layers; iterate with `for (const layer of map.layers)`. Mutation goes through `addLayer` / `removeLayer`. */
   get layers(): ReadonlySet<Layer> { return this.#layers; }
@@ -225,41 +249,41 @@ export class Orihon extends Evented<MapEventMap> {
     super();
     rejectLegacyUnit(options, "zoomAnimationDuration", "zoomAnimationDurationMs");
     nonNegativeFinite(options.zoomAnimationDurationMs ?? DEFAULTS.zoomAnimationDurationMs, "zoomAnimationDurationMs");
-    this.options = {
+    this.#options = {
       ...mergeOptions(DEFAULTS, options),
       maxBounds: normalizeMaxBounds(options.maxBounds),
       crs: resolveCRS(options.crs),
       behaviors: mergeOptions(DEFAULT_BEHAVIORS, options.behaviors)
     };
     this.container = getContainer(container);
-    this.locale = resolveLocale(this.options.locale);
-    this.behaviors = new BehaviorManager(this, this.options.behaviors);
-    this.crs = this.options.crs;
+    this.locale = resolveLocale(this.#options.locale);
+    this.behaviors = new BehaviorManager(this, this.#options.behaviors);
+    this.crs = this.#options.crs;
     this.#initialA11y = {
       role: this.container.getAttribute("role"),
       ariaLabel: this.container.getAttribute("aria-label"),
       tabIndex: this.container.getAttribute("tabindex")
     };
-    this.center = latLng(this.options.center);
-    this.zoom = this.#clampZoom(this.options.zoom);
+    this.#center = latLng(this.#options.center);
+    this.#zoom = this.#clampZoom(this.#options.zoom);
     this.#frameRender = rafThrottle(() => this.#render());
     this.#initDom();
     this.#bindInput();
     this.#bindResize();
     this.invalidateSize();
-    if (this.options.controls) {
+    if (this.#options.controls) {
       new ZoomControl({ locale: this.locale }).addTo(this);
       new ScaleControl({ locale: this.locale }).addTo(this);
       new AttributionControl({ locale: this.locale }).addTo(this);
     }
-    this.#trackLocale(this.options.locale);
+    this.#trackLocale(this.#options.locale);
     this.#render();
   }
 
   #initDom(): void {
     this.container.classList.add("oh-map");
     this.container.setAttribute("role", "application");
-    this.container.setAttribute("aria-label", this.options.ariaLabel || this.locale.mapLabel);
+    this.container.setAttribute("aria-label", this.#options.ariaLabel || this.locale.mapLabel);
     this.container.tabIndex = 0;
     this.viewport = createEl("div", "oh-viewport", this.container);
     this.createPane("tile", this.viewport, "oh-pane oh-tile-pane");
@@ -304,7 +328,7 @@ export class Orihon extends Evented<MapEventMap> {
         type: "drag",
         pointerId: pointer.id,
         start,
-        origin: this.crs.project(this.center, this.zoom),
+        origin: this.crs.project(this.#center, this.#zoom),
         moved: false,
         last: start,
         lastTime: performance.now(),
@@ -329,7 +353,7 @@ export class Orihon extends Evented<MapEventMap> {
       gesture = {
         type: "pinch",
         distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
-        zoom: this.zoom,
+        zoom: this.#zoom,
         anchor: this.containerPointToLatLng(midpoint)
       };
       this.#beginViewSession(true);
@@ -384,8 +408,8 @@ export class Orihon extends Evented<MapEventMap> {
         const nextZoom = this.#clampZoom(gesture.zoom + Math.log2(distance / gesture.distance));
         const projectedAnchor = this.crs.project(gesture.anchor, nextZoom);
         const nextCenter = this.crs.unproject({
-          x: projectedAnchor.x - midpoint.x + this.size.width / 2,
-          y: projectedAnchor.y - midpoint.y + this.size.height / 2
+          x: projectedAnchor.x - midpoint.x + this.#size.width / 2,
+          y: projectedAnchor.y - midpoint.y + this.#size.height / 2
         }, nextZoom);
         this.#applyView(nextCenter, nextZoom);
         return;
@@ -396,8 +420,8 @@ export class Orihon extends Evented<MapEventMap> {
         const current = new Point(event.clientX, event.clientY);
         const elapsed = Math.max(1, now - gesture.lastTime);
         gesture.velocity = current.subtract(gesture.last).divideBy(elapsed / 1000);
-        this.panVelocity.x = gesture.velocity.x;
-        this.panVelocity.y = gesture.velocity.y;
+        this.#panVelocity.x = gesture.velocity.x;
+        this.#panVelocity.y = gesture.velocity.y;
         gesture.last = current;
         gesture.lastTime = now;
         const dx = event.clientX - gesture.start.x;
@@ -407,8 +431,8 @@ export class Orihon extends Evented<MapEventMap> {
           gesture.moved = true;
           event.preventDefault();
         }
-        const nextCenter = this.crs.unproject({ x: gesture.origin.x - dx, y: gesture.origin.y - dy }, this.zoom);
-        this.#applyView(nextCenter, this.zoom);
+        const nextCenter = this.crs.unproject({ x: gesture.origin.x - dx, y: gesture.origin.y - dy }, this.#zoom);
+        this.#applyView(nextCenter, this.#zoom);
       }
     }));
 
@@ -456,7 +480,7 @@ export class Orihon extends Evented<MapEventMap> {
       gesture = null;
       this.container.classList.remove("oh-dragging");
       this.#endViewSession(false, true);
-      if (dragVelocity && this.options.inertia) this.#startInertia(dragVelocity);
+      if (dragVelocity && this.#options.inertia) this.#startInertia(dragVelocity);
     };
     this.#unsub.push(listen(this.container, "pointerup", stopPointer));
     this.#unsub.push(listen(this.container, "pointercancel", stopPointer));
@@ -466,8 +490,8 @@ export class Orihon extends Evented<MapEventMap> {
       event.preventDefault();
       if (pointers.size) return;
       const anchor = containerPoint(event.clientX, event.clientY);
-      const next = this.zoom - Math.sign(event.deltaY) * this.options.wheelZoomStep;
-      if (this.#clampZoom(next) === this.zoom) return;
+      const next = this.#zoom - Math.sign(event.deltaY) * this.#options.wheelZoomStep;
+      if (this.#clampZoom(next) === this.#zoom) return;
       this.#beginViewSession(true);
       this.#applyZoomAround(anchor, next);
       if (this.#wheelTimer) clearTimeout(this.#wheelTimer);
@@ -477,7 +501,7 @@ export class Orihon extends Evented<MapEventMap> {
     this.#unsub.push(listen(this.container, "dblclick", (event) => {
       if (!this.behaviors.isEnabled("dblClick")) return;
       event.preventDefault();
-      this.setZoomAround(containerPoint(event.clientX, event.clientY), this.zoom + 1);
+      this.setZoomAround(containerPoint(event.clientX, event.clientY), this.#zoom + 1);
     }));
 
     this.#unsub.push(listen(this.container, "click", (event) => {
@@ -495,8 +519,8 @@ export class Orihon extends Evented<MapEventMap> {
     }));
 
     this.#unsub.push(listen(this.container, "keydown", (event) => {
-      if (!this.options.keyboard || event.target !== this.container) return;
-      const delta = this.options.keyboardPanDelta;
+      if (!this.#options.keyboard || event.target !== this.container) return;
+      const delta = this.#options.keyboardPanDelta;
       const panOffsets: Record<string, [number, number]> = {
         ArrowLeft: [-delta, 0],
         ArrowRight: [delta, 0],
@@ -511,24 +535,24 @@ export class Orihon extends Evented<MapEventMap> {
       }
       if (event.key === "+" || event.key === "=" || event.key === "PageUp") {
         event.preventDefault();
-        this.setZoom(this.zoom + 1);
+        this.setZoom(this.#zoom + 1);
       } else if (event.key === "-" || event.key === "_" || event.key === "PageDown") {
         event.preventDefault();
-        this.setZoom(this.zoom - 1);
+        this.setZoom(this.#zoom - 1);
       }
     }));
   }
 
   #clampZoom(zoom: number): number {
-    const snap = Number(this.options.zoomSnap);
+    const snap = Number(this.#options.zoomSnap);
     const numericZoom = Number(zoom);
     const snapped = snap > 0 ? Math.round(numericZoom / snap) * snap : numericZoom;
-    return Math.max(this.options.minZoom, Math.min(this.options.maxZoom, snapped));
+    return Math.max(this.#options.minZoom, Math.min(this.#options.maxZoom, snapped));
   }
 
-  #pixelOriginFor(center = this.center, zoom = this.zoom): Point {
+  #pixelOriginFor(center = this.#center, zoom = this.#zoom): Point {
     const centerPoint = this.crs.project(center, zoom);
-    return new Point(centerPoint.x - this.size.width / 2, centerPoint.y - this.size.height / 2);
+    return new Point(centerPoint.x - this.#size.width / 2, centerPoint.y - this.#size.height / 2);
   }
 
   /**
@@ -537,24 +561,24 @@ export class Orihon extends Evented<MapEventMap> {
    */
   getCamera(): CameraState {
     return {
-      center: this.center,
-      zoom: this.zoom,
-      pixelOrigin: this.pixelOrigin.clone(),
-      size: { width: this.size.width, height: this.size.height }
+      center: this.#center.clone(),
+      zoom: this.#zoom,
+      pixelOrigin: this.#pixelOrigin.clone(),
+      size: { width: this.#size.width, height: this.#size.height }
     };
   }
 
   #limitCenter(center: LatLng, zoom: number): LatLng {
-    const maxBounds = this.options.maxBounds;
-    if (!maxBounds || this.options.maxBoundsViscosity <= 0 || !maxBounds.isValid()) return center;
-    if (this.size.width <= 0 || this.size.height <= 0) return center;
+    const maxBounds = this.#options.maxBounds;
+    if (!maxBounds || this.#options.maxBoundsViscosity <= 0 || !maxBounds.isValid()) return center;
+    if (this.#size.width <= 0 || this.#size.height <= 0) return center;
     const northWest = this.crs.project(maxBounds.getNorthWest(), zoom);
     const southEast = this.crs.project(maxBounds.getSouthEast(), zoom);
     const projected = this.crs.project(center, zoom);
-    const minX = Math.min(northWest.x, southEast.x) + this.size.width / 2;
-    const maxX = Math.max(northWest.x, southEast.x) - this.size.width / 2;
-    const minY = Math.min(northWest.y, southEast.y) + this.size.height / 2;
-    const maxY = Math.max(northWest.y, southEast.y) - this.size.height / 2;
+    const minX = Math.min(northWest.x, southEast.x) + this.#size.width / 2;
+    const maxX = Math.max(northWest.x, southEast.x) - this.#size.width / 2;
+    const minY = Math.min(northWest.y, southEast.y) + this.#size.height / 2;
+    const maxY = Math.max(northWest.y, southEast.y) - this.#size.height / 2;
     const clamp = (value: number, min: number, max: number): number => {
       if (min > max) return (min + max) / 2;
       return Math.max(min, Math.min(max, value));
@@ -576,11 +600,11 @@ export class Orihon extends Evented<MapEventMap> {
     else this.#animationFrame = setTimeout(() => callback(performance.now()), 16) as unknown as number;
   }
 
-  #animateView(center: LatLngLike, zoom: number, durationMs = this.options.zoomAnimationDurationMs): this {
+  #animateView(center: LatLngLike, zoom: number, durationMs = this.#options.zoomAnimationDurationMs): this {
     const targetCenter = this.#limitCenter(latLng(center), this.#clampZoom(zoom));
     const targetZoom = this.#clampZoom(zoom);
-    const startCenter = this.center.clone();
-    const startZoom = this.zoom;
+    const startCenter = this.#center.clone();
+    const startZoom = this.#zoom;
     const zoomChanged = targetZoom !== startZoom;
     const duration = nonNegativeFinite(durationMs, "durationMs");
     this.stop();
@@ -609,12 +633,12 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   #startInertia(velocity: Point): void {
-    const speed = Math.min(this.options.inertiaMaxSpeed, Math.hypot(velocity.x, velocity.y));
+    const speed = Math.min(this.#options.inertiaMaxSpeed, Math.hypot(velocity.x, velocity.y));
     if (speed < 80) return;
     const direction = velocity.divideBy(Math.max(1, Math.hypot(velocity.x, velocity.y)));
-    const duration = speed / Math.max(1, this.options.inertiaDeceleration);
+    const duration = speed / Math.max(1, this.#options.inertiaDeceleration);
     const travel = direction.multiplyBy((speed * duration) / 2);
-    const origin = this.crs.project(this.center, this.zoom);
+    const origin = this.crs.project(this.#center, this.#zoom);
     const startTime = performance.now();
     this.stop();
     this.#animationActive = true;
@@ -624,15 +648,15 @@ export class Orihon extends Evented<MapEventMap> {
       const progress = Math.min(1, Math.max(0, (now - startTime) / (duration * 1000)));
       const eased = 1 - (1 - progress) ** 2;
       const remain = 1 - progress;
-      this.panVelocity.x = direction.x * speed * remain;
-      this.panVelocity.y = direction.y * speed * remain;
-      this.#applyView(this.crs.unproject(origin.subtract(travel.multiplyBy(eased)), this.zoom), this.zoom);
+      this.#panVelocity.x = direction.x * speed * remain;
+      this.#panVelocity.y = direction.y * speed * remain;
+      this.#applyView(this.crs.unproject(origin.subtract(travel.multiplyBy(eased)), this.#zoom), this.#zoom);
       if (progress < 1) {
         this.#scheduleAnimation(frame);
         return;
       }
-      this.panVelocity.x = 0;
-      this.panVelocity.y = 0;
+      this.#panVelocity.x = 0;
+      this.#panVelocity.y = 0;
       this.#animationFrame = null;
       this.#animationActive = false;
       this.#endViewSession(false, true);
@@ -645,34 +669,34 @@ export class Orihon extends Evented<MapEventMap> {
     const height = Math.abs(end.y - start.y);
     if (width < 8 || height < 8) return this;
     const centerPoint = start.add(end).divideBy(2);
-    const scale = Math.min(this.size.width / Math.max(1, width), this.size.height / Math.max(1, height));
-    const nextZoom = this.#clampZoom(this.zoom + Math.log2(Math.max(1, scale)));
+    const scale = Math.min(this.#size.width / Math.max(1, width), this.#size.height / Math.max(1, height));
+    const nextZoom = this.#clampZoom(this.#zoom + Math.log2(Math.max(1, scale)));
     return this.setView(this.containerPointToLatLng(centerPoint), nextZoom);
   }
 
   #beginViewSession(withZoom: boolean): void {
     if (!this.#viewSession.move) {
       this.#viewSession.move = true;
-      this.emit("movestart", { center: this.center });
+      this.emit("movestart", { center: this.#center });
     }
     if (withZoom && !this.#viewSession.zoom) {
       this.#viewSession.zoom = true;
-      this.emit("zoomstart", { zoom: this.zoom });
+      this.emit("zoomstart", { zoom: this.#zoom });
     }
   }
 
   #endViewSession(withZoom: boolean, withMove: boolean): void {
     if (withZoom && this.#viewSession.zoom) {
       this.#viewSession.zoom = false;
-      this.emit("zoomend", { zoom: this.zoom });
+      this.emit("zoomend", { zoom: this.#zoom });
     }
     if (withMove && this.#viewSession.move) {
       this.#viewSession.move = false;
       if (!this.#animationActive) {
-        this.panVelocity.x = 0;
-        this.panVelocity.y = 0;
+        this.#panVelocity.x = 0;
+        this.#panVelocity.y = 0;
       }
-      this.emit("moveend", { center: this.center });
+      this.emit("moveend", { center: this.#center });
     }
   }
 
@@ -680,14 +704,14 @@ export class Orihon extends Evented<MapEventMap> {
     if (this.#destroyed) return false;
     const nextZoom = this.#clampZoom(zoom);
     const nextCenter = this.#limitCenter(latLng(center), nextZoom);
-    const zoomChanged = nextZoom !== this.zoom;
-    const centerChanged = !nextCenter.equals(this.center, 0);
+    const zoomChanged = nextZoom !== this.#zoom;
+    const centerChanged = !nextCenter.equals(this.#center, 0);
     if (!zoomChanged && !centerChanged) return false;
-    this.center = nextCenter;
-    this.zoom = nextZoom;
-    this.pixelOrigin = this.#pixelOriginFor();
-    if (zoomChanged) this.emit("zoom", { zoom: this.zoom });
-    this.emit("move", { center: this.center });
+    this.#center = nextCenter;
+    this.#zoom = nextZoom;
+    this.#pixelOrigin = this.#pixelOriginFor();
+    if (zoomChanged) this.emit("zoom", { zoom: this.#zoom });
+    this.emit("move", { center: this.#center });
     if (syncRender) this.#render();
     else this.#frameRender();
     return true;
@@ -696,12 +720,12 @@ export class Orihon extends Evented<MapEventMap> {
   #applyZoomAround(anchor: PointLike, zoom: number): boolean {
     const anchorPoint = point(anchor);
     const nextZoom = this.#clampZoom(zoom);
-    if (nextZoom === this.zoom) return false;
+    if (nextZoom === this.#zoom) return false;
     const before = this.containerPointToLatLng(anchorPoint);
     const afterPoint = this.crs.project(before, nextZoom);
     const nextCenter = this.crs.unproject({
-      x: afterPoint.x - anchorPoint.x + this.size.width / 2,
-      y: afterPoint.y - anchorPoint.y + this.size.height / 2
+      x: afterPoint.x - anchorPoint.x + this.#size.width / 2,
+      y: afterPoint.y - anchorPoint.y + this.#size.height / 2
     }, nextZoom);
     return this.#applyView(nextCenter, nextZoom);
   }
@@ -709,7 +733,7 @@ export class Orihon extends Evented<MapEventMap> {
   #render(): void {
     if (this.#destroyed) return;
     // Single camera snapshot for this frame — every wantsFrameRender layer reads these fields.
-    this.pixelOrigin = this.#pixelOriginFor();
+    this.#pixelOrigin = this.#pixelOriginFor();
     for (const layer of this.#layers) {
       if (layer.wantsFrameRender()) layer.render();
     }
@@ -760,13 +784,13 @@ export class Orihon extends Evented<MapEventMap> {
 
   invalidateSize(): this {
     if (this.#destroyed) return this;
-    const previous = this.size;
+    const previous = this.#size;
     const rect = this.container.getBoundingClientRect();
     const next = {
       width: rect.width || this.container.clientWidth,
       height: rect.height || this.container.clientHeight
     };
-    this.size = next;
+    this.#size = next;
     if (previous.width > 0 && previous.height > 0 && (previous.width !== next.width || previous.height !== next.height)) {
       this.emit("resize", { oldSize: new Point(previous.width, previous.height), newSize: new Point(next.width, next.height) });
     }
@@ -776,10 +800,10 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   getContainer(): HTMLElement { return this.container; }
-  getCenter(): LatLng { return this.center.clone(); }
-  getZoom(): number { return this.zoom; }
-  getSize(): Point { return new Point(this.size.width, this.size.height); }
-  getMaxBounds(): LatLngBounds | null { return this.options.maxBounds ? new LatLngBounds(this.options.maxBounds) : null; }
+  getCenter(): LatLng { return this.#center.clone(); }
+  getZoom(): number { return this.#zoom; }
+  getSize(): Point { return new Point(this.#size.width, this.#size.height); }
+  getMaxBounds(): LatLngBounds | null { return this.#options.maxBounds ? new LatLngBounds(this.#options.maxBounds) : null; }
 
   distance(a: LatLngLike, b: LatLngLike): number {
     if (this.crs.code !== "Simple") return distance(a, b);
@@ -796,7 +820,7 @@ export class Orihon extends Evented<MapEventMap> {
 
   #applyLocale(input: LocaleInput): void {
     Object.assign(this.locale, resolveLocale(input));
-    if (!this.options.ariaLabel) {
+    if (!this.#options.ariaLabel) {
       this.container.setAttribute("aria-label", this.locale.mapLabel);
     }
     for (const control of this.#controls) {
@@ -954,8 +978,8 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   setMaxBounds(value: LatLngBoundsLike | null): this {
-    this.options.maxBounds = normalizeMaxBounds(value);
-    if (this.options.maxBounds) this.panInsideBounds(this.options.maxBounds);
+    this.#options.maxBounds = normalizeMaxBounds(value);
+    if (this.#options.maxBounds) this.panInsideBounds(this.#options.maxBounds);
     return this;
   }
 
@@ -966,17 +990,17 @@ export class Orihon extends Evented<MapEventMap> {
     if (!target.isValid()) return this;
     const view = this.getBounds();
     if (target.contains(view)) return this;
-    const nextCenter = this.#limitCenter(this.center, this.zoom);
-    return options.animate ? this.flyTo(nextCenter, this.zoom, options) : this.setView(nextCenter, this.zoom);
+    const nextCenter = this.#limitCenter(this.#center, this.#zoom);
+    return options.animate ? this.flyTo(nextCenter, this.#zoom, options) : this.setView(nextCenter, this.#zoom);
   }
 
-  setView(center: LatLngLike, zoom = this.zoom, options?: SetViewOptions): this {
+  setView(center: LatLngLike, zoom = this.#zoom, options?: SetViewOptions): this {
     if (this.#destroyed) return this;
     const settle = options?.settle !== false;
     const nextCenter = latLng(center);
     const nextZoom = this.#clampZoom(zoom);
-    const zoomChanged = nextZoom !== this.zoom;
-    const centerChanged = !nextCenter.equals(this.center, 0);
+    const zoomChanged = nextZoom !== this.#zoom;
+    const centerChanged = !nextCenter.equals(this.#center, 0);
     // A no-op setView must not cancel a running flyTo / inertia: React effects
     // re-run on every parent render and would otherwise kill camera animation.
     if (!zoomChanged && !centerChanged) {
@@ -991,18 +1015,18 @@ export class Orihon extends Evented<MapEventMap> {
     return this;
   }
 
-  panTo(center: LatLngLike): this { return this.setView(center, this.zoom); }
+  panTo(center: LatLngLike): this { return this.setView(center, this.#zoom); }
   panBy(offset: PointLike): this {
-    const nextCenter = this.crs.unproject(this.crs.project(this.center, this.zoom).add(point(offset)), this.zoom);
+    const nextCenter = this.crs.unproject(this.crs.project(this.#center, this.#zoom).add(point(offset)), this.#zoom);
     return this.panTo(nextCenter);
   }
-  setZoom(zoom: number): this { return this.setView(this.center, zoom); }
-  zoomIn(delta = 1): this { return this.setZoom(this.zoom + delta); }
-  zoomOut(delta = 1): this { return this.setZoom(this.zoom - delta); }
+  setZoom(zoom: number): this { return this.setView(this.#center, zoom); }
+  zoomIn(delta = 1): this { return this.setZoom(this.#zoom + delta); }
+  zoomOut(delta = 1): this { return this.setZoom(this.#zoom - delta); }
 
   setZoomAround(anchor: PointLike, zoom: number): this {
     this.stop();
-    if (this.#clampZoom(zoom) === this.zoom) return this;
+    if (this.#clampZoom(zoom) === this.#zoom) return this;
     this.#beginViewSession(true);
     this.#applyZoomAround(anchor, zoom);
     this.#endViewSession(true, true);
@@ -1019,13 +1043,13 @@ export class Orihon extends Evented<MapEventMap> {
 
   fitWorld(options: { padding?: number; animate?: boolean; durationMs?: number } = {}): this {
     return this.fitBounds(this.crs.code === "Simple"
-      ? this.options.maxBounds ?? [{ lat: 0, lng: 0 }, { lat: TILE_SIZE, lng: TILE_SIZE }]
+      ? this.#options.maxBounds ?? [{ lat: 0, lng: 0 }, { lat: TILE_SIZE, lng: TILE_SIZE }]
       : [{ lat: -85.0511287798066, lng: -180 }, { lat: 85.0511287798066, lng: 180 }], options);
   }
 
-  flyTo(center: LatLngLike, zoom = this.zoom, options: { durationMs?: number } = {}): this {
+  flyTo(center: LatLngLike, zoom = this.#zoom, options: { durationMs?: number } = {}): this {
     rejectLegacyUnit(options, "duration", "durationMs");
-    return this.#animateView(center, zoom, options.durationMs ?? this.options.zoomAnimationDurationMs);
+    return this.#animateView(center, zoom, options.durationMs ?? this.#options.zoomAnimationDurationMs);
   }
 
   flyToBounds(value: LatLngBoundsLike, options: { padding?: number; durationMs?: number } = {}): this {
@@ -1047,21 +1071,21 @@ export class Orihon extends Evented<MapEventMap> {
   }
 
   latLngToLayerPoint(value: LatLngLike): Point {
-    return this.crs.project(value, this.zoom).subtract(this.pixelOrigin);
+    return this.crs.project(value, this.#zoom).subtract(this.#pixelOrigin);
   }
 
   latLngToContainerPoint(value: LatLngLike): Point {
-    return this.crs.project(value, this.zoom).subtract(this.pixelOrigin);
+    return this.crs.project(value, this.#zoom).subtract(this.#pixelOrigin);
   }
 
   containerPointToLatLng(value: PointLike): LatLng {
     const source = point(value);
-    return this.crs.unproject(source.add(this.pixelOrigin), this.zoom);
+    return this.crs.unproject(source.add(this.#pixelOrigin), this.#zoom);
   }
 
   getBounds(): LatLngBounds {
     const northWest = this.containerPointToLatLng([0, 0]);
-    const southEast = this.containerPointToLatLng([this.size.width, this.size.height]);
+    const southEast = this.containerPointToLatLng([this.#size.width, this.#size.height]);
     return bounds({ lat: southEast.lat, lng: northWest.lng }, { lat: northWest.lat, lng: southEast.lng });
   }
 
@@ -1070,9 +1094,9 @@ export class Orihon extends Evented<MapEventMap> {
     const b = this.crs.project(target.getSouthEast(), 0);
     const dx = Math.max(1e-9, Math.abs(b.x - a.x));
     const dy = Math.max(1e-9, Math.abs(b.y - a.y));
-    const zx = Math.log2(Math.max(1, this.size.width - padding * 2) / dx);
-    const zy = Math.log2(Math.max(1, this.size.height - padding * 2) / dy);
-    return Math.max(0, Math.min(this.options.maxZoom, Math.floor(Math.min(zx, zy))));
+    const zx = Math.log2(Math.max(1, this.#size.width - padding * 2) / dx);
+    const zy = Math.log2(Math.max(1, this.#size.height - padding * 2) / dy);
+    return Math.max(0, Math.min(this.#options.maxZoom, Math.floor(Math.min(zx, zy))));
   }
 
   /**

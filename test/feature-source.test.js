@@ -99,6 +99,126 @@ test("FeatureSource provides stable ids and mutation events", () => {
   assert.equal(source.size, 0);
 });
 
+test("FeatureSource.batch coalesces by endpoints, not by the last verb", () => {
+  // A subscriber only sees the flush, so the delta it needs depends on where the id started
+  // and where it ended — not on which mutation happened to run last.
+  const cases = [
+    {
+      name: "remove then add of an existing id is an update, never a second add",
+      initial: [point("a", "A")],
+      run: (source) => { source.remove("a"); source.add(point("a", "A2")); },
+      expect: [{ type: "update", ids: ["a"] }],
+      after: ["a"]
+    },
+    {
+      name: "remove, add and remove again of an existing id is a remove",
+      initial: [point("a", "A")],
+      run: (source) => { source.remove("a"); source.add(point("a", "A2")); source.remove("a"); },
+      expect: [{ type: "remove", ids: ["a"] }],
+      after: []
+    },
+    {
+      name: "add then remove of a fresh id leaves the source untouched and emits nothing",
+      initial: [point("a", "A")],
+      run: (source) => { source.add(point("z", "Z")); source.remove("z"); },
+      expect: [],
+      after: ["a"]
+    },
+    {
+      name: "add, remove and add again of a fresh id is a single add",
+      initial: [],
+      run: (source) => { source.add(point("z", "Z")); source.remove("z"); source.add(point("z", "Z2")); },
+      expect: [{ type: "add", ids: ["z"] }],
+      after: ["z"]
+    },
+    {
+      name: "add then update of a fresh id is a single add carrying the latest value",
+      initial: [],
+      run: (source) => { source.add(point("z", "Z")); source.update("z", { properties: { name: "Z2" } }); },
+      expect: [{ type: "add", ids: ["z"] }],
+      after: ["z"]
+    },
+    {
+      name: "update then remove of an existing id is a remove",
+      initial: [point("a", "A")],
+      run: (source) => { source.update("a", { properties: { name: "A2" } }); source.remove("a"); },
+      expect: [{ type: "remove", ids: ["a"] }],
+      after: []
+    },
+    {
+      name: "update, remove and add of an existing id is an update",
+      initial: [point("a", "A")],
+      run: (source) => {
+        source.update("a", { properties: { name: "A2" } });
+        source.remove("a");
+        source.add(point("a", "A3"));
+      },
+      expect: [{ type: "update", ids: ["a"] }],
+      after: ["a"]
+    }
+  ];
+
+  for (const testCase of cases) {
+    const source = featureSource(testCase.initial);
+    const changes = [];
+    source.subscribe((change) => changes.push(change));
+    const versionBefore = source.version;
+
+    source.batch(() => testCase.run(source));
+
+    if (!testCase.expect.length) {
+      assert.equal(changes.length, 0, `${testCase.name}: a net no-op must not emit`);
+      assert.equal(source.version, versionBefore, `${testCase.name}: no-op must not bump version`);
+    } else {
+      assert.equal(changes.length, 1, testCase.name);
+      assert.equal(changes[0].type, "batch", testCase.name);
+      assert.equal(source.version, versionBefore + 1, testCase.name);
+      assert.deepEqual(
+        changes[0].changes.map((delta) => ({
+          type: delta.type,
+          ids: delta.type === "remove" ? [...delta.ids] : delta.features.map((feature) => feature.id)
+        })),
+        testCase.expect,
+        testCase.name
+      );
+    }
+
+    // The snapshot must agree with the deltas that were (or were not) emitted.
+    assert.deepEqual(
+      source.getSnapshot().features.map((feature) => feature.id).sort(),
+      [...testCase.after].sort(),
+      `${testCase.name}: snapshot`
+    );
+    assert.equal(source.size, testCase.after.length, `${testCase.name}: size`);
+  }
+});
+
+test("GeoJSONLayer keeps one layer per id when a batch replaces a feature", () => {
+  const source = featureSource([point("a", "A"), point("b", "B")]);
+  const map = createMap(container(), {
+    center: { lat: 55.751244, lng: 37.618423 },
+    zoom: 12,
+    controls: false
+  });
+  const layer = geoJSON(source).addTo(map);
+  assert.equal(layer.getLayers().length, 2);
+
+  source.batch(() => {
+    source.remove("a");
+    source.add(point("a", "A2", [37.62, 55.75]));
+  });
+  assert.equal(layer.getLayers().length, 2, "a replaced feature must not leave a stale layer behind");
+
+  source.batch(() => {
+    source.remove("b");
+    source.add(point("b", "B2"));
+    source.remove("b");
+  });
+  assert.equal(layer.getLayers().length, 1, "a batch that ends in removal must reach the renderer");
+
+  map.destroy();
+});
+
 test("FeatureSource.batch rejects async callbacks after flushing sync work", () => {
   const source = featureSource([point("a", "A")]);
   const changes = [];

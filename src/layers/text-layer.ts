@@ -7,7 +7,7 @@ import {
 } from "../source-protocol.js";
 import type { ReadonlyFeatureSource } from "../source-types.js";
 import { pickLabelAnchor } from "../services/label-layout.js";
-import type { GeoJSONFeature, GeoJSONFeatureCollection, GeoJSONPosition } from "./geojson.js";
+import type { GeoJSONFeature, GeoJSONFeatureCollection, GeoJSONPosition } from "../geojson-types.js";
 
 export interface TextLayerOptions extends LayerOptions {
   text: (feature: GeoJSONFeature) => string;

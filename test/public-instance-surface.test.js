@@ -63,8 +63,10 @@ test("map instances do not expose renderer or lifecycle internals", () => {
   assert.throws(() => { map.options = {}; }, TypeError);
   assert.throws(() => { map.behaviors.states = {}; }, TypeError);
 
-  // LatLng.lat / LatLng.lng are readonly in the type surface — a compile-time guarantee
-  // checked in test/types/public-api.ts, since `readonly` leaves no runtime trap.
+  // LatLng is frozen in its constructor, so coordinate immutability holds at runtime too;
+  // map.test.js asserts that. The `Readonly<T>` wrappers on view *contents* — options.maxZoom,
+  // behaviors.states.drag, pixelOrigin.x — are erased at compile time and are checked in
+  // test/types/public-api.ts instead.
 
   // getCamera() is a detached snapshot: writing it must not reach the live camera.
   const camera = map.getCamera();

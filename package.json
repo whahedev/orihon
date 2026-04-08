@@ -1,6 +1,6 @@
 {
   "name": "orihon",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "A free, open-source browser map engine. Apache 2.0. Use it anywhere.",
   "type": "module",
   "main": "./dist/index.js",

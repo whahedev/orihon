@@ -226,8 +226,9 @@ const selectedManager: LocalManager | RemoteObjectManager | MarkerCollection = o
 void [textIcon, mixedAppearance, mixedReactMarker, mixedEasyMarker, localResult, remoteResult, pointResult, mixedManagerOptions, selectedManager];
 
 // --- Read-only public surface of the map -------------------------------------------------
-// These guarantees are compile-time only: `readonly` and getter-only properties leave no
-// runtime trap, so the type tests are where they are actually enforced.
+// Getter-only properties and frozen LatLng instances also fail at runtime (see map.test.js and
+// public-instance-surface.test.js). The `Readonly<T>` wrappers on view *contents* do not: they
+// are erased at compile time, so this file is the only place they are enforced.
 declare const liveMap: Orihon;
 // @ts-expect-error The live camera moves through setView / setZoom, not by assignment.
 liveMap.zoom = 12;

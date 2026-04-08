@@ -100,6 +100,22 @@ source.batch(() => {
 //    ] }
 ```
 
+Coalescing is defined by where each id **started and ended**, not by the last mutation that ran.
+A subscriber only sees the flush, so the delta it receives is the one that takes it from the
+state it holds to the state the source ended in:
+
+| Before the batch | After the batch | Emitted for that id |
+| --- | --- | --- |
+| absent | present | `add` |
+| present | present | `update` |
+| present | absent | `remove` |
+| absent | absent | nothing |
+
+So `remove("a")` followed by `add(a2)` is an **`update`**, not an `add` — a subscriber still holds
+the old `"a"` and would otherwise end up with two of it. `remove("a")`, `add(a2)`, `remove("a")` is
+a **`remove`**, even though the mutations cancel pairwise. A batch whose ids all end where they
+started emits nothing and does not bump `version`. Each id appears in at most one delta.
+
 ## Lifecycle and rendering
 
 `GeoJSONLayer` and `TextLayer` subscribe while attached to a map and unsubscribe on `remove()`. Re-adding either layer first refreshes it from the latest source snapshot. `ObjectManager` owns its rendered data independently of map attachment, so it remains subscribed until `destroy()`.

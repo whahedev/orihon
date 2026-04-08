@@ -107,23 +107,90 @@ test("programmatic zoom emits one complete view lifecycle", () => {
   map.destroy();
 });
 
-test("setView settle:false pans without moveend until settled", () => {
+test("updateView keeps the gesture open until setView finishes it", () => {
   const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });
   const events = [];
   for (const type of ["movestart", "move", "moveend"]) {
     map.on(type, () => events.push(type));
   }
 
-  map.setView({ lat: 1, lng: 1 }, 2, { settle: false });
-  assert.deepEqual(events, ["movestart", "move"]);
+  map.updateView({ lat: 1, lng: 1 }, 2);
+  assert.deepEqual(events, ["movestart", "move"], "the first step opens the gesture");
 
   events.length = 0;
-  map.setView({ lat: 2, lng: 2 }, 2, { settle: false });
-  assert.deepEqual(events, ["move"]);
+  map.updateView({ lat: 2, lng: 2 }, 2);
+  assert.deepEqual(events, ["move"], "further steps stay inside the open gesture");
 
   events.length = 0;
   map.setView(map.getCenter(), map.getZoom());
-  assert.deepEqual(events, ["moveend"]);
+  assert.deepEqual(events, ["moveend"], "setView finishes it even when the view did not change");
+  map.destroy();
+});
+
+test("zoom limits can be narrowed at runtime and re-clamp the live zoom", () => {
+  const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 4, controls: false });
+
+  // Raising the floor above the live zoom must move the camera, not leave the map outside
+  // its own limits until the next interaction.
+  map.setMinZoom(6);
+  assert.equal(map.options.minZoom, 6);
+  assert.equal(map.getZoom(), 6);
+
+  map.setMaxZoom(8);
+  assert.equal(map.options.maxZoom, 8);
+  map.setZoom(12);
+  assert.equal(map.getZoom(), 8);
+
+  assert.throws(() => map.setMinZoom(Number.NaN), TypeError);
+  assert.throws(() => map.setMaxZoom("9"), TypeError);
+  assert.throws(() => map.setMinZoom(9), RangeError);
+  assert.throws(() => map.setMaxZoom(5), RangeError);
+  assert.equal(map.options.minZoom, 6);
+  assert.equal(map.options.maxZoom, 8);
+  map.destroy();
+});
+
+test("camera moves name their animation and reject the removed animate flag", () => {
+  const map = new Orihon(new FakeElement(), { center: { lat: 0, lng: 0 }, zoom: 4, controls: false });
+  const berlin = [{ lat: 52.4, lng: 13.2 }, { lat: 52.6, lng: 13.6 }];
+
+  // Default jumps: the move is terminal, so nothing is animating afterwards.
+  map.fitBounds(berlin);
+  assert.equal(map.isAnimating, false);
+  const jumped = map.getCenter();
+
+  map.setView({ lat: 0, lng: 0 }, 4);
+  map.fitBounds(berlin, { animation: "fly" });
+  assert.equal(map.isAnimating, true, '"fly" runs the flyTo curve instead of jumping');
+  map.stop();
+
+  // An unknown key in an options bag is silently ignored by JavaScript, so the rename has to
+  // fail loudly rather than quietly stop animating.
+  for (const call of [
+    () => map.fitBounds(berlin, { animate: true }),
+    () => map.fitWorld({ animate: true }),
+    () => map.panInsideBounds(berlin, { animate: true })
+  ]) {
+    assert.throws(call, (error) => {
+      assert.ok(error instanceof TypeError);
+      assert.match(error.message, /animate was removed/);
+      return true;
+    });
+  }
+  assert.throws(() => map.fitBounds(berlin, { animation: "ease" }), /Unknown camera animation/);
+  assert.throws(() => map.fitBounds(berlin, { animation: "fly", durationMs: -1 }), RangeError);
+
+  void jumped;
+  map.destroy();
+});
+
+test("LatLng is immutable at runtime, not only in the type surface", () => {
+  const map = new Orihon(new FakeElement(), { center: { lat: 10, lng: 20 }, zoom: 2, controls: false });
+  const centre = map.getCenter();
+  assert.equal(Object.isFrozen(centre), true);
+  assert.throws(() => { centre.lat = 0; }, TypeError);
+  assert.throws(() => { map.getCamera().center.lat = 0; }, TypeError);
+  assert.equal(map.getCenter().lat, 10);
   map.destroy();
 });
 

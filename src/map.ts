@@ -1,6 +1,6 @@
 import { createEl, getContainer, listen, rafThrottle } from "./dom.js";
 import type { CameraState } from "./camera.js";
-import { mergeOptions, nonNegativeFinite, rejectLegacyUnit } from "./units.js";
+import { mergeOptions, nonNegativeFinite, rejectLegacyUnit, rejectRemovedOption } from "./units.js";
 import { CRS, resolveCRS, type CoordinateReferenceSystem, type CRSInput } from "./crs.js";
 import { DestroyedError } from "./errors.js";
 import { Evented } from "./events.js";
@@ -34,12 +34,23 @@ export interface MapOptions {
   crs?: CRSInput;
 }
 
-export interface SetViewOptions {
-  /**
-   * When false, pan without `moveend` so tiles keep CSS-translating (follow-cam / rAF).
-   * Call `setView` again with the default to settle. Default true.
-   */
-  settle?: boolean;
+/**
+ * Which animation a camera move runs. `"none"` jumps to the target; `"fly"` runs the `flyTo`
+ * curve. A name rather than a boolean because the option selects an implementation, and the
+ * set can grow without a second flag.
+ */
+export type CameraAnimation = "none" | "fly";
+
+export interface CameraMotionOptions {
+  /** Default `"none"`. */
+  animation?: CameraAnimation;
+  /** Only meaningful for an animated move; defaults to `zoomAnimationDurationMs`. */
+  durationMs?: number;
+}
+
+export interface FitBoundsOptions extends CameraMotionOptions {
+  /** Screen-space padding in CSS pixels kept around the fitted bounds. Default 32. */
+  padding?: number;
 }
 
 export interface MapSize {
@@ -185,10 +196,13 @@ export interface MapEventMap {
 export class Orihon extends Evented<MapEventMap> {
   readonly #options: ResolvedMapOptions;
   /**
-   * Configuration snapshot, matching `Layer.options`. Treat as read-only: assigning a field
+   * Read-only configuration view, matching `Layer.options`. Assigning a field
    * changes no live state — `controls` would not remove existing controls, `locale` would not
    * re-render them. Use `setLocale`, `setMaxBounds`, `setMinZoom` / `setMaxZoom` and
    * `map.behaviors` instead.
+   *
+   * `Readonly` is a TypeScript guarantee: this is a read-only view of the live configuration
+   * object, not a copy, and the modifier disappears at runtime.
    */
   get options(): Readonly<ResolvedMapOptions> { return this.#options; }
   readonly container: HTMLElement;
@@ -983,20 +997,72 @@ export class Orihon extends Evented<MapEventMap> {
     return this;
   }
 
-  panInsideBounds(value: LatLngBoundsLike, options: { animate?: boolean; durationMs?: number } = {}): this {
-    rejectLegacyUnit(options, "duration", "durationMs");
-    if (options.durationMs !== undefined) nonNegativeFinite(options.durationMs, "durationMs");
+  /**
+   * Narrow or widen the zoom range at runtime. The current zoom is re-clamped immediately, so
+   * raising `minZoom` above the live zoom zooms in rather than leaving the map outside its own
+   * limits until the next interaction.
+   */
+  setMinZoom(zoom: number): this {
+    return this.#setZoomLimit("minZoom", zoom);
+  }
+
+  setMaxZoom(zoom: number): this {
+    return this.#setZoomLimit("maxZoom", zoom);
+  }
+
+  #setZoomLimit(name: "minZoom" | "maxZoom", zoom: number): this {
+    if (!Number.isFinite(zoom)) throw new TypeError(`Orihon ${name} must be a finite number`);
+    const min = name === "minZoom" ? zoom : this.#options.minZoom;
+    const max = name === "maxZoom" ? zoom : this.#options.maxZoom;
+    if (min > max) throw new RangeError(`Orihon minZoom (${min}) must not exceed maxZoom (${max})`);
+    if (this.#options[name] === zoom) return this;
+    this.#options[name] = zoom;
+    return this.setView(this.#center, this.#zoom);
+  }
+
+  panInsideBounds(value: LatLngBoundsLike, options: CameraMotionOptions = {}): this {
+    const fly = this.#cameraAnimation(options);
     const target = bounds(value);
     if (!target.isValid()) return this;
     const view = this.getBounds();
     if (target.contains(view)) return this;
     const nextCenter = this.#limitCenter(this.#center, this.#zoom);
-    return options.animate ? this.flyTo(nextCenter, this.#zoom, options) : this.setView(nextCenter, this.#zoom);
+    return fly ? this.flyTo(nextCenter, this.#zoom, options) : this.setView(nextCenter, this.#zoom);
   }
 
-  setView(center: LatLngLike, zoom = this.#zoom, options?: SetViewOptions): this {
+  /** Shared validation for every camera move that can be animated. */
+  #cameraAnimation(options: CameraMotionOptions): boolean {
+    rejectLegacyUnit(options, "duration", "durationMs");
+    rejectRemovedOption(options, "animate", `animation: "fly"`);
+    if (options.durationMs !== undefined) nonNegativeFinite(options.durationMs, "durationMs");
+    const animation = options.animation ?? "none";
+    if (animation !== "none" && animation !== "fly") {
+      throw new TypeError(`Unknown camera animation: ${String(animation)}. Use "none" or "fly".`);
+    }
+    return animation === "fly";
+  }
+
+  /**
+   * Move the camera and finish: the move is terminal, so `moveend` / `zoomend` fire and any
+   * running `flyTo` or inertia is cancelled. Use `updateView` for one step of an ongoing motion.
+   */
+  setView(center: LatLngLike, zoom = this.#zoom): this {
+    return this.#setView(center, zoom, true);
+  }
+
+  /**
+   * One step of a continuous motion — follow-cam, an animation frame, a live position feed.
+   * The camera moves but the gesture stays open: `movestart` / `zoomstart` fire once, no
+   * `moveend` follows, tiles keep CSS-translating instead of reloading per step, and a running
+   * animation is left alone. Finish with `setView` (or let the next gesture end it), otherwise
+   * consumers waiting on `moveend` never hear that the motion stopped.
+   */
+  updateView(center: LatLngLike, zoom = this.#zoom): this {
+    return this.#setView(center, zoom, false);
+  }
+
+  #setView(center: LatLngLike, zoom: number, settle: boolean): this {
     if (this.#destroyed) return this;
-    const settle = options?.settle !== false;
     const nextCenter = latLng(center);
     const nextZoom = this.#clampZoom(zoom);
     const zoomChanged = nextZoom !== this.#zoom;
@@ -1033,15 +1099,14 @@ export class Orihon extends Evented<MapEventMap> {
     return this;
   }
 
-  fitBounds(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; durationMs?: number } = {}): this {
-    rejectLegacyUnit(options, "duration", "durationMs");
-    if (options.durationMs !== undefined) nonNegativeFinite(options.durationMs, "durationMs");
+  fitBounds(value: LatLngBoundsLike, options: FitBoundsOptions = {}): this {
+    const fly = this.#cameraAnimation(options);
     const target = bounds(value);
     const zoom = this.#zoomForBounds(target, options.padding ?? 32);
-    return options.animate ? this.flyTo(target.getCenter(), zoom, options) : this.setView(target.getCenter(), zoom);
+    return fly ? this.flyTo(target.getCenter(), zoom, options) : this.setView(target.getCenter(), zoom);
   }
 
-  fitWorld(options: { padding?: number; animate?: boolean; durationMs?: number } = {}): this {
+  fitWorld(options: FitBoundsOptions = {}): this {
     return this.fitBounds(this.crs.code === "Simple"
       ? this.#options.maxBounds ?? [{ lat: 0, lng: 0 }, { lat: TILE_SIZE, lng: TILE_SIZE }]
       : [{ lat: -85.0511287798066, lng: -180 }, { lat: 85.0511287798066, lng: 180 }], options);

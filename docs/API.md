@@ -11,14 +11,18 @@ Public naming, ownership, lifecycle, error and configuration conventions are def
 Core view methods:
 
 - `setView(center, zoom)`, `panTo(center)`, `panBy(offset)` and `setZoomAround(point, zoom)` update the current view.
-- `fitBounds(bounds)`, `fitWorld()`, `flyTo(center, zoom)`, `flyToBounds(bounds)` and `stop()` implement animated and bounded navigation.
+- `fitBounds(bounds)`, `fitWorld()`, `flyTo(center, zoom)`, `flyToBounds(bounds)` and `stop()` implement animated and bounded navigation. Methods that can either jump or animate take `animation: "none" | "fly"` (default `"none"`) rather than a boolean, because the option selects an implementation — `"fly"` is exactly `flyTo`. The removed `animate` flag throws, since an unknown key in an options bag would otherwise be ignored in silence.
 - `getCenter()`, `getZoom()`, `getSize()`, `getBounds()` and coordinate conversion methods inspect the view.
 - `addLayer(layer)`, `removeLayer(layer)`, `hasLayer(layer)` and `eachLayer(callback)` manage the layer lifecycle. Prefer iterating with `for (const layer of map.layers)`. `map.layers` is a `ReadonlySet` — mutate only through `addLayer` / `removeLayer`. The Layer API prefers object-centric `layer.addTo(map)`. Easy maps add map-centric `addMarker` / `addPolyline` / … helpers (see Easy API); they do not add a declarative `map.add({ type })` dialect.
 - `query(containerPoint, options)` and `queryLatLng(latlng, options)` return renderer-independent hits from topmost to bottommost. Options are `tolerance` (default `8` CSS px), `layers`, `pane` and `limit` (default `1`; use `Infinity` for every hit). A hit exposes `layer`, `latlng`, `source`, and renderer-specific `id`, `index` or `feature` metadata.
 - `createPane(name)`, `getPane(name)` and `removePane(name)` manage rendering panes.
 - `behaviors.enable(name)`, `disable(name)` and `isEnabled(name)` control `drag`, `scrollZoom`, `pinchZoom`, `dblClick` and `boxZoom`.
 - `remove()` and `destroy()` release layers, controls, observers and DOM listeners.
-- Live state is read-only on the public surface. `center`, `zoom`, `size`, `pixelOrigin`, `panVelocity`, `layers`, `controls`, `panes`, `controlCorners`, `options` and `behaviors.states` are views on state the render loop and the documented setters own; assigning through one would skip clamping, events and the render pass. Use `setView` / `setZoom` / `invalidateSize` / `setLocale` / `setMaxBounds` and `map.behaviors`. `getCamera()` returns a detached snapshot (`CameraState` is fully readonly) for values that must outlive the frame, and `LatLng.lat` / `LatLng.lng` are readonly, so a coordinate handed out is a value rather than a handle on live state.
+- Live state is a **read-only TypeScript surface**. `center`, `zoom`, `size`, `pixelOrigin`, `panVelocity`, `layers`, `controls`, `panes`, `controlCorners`, `options` and `behaviors.states` are read-only *views* on state the render loop and the documented setters own — not copies. Assigning through one would skip clamping, events and the render pass. Use `setView` / `updateView` / `setZoom` / `invalidateSize` / `setLocale` / `setMaxBounds` / `setMinZoom` / `setMaxZoom` and `map.behaviors`.
+- What each guarantee is worth at runtime differs, and the distinction matters for JavaScript consumers:
+  - **Enforced at runtime.** The properties above are getters with no setter, so `map.zoom = 15` throws `TypeError` in any ES module. `getCamera()` returns a detached copy, so writing into the snapshot cannot reach the live camera.
+  - **Enforced at runtime and in types.** `LatLng` is frozen in its constructor: `latlng.lat = 0` throws. A coordinate is a value, never a handle on live state.
+  - **Types only.** `Readonly<T>` on the *contents* of a view — `map.options.maxZoom = 5`, `map.behaviors.states.drag = false`, `map.pixelOrigin.x = 1` — is erased at compile time. The library mutates those objects itself, so they cannot be frozen; TypeScript rejects the write, plain JavaScript does not.
 - `exportPng({ pixelRatio, includeControls })` produces a PNG `Blob`; `print(options)` prepares that image in a print window. The exporter is loaded asynchronously on first use, so importing Core or Standard does not put its implementation on the startup path. Export includes loaded raster images, canvases/WebGL canvases, SVG, and image-based markers. Arbitrary marker/control HTML, `DivIcon`, popups and SVG `foreignObject` are never rasterized.
 
 Important options include `center`, `zoom`, `minZoom`, `maxZoom`, `maxBounds`, `maxBoundsViscosity`, `zoomSnap`, `inertia`, `keyboard`, `locale`, `crs` and per-behavior flags. `crs` accepts `CRS.EPSG3857` / `"EPSG:3857"` (default) or `CRS.Simple` / `"Simple"`.
@@ -344,10 +348,13 @@ heat and the WebGL layers:
 | Method | Purpose |
 | --- | --- |
 | `getCenter()`, `getZoom()`, `getSize()`, `getBounds()`, `getCamera()` | Read current view/camera state |
-| `setView(center, zoom?, options?)` | Set center and zoom; `settle:false` defers the terminal move event |
+| `setView(center, zoom?)` | Move the camera and finish: `moveend` / `zoomend` fire and a running animation is cancelled |
+| `updateView(center, zoom?)` | One step of a continuous motion (follow-cam, rAF, live feed): the gesture stays open, no `moveend`, tiles keep CSS-translating. Finish with `setView` |
 | `panTo`, `panBy`, `setZoom`, `zoomIn`, `zoomOut`, `setZoomAround` | Incremental navigation |
-| `fitBounds`, `fitWorld`, `flyTo`, `flyToBounds`, `stop` | Fit/animated navigation |
-| `setMaxBounds`, `getMaxBounds`, `panInsideBounds` | Restrict and correct the camera |
+| `fitBounds`, `fitWorld`, `panInsideBounds` | Fit the camera; `animation: "fly"` runs the flyTo curve, default `"none"` jumps |
+| `flyTo`, `flyToBounds`, `stop` | Always-animated navigation, and cancelling it |
+| `setMaxBounds`, `getMaxBounds` | Restrict the camera |
+| `setMinZoom`, `setMaxZoom` | Narrow or widen the zoom range at runtime; the live zoom is re-clamped immediately |
 | `latLngToLayerPoint`, `latLngToContainerPoint`, `containerPointToLatLng` | Convert geographic and screen coordinates |
 | `addLayer`, `removeLayer`, `hasLayer`, `eachLayer` | Add and manage layers; prefer `for (const layer of map.layers)` |
 | `query(point, options?)`, `queryLatLng(latlng, options?)` | Return top-to-bottom renderer-independent hit results |
@@ -463,7 +470,7 @@ Create with `objectManager(options?)`; pass `loader` for viewport loading or `po
 | `search(query, options?)` | Query the configured local search index |
 | `setTime(timestampOrNull)`, `setTimeRange(from, to)` | Apply temporal visibility filtering |
 | `setVisualization(mode)` | Select objects/clusters/heatmap/auto |
-| `focusObject(id, options?)` | Center/zoom the attached map on an object |
+| `focusObject(id, options?)` | Center/zoom the attached map on an object; `{ zoom?, animation?: "none" \| "fly", durationMs? }` |
 | `bindPopup`, `unbindPopup`, `openPopup`, `closePopup`, `hasOpenPopup` | Object popup lifecycle |
 | `bindClusterPopup`, `unbindClusterPopup` | Cluster popup lifecycle |
 | `setClusterize`, `setClusterRadiusPixels`, `setClusterRenderer` | Change cluster behavior/rendering |

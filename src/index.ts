@@ -146,7 +146,7 @@ export {
 export type { OrihonEvent, EventHandler, EventFor } from "./events.js";
 export type { LayerOptions, LayerEventMap, QueryHit, QueryOptions, QuerySource } from "./layer.js";
 export type { RendererOptions } from "./renderer.js";
-export type { BehaviorOptions, MapBehaviorName, MapEventMap, MapOptions, MapSize, ControlPosition, SetViewOptions } from "./map.js";
+export type { BehaviorOptions, MapBehaviorName, MapEventMap, MapOptions, MapSize, ControlPosition, CameraAnimation, CameraMotionOptions, FitBoundsOptions } from "./map.js";
 export type { CameraState, CameraOrigin } from "./camera.js";
 export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";

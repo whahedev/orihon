@@ -10,7 +10,7 @@ import { Polyline, polyline } from "../layers/vector.js";
 import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js";
 import { LatLng, LatLngBounds, Point, clampLat, latLng, bounds, wrapLng, type LatLngBoundsLike, type LatLngLike, type PointLike } from "../geo.js";
 import type { Orihon } from "../map.js";
-import { mergeOptions, nonNegativeFinite, rejectLegacyUnit } from "../units.js";
+import { mergeOptions, nonNegativeFinite, rejectLegacyUnit, rejectRemovedOption } from "../units.js";
 import { AbortableOperation, abortError } from "./abortable-operation.js";
 import {
   Popup,
@@ -327,6 +327,8 @@ interface ObjectManagerMap extends Evented {
   containerPointToLatLng(value: PointLike): LatLng;
   setView(center: LatLngLike, zoom: number): unknown;
   fitBounds(bounds: LatLngBoundsLike, options?: { padding?: number }): unknown;
+  /** Present on a real `Orihon`; optional so tests can pass a minimal map stub. */
+  flyTo?(center: LatLngLike, zoom?: number, options?: { durationMs?: number }): unknown;
   crs?: { code: "EPSG:3857" | "Simple" };
   /** Terminal-lifecycle flag from `Orihon`; optional so tests can pass a minimal map stub. */
   isDestroyed?: boolean;
@@ -1436,13 +1438,31 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     return this;
   }
 
-  focusObject(id: ObjectId, options?: { zoom?: number; animate?: boolean }): this {
+  /**
+   * Centre the attached map on an object and select it. `animation: "fly"` runs the map's
+   * `flyTo` curve; the default jumps. The previous `animate` flag was accepted and never read,
+   * so it is rejected rather than quietly kept working with a new meaning.
+   */
+  focusObject(id: ObjectId, options: { zoom?: number; animation?: "none" | "fly"; durationMs?: number } = {}): this {
     this.assertAlive();
+    rejectRemovedOption(options, "animate", `animation: "fly"`);
+    const animation = options.animation ?? "none";
+    if (animation !== "none" && animation !== "fly") {
+      throw new TypeError(`Unknown camera animation: ${String(animation)}. Use "none" or "fly".`);
+    }
     const object = this.items.get(id);
     const position = object ? this.#objectPosition(object) : null;
     if (!object || !position || !this.map) return this;
-    const zoom = options?.zoom ?? Math.max(this.map.zoom, 14);
-    this.map.setView(position, zoom);
+    const zoom = options.zoom ?? Math.max(this.map.zoom, 14);
+    if (animation === "fly") {
+      // A named animation is a requirement, so a map that cannot fly says so.
+      if (typeof this.map.flyTo !== "function") {
+        throw new TypeError(`focusObject animation "fly" requires a map with flyTo()`);
+      }
+      this.map.flyTo(position, zoom, { durationMs: options.durationMs });
+    } else {
+      this.map.setView(position, zoom);
+    }
     this.setSelected(id);
     return this;
   }

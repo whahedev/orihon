@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+- **Breaking — camera moves name their animation instead of toggling a boolean.**
+  `fitBounds`, `fitWorld` and `panInsideBounds` took `animate?: boolean`, where `true` meant
+  precisely "call `flyTo`" — a flag standing in for a choice of implementation. They take
+  `animation?: "none" | "fly"` now (default `"none"`), which says what runs and leaves room for
+  further curves without a second flag. `ObjectManager.focusObject` follows the same vocabulary
+  and, unlike before, actually honours it: its `animate` option was accepted and never read.
+  Passing `animate` throws `TypeError` — an unknown key in an options bag is ignored in silence
+  by JavaScript, so the rename would otherwise stop animating without a word. The shared
+  `CameraAnimation`, `CameraMotionOptions` and `FitBoundsOptions` types are exported.
+  `ObjectManager.update()` keeps its `animate` boolean: it interpolates a move rather than
+  selecting between named implementations.
+
+- **Breaking — `setView(center, zoom, { settle: false })` becomes `updateView(center, zoom)`.**
+  `settle` named an internal concept (ending the view session) rather than what the caller
+  wants, and it read as a double negative in the one situation it exists for. The two motions
+  are now two methods: `setView` moves the camera and finishes, `updateView` performs one step
+  of a continuous motion — follow-cam, an animation frame, a live position feed — leaving the
+  gesture open. `SetViewOptions` is gone; it existed only to carry that flag.
+
+- **Added — `map.setMinZoom()` / `map.setMaxZoom()`.** The zoom range could previously be
+  changed only by writing `map.options`, which stopped compiling when options became a read-only
+  view — and never re-clamped the live zoom anyway. Both setters validate (`TypeError` for a
+  non-finite value, `RangeError` when the range would invert) and re-clamp immediately, so
+  raising `minZoom` above the current zoom zooms in instead of leaving the map outside its own
+  limits until the next interaction.
+
+- **Changed — `LatLng` is frozen at runtime, not only in the type surface.** It is a value
+  object, so `Object.freeze` in the constructor makes `latlng.lat = 0` throw instead of silently
+  aliasing a coordinate the map or a layer still holds. The freeze costs about 17ns per instance
+  (measured; roughly 2.3x on construction alone), which lands on one-time ingests rather than
+  per-frame work.
+
+- **Fixed — `FeatureSource.batch()` coalesced by the last verb instead of by the net change.**
+  A subscriber only sees the flush, so the delta it needs depends on where each id started and
+  ended, not on which mutation ran last. `remove("a")` followed by `add(a2)` emitted an `add`,
+  which left `GeoJSONLayer` with two layers for one id because `add` does not drop an existing
+  one; it is an `update` now. Worse, `remove("a")`, `add(a2)`, `remove("a")` cancelled pairwise
+  into an empty intent map, so the flush emitted nothing and did not bump `version` even though
+  `"a"` was gone — subscribers kept rendering a feature the source no longer had. Batch state is
+  tracked per id as (initially present, currently present), giving `add` / `update` / `remove` /
+  no-op directly; a batch whose ids all end where they started still emits nothing, which is
+  now a decision rather than an accident.
+
+- **Internal — `TextLayer` imports its GeoJSON types from `geojson-types.ts`** rather than from
+  the `geojson.js` layer module, matching `ObjectManager`. Type-only either way, but it keeps
+  the layering readable.
+
 - **Breaking — an explicit GPU renderer refuses instead of falling back.**
   `tileLayer(url, { renderer: "webgpu" })` returned DOM tiles when WebGPU was unavailable or no
   GPU implementation was registered, so the same code read as a GPU path in development and

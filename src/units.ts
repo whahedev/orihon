@@ -31,3 +31,11 @@ export function nonNegativeFinite(value: number, name: string): number {
 export function rejectLegacyUnit(options: object, oldName: string, replacement: string): void {
   if (oldName in options) throw new TypeError(`${oldName} was removed. Use ${replacement} with explicit units.`);
 }
+
+/**
+ * Fail on a removed option name. An unknown key in an options bag is silently ignored by
+ * JavaScript, so a rename would otherwise change behaviour without a word.
+ */
+export function rejectRemovedOption(options: object, oldName: string, replacement: string): void {
+  if (oldName in options) throw new TypeError(`${oldName} was removed. Use ${replacement}.`);
+}

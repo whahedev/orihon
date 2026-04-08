@@ -29,9 +29,19 @@ type PendingFeatureSourceChange<TFeature> =
   | { type: "remove"; ids: readonly FeatureId[] }
   | { type: "reset" };
 
-type BatchIntent<TFeature> =
-  | { type: "add" | "update"; feature: TFeature }
-  | { type: "remove" };
+/**
+ * What a batch did to one id, as endpoints rather than as a last-write-wins verb.
+ * Collapsing to the final verb loses the starting point, and the delta a subscriber needs is
+ * a function of both: a `remove` followed by an `add` is an `update` for anyone holding the
+ * old feature, and an `add` followed by a `remove` of a pre-existing id is still a `remove`.
+ */
+interface BatchState<TFeature> {
+  /** Whether the id existed in the source when this batch first touched it. */
+  readonly initiallyPresent: boolean;
+  currentlyPresent: boolean;
+  /** Latest value; always set while `currentlyPresent` is true. */
+  feature?: TFeature;
+}
 
 /** Reactive, renderer-independent GeoJSON feature storage. */
 export class FeatureSource<TFeature extends IdentifiedGeoJSONFeature = IdentifiedGeoJSONFeature>
@@ -41,7 +51,7 @@ implements ReadonlyFeatureSource<TFeature> {
   #version = 0;
   #batchDepth = 0;
   #batchReset = false;
-  #batchIntents: Map<FeatureId, BatchIntent<TFeature>> | null = null;
+  #batchIntents: Map<FeatureId, BatchState<TFeature>> | null = null;
   #snapshot: SourceSnapshot<TFeature> | null = null;
 
   constructor(input?: FeatureSourceInput<TFeature> | null) {
@@ -186,18 +196,30 @@ implements ReadonlyFeatureSource<TFeature> {
     if (!this.#batchIntents) this.#batchIntents = new Map();
     if (change.type === "remove") {
       for (const id of change.ids) {
-        const previous = this.#batchIntents.get(id);
-        if (previous?.type === "add") this.#batchIntents.delete(id);
-        else this.#batchIntents.set(id, { type: "remove" });
+        const state = this.#batchIntents.get(id);
+        // `remove` only reports ids it actually deleted, so an untouched id was present.
+        if (state) {
+          state.currentlyPresent = false;
+          state.feature = undefined;
+        } else {
+          this.#batchIntents.set(id, { initiallyPresent: true, currentlyPresent: false });
+        }
       }
       return;
     }
     for (const feature of change.features) {
-      const previous = this.#batchIntents.get(feature.id);
-      if (change.type === "add" || previous?.type === "add") {
-        this.#batchIntents.set(feature.id, { type: "add", feature });
+      const state = this.#batchIntents.get(feature.id);
+      if (state) {
+        state.currentlyPresent = true;
+        state.feature = feature;
       } else {
-        this.#batchIntents.set(feature.id, { type: "update", feature });
+        // The first change for an id reveals what the batch started from: `add` refuses a
+        // duplicate id, and `update` refuses a missing one.
+        this.#batchIntents.set(feature.id, {
+          initiallyPresent: change.type === "update",
+          currentlyPresent: true,
+          feature
+        });
       }
     }
   }
@@ -216,10 +238,15 @@ implements ReadonlyFeatureSource<TFeature> {
     const added: TFeature[] = [];
     const updated: TFeature[] = [];
     const removed: FeatureId[] = [];
-    for (const [id, intent] of intents) {
-      if (intent.type === "add") added.push(intent.feature);
-      else if (intent.type === "update") updated.push(intent.feature);
-      else removed.push(id);
+    for (const [id, state] of intents) {
+      // absent -> present = add; present -> present = update; present -> absent = remove;
+      // absent -> absent leaves the source exactly as the batch found it, so it emits nothing.
+      if (state.currentlyPresent) {
+        if (state.initiallyPresent) updated.push(state.feature as TFeature);
+        else added.push(state.feature as TFeature);
+      } else if (state.initiallyPresent) {
+        removed.push(id);
+      }
     }
     const changes: FeatureSourceDelta<TFeature>[] = [];
     if (added.length) changes.push({ type: "add", features: added });

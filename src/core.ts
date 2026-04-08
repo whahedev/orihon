@@ -39,7 +39,7 @@ export {
 
 export type { OrihonEvent, EventHandler, EventFor } from "./events.js";
 export type { LayerOptions, LayerEventMap, QueryHit, QueryOptions, QuerySource } from "./layer.js";
-export type { BehaviorOptions, MapBehaviorName, MapEventMap, MapOptions, MapSize, ControlPosition } from "./map.js";
+export type { BehaviorOptions, MapBehaviorName, MapEventMap, MapOptions, MapSize, ControlPosition, CameraAnimation, CameraMotionOptions, FitBoundsOptions } from "./map.js";
 export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";

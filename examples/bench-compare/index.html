@@ -2056,7 +2056,7 @@ async function stressCamera(applyView, durationMs = STRESS_MS, baseZoom = ZOOM) 
 /** Exercise Orihon's continuous-camera path, then commit one final layout. */
 async function stressOrihonCamera(map, durationMs = STRESS_MS, baseZoom = ZOOM) {
   const result = await stressCamera(
-    (lat, lng, zoom) => map.setView({ lat, lng }, zoom, { settle: false }),
+    (lat, lng, zoom) => map.updateView({ lat, lng }, zoom),
     durationMs,
     baseZoom
   );

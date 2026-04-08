@@ -1030,7 +1030,7 @@
         const u = Math.max(0, Math.min(1, (now - f.animStart) / span));
         const lat = f.fromPos.lat + (f.toPos.lat - f.fromPos.lat) * u;
         const lng = f.fromPos.lng + (f.toPos.lng - f.fromPos.lng) * u;
-        map.setView(({ lat: lat, lng: lng }), map.zoom, { settle: false });
+        map.updateView(({ lat: lat, lng: lng }), map.zoom);
       }
 
       function collectAlarmIds() {

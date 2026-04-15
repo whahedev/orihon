@@ -23,7 +23,7 @@ Object.defineProperty(globalThis, "navigator", {
 });
 dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 
-const [{ createMap }, { GeoJSONLayer, Layer, Marker, Polygon, Polyline, TileLayer, marker, wmtsTileLayer }] = await Promise.all([
+const [{ createMap }, { GeoJSONLayer, Layer, Marker, Polygon, Polyline, TileLayer, marker, toGeoJSONPosition, wmtsTileLayer }] = await Promise.all([
   import("orihon/easy"),
   import("orihon/standard")
 ]);
@@ -52,7 +52,7 @@ test("orihon/easy creates a Standard map with an owned basemap", () => {
     }
   });
 
-  assert.deepEqual(map.getCenter().toArray(), [55.751244, 37.618423]);
+  assert.deepEqual(toGeoJSONPosition(map.getCenter()), [37.618423, 55.751244]);
   assert.equal(map.getZoom(), 12);
   assert.ok(map.getBasemap() instanceof TileLayer);
   assert.match(map.getBasemap().getTileUrl(1, 2, 3), /\/3\/1\/2\.png$/);
@@ -111,7 +111,7 @@ test("orihon/easy addMarker is object-first with nested appearance", () => {
 
   assert.ok(layer instanceof Marker);
   assert.equal(layer.map, map);
-  assert.deepEqual(layer.getLatLng().toArray(), [55.751244, 37.618423]);
+  assert.deepEqual(toGeoJSONPosition(layer.getLatLng()), [37.618423, 55.751244]);
   assert.equal(layer.options.color, "#2563eb");
   assert.ok(layer.getPopup());
   assert.ok(layer.getTooltip());

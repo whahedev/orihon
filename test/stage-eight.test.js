@@ -945,7 +945,7 @@ test("decodeMVT honors maxBytes and maxFeatures", () => {
 test("Framework adapter creates, updates and destroys a map", () => {
   const adapter = createMapAdapter(new FakeElement(), { controls: false, center: { lat: 1, lng: 2 }, zoom: 3 });
   adapter.update({ center: { lat: 4, lng: 5 }, zoom: 6, behaviors: { scrollZoom: false } });
-  assert.deepEqual(adapter.map.getCenter().toArray(), [4, 5]);
+  assert.deepEqual([adapter.map.getCenter().lat, adapter.map.getCenter().lng], [4, 5]);
   assert.equal(adapter.map.behaviors.isEnabled("scrollZoom"), false);
   adapter.destroy();
 });

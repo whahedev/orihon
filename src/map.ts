@@ -193,6 +193,9 @@ export interface MapEventMap {
   tooltipclose: { tooltip: Tooltip };
 }
 
+/** Shared "nothing to load" readiness; see `#trackLocale`. */
+const SETTLED_LOCALE = Promise.resolve();
+
 export class Orihon extends Evented<MapEventMap> {
   readonly #options: ResolvedMapOptions;
   /**
@@ -850,11 +853,17 @@ export class Orihon extends Evented<MapEventMap> {
    * Advanced) or still has to be fetched (Core).
    */
   #trackLocale(input: LocaleInput): void {
-    const pending = typeof input === "string" && input !== "en" && !localePackLoaded(input)
-      ? ensureLocalePacks().then(() => {
-        if (!this.#destroyed) this.#applyLocale(input);
-      })
-      : Promise.resolve();
+    if (typeof input !== "string" || input === "en" || localePackLoaded(input)) {
+      // The requested strings are already in place, so readiness is settled and nothing can
+      // reject. One shared promise avoids queueing a microtask per map: attaching a handler to
+      // a resolved promise schedules a job whose closure keeps the map reachable until the
+      // queue drains, which turned map construction into a measurable heap cost.
+      this.#localeReady = SETTLED_LOCALE;
+      return;
+    }
+    const pending = ensureLocalePacks().then(() => {
+      if (!this.#destroyed) this.#applyLocale(input);
+    });
     // A missing translation is not fatal for the map, so the stored promise is always handled.
     // Callers that do care still see the rejection through `await map.localeReady`.
     pending.catch(() => {});

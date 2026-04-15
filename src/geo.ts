@@ -168,9 +168,11 @@ export class LatLng {
     return new LatLng(this.lat, wrapLng(this.lng));
   }
 
-  toArray(): [number, number] {
-    return [this.lat, this.lng];
-  }
+  // No `toArray()`. A bare `[lat, lng]` is indistinguishable from a GeoJSON `[lng, lat]`
+  // position, and no geographic API here accepts one back, so the method could only produce a
+  // value this library refuses. Use `toGeoJSONPosition()` for export, or `{ lat, lng }` — which
+  // serializes as-is — to keep the names attached. `Point.toArray()` stays: `[x, y]` in screen
+  // space has no competing convention.
 
   toString(): string {
     return `LatLng(${this.lat}, ${this.lng})`;

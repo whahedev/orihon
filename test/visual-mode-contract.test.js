@@ -74,7 +74,7 @@ test("visual setters switch modes explicitly without replacing the marker or rev
   assert.equal(layer.getContent(), null);
   assert.ok(layer.el.querySelector(".is-square"));
   assert.equal(layer.el, element);
-  assert.deepEqual(layer.getLatLng().toArray(), [0, 0]);
+  assert.deepEqual([layer.getLatLng().lat, layer.getLatLng().lng], [0, 0]);
 });
 
 test("invalid visual updates leave the current mode, DOM and options unchanged", (t) => {

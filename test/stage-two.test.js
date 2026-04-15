@@ -27,7 +27,7 @@ test("geometry classes keep value semantics", () => {
   const position = latLng({ lat: 52.52, lng: 13.405 });
   const mapLibrePosition = lngLat(13.405, 52.52);
   assert.ok(mapLibrePosition.equals(position));
-  assert.deepEqual(mapLibrePosition.toArray(), [52.52, 13.405]);
+  assert.deepEqual([mapLibrePosition.lat, mapLibrePosition.lng], [52.52, 13.405]);
   assert.equal(position.clone().equals(position), true);
   const geographic = bounds({ lat: 52, lng: 13 }, { lat: 53, lng: 14 });
   assert.ok(geographic instanceof LatLngBounds);

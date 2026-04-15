@@ -142,7 +142,7 @@ test("Rectangle, Circle and CircleMarker expose mutable geometry", () => {
   assert.equal(dot.getRadiusPixels(), 12);
   dot.setRadiusPixels(18).setLatLng({ lat: 5, lng: 6 });
   assert.equal(dot.getRadiusPixels(), 18);
-  assert.deepEqual(dot.getLatLng().toArray(), [5, 6]);
+  assert.deepEqual([dot.getLatLng().lat, dot.getLatLng().lng], [5, 6]);
   assert.equal(metric.getBounds().contains(metric.getLatLng()), true);
 });
 

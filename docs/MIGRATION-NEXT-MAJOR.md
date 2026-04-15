@@ -24,8 +24,11 @@ Replace `coordinates: [lat, lng]` in managed points with
 longitude-first; do not rewrite GeoJSON arrays as objects.
 
 `latLng(latitude, longitude)` and `lngLat(longitude, latitude)` remain available.
-`LatLng.toArray()` still serializes latitude-first, but its result is deliberately
-not accepted as a geographic API input. Prefer `toGeoJSONPosition()` for export.
+`LatLng.toArray()` is removed: it returned a latitude-first array that no geographic
+API accepts back and that reads exactly like a longitude-first GeoJSON position. Use
+`toGeoJSONPosition(latlng)` to export, `fromGeoJSONPosition(position)` to read one back,
+or `{ lat: latlng.lat, lng: latlng.lng }` to keep the names attached. `Point.toArray()`
+is unaffected — `[x, y]` in screen space has no competing convention.
 The GeoJSON converter ignores altitude and validates the first two components.
 Named coordinates require finite numbers; numeric strings are not coordinates.
 

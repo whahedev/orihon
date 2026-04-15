@@ -249,6 +249,11 @@ liveMap.behaviors.states = liveMap.behaviors.states;
 // @ts-expect-error Writing one flag would skip the behaviorchange event.
 liveMap.behaviors.states.drag = false;
 
+// A coordinate never degrades to a bare pair: `[lat, lng]` is indistinguishable from a
+// GeoJSON `[lng, lat]` position, and nothing here would accept it back.
+// @ts-expect-error Use toGeoJSONPosition() to export, or { lat, lng } to keep the names.
+liveMap.getCenter().toArray();
+
 // LatLng is a value type: a coordinate handed out is not a handle on live state.
 const liveCentre: LatLng = liveMap.getCenter();
 // @ts-expect-error Derive a changed coordinate instead of assigning through one.

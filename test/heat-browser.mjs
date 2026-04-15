@@ -135,7 +135,6 @@ try {
     const events = {
       clickTarget: click?.target === layer,
       feature: click?.feature === click?.data && typeof click?.feature?.fieldValue === "number",
-      detail: click?.detail.feature === click?.feature,
       plainPoint: Object.getPrototypeOf(click?.containerPoint ?? {}) === Object.prototype,
       selection: selected?.feature === click?.feature,
       nullHover: hover?.latlng === null && hover?.feature === null && hover?.containerPoint === null,
@@ -150,7 +149,7 @@ try {
   assert.equal(layerWorker.backend, "wasm");
   assert.ok(layerWorker.rings > 0);
   assert.equal(Boolean(layerWorker.frameDriven), false);
-  assert.deepEqual(layerWorker.events, { clickTarget: true, feature: true, detail: true, plainPoint: true, selection: true, nullHover: true, rebuild: true });
+  assert.deepEqual(layerWorker.events, { clickTarget: true, feature: true, plainPoint: true, selection: true, nullHover: true, rebuild: true });
   console.log(`heat browser ok · wasm+contours · webgpu ${result.webgpuSupported ? "adapter" : "fallback-ready"}`);
 } finally {
   await browser.close();

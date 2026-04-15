@@ -48,6 +48,8 @@ test("CanvasPathBatch densifies geodesic paths", () => {
 test("Circle uses map units for bounds on Simple CRS", () => {
   const shape = new Circle({ lat: 200, lng: 300 }, { radiusMapUnits: 50 }, { geodesic: true });
   shape.map = { crs: { code: "Simple" } };
-  assert.deepEqual(shape.getBounds().getSouthWest().toArray(), [150, 250]);
-  assert.deepEqual(shape.getBounds().getNorthEast().toArray(), [250, 350]);
+  const southWest = shape.getBounds().getSouthWest();
+  const northEast = shape.getBounds().getNorthEast();
+  assert.deepEqual([southWest.lat, southWest.lng], [150, 250]);
+  assert.deepEqual([northEast.lat, northEast.lng], [250, 350]);
 });

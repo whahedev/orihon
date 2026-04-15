@@ -20,17 +20,25 @@ try {
     host.style.cssText = "width:512px;height:320px";
     document.body.appendChild(host);
     const map = api.createMap(host, { center: ({ lat: 50.08, lng: 14.42 }), zoom: 5, controls: false });
+    // Reading the payload runs inside the handler, and `emit` isolates handler failures, so a
+    // throw here would settle nothing: the timer is already cleared and the promise is collected
+    // with "Resulting promise was garbage collected" instead of the real error. Reject with it.
     const loadContract = (layer) => new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("No raster tileload event")), 5000);
       layer.once("tileload", (event) => {
-        clearTimeout(timer);
-        resolve({
-          target: event.target === layer,
-          coordinates: [event.x, event.y, event.z].every(Number.isFinite),
-          url: typeof event.url === "string",
-          detail: event.detail.url === event.url,
-          hasTile: event.tile instanceof HTMLImageElement
-        });
+        try {
+          const contract = {
+            target: event.target === layer,
+            coordinates: [event.x, event.y, event.z].every(Number.isFinite),
+            url: typeof event.url === "string",
+            hasTile: event.tile instanceof HTMLImageElement
+          };
+          clearTimeout(timer);
+          resolve(contract);
+        } catch (error) {
+          clearTimeout(timer);
+          reject(error);
+        }
       });
     });
     const webgl = api.tileLayer("/assets/brand/png/orihon-mark-256.png", {
@@ -107,8 +115,8 @@ try {
   assert.equal(result.webgl.hasStats, true);
   assert.equal(result.webgl.maxDpr, 1.25);
   assert.equal(result.webgl.maxNewPerFrame, 7);
-  assert.deepEqual(result.webglEvent, { target: true, coordinates: true, url: true, detail: true, hasTile: false });
-  assert.deepEqual(result.webgpuEvent, { target: true, coordinates: true, url: true, detail: true, hasTile: result.webgpu.renderer === "dom" });
+  assert.deepEqual(result.webglEvent, { target: true, coordinates: true, url: true, hasTile: false });
+  assert.deepEqual(result.webgpuEvent, { target: true, coordinates: true, url: true, hasTile: result.webgpu.renderer === "dom" });
   assert.deepEqual(result.pointEvents, { target: true, index: 0, noData: true, plainLatLng: true, plainPoint: true, nullHover: true });
   if (result.hasWebGpu) {
     assert.equal(result.webgpu.hasStats, true);

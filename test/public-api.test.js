@@ -78,7 +78,10 @@ test("public API exports the complete geometry toolkit", () => {
   assert.equal(typeof Core.lngLat, "function");
   assert.equal(typeof Standard.lngLat, "function");
   assert.equal(typeof Geo.lngLat, "function");
-  assert.deepEqual(Orihon.lngLat(13.405, 52.52).toArray(), [52.52, 13.405]);
+  // lngLat takes longitude first; the result carries names, never a bare pair.
+  const named = Orihon.lngLat(13.405, 52.52);
+  assert.deepEqual([named.lat, named.lng], [52.52, 13.405]);
+  assert.equal("toArray" in named, false, "LatLng must not hand out an ambiguous [lat, lng] pair");
   assert.equal("latLngBounds" in Orihon, false);
   assert.equal("latLngBounds" in Standard, false);
   assert.equal("latLngBounds" in Geo, false);

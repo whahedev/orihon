@@ -179,7 +179,7 @@ test("mountable popup content receives context and is disposed on close", () => 
 
   assert.equal(received.source, source);
   assert.deepEqual(received.data, { value: 42 });
-  assert.deepEqual(received.latlng.toArray(), [52.52, 13.405]);
+  assert.deepEqual([received.latlng.lat, received.latlng.lng], [52.52, 13.405]);
   assert.equal(popup.contentNode.children[0].kind, "chart");
 
   popup.onRemove();

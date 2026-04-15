@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- **Breaking — `LatLng.toArray()` is removed.** It returned `[lat, lng]`: a value no geographic
+  API in this library accepts back, since `LatLngLike` dropped bare tuples, and one that reads
+  exactly like a longitude-first GeoJSON position. A method whose only possible output is a
+  shape the library refuses is a footgun, not a convenience. Use `toGeoJSONPosition(latlng)` to
+  export (`fromGeoJSONPosition` reads it back), or `{ lat: latlng.lat, lng: latlng.lng }` to keep
+  the names attached — that serializes as-is. `Point.toArray()` is unaffected: `[x, y]` in
+  screen space has no competing convention.
+
+- **Fixed — constructing a map queued a microtask per instance.** `localeReady` derived a
+  `.catch()` handler from an already-resolved promise even when the locale needed no loading.
+  Attaching to a settled promise schedules a job, and that job's closure keeps its map reachable
+  until the queue drains — so a synchronous loop of map create/destroy cycles held every map at
+  once. The lifecycle leak test measured 4.85 MiB of growth against 0.04 MiB before. Maps whose
+  locale is already in place now share one settled promise and attach nothing.
+
+- **Fixed — two browser tests still read `event.detail`.** `tile-gpu-browser.mjs` and
+  `heat-browser.mjs` were missed when event payloads were flattened. The handler threw after
+  clearing its own timeout, so the promise settled neither way and Playwright reported
+  "Resulting promise was garbage collected" instead of the real error — which blocked the
+  `test:leaks`, `test:plugin` and `size` steps behind it in CI. The tile helper now rejects with
+  the underlying failure rather than hanging.
+
 - **Breaking — camera moves name their animation instead of toggling a boolean.**
   `fitBounds`, `fitWorld` and `panInsideBounds` took `animate?: boolean`, where `true` meant
   precisely "call `flyTo`" — a flag standing in for a choice of implementation. They take

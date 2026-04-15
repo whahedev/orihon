@@ -91,6 +91,17 @@ test("100 create/remove cycles release DOM and listeners", () => {
   runCycles(100);
 });
 
+/**
+ * Nothing in `runCycles` yields, so the microtask queue never drains mid-run. That makes this
+ * assertion sensitive to more than retention: a constructor that attaches a handler to an
+ * already-resolved promise schedules a job per map, and each job's closure keeps its map
+ * reachable until the queue drains — every map at once. `Orihon` therefore keeps one shared
+ * settled promise for `localeReady` instead of deriving one per instance.
+ *
+ * A `WeakRef` probe cannot sharpen this into "which object leaked": creating a WeakRef keeps its
+ * target alive until the end of the current job, so a synchronous probe reports everything as
+ * reachable in both the healthy and the broken case.
+ */
 test("heap stays bounded across repeated lifecycle cycles", { skip: typeof globalThis.gc !== "function" }, () => {
   runCycles(25);
   globalThis.gc();
@@ -101,3 +112,4 @@ test("heap stays bounded across repeated lifecycle cycles", { skip: typeof globa
   const growth = process.memoryUsage().heapUsed - before;
   assert.ok(growth < 4 * 1024 * 1024, `heap grew by ${(growth / 1024 / 1024).toFixed(2)} MiB`);
 });
+

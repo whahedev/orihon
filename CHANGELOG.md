@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+- **Breaking — a call on a destroyed resource is no longer reported as cancellation.**
+  `DrawHandler`, `DrawControl`, `ObjectManager`, `RemoteObjectManager`, `SuggestProvider` and
+  attaching any of them to a destroyed `Orihon` threw `AbortError` for post-`destroy()` calls,
+  the same error a cancelled in-flight operation produces. The two answer different questions —
+  "this attempt was stopped, retry is possible" versus "the resource is gone" — so they are now
+  `AbortError` and `DestroyedError` (`code: "ERR_DESTROYED"`) respectively. `ObjectManager`'s
+  layout guard after `await` was switched the other way, to `AbortError`: a layout interrupted
+  by `destroy()` was cancelled, it did not call into a dead manager.
+
+- **Fixed — `SuggestWidget` ignored its own terminal lifecycle.** After `destroy()`, `attach()`
+  still started a provider request and `select()` still wrote `input.value` and invoked
+  `onSelect`, reaching into a page that had already moved on. Both now throw `DestroyedError`;
+  `cancel()` stays a safe no-op, `destroy()` stays idempotent, and `isDestroyed` is readable.
+  `_requestId` and `_destroyed` became private.
+
+- **Docs — README no longer contradicts the renderer policy.** The tiers example still showed
+  `tileLayer(url); // auto: WebGPU → WebGL → DOM`, which stopped being true when DOM became the
+  tier-independent default. README is what gets copied first.
+
+- **Docs — `docs/MIGRATION-LEAFLET.md`.** The existing migration guide covers Orihon-to-Orihon
+  changes; there was nothing for the audience most likely to arrive. Every runnable claim in it
+  was executed against the built `orihon/standard` before publishing, which caught the controls
+  table naming the wrong entry point.
+
+- **Docs — the `destroy()` rule no longer overreaches.** `API-DESIGN.md` said caller-owned
+  resources expose an idempotent `destroy()`, which conflicts with ordinary reusable Layers and
+  Controls that need no terminal state. It now scopes the rule to services and controllers that
+  own resources beyond attachment, and records the lifecycle grammar as a table.
+
+- **Breaking — overlay binding no longer goes through a global registry.** `InteractiveLayer`
+  moves out of `layer.ts` into `interactive-layer.ts`, which imports `popup()` and `tooltip()`
+  directly. `registerOverlayFactories()` and the module-level factory slots are gone — the last
+  place where importing a module registered a capability as a side effect, the same pattern the
+  renderer default removed earlier. The capability now follows from which class you hold, and
+  `bindPopup` can no longer reach a "module is not registered" state at all. `DivOverlay` (so
+  `Popup` and `Tooltip`) extends `Layer` rather than `InteractiveLayer`, which is what lets the
+  dependency run one way; binding an overlay to an overlay has no use, since an overlay is
+  already anchored by whatever opened it. Standard shrank by 0.23 KiB gzip, Core is unchanged.
+
 - **Breaking — `LatLng.toArray()` is removed.** It returned `[lat, lng]`: a value no geographic
   API in this library accepts back, since `LatLngLike` dropped bare tuples, and one that reads
   exactly like a longitude-first GeoJSON position. A method whose only possible output is a

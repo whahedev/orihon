@@ -1,3 +1,4 @@
+import { DestroyedError } from "../errors.js";
 import { Evented, type OrihonEvent } from "../events.js";
 import { destination, latLng, type LatLngLike, type PointLike } from "../geo.js";
 import { FeatureGroup, featureGroup } from "../layer-group.js";
@@ -88,7 +89,12 @@ export class DrawHandler extends Evented<DrawEventMap> {
   get isDestroyed(): boolean { return this.#destroyed; }
 
   #assertAlive(): void {
-    if (this.#destroyed || this.#detaching) throw abortError("DrawHandler is destroyed or being detached");
+    if (this.#destroyed) {
+      throw new DestroyedError("DrawHandler was destroyed", { context: { resource: "DrawHandler" } });
+    }
+    // Detaching is transient, not terminal: the handler is reusable once it settles, so the
+    // caller is being told this attempt stopped, not that the object is gone.
+    if (this.#detaching) throw abortError("DrawHandler is being detached");
   }
 
   #isCurrent(generation: number): boolean {
@@ -97,7 +103,7 @@ export class DrawHandler extends Evented<DrawEventMap> {
 
   addTo(map: Orihon): this {
     this.#assertAlive();
-    if (map.isDestroyed) throw abortError("Cannot attach DrawHandler to a destroyed map");
+    if (map.isDestroyed) throw new DestroyedError("Cannot attach DrawHandler to a destroyed map", { context: { resource: "Orihon" } });
     if (this.featureGroup.map && this.featureGroup.map !== map && (!this.addedGroup || this.featureGroup.map !== this.map)) {
       throw new Error("Remove the supplied featureGroup from its current map before attaching DrawHandler");
     }

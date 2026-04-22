@@ -155,8 +155,8 @@ test("destroy rejects pending work and remote entrypoints cannot revive the mana
   manager.destroy();
   manager.destroy();
   await assert.rejects(pending, { name: "AbortError" });
-  await assert.rejects(manager.reload(), { name: "AbortError" });
-  assert.throws(() => manager.addTo(map), { name: "AbortError" });
+  await assert.rejects(manager.reload(), { name: "DestroyedError", code: "ERR_DESTROYED" });
+  assert.throws(() => manager.addTo(map), { name: "DestroyedError", code: "ERR_DESTROYED" });
   assert.equal(manager.loading, false);
   map.emit("moveend");
   assert.equal(calls, 1);
@@ -250,6 +250,7 @@ test("destroying a real map detaches its remote manager and cancels pending work
   assert.equal(unloads, 1);
   assert.equal(manager.map, null);
   assert.equal(manager.loading, false);
-  assert.throws(() => manager.addTo(map), { name: "AbortError" });
+  // The map is destroyed, so attaching cannot succeed later either.
+  assert.throws(() => manager.addTo(map), { name: "DestroyedError", code: "ERR_DESTROYED" });
   manager.destroy();
 });

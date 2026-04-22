@@ -18,7 +18,8 @@ test("SuggestProvider destroy aborts pending work and is terminal", async () => 
   provider.destroy();
   provider.destroy();
   await assert.rejects(pending, { name: "AbortError" });
-  await assert.rejects(provider.suggest("ignored"), { name: "AbortError" });
+  // The in-flight request above aborts; a request started afterwards never begins.
+  await assert.rejects(provider.suggest("ignored"), { name: "DestroyedError", code: "ERR_DESTROYED" });
 });
 
 test("ObjectManager detaches map listeners on remove", () => {

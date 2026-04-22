@@ -1,7 +1,7 @@
 import { createEl, listen } from "../dom.js";
 import type { OrihonEvent } from "../events.js";
 import { LatLng, Point, latLng, point, type LatLngLike, type PointLike } from "../geo.js";
-import { InteractiveLayer, registerOverlayFactories, type LayerOptions } from "../layer.js";
+import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { resolveLocale, type LocaleInput } from "../ui/locale.js";
 
@@ -48,7 +48,13 @@ export interface OverlayLifecycleEventMap {
   close: { map: Orihon | null };
 }
 
-export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDivOverlayOptions, TEvents extends object = {}> extends InteractiveLayer<TOptions, DivOverlayEventMap & TEvents> {
+/**
+ * Base for Popup and Tooltip. It extends `Layer`, not `InteractiveLayer`: `InteractiveLayer`
+ * builds overlays through this module, so inheriting from it would make the two modules
+ * mutually dependent at class-definition time. Binding an overlay to an overlay has no use
+ * anyway — an overlay is already anchored by whatever opened it.
+ */
+export class DivOverlay<TOptions extends ResolvedDivOverlayOptions = ResolvedDivOverlayOptions, TEvents extends object = {}> extends Layer<TOptions, DivOverlayEventMap & TEvents> {
   container: HTMLDivElement | null = null;
   contentNode: HTMLDivElement | null = null;
   protected content: OverlayContent;
@@ -456,4 +462,3 @@ export function tooltip(content: OverlayContent, options?: TooltipOptions): Tool
   return new Tooltip(content, options);
 }
 
-registerOverlayFactories(popup, tooltip);

@@ -1,3 +1,4 @@
+import { DestroyedError } from "../errors.js";
 import { createEl, empty, getContainer, listen } from "../dom.js";
 import { Evented } from "../events.js";
 import { AbortableOperation, abortError, isAbortError } from "./abortable-operation.js";
@@ -33,9 +34,15 @@ export class SuggestProvider<TResult = unknown> {
     this.options = { debounceMs: 180, minLength: 2, limit: 8, ...options };
   }
 
-  /** Supersedes the previous request; cancellation rejects with AbortError, never []. */
+  /**
+   * Supersedes the previous request; cancellation rejects with `AbortError`, never `[]`.
+   * Calling a destroyed provider rejects with `DestroyedError` instead: the request never
+   * started, and no retry against this provider can succeed.
+   */
   suggest(query: string, context: SuggestContext = {}): Promise<TResult[]> {
-    if (this.#destroyed) return Promise.reject(abortError("SuggestProvider was destroyed"));
+    if (this.#destroyed) {
+      return Promise.reject(new DestroyedError("SuggestProvider was destroyed", { context: { resource: "SuggestProvider" } }));
+    }
     const previous = this.#pending;
     const operation = new AbortableOperation("SuggestProvider request", context.signal);
     const pending: PendingSuggest = { operation, timer: null };
@@ -122,8 +129,9 @@ export class SuggestWidget<TResult = unknown> extends Evented<SuggestWidgetEvent
   readonly _itemUnsub: Array<() => void> = [];
   results: TResult[] = [];
   activeIndex = -1;
-  _requestId = 0;
-  _destroyed = false;
+  #requestId = 0;
+  #destroyed = false;
+  get isDestroyed(): boolean { return this.#destroyed; }
 
   constructor(options: SuggestWidgetOptions<TResult>) {
     super();
@@ -144,12 +152,21 @@ export class SuggestWidget<TResult = unknown> extends Evented<SuggestWidgetEvent
     this.#bind();
   }
 
+  /** Runs a suggestion pass for the input's current value. */
   attach(): this {
+    this.#assertAlive();
     return this.#suggest(this.input.value);
   }
 
+  #assertAlive(): void {
+    if (this.#destroyed) {
+      throw new DestroyedError("SuggestWidget was destroyed", { context: { resource: "SuggestWidget" } });
+    }
+  }
+
+  /** Cancels pending work and clears the list. Safe to call after `destroy()`. */
   cancel(): this {
-    this._requestId++;
+    this.#requestId++;
     this.provider.cancel();
     this.results = [];
     this.activeIndex = -1;
@@ -158,16 +175,20 @@ export class SuggestWidget<TResult = unknown> extends Evented<SuggestWidgetEvent
     return this;
   }
 
+  /** Terminal and idempotent. Afterwards `attach` and `select` throw; `cancel` stays a no-op. */
   destroy(): void {
-    if (this._destroyed) return;
+    if (this.#destroyed) return;
     this.cancel();
     for (const unsubscribe of this._itemUnsub.splice(0)) unsubscribe();
     for (const unsubscribe of this._unsub.splice(0)) unsubscribe();
-    this._destroyed = true;
+    this.#destroyed = true;
     this.off();
   }
 
   select(index = this.activeIndex): this {
+    // Selecting writes the input value and calls onSelect, so a destroyed widget must not
+    // reach back into a page that has already moved on.
+    this.#assertAlive();
     const item = this.results[index];
     if (item === undefined) return this;
     this.input.value = this.label(item);
@@ -209,16 +230,16 @@ export class SuggestWidget<TResult = unknown> extends Evented<SuggestWidgetEvent
   }
 
   #suggest(query: string): this {
-    const requestId = ++this._requestId;
+    const requestId = ++this.#requestId;
     this.emit("loading", { query });
     void this.provider.suggest(query, this.context(query)).then((items) => {
-      if (this._destroyed || requestId !== this._requestId) return;
+      if (this.#destroyed || requestId !== this.#requestId) return;
       this.results = items;
       this.activeIndex = items.length ? 0 : -1;
       this.#render();
       this.emit("results", { query, items });
     }).catch((error) => {
-      if (this._destroyed || requestId !== this._requestId) return;
+      if (this.#destroyed || requestId !== this.#requestId) return;
       this.results = [];
       this.activeIndex = -1;
       this.#render();

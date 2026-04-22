@@ -171,7 +171,8 @@ test("SuggestProvider cancels debounce and destroys in-flight non-cooperative wo
   active.destroy();
   active.destroy();
   await destroyed;
-  await assert.rejects(active.suggest("new"), { name: "AbortError" });
+  // The request above was cancelled by destroy; this one never starts at all.
+  await assert.rejects(active.suggest("new"), { name: "DestroyedError", code: "ERR_DESTROYED" });
 });
 
 test("RoutingLayer cancellation retains last success and emits exactly one abort, never load/error", async () => {

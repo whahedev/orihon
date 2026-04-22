@@ -1,6 +1,7 @@
 import { createEl } from "../dom.js";
 import { latLng, bounds, type LatLngLike } from "../geo.js";
-import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer } from "../interactive-layer.js";
+import { type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { clampOpacity, parseCssColor } from "../webgl-utils.js";

@@ -1,5 +1,6 @@
 import { LatLngBounds, bounds, type LatLngBoundsLike, type LatLngLike } from "./geo.js";
-import { InteractiveLayer, Layer, type LayerOptions } from "./layer.js";
+import { InteractiveLayer } from "./interactive-layer.js";
+import { Layer, type LayerOptions } from "./layer.js";
 import type { Orihon } from "./map.js";
 
 export class LayerGroup<TEvents extends object = {}, TOptions extends LayerOptions = LayerOptions> extends InteractiveLayer<TOptions, TEvents> {

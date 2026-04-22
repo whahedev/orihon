@@ -119,7 +119,7 @@ map.addTileLayer({ url: "https://example.test/{z}/{x}/{y}.png" });
 
 For data reused by several renderers, `orihon/source` provides a small reactive `FeatureSource`. One source can drive `geoJSON`, `textLayer` and `ObjectManager`, so an application can change rendering strategy without replacing its update model. Consumers depend only on the read-only structural protocol exported from Core; mutation, batching and storage remain optional. See the [FeatureSource guide](./docs/FEATURE_SOURCE.md).
 
-**GPU policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `heatLayer({ backend: "auto" })`, `tileLayer({ renderer: "webgl"|"webgpu"|"auto" })`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets). `tileLayer({ renderer: "auto" })` uses the unified GPU tile pipeline: WebGPU when available, then WebGL, then DOM. Normal vector-tile applications use `createMVTProvider` / `decodeMVT`; low-level packed decoding is isolated in `orihon/mvt`.
+**GPU policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `heatLayer({ backend: "auto" })`, `tileLayer({ renderer: "webgl"|"webgpu"|"auto" })`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets). `tileLayer({ renderer: "auto" })` uses the unified GPU tile pipeline: WebGPU when available, then WebGL, then DOM. Importing the Advanced entry does not change what a plain `tileLayer(url)` builds — that is DOM everywhere — and naming `"webgl"` or `"webgpu"` outright is a requirement that refuses rather than falling back. Normal vector-tile applications use `createMVTProvider` / `decodeMVT`; low-level packed decoding is isolated in `orihon/mvt`.
 
 ```js
 // Core — basemap only
@@ -131,7 +131,8 @@ import { createMap, tileLayer, marker, geoJSON, zoomControl } from "orihon/stand
 // Advanced — GPU when volume / camera stress needs it
 import { createMap, objectManager, webglPointLayer, geoJSON, createMVTProvider, tileLayer } from "orihon";
 
-tileLayer(url); // auto: WebGPU → WebGL → DOM
+tileLayer(url); // DOM — the stable default in every tier
+tileLayer(url, { renderer: "auto" }); // WebGPU → WebGL → DOM
 createMVTProvider("/tiles/{z}/{x}/{y}.pbf"); // MVT, MLT, WASM — same call
 
 // Product integrations stay separate
@@ -683,6 +684,8 @@ non-English locales and adaptive isoline levels already load as separate chunks.
 ## Documentation
 
 - [API reference](docs/API.md)
+- [Migrating from Leaflet](docs/MIGRATION-LEAFLET.md)
+- [Migrating to the next major](docs/MIGRATION-NEXT-MAJOR.md)
 - [Security model](docs/SECURITY.md)
 - [Development, versions and benchmarks](docs/DEVELOPMENT.md)
 - [License FAQ](docs/LICENSE-FAQ.md)

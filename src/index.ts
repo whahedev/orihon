@@ -1,7 +1,8 @@
 export { Evented } from "./events.js";
 export { OrihonError, DestroyedError, UnsupportedCapabilityError } from "./errors.js";
 export type { OrihonErrorCode, OrihonErrorOptions } from "./errors.js";
-export { Layer, InteractiveLayer } from "./layer.js";
+export { Layer } from "./layer.js";
+export { InteractiveLayer } from "./interactive-layer.js";
 export { LayerGroup, FeatureGroup, featureGroup } from "./layer-group.js";
 export { Renderer } from "./renderer.js";
 export { Orihon, createMap } from "./map.js";

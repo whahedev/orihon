@@ -1,3 +1,4 @@
+import { DestroyedError } from "../errors.js";
 import { Evented, type OrihonEvent, type EventHandler } from "../events.js";
 import type { FeatureSourceChange, ReadonlyFeatureSource } from "../source-types.js";
 import { CRSCompatibilityError } from "../crs.js";
@@ -433,7 +434,9 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
   get isDestroyed(): boolean { return this.#destroyed; }
 
   protected assertAlive(): void {
-    if (this.#destroyed) throw abortError("ObjectManager was destroyed");
+    if (this.#destroyed) {
+      throw new DestroyedError("ObjectManager was destroyed", { context: { resource: "ObjectManager" } });
+    }
   }
   readonly options: ResolvedObjectManagerOptions;
   readonly items = new Map<ObjectId, ManagedObject>();
@@ -631,7 +634,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
 
   addTo(map: ObjectManagerMap): this {
     this.assertAlive();
-    if (map.isDestroyed === true) throw abortError("Cannot attach ObjectManager to a destroyed map");
+    if (map.isDestroyed === true) throw new DestroyedError("Cannot attach ObjectManager to a destroyed map", { context: { resource: "Orihon" } });
     if (this.map === map) return this;
     this.detach();
     this.assertAlive();
@@ -1861,7 +1864,8 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       if (this.map) {
         this.render();
       }
-      this.assertAlive();
+      // A render listener may have destroyed the manager; that cancels this layout.
+      if (this.#destroyed) throw abortError("ObjectManager layout was cancelled");
       return this;
     }
 
@@ -1911,7 +1915,9 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       if (!this.#destroyed && generation === this._layoutGeneration) this.emit("error", { error, phase: "layout" });
     });
     await settled;
-    this.assertAlive();
+    // Destroyed while this layout was in flight: the caller's operation was cancelled, it did
+    // not call into a dead manager, so it hears AbortError rather than DestroyedError.
+    if (this.#destroyed) throw abortError("ObjectManager layout was cancelled");
     return this;
   }
 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect } from "react";
 import type { EventFor, EventHandler } from "../events.js";
-import type { InteractiveLayer } from "../layer.js";
+import type { InteractiveLayer } from "../interactive-layer.js";
 import type { FeatureGroup } from "../layer-group.js";
 import type { MapEventMap, Orihon } from "../map.js";
 

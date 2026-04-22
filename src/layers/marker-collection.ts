@@ -1,7 +1,8 @@
 import { cameraWarpCss } from "../camera.js";
 import { createEl, createSvgEl, rafThrottle } from "../dom.js";
 import { latLng, bounds, type LatLngLike } from "../geo.js";
-import { InteractiveLayer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer } from "../interactive-layer.js";
+import { type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { SpatialGridIndex } from "../services/spatial-grid-index.js";
 import { Marker, validateMarkerOptions, type MarkerOptions } from "./marker.js";

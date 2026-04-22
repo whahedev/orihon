@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import * as Core from "../dist/core.js";
 import {
   createMap,
   tileLayer,
@@ -64,16 +65,56 @@ test("an explicit GPU renderer refuses when no implementation is registered", ()
   assert.equal(tileLayer("https://tiles.test/{z}/{x}/{y}.png", { renderer: "auto" }).rendererKind, "dom");
 });
 
-test("Core layers do not advertise popup binding, and asking for it names the missing tier", () => {
+test("a stopped operation and a call on a dead resource are different errors", async () => {
+  const { SuggestProvider, SuggestWidget, objectManager, DestroyedError, OrihonError } =
+    await import("../dist/index.js");
+
+  // Started before destroy: the operation was cancelled, and the same call on a live
+  // provider could still succeed.
+  const provider = new SuggestProvider(() => new Promise(() => {}), { debounceMs: 0 });
+  const inFlight = provider.suggest("Berlin");
+  provider.destroy();
+  await assert.rejects(inFlight, { name: "AbortError" });
+
+  // Started after destroy: nothing ran, and no retry against this provider can work.
+  await assert.rejects(provider.suggest("Berlin"), (error) => {
+    assert.ok(error instanceof DestroyedError);
+    assert.ok(error instanceof OrihonError);
+    assert.equal(error.code, "ERR_DESTROYED");
+    assert.equal(error.context.resource, "SuggestProvider");
+    return true;
+  });
+
+  const manager = objectManager();
+  manager.destroy();
+  assert.throws(() => manager.add({ id: 1, coordinates: { lat: 1, lng: 2 } }), { code: "ERR_DESTROYED" });
+
+  // A widget must not reach back into a page that has already moved on.
+  const input = document.createElement("input");
+  const list = document.createElement("ul");
+  document.body.append(input, list);
+  const widget = new SuggestWidget({ input, list, provider: new SuggestProvider(() => []) });
+  assert.equal(widget.isDestroyed, false);
+  widget.destroy();
+  assert.equal(widget.isDestroyed, true);
+  assert.throws(() => widget.attach(), { code: "ERR_DESTROYED" });
+  assert.throws(() => widget.select(0), { code: "ERR_DESTROYED" });
+  // Cleanup stays callable, and repeating destroy is idempotent.
+  widget.cancel();
+  widget.destroy();
+});
+
+test("Core layers do not carry popup binding at all", () => {
   const el = installDom();
   const map = createMap(el, { center: { lat: 0, lng: 0 }, zoom: 2, controls: false });
   const tiles = tileLayer("https://tiles.test/{z}/{x}/{y}.png").addTo(map);
+
+  // The capability is a matter of which class you have, not of which modules were imported:
+  // InteractiveLayer builds overlays through a direct import, so there is no registry to be
+  // empty and no "module is not registered" state to reach.
   assert.equal("bindPopup" in tiles, false);
   assert.equal("bindTooltip" in tiles, false);
-
-  const error = new UnsupportedCapabilityError("Popup module is not registered");
-  assert.ok(error instanceof OrihonError);
-  assert.equal(error.code, "ERR_UNSUPPORTED_CAPABILITY");
+  assert.equal("InteractiveLayer" in Core, false, "the interactive base is a Standard export");
   map.destroy();
 });
 

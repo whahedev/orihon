@@ -1,7 +1,8 @@
 import { createEl, listen, listenTap } from "../dom.js";
 import { cameraWarpCoversViewport } from "../camera.js";
 import { TILE_SIZE, latLng, projectMercator01, type LatLngLike, type Point } from "../geo.js";
-import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer } from "../interactive-layer.js";
+import { type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import type { OverlayContent, PopupOptions } from "../overlays/div-overlay.js";

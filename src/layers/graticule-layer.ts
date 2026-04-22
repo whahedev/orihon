@@ -1,6 +1,7 @@
 import { createSvgEl } from "../dom.js";
 import { EARTH_RADIUS } from "../geo.js";
-import { InteractiveLayer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer } from "../interactive-layer.js";
+import { type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 
 const METERS_PER_MILE = 1609.344;

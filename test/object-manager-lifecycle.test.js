@@ -56,9 +56,10 @@ test("destroyed managers reject data, state and rendering mutations", async () =
     () => manager.setClusterRadiusPixels(50), () => manager.setClusterRenderer("dom"),
     () => manager.spiderfyCluster("x")
   ];
-  for (const mutate of mutations) assert.throws(mutate, { name: "AbortError" });
-  await assert.rejects(manager.addAsync([point(1)]), { name: "AbortError" });
-  await assert.rejects(manager.prepareLayout(), { name: "AbortError" });
+  // Every one of these is a new call on a destroyed manager, not a cancelled operation.
+  for (const mutate of mutations) assert.throws(mutate, { name: "DestroyedError", code: "ERR_DESTROYED" });
+  await assert.rejects(manager.addAsync([point(1)]), { name: "DestroyedError", code: "ERR_DESTROYED" });
+  await assert.rejects(manager.prepareLayout(), { name: "DestroyedError", code: "ERR_DESTROYED" });
   manager.clear().detach().endBulk().closePopup().unspiderfy();
   manager.render(); // Late scheduled rendering is harmless.
   assert.equal(manager.getStats().objects, 0);

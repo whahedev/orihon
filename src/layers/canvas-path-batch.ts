@@ -1,6 +1,7 @@
 import { createEl, listenTap } from "../dom.js";
 import { LatLngBounds, latLng, type LatLngLike, type Point } from "../geo.js";
-import { InteractiveLayer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
+import { InteractiveLayer } from "../interactive-layer.js";
+import { type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions } from "../overlays/div-overlay.js";
 import { densifyLatLngs, normalizeDashArray, type PathOptions } from "./vector.js";

@@ -1,3 +1,4 @@
+import { DestroyedError } from "../errors.js";
 import { createEl, listen } from "../dom.js";
 import type { EventFor, EventHandler } from "../events.js";
 import type { GeoJSONData, GeoJSONFeatureCollection } from "../layers/geojson.js";
@@ -83,18 +84,20 @@ export class DrawControl extends Control<DrawControlOptions> {
   get isDestroyed(): boolean { return this.handler.isDestroyed; }
 
   #assertAlive(): void {
-    if (this.isDestroyed) throw abortError("DrawControl was destroyed");
+    if (this.isDestroyed) {
+      throw new DestroyedError("DrawControl was destroyed", { context: { resource: "DrawControl" } });
+    }
   }
 
   override addTo(map: Orihon): this {
     this.#assertAlive();
-    if (map.isDestroyed) throw abortError("Cannot attach DrawControl to a destroyed map");
+    if (map.isDestroyed) throw new DestroyedError("Cannot attach DrawControl to a destroyed map", { context: { resource: "Orihon" } });
     return super.addTo(map);
   }
 
   override onAdd(map: Orihon): void {
     this.#assertAlive();
-    if (map.isDestroyed) throw abortError("Cannot attach DrawControl to a destroyed map");
+    if (map.isDestroyed) throw new DestroyedError("Cannot attach DrawControl to a destroyed map", { context: { resource: "Orihon" } });
     if (this.map && this.map !== map) this.remove();
     this.#assertAlive();
     super.onAdd(map);

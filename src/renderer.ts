@@ -1,5 +1,6 @@
 import { createEl } from "./dom.js";
-import { InteractiveLayer, type LayerOptions } from "./layer.js";
+import { InteractiveLayer } from "./interactive-layer.js";
+import { type LayerOptions } from "./layer.js";
 import type { Orihon } from "./map.js";
 
 export interface RendererOptions extends LayerOptions {

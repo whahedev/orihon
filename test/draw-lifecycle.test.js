@@ -7,6 +7,7 @@ import { featureGroup } from "../dist/layer-group.js";
 
 const point = (lng = 1) => ({ type: "Point", coordinates: [lng, 2] });
 const aborted = { name: "AbortError" };
+const destroyed = { name: "DestroyedError", code: "ERR_DESTROYED" };
 
 function environment(t) {
   const dom = new JSDOM("<!doctype html><div id='a'></div><div id='b'></div>", { pretendToBeVisual: true });
@@ -45,7 +46,7 @@ test("Draw destruction is terminal, idempotent and releases owned features/histo
   assert.deepEqual(draw.toGeoJSON().features, []);
   assert.equal(draw.listens("modechange"), false);
   for (const mutate of [() => draw.addTo({}), () => draw.setMode("off"), () => draw.finish(),
-    () => draw.undo(), () => draw.redo(), () => draw.loadData(point())]) assert.throws(mutate, aborted);
+    () => draw.undo(), () => draw.redo(), () => draw.loadData(point())]) assert.throws(mutate, destroyed);
   assert.throws(() => { draw.mode = "point"; }, TypeError);
   assert.throws(() => { draw.map = {}; }, TypeError);
   assert.throws(() => { draw.isDestroyed = false; }, TypeError);
@@ -88,7 +89,7 @@ test("standalone Draw detaches on map unload and may attach to another live map"
   assert.equal(draw.isDestroyed, false);
   assert.equal(keys.size, 0);
   assert.equal(draw.toGeoJSON().features.length, 1);
-  assert.throws(() => draw.addTo(map), aborted);
+  assert.throws(() => draw.addTo(map), destroyed);
   draw.addTo(other).setMode("point");
   assert.equal(other.behaviors.isEnabled("dblClick"), false);
   draw.remove();
@@ -140,10 +141,10 @@ test("DrawControl transfers between maps without leaving controls, DOM or subscr
   assert.equal(other.controls.has(draw), false);
   assert.equal(document.querySelectorAll(".oh-draw-control").length, 0);
   assert.equal(draw.isDestroyed, true);
-  assert.throws(() => draw.addTo(map), aborted);
-  assert.throws(() => map.addControl(draw), aborted);
+  assert.throws(() => draw.addTo(map), destroyed);
+  assert.throws(() => map.addControl(draw), destroyed);
   assert.equal(map.controls.has(draw), false, "failed onAdd must roll back control registration");
-  assert.throws(() => draw.setPosition("top-right"), aborted);
+  assert.throws(() => draw.setPosition("top-right"), destroyed);
 });
 
 test("map-driven DrawControl removal is reusable; destroy is final", (t) => {
@@ -154,7 +155,7 @@ test("map-driven DrawControl removal is reusable; destroy is final", (t) => {
   assert.equal(draw.handler.map, null);
   assert.equal(keys.size, 0);
   assert.equal(draw.isDestroyed, false);
-  assert.throws(() => draw.addTo(map), aborted);
+  assert.throws(() => draw.addTo(map), destroyed);
   draw.addTo(other);
   assert.equal(draw.toGeoJSON().features.length, 1);
   draw.destroy();

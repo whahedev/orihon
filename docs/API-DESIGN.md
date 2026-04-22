@@ -14,7 +14,8 @@ Orihon keeps two complementary sentence subjects. Do not add a third grammar for
 ## Creation and ownership
 
 - A `create...()` factory returns a new caller-owned instance unless its documentation explicitly says otherwise.
-- Caller-owned resources expose an idempotent `destroy()` and must not share destructible state with library-managed components.
+- Caller-owned **services and controllers that own resources beyond attachment** — workers, timers, network requests, subscriptions — expose an idempotent, terminal `destroy()` and must not share destructible state with library-managed components. Reusable Layers and Controls do not: their lifecycle is `addTo` ↔ `remove`, they release listeners and DOM on `remove()`, and they can be attached again. Adding `destroy()` to them would invent a terminal state nothing needs.
+- After `destroy()`, a new call throws `DestroyedError` (`code: "ERR_DESTROYED"`). An operation that was already running when `destroy()` ran rejects with `AbortError` instead: one says the resource is gone, the other says this attempt was stopped, and a caller has to be able to tell them apart.
 - Shared caches and workers are internal implementation details. Internal accessors use `getShared...()` and are not re-exported from package entrypoints.
 - Short layer factories such as `marker()` and `tileLayer()` return normal reusable layers. They do not perform network or DOM work until their documented lifecycle starts.
 
@@ -25,14 +26,28 @@ Orihon keeps two complementary sentence subjects. Do not add a third grammar for
 - `clear()` removes contained data without destroying the container.
 - ObjectManager uses `detach()` for map disconnection and `removeObjects()` for record deletion; it has no overloaded `remove()`.
 - `cancel()` stops the current operation while leaving its owner reusable.
-- `destroy()` is terminal and idempotent. Methods that require a live resource fail after destruction.
+- `destroy()` is terminal and idempotent. Methods that require a live resource fail after destruction with `DestroyedError`; cleanup calls (`cancel()`, `clear()`, `remove()`, repeated `destroy()`) stay safe.
 - Cleanup must settle every outstanding promise. It must never turn cancellation or failure into an empty successful business result.
+
+The verbs combine into one grammar rather than one shape per class:
+
+| Kind | Attachment | Terminal |
+| --- | --- | --- |
+| Layer, Control | `addTo` ↔ `remove` | none needed |
+| ObjectManager | `addTo` ↔ `detach` | `destroy()` |
+| Draw | `addTo` ↔ `remove` | `destroy()` |
+| Async operation | `start` ↔ `cancel` | — |
+| Map | — | `destroy()` / `remove()` |
+
+ObjectManager uses `detach` rather than `remove` because `remove` would compete with record
+deletion; Draw carries both because a reusable toolbar and an owned handler are different
+things. Neither is an exception to the grammar — both follow from what the object owns.
 
 ## Asynchronous operations and errors
 
 - Operations involving network, Worker, filesystem-like storage or cooperative ingestion expose an asynchronous API.
 - Cancellation uses an `AbortSignal` where the caller controls one operation and rejects with an error named `AbortError`.
-- Resource shutdown also rejects unfinished work with `AbortError`.
+- Resource shutdown rejects work that was already running with `AbortError`. A call made after shutdown is not cancellation and rejects with `DestroyedError` instead.
 - Operational failures reject with an actionable message, a stable `name`, and the original failure in `cause` when available.
 - An error message identifies the failed resource or operation. It must not require parsing to distinguish success from failure.
 - Sync and async variants use the same input and result vocabulary. The async variant adds only scheduling, progress and cancellation concerns.

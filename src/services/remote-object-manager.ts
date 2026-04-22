@@ -1,3 +1,4 @@
+import { DestroyedError } from "../errors.js";
 import type { LatLngBoundsLike } from "../geo.js";
 import { AbortableOperation, abortError, isAbortError } from "./abortable-operation.js";
 import { assertManagedCoordinateFormat } from "./object-geometry.js";
@@ -70,7 +71,7 @@ export class RemoteObjectManager extends ObjectManager<RemoteObjectManagerEventM
 
   override addTo(map: RemoteObjectMap): this {
     this.assertAlive();
-    if (map.isDestroyed === true) throw abortError("Cannot attach RemoteObjectManager to a destroyed map");
+    if (map.isDestroyed === true) throw new DestroyedError("Cannot attach RemoteObjectManager to a destroyed map", { context: { resource: "Orihon" } });
     if (this.map === map) return this;
     super.addTo(map);
     map.on("moveend", this.#remoteRender);

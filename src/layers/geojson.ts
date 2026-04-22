@@ -1,6 +1,7 @@
 import { LatLng, LatLngBounds, latLng, type LatLngLike } from "../geo.js";
 import { FeatureGroup } from "../layer-group.js";
-import { InteractiveLayer, Layer, type LayerOptions } from "../layer.js";
+import { InteractiveLayer } from "../interactive-layer.js";
+import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import {
   isReadonlyFeatureSource

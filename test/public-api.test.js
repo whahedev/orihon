@@ -36,6 +36,7 @@ test("feature source is isolated in its optional entry", () => {
 
 test("public API does not expose renderer wiring helpers", () => {
   for (const name of [
+    "registerOverlayFactories",
     "registerGpuTileFactory",
     "geoTransformCss",
     "cameraWarpCss",

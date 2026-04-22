@@ -99,6 +99,31 @@ there is no value conversion. Removed constructor options are rejected.
 Specialized heat bandwidth, style-expression and packed-buffer layouts are not
 renamed in this batch; retain their separately documented units.
 
+Coming from Leaflet rather than from an earlier Orihon? Start with
+[Migrating from Leaflet](MIGRATION-LEAFLET.md); this guide covers Orihon-to-Orihon changes.
+
+## Cancellation versus destruction
+
+Two different failures used to share one error name. They are now distinct, and the
+rule is the same for every owned resource in the library:
+
+| What happened | Error | Can a retry succeed? |
+| --- | --- | --- |
+| An operation you started was stopped — cancelled, superseded, signalled, or interrupted by `destroy()` | `AbortError` | Yes, on a resource that is still alive |
+| You called a new method on a resource after its terminal `destroy()` | `DestroyedError` (`code: "ERR_DESTROYED"`) | No |
+
+```js
+const request = provider.suggest("Berlin");
+provider.destroy();
+await request;            // AbortError — this request was stopped
+await provider.suggest("Berlin"); // DestroyedError — nothing was started
+```
+
+This applies to `SuggestProvider`, `SuggestWidget`, `ObjectManager`,
+`RemoteObjectManager`, `DrawHandler` and `DrawControl`, and to attaching any of them
+to a destroyed `Orihon`. `DestroyedError` extends `OrihonError`, so branch on
+`error.code === "ERR_DESTROYED"` rather than on the message.
+
 ## Suggest and routing cancellation
 
 `SuggestProvider.suggest()` and `RoutingLayer.route()` now reject with an error
@@ -156,7 +181,7 @@ clear the loading state of a newer one. Pending debounce alone is not `loading`.
 
 `detach()` cancels and detaches while retaining data; reattachment remains valid.
 `destroy()` is idempotent and prohibits future remote reloads and attachment with
-`AbortError`. Calling `reload()` while detached rejects with an actionable error.
+`DestroyedError`; reloads already in flight when it runs still reject with `AbortError`. Calling `reload()` while detached rejects with an actionable error.
 Map `destroy()` now emits `unload` once, allowing the remote manager to detach and
 cancel automatically; the manager can subsequently attach to another live map.
 After manager destruction, late lifecycle events are suppressed.
@@ -182,7 +207,9 @@ manager.destroy(); // Releases source/scene/imports; cannot be revived.
 ```
 
 `isDestroyed` is a read-only boolean. After destruction, imports, attachment,
-layout preparation and data/state/style mutations throw or reject with `AbortError`.
+layout preparation and data/state/style mutations throw or reject with `DestroyedError`.
+An import or layout that was already running when `destroy()` was called rejects with
+`AbortError` instead — it was cancelled, not called on a dead manager.
 Reads remain available; cleanup calls such as `clear()`, `detach()`, `closePopup()`,
 `endBulk()` and repeated `destroy()` remain safe. Late scheduled renders are no-ops.
 Raw public stores/options still need encapsulation in a later review batch; do not
@@ -223,7 +250,8 @@ before transferring Draw. Standalone handlers now detach on map `unload` too;
 map destruction does not destroy the Draw instance or erase its features.
 
 After destruction, `addTo()`, `setMode()`, `finish()`, `undo()`, `redo()`, `loadData()`
-and control `setPosition()` throw `AbortError`. Reads, `cancel()`, `remove()` and
+and control `setPosition()` throw `DestroyedError`. An attachment superseded while it was
+still running throws `AbortError`, as does attaching during a detach. Reads, `cancel()`, `remove()` and
 repeated `destroy()` stay safe. `DrawHandler.map` and `.mode` are read-only;
 use the lifecycle methods and `setMode()` instead of assigning fields directly.
 

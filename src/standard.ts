@@ -1,5 +1,5 @@
 export * from "./core.js";
-export { InteractiveLayer } from "./layer.js";
+export { InteractiveLayer } from "./interactive-layer.js";
 export { LayerGroup, FeatureGroup, featureGroup } from "./layer-group.js";
 export { Renderer } from "./renderer.js";
 export { WMSTileLayer, wmsTileLayer } from "./layers/wms-tile-layer.js";

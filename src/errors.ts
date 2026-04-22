@@ -41,7 +41,14 @@ export class UnsupportedCapabilityError extends OrihonError {
   }
 }
 
-/** A stateful operation was requested on an owned resource after its terminal `destroy()`. */
+/**
+ * A new operation was requested on an owned resource after its terminal `destroy()`.
+ *
+ * This is deliberately not an `AbortError`. The two answer different questions: `AbortError`
+ * means "the operation you started was stopped", and the work may be retried on a resource that
+ * is still usable; `DestroyedError` means "the resource you called is gone", and no retry can
+ * succeed. Reporting both the same way forces callers to guess which one they got.
+ */
 export class DestroyedError extends OrihonError {
   constructor(message: string, options?: OrihonErrorOptions) {
     super("ERR_DESTROYED", message, options);

@@ -191,6 +191,6 @@ test("compressed Standard keeps mode contracts and property compatibility with e
   map.destroy();
   assert.equal(map.isDestroyed, true);
   assert.equal(draw.map, null);
-  assert.throws(() => draw.addTo(map), { name: "AbortError" });
+  assert.throws(() => draw.addTo(map), { name: "DestroyedError", code: "ERR_DESTROYED" });
   draw.destroy();
 });

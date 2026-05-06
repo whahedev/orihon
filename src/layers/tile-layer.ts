@@ -783,24 +783,31 @@ function gpuContextAvailable(): boolean {
 }
 
 /**
- * Probes WebGL once per document and releases the probe context immediately.
- * Browsers cap live WebGL contexts; leaking one per `tileLayer()` call would
- * force the oldest contexts — including real map layers — to be lost.
+ * Probes WebGL and releases the probe context immediately. Browsers cap live WebGL contexts;
+ * leaking one per `tileLayer()` call would force the oldest contexts — including real map
+ * layers — to be lost, which is why a successful probe is memoized.
+ *
+ * Only success is memoized. A failure can be transient — the context budget is exhausted at
+ * this instant — and caching it would make an explicit `renderer: "webgl"` refuse for the rest
+ * of the page's life even after contexts free up. Re-probing after a failure costs a throwaway
+ * canvas and creates no context, so it cannot leak.
  */
-let webglProbe: boolean | null = null;
+let webglProbe = false;
 
 function webglContextAvailable(): boolean {
-  if (webglProbe !== null) return webglProbe;
+  if (webglProbe) return true;
   if (typeof document === "undefined") return false;
   try {
     const canvas = document.createElement("canvas");
     const gl = (canvas.getContext("webgl2")
       || canvas.getContext("webgl")
       || canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
-    gl?.getExtension("WEBGL_lose_context")?.loseContext();
-    webglProbe = Boolean(gl);
+    if (!gl) return false;
+    webglProbe = true;
+    // Best effort: a context we cannot release is still better reported as available.
+    try { gl.getExtension("WEBGL_lose_context")?.loseContext(); } catch { /* probe cleanup only */ }
+    return true;
   } catch {
-    webglProbe = false;
+    return false;
   }
-  return webglProbe;
 }

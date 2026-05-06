@@ -61,7 +61,7 @@ things. Neither is an exception to the grammar — both follow from what the obj
 - Mutation methods return `this` when chaining is already the local convention; computation functions return their computed value.
 - Inputs accepted as multiple structural forms are normalized at the public boundary and represented by a named public type.
 - Public results must not expose mutable internal buffers unless ownership transfer is explicit in the method name or options.
-- Live configuration is exposed as a read-only `options` snapshot. Mutating `layer.options.foo` does not update rendering; use documented setters. Do not add Leaflet-style `callback, context` / `thisArg` parameters. Prefer iterables (`for…of`) or a single-callback visitor; callers use arrows for `this`.
+- Live configuration is exposed as a read-only `options` view — the live object, not a copy, and `Readonly` is erased at runtime. Mutating `layer.options.foo` does not update rendering; use documented setters. Do not add Leaflet-style `callback, context` / `thisArg` parameters. Prefer iterables (`for…of`) or a single-callback visitor; callers use arrows for `this`.
 
 ## Options and extensibility
 

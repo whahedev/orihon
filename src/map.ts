@@ -241,6 +241,7 @@ export class Orihon extends Evented<MapEventMap> {
   get controls(): ReadonlySet<Control> { return this.#controls; }
   readonly locale: OrihonLocale;
   #localeReady: Promise<void> = Promise.resolve();
+  #localeGeneration = 0;
   /**
    * Resolves once the locale requested by `options.locale` / `setLocale()` is actually applied.
    * Core loads non-English packs lazily, so `map.locale` starts as English strings tagged with
@@ -853,6 +854,9 @@ export class Orihon extends Evented<MapEventMap> {
    * Advanced) or still has to be fetched (Core).
    */
   #trackLocale(input: LocaleInput): void {
+    // A pack load started earlier must not win over a locale chosen since. Both branches bump
+    // the generation, so a synchronous `setLocale` also supersedes a pending asynchronous one.
+    const generation = ++this.#localeGeneration;
     if (typeof input !== "string" || input === "en" || localePackLoaded(input)) {
       // The requested strings are already in place, so readiness is settled and nothing can
       // reject. One shared promise avoids queueing a microtask per map: attaching a handler to
@@ -862,7 +866,8 @@ export class Orihon extends Evented<MapEventMap> {
       return;
     }
     const pending = ensureLocalePacks().then(() => {
-      if (!this.#destroyed) this.#applyLocale(input);
+      if (this.#destroyed || generation !== this.#localeGeneration) return;
+      this.#applyLocale(input);
     });
     // A missing translation is not fatal for the map, so the stored promise is always handled.
     // Callers that do care still see the rejection through `await map.localeReady`.

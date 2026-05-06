@@ -42,8 +42,9 @@ export class Layer<TOptions extends LayerOptions = LayerOptions, TEvents extends
   readonly #options: TOptions;
 
   /**
-   * Configuration snapshot. Treat as read-only: assigning fields does not update
-   * the DOM or renderer. Use documented setters (`setOpacity`, `setStyle`, …).
+   * Read-only configuration view — the live options object, not a copy. Assigning a field
+   * does not update the DOM or renderer, so use the documented setters (`setOpacity`,
+   * `setStyle`, …). `Readonly` is a TypeScript guarantee and disappears at runtime.
    */
   get options(): Readonly<TOptions> {
     return this.#options;

@@ -369,7 +369,7 @@ console.log(basemap.getStats?.());`,
 function pathBatch(options: FeaturePathBatchOptions): WebGLStyledPathBatch`,
     returnType: "WebGLPathBatch | WebGLStyledPathBatch",
     summary: "Создаёт единый пакетный слой линий с выбором реализации по требуемому стилю.",
-    note: "\`mode:'uniform'\` использует instanced WebGL для общего стиля. \`mode:'feature'\` сохраняет индивидуальные width/color/dash/gradient, picking и Canvas fallback."
+    note: "\`mode:'uniform'\` использует instanced WebGL для общего стиля. \`mode:'feature'\` сохраняет индивидуальные strokeWidth/stroke/dash/gradient, picking и Canvas fallback."
   },
   webglPolygonBatch: {
     summary: "Триангулирует и рисует пакет полигонов через WebGL."

@@ -94,6 +94,20 @@ test("camera warp coverage rejects zoom-out and pan edge gaps", () => {
     y: origin.y * scale + anchor.y * (scale - 1)
   };
   assert.equal(cameraWarpCoversViewport(origin, 10, live, 10.5, viewport), true);
+
+  // Overdraw counts as coverage. A layer that paints a padded surface would otherwise be told
+  // to repaint for a pan its own margin already covers — at a million points that repaint
+  // overruns the frame budget, and the repaint path resets the CSS transform, so the stale
+  // surface is composited unwarped for a frame and the content visibly jumps.
+  const pad = 96;
+  const panned = { x: origin.x + 40, y: origin.y + 40 };
+  assert.equal(cameraWarpCoversViewport(origin, 10, panned, 10, viewport), false, "no pad: a 40px pan uncovers");
+  assert.equal(cameraWarpCoversViewport(origin, 10, panned, 10, viewport, undefined, pad), true, "the pad absorbs it");
+  // The pad is finite: a pan past it still forces the repaint.
+  const far = { x: origin.x + pad + 10, y: origin.y };
+  assert.equal(cameraWarpCoversViewport(origin, 10, far, 10, viewport, undefined, pad), false);
+  // Default stays exactly as before for surfaces painted at viewport size.
+  assert.equal(cameraWarpCoversViewport(origin, 10, origin, 9.75, viewport, undefined, 0), false);
 });
 
 test("fractional zoomAround keeps anchor and marker/tile math glued", async () => {

@@ -83,6 +83,24 @@ for (const file of Object.keys(budgets)) {
   if (!tableRows.some(([, listed]) => listed === file)) {
     failures.push(`README budget table is missing \`${file}\``);
   }
+
+/**
+ * The showcase publishes the same claim to a wider audience than the README, and it carried
+ * hand-written numbers that drifted 54 KiB below the real Advanced bundle. Each tier badge
+ * names the artifact it speaks for, so the claim is checked rather than trusted.
+ */
+const showcase = await readFile(new URL("../examples/showcase/index.html", import.meta.url), "utf8");
+const tierBadges = [...showcase.matchAll(/data-tier-budget="([^"]+)"[^>]*>\s*≤\s*(\d+)\s*KiB/g)];
+assert.ok(tierBadges.length > 0, "showcase is missing its tier budget badges");
+for (const [, artifact, claimed] of tierBadges) {
+  const budget = budgets[artifact];
+  if (budget === undefined) {
+    failures.push(`showcase names \`${artifact}\`, which has no budget in scripts/check-size.mjs`);
+  } else if (budget / kib !== Number(claimed)) {
+    failures.push(`showcase says \`${artifact}\` ≤ ${claimed} KiB, the enforced budget is ${(budget / kib).toFixed(0)} KiB`);
+  }
+}
+
 }
 
 if (failures.length) {

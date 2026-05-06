@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+- **Fixed — the showcase advertised sizes that were never true.** Its tier ladder carried
+  hand-written "≤22 KiB Core / ≤35 KiB Standard / ≤70 KiB Advanced". Standard actually
+  builds at 36.87 KiB and Advanced at 124.17 KiB, so two of the three understated the bundle, one
+  of them by 54 KiB — on the page most likely to be read before installing. The badges now name
+  the artifact they speak for and `npm run size` verifies them against the enforced budgets, the
+  same way it already verified the README.
+
+- **Fixed — developer-guide playground and prose taught removed option names.** The `pathBatch`
+  snippet still styled paths with `{ color, width }`, which `StyledPathStyle` forbids, and the
+  `mode: "feature"` note described the batch as preserving "width/color". Both use `stroke` /
+  `strokeWidth` now. The snippets are executable and only syntax-checked, so a rename cannot be
+  caught by the type system there.
+
+- **Fixed — WebGL point layers repainted every frame of a gesture instead of warping.** The
+  camera-warp decision was reduced to a coverage test, which dropped two things: the painted
+  surface's overdraw was not counted, so a pan its own margin already covered was reported as
+  uncovered; and the point-count-aware throttle was removed. At a million points the resulting
+  full GPU pass overruns the frame budget, and the repaint path resets the CSS transform, so a
+  stalled frame composites the stale surface unwarped — points visibly jump and snap back.
+  `cameraWarpCoversViewport()` takes the painted pad, and the throttle is back: while the GPU
+  budget is spent the exact frame keeps being warped rather than half-repainted.
+
+- **Fixed — a pending locale load could override a locale chosen after it.** On Core, where
+  packs load lazily, `createMap(el, { locale: "ru" })` followed by `setLocale("en")` ended up in
+  Russian: the second call took the synchronous branch and settled `localeReady`, then the
+  first call's chunk resolved and reapplied `"ru"` over it. `#trackLocale` carries a generation
+  now, so a superseded load applies nothing.
+
+- **Fixed — a transient WebGL probe failure was remembered for the life of the page.** The
+  capability probe memoized its result either way, which was harmless while an unavailable
+  backend meant a silent DOM fallback. Once `renderer: "webgl"` became a requirement that
+  refuses, a probe that failed because the browser's live-context budget happened to be
+  exhausted made every later explicit request throw `UnsupportedCapabilityError` even after
+  contexts freed up. Only a successful probe is memoized now; re-probing after a failure
+  creates no context, so it cannot leak.
+
 - **Breaking — a call on a destroyed resource is no longer reported as cancellation.**
   `DrawHandler`, `DrawControl`, `ObjectManager`, `RemoteObjectManager`, `SuggestProvider` and
   attaching any of them to a destroyed `Orihon` threw `AbortError` for post-`destroy()` calls,

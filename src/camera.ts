@@ -74,16 +74,23 @@ export function cameraWarpCoversViewport(
   liveOrigin: CameraOrigin,
   liveZoom: number,
   viewport: { width: number; height: number },
-  epsilon = 0.5
+  epsilon = 0.5,
+  /**
+   * Overdraw around the viewport, in painted CSS pixels, for surfaces painted larger than the
+   * viewport. Ignoring it understates coverage and forces a full repaint the warp could absorb.
+   */
+  paintedPad = 0
 ): boolean {
   const scale = 2 ** (liveZoom - paintedZoom);
-  const x = paintedOrigin.x * scale - liveOrigin.x;
-  const y = paintedOrigin.y * scale - liveOrigin.y;
+  const x = (paintedOrigin.x - paintedPad) * scale - liveOrigin.x;
+  const y = (paintedOrigin.y - paintedPad) * scale - liveOrigin.y;
+  const width = (viewport.width + paintedPad * 2) * scale;
+  const height = (viewport.height + paintedPad * 2) * scale;
   return (
     x <= epsilon &&
     y <= epsilon &&
-    x + viewport.width * scale >= viewport.width - epsilon &&
-    y + viewport.height * scale >= viewport.height - epsilon
+    x + width >= viewport.width - epsilon &&
+    y + height >= viewport.height - epsilon
   );
 }
 

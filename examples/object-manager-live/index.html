@@ -289,7 +289,7 @@
         if (cached) return cached;
         const a = hubById(fromId);
         const b = hubById(toId);
-        const pts = geodesicInterpolate([a.lat, a.lng], [b.lat, b.lng], 80_000);
+        const pts = geodesicInterpolate(a, b, 80_000);
         const path = pts.map((p) => [p.lat, p.lng]);
         pathCache.set(key, path);
         return path;
@@ -381,9 +381,9 @@
         const alarm = Number.isFinite(temp) && temp > TEMP_ALARM;
         const selected = context.selected;
         return {
-          color: selected ? "#7c3aed" : alarm ? "#dc2626" : "#14b8a6",
+          fill: selected ? "#7c3aed" : alarm ? "#dc2626" : "#14b8a6",
           size: selected || alarm ? 8 : count >= MASS ? 3 : 4.5,
-          opacity: 0.88
+          fillOpacity: 0.88
         };
       }
 
@@ -463,9 +463,9 @@
           },
           trail: {
             enabled: true,
-            color: selected ? "#a78bfa" : "#67e8f9",
-            width: selected ? 2 : 1.25,
-            opacity: selected ? 0.7 : 0.4,
+            stroke: selected ? "#a78bfa" : "#67e8f9",
+            strokeWidth: selected ? 2 : 1.25,
+            strokeOpacity: selected ? 0.7 : 0.4,
             maxPoints: 16,
             maxAgeMs: 45_000
           }

@@ -66,7 +66,7 @@
       <div><p class="eyebrow">orihon</p><h1><code>pathBatch()</code></h1><p class="lede">Создаёт единый пакетный слой линий с выбором реализации по требуемому стилю.</p></div>
       <a class="source-link" href="https://github.com/whahedev/orihon/blob/main/src/layers/path-batch.ts#L27" target="_blank" rel="noreferrer">Исходник · L27</a>
     </header>
-    <section class="doc-section purpose"><h2>Для чего нужна</h2><p>Создаёт единый пакетный слой линий с выбором реализации по требуемому стилю.</p><p><code>mode:&#39;uniform&#39;</code> использует instanced WebGL для общего стиля. <code>mode:&#39;feature&#39;</code> сохраняет индивидуальные width/color/dash/gradient, picking и Canvas fallback.</p></section>
+    <section class="doc-section purpose"><h2>Для чего нужна</h2><p>Создаёт единый пакетный слой линий с выбором реализации по требуемому стилю.</p><p><code>mode:&#39;uniform&#39;</code> использует instanced WebGL для общего стиля. <code>mode:&#39;feature&#39;</code> сохраняет индивидуальные strokeWidth/stroke/dash/gradient, picking и Canvas fallback.</p></section>
     <section class="doc-section"><h2>Импорт</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>import { pathBatch } from &quot;orihon&quot;;</code></pre></div></section>
     <section class="doc-section"><h2>Сигнатура и результат</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>function pathBatch(options?: UniformPathBatchOptions): WebGLPathBatch
 function pathBatch(options: FeaturePathBatchOptions): WebGLStyledPathBatch</code></pre></div><p class="returns"><strong>Возвращает:</strong> <code>WebGLPathBatch | WebGLStyledPathBatch</code> — значение типа WebGLPathBatch | WebGLStyledPathBatch, описанное в сигнатуре выше</p></section>
@@ -81,8 +81,8 @@ const result = pathBatch();</code></pre></div></section>
           <div class="playground-toolbar"><span>JavaScript</span><div><button type="button" data-playground-reset>Сбросить</button><button class="run" type="button" data-playground-run>Выполнить</button></div></div>
           <textarea data-playground-code spellcheck="false" aria-label="Код примера pathBatch">const layer = pathBatch({ mode: &quot;feature&quot;, interactive: true }).addTo(map);
 layer.setPaths([
-  { id: &quot;main&quot;, positions: [({ lat: 55.55, lng: 37.2 }),({ lat: 55.75, lng: 37.62 }),({ lat: 55.95, lng: 38.05 })], style: { color: &quot;#43d5c7&quot;, width: 5 } },
-  { id: &quot;alt&quot;, positions: [({ lat: 55.62, lng: 38.0 }),({ lat: 55.82, lng: 37.3 })], style: { color: &quot;#ffd37a&quot;, width: 3, dashArray: [8, 4] } }
+  { id: &quot;main&quot;, positions: [({ lat: 55.55, lng: 37.2 }),({ lat: 55.75, lng: 37.62 }),({ lat: 55.95, lng: 38.05 })], style: { stroke: &quot;#43d5c7&quot;, strokeWidth: 5 } },
+  { id: &quot;alt&quot;, positions: [({ lat: 55.62, lng: 38.0 }),({ lat: 55.82, lng: 37.3 })], style: { stroke: &quot;#ffd37a&quot;, strokeWidth: 3, dashArray: [8, 4] } }
 ]);
 return layer;</textarea>
           <p class="playground-status" data-playground-status>Ожидание карты…</p>
@@ -91,7 +91,7 @@ return layer;</textarea>
         <div class="playground-preview"><iframe data-playground-frame title="Карта для примера pathBatch" sandbox="allow-scripts" src="/examples/developer-guide/playground.html"></iframe></div>
       </div>
     </section>
-    <aside class="note"><strong>Важно</strong><div><p><code>mode:&#39;uniform&#39;</code> использует instanced WebGL для общего стиля. <code>mode:&#39;feature&#39;</code> сохраняет индивидуальные width/color/dash/gradient, picking и Canvas fallback.</p></div></aside>
+    <aside class="note"><strong>Важно</strong><div><p><code>mode:&#39;uniform&#39;</code> использует instanced WebGL для общего стиля. <code>mode:&#39;feature&#39;</code> сохраняет индивидуальные strokeWidth/stroke/dash/gradient, picking и Canvas fallback.</p></div></aside>
 
     <footer class="page-footer">
       <a href="/examples/developer-guide/functions/offlineTileCache/"><span>← Предыдущая</span><code>offlineTileCache()</code></a>

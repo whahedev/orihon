@@ -733,9 +733,18 @@ export class WebGLPointLayer extends InteractiveLayer<ResolvedWebGLPointLayerOpt
         this._paintedZoom,
         { x: ox, y: oy },
         zoom,
-        { width: cssW, height: cssH }
+        { width: cssW, height: cssH },
+        undefined,
+        this._paintedPad
       );
-      if (warpCovers) {
+      // A large layer cannot repaint every frame of a gesture: a 1M-point GPU pass overruns the
+      // frame budget, and the repaint path resets the transform, so a stalled frame shows the
+      // stale surface unwarped — points visibly jump and snap back when the pass lands. While
+      // the budget is spent, keep warping the exact frame we have even though it no longer
+      // covers the viewport: briefly missing overdraw at the edges beats a moving picture.
+      const minInterval = this.points.length / 2 >= 250_000 ? 150 : 80;
+      const throttled = !warpCovers && now - this._lastGpuMs < minInterval;
+      if (warpCovers || throttled) {
         const s = 2 ** (zoom - this._paintedZoom);
         const tx = this._paintedOriginX * s - ox;
         const ty = this._paintedOriginY * s - oy;
@@ -744,7 +753,7 @@ export class WebGLPointLayer extends InteractiveLayer<ResolvedWebGLPointLayerOpt
         this.canvas.style.top = `${-this._paintedPad}px`;
         this.canvas.style.transformOrigin = "0 0";
         this.canvas.style.transform = `translate3d(${tx}px,${ty}px,0) scale(${s})`;
-        this.#scheduleSettledGpu(120);
+        this.#scheduleSettledGpu(throttled ? Math.max(16, minInterval - (now - this._lastGpuMs)) : 120);
         return;
       }
     }

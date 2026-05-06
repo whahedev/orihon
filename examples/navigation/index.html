@@ -424,8 +424,8 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
         "https://cdn.jsdelivr.net/npm/orihon@1.0.5/dist/orihon.css";
       const OSRM_HOST = "https://router.project-osrm.org";
 
-      const DEMO_A = [55.7558, 37.6173];
-      const DEMO_B = [55.7494, 37.5395];
+      const DEMO_A = { lat: 55.7558, lng: 37.6173 };
+      const DEMO_B = { lat: 55.7494, lng: 37.5395 };
 
       // Public demo OSRM only serves a car graph; bike/walk reuse OSM geometries
       // with typical urban speeds so distance/speed variants stay meaningful.
@@ -486,9 +486,8 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
       }
 
       function formatLatLng(latlng) {
-        const ll = Array.isArray(latlng)
-          ? latlng
-          : latlng;
+        // Route geometry arrives from OSRM as arrays, so normalize the same way the map calls do.
+        const ll = mapPosition(latlng);
         return `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
       }
 
@@ -666,7 +665,7 @@ function mapPositions(value) { return Array.isArray(value) ? (typeof value[0] ==
       } = await loadOrihon();
 
       const map = createMap("map", {
-        center: { lat: DEMO_A[0], lng: DEMO_A[1] },
+        center: DEMO_A,
         zoom: 12,
         locale: "ru",
         ariaLabel: "Навигация Orihon"

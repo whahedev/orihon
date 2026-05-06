@@ -332,7 +332,7 @@
             size: Number.isFinite(propSize) ? propSize : 4,
             icon: null,
             label: null,
-            color: alarm ? "#dc2626" : (propColor || "#2563eb")
+            fill: alarm ? "#dc2626" : (propColor || "#2563eb")
           };
         }
 
@@ -375,9 +375,9 @@
             type === "truck"
               ? {
                   enabled: true,
-                  color: selected ? "#7c3aed" : baseColor,
-                  width: 2,
-                  opacity: 0.45,
+                  stroke: selected ? "#7c3aed" : baseColor,
+                  strokeWidth: 2,
+                  strokeOpacity: 0.45,
                   maxPoints: 35,
                   maxAgeMs: 120000
                 }
@@ -411,7 +411,7 @@
           }
         },
         clusterStyle: (cluster) => ({
-          color: Number(cluster.properties?.alarms ?? 0) > 0 ? "#dc2626" : "#2563eb",
+          fill: Number(cluster.properties?.alarms ?? 0) > 0 ? "#dc2626" : "#2563eb",
           size: 28 + Math.min(24, Math.log2(cluster.count + 1) * 6)
         }),
         style: richStyle

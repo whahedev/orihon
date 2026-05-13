@@ -20,6 +20,9 @@ export {
   latLng,
   lngLat,
   fromGeoJSONPosition,
+  latLngs,
+  lngLats,
+  fromGeoJSONPositions,
   toGeoJSONPosition,
   bounds,
   project,
@@ -44,7 +47,7 @@ export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
 export type { TileCoordinates, TileTemplate, TileLayerOptions, TileRedrawFlag, RasterTileRendererKind, RasterTileLayer, RasterTileStats, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
-export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
+export type { PointLike, LatLngLike, LatLngBoundsLike, ViewSize } from "./geo.js";
 export type {
   FeatureId,
   FeatureSourceChange,

@@ -61,6 +61,18 @@ const berlin = lngLat(13.405, 52.52);        // longitude, latitude (MapLibre / 
 marker(berlin).addTo(map);
 ```
 
+A list names its order once, not `lat` and `lng` on every point:
+
+```ts
+polyline(latLngs([[55.75, 37.62], [56.33, 44.00], [59.94, 30.31]]));
+polyline(lngLats(maplibreCoordinates));
+polyline(fromGeoJSONPositions(feature.geometry.coordinates));
+```
+
+`latLngs()` and `lngLats()` also take a flat run of numbers — `latLngs([55.75, 37.62, 56.33, 44.00])`
+or a `Float64Array` straight from a worker — and reject an odd length rather than shifting every
+point after the gap.
+
 Development and release tooling requires **Node.js 22 or newer**; the repository pins **Node.js 24.20.0 LTS** in `.node-version`. Browser consumers are unaffected by this build-time requirement.
 
 ## Package complexity: tiers
@@ -84,6 +96,17 @@ Package size and API difficulty are separate axes:
 | **Easy** | A Standard-powered adapter for first maps: options create a basemap and map methods add common objects. |
 | **Layer API** | Explicit composition with `tileLayer()`, `marker()`, `geoJSON()` and other layers. |
 | **Rendering API** | Backend selection, packed data, workers, WebGL/WebGPU and renderer diagnostics. |
+
+The map fills its container, and a `<div>` has no height of its own — give it one, or nothing
+will be visible:
+
+```html
+<div id="map"></div>
+```
+
+```css
+#map { height: 400px; }
+```
 
 ```js
 import { createMap } from "orihon/easy";
@@ -155,6 +178,8 @@ For 100k–1M imports, prefer `await manager.addAsync(iterable, { chunkSize: 10_
 Start at `orihon/standard`: it covers ordinary GIS work, and every symbol below keeps the same
 name and behaviour if you later move the import to the Advanced `orihon` root. For a first map
 with even less to learn, `orihon/easy` above is the shorter path.
+
+The container needs a height here too — see the snippet above.
 
 ```js
 import { createMap, tileLayer, marker, polyline } from "orihon/standard";
@@ -684,6 +709,7 @@ non-English locales and adaptive isoline levels already load as separate chunks.
 ## Documentation
 
 - [API reference](docs/API.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Migrating from Leaflet](docs/MIGRATION-LEAFLET.md)
 - [Migrating to the next major](docs/MIGRATION-NEXT-MAJOR.md)
 - [Security model](docs/SECURITY.md)

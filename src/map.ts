@@ -294,6 +294,7 @@ export class Orihon extends Evented<MapEventMap> {
       new ScaleControl({ locale: this.locale }).addTo(this);
       new AttributionControl({ locale: this.locale }).addTo(this);
     }
+    this.#scheduleCollapsedContainerCheck();
     this.#trackLocale(this.#options.locale);
     this.#render();
   }
@@ -798,6 +799,37 @@ export class Orihon extends Evented<MapEventMap> {
     pane.remove();
     delete this.#panes[name];
     return this;
+  }
+
+  /**
+   * A container with no height is the most common first-map failure: tiles are requested, nothing
+   * paints, and no API call reports a problem. Checked once, a frame after setup, so neither the
+   * usual "create, then append" order nor a ResizeObserver that fills the size in is flagged.
+   */
+  #warnOnCollapsedContainer(): void {
+    if (this.#destroyed || !this.container.isConnected) return;
+    if (this.#size.width > 0 && this.#size.height > 0) return;
+    const view = this.container.ownerDocument?.defaultView;
+    // No layout engine at all (jsdom, a detached document): a zero box says nothing here.
+    if (!view || view.document.documentElement.getBoundingClientRect().height === 0) return;
+    if (view.getComputedStyle(this.container).display === "none") return;
+    const axis = this.#size.height > 0 ? "width" : "height";
+    const selector = this.container.id ? `#${this.container.id}` : ".oh-map";
+    view.console.warn(
+      `Orihon: map container has zero ${axis}, so nothing will be visible. ` +
+      `Give it an explicit ${axis}, for example \`${selector} { ${axis}: 400px }\`. ` +
+      "https://github.com/whahedev/orihon/blob/master/docs/TROUBLESHOOTING.md#zero-size-container"
+    );
+  }
+
+  #scheduleCollapsedContainerCheck(): void {
+    const view = this.container.ownerDocument?.defaultView;
+    if (!view) return;
+    if (typeof view.requestAnimationFrame === "function") {
+      view.requestAnimationFrame(() => this.#warnOnCollapsedContainer());
+      return;
+    }
+    view.setTimeout(() => this.#warnOnCollapsedContainer(), 0);
   }
 
   invalidateSize(): this {

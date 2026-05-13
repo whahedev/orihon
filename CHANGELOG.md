@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- **Docs — one example per guide page, and it is the code that runs.** The pages carried a static
+  «Пример» and a separate «Интерактивный пример» with different code, so the editor showed
+  something the reader had not seen. There is one block now: the example is what you copy and
+  what executes on the map beside it. Making it executable exposed that a dozen examples were
+  never runnable — placeholder arguments (`destination(/* origin */, …)`), undefined variables
+  (`collection`, `layout`, `tileUrls`, `loadObjects`) and options the API does not have
+  (`maxEntries`, `registerServiceWorker` on `offlineTileCache`). All are rewritten against the
+  current API, and `test/developer-guide-examples.test.js` now parses every example and fails on
+  an identifier the playground cannot resolve.
+
+- **Docs — sections are ordered by expected reach instead of alphabetically.** `attributionControl`
+  no longer outranks `zoomControl`, and `icon` no longer outranks `marker`. The optional-entry
+  functions also landed in real sections: `featureSource` under vector data, `drawControl` and the
+  `orihon/controls` factories under controls, `popupContent` under overlays, the PMTiles and MLT
+  decoders under render-free computation — 30 of them had fallen into the infrastructure bin.
+
+- **Docs — the developer guide now catalogues the optional entries.** It covered only the
+  `orihon` root, so 23 published functions had no page: `featureSource`, `drawControl`,
+  `snapLatLng`, the four `orihon/controls` factories, `bufferPoint`, the `popupContent` family,
+  and the PMTiles and MLT functions. The generator reads every entry now, each page states which
+  specifier to import from, and the playground loads those entries so their snippets run. Three
+  build-only helpers (`createDrawModeIcon`, `drawLocaleFromMapLabel`, `sniffPackedMLT`) stay out
+  deliberately — documenting them would advertise internals as product API — and
+  `test/developer-guide.test.js` now pins both halves of that decision. 102 pages, up from 79.
+
+- **Added — `ViewSize` and the `ReadonlyFeatureSource` protocol types are exported from the root
+  entry.** `zoomForBounds()` took a private `ViewSize` alias, and `textLayer()` takes a
+  `ReadonlyFeatureSource` that only `orihon/core` exported. Both are parameter types of root
+  exports, so a caller importing from `orihon` could not name what it was passing.
+
+- **Docs — the developer guide describes the current contracts.** Its catalogue is generated
+  from `src/index.ts`, so removed functions disappear and new ones appear on their own, but the
+  hand-written prose had drifted: `tileLayer` still promised "явное значение задаёт
+  предпочтительный путь с безопасным fallback" for `renderer: "webgl" | "webgpu"`, which now
+  refuses; `searchProvider` did not mention that a missing `reverse()` returns `null`;
+  `objectManager` did not name `remoteObjectManager()` / `markerCollection()` or separate
+  `AbortError` from `DestroyedError`; `geoJSON` did not describe incremental `FeatureSource`
+  deltas; `createMap`, `offlineTileCache` and `textLayer` had no page-specific text at all.
+  `bounds` still documented `[широта, долгота]` and named the removed `LatLngExpression` types.
+  The index now states its scope — the `orihon` root entry — instead of implying it covers
+  every public function; the optional subpath entries are not catalogued.
+
 - **Fixed — the showcase advertised sizes that were never true.** Its tier ladder carried
   hand-written "≤22 KiB Core / ≤35 KiB Standard / ≤70 KiB Advanced". Standard actually
   builds at 36.87 KiB and Advanced at 124.17 KiB, so two of the three understated the bundle, one

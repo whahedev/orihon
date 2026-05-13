@@ -35,7 +35,11 @@ function resolvePath(urlPath) {
 function headers(contentType) {
   return {
     "Content-Type": contentType,
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
+    // The developer-guide playground runs in a `sandbox="allow-scripts"` iframe, which has an
+    // opaque origin, so its module imports of /dist are cross-origin fetches and need CORS.
+    // Without this the iframe's script never evaluates and the page waits for a map forever.
+    "Access-Control-Allow-Origin": "*"
   };
 }
 

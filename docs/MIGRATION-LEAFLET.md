@@ -23,6 +23,7 @@ This is the only mechanical rewrite that cannot be automated safely, because the
 | `L.latLng(55.75, 37.62)` | `latLng(55.75, 37.62)` | Same order |
 | — | `lngLat(37.62, 55.75)` | For data that is already longitude-first |
 | `L.latLngBounds(a, b)` | `bounds(a, b)` | Also accepts `{ south, west, north, east }` |
+| `L.polyline([[a, b], …])` | `polyline(latLngs([[a, b], …]))` | One word per list, nothing per point |
 | `L.point(x, y)` | `point(x, y)` | Screen pixels keep tuples: `[x, y]` is unambiguous |
 | `geometry.coordinates` in GeoJSON | **unchanged** | GeoJSON stays longitude-first; do not rewrite it |
 
@@ -34,13 +35,39 @@ L.marker([55.7558, 37.6176]).addTo(map);
 marker({ lat: 55.7558, lng: 37.6176 }).addTo(map);
 ```
 
+A list of coordinates does not need `lat` and `lng` spelled out on every point. Name the order
+once, for the whole array:
+
+```js
+import { latLngs, lngLats } from "orihon/core";
+
+// Leaflet
+L.polyline([[55.75, 37.62], [56.33, 44.00], [59.94, 30.31]]).addTo(map);
+
+// Orihon — same numbers, the order is in the function name
+polyline(latLngs([[55.75, 37.62], [56.33, 44.00], [59.94, 30.31]])).addTo(map);
+
+// Already longitude-first, so no manual swap
+polyline(lngLats(maplibreCoordinates)).addTo(map);
+```
+
+Both take a flat run of numbers as well, which is what a worker, a CSV column or a binary
+response already holds — and it skips building a pair object per point:
+
+```js
+polyline(latLngs(Float64Array.of(55.75, 37.62, 56.33, 44.00))).addTo(map);
+```
+
+An odd number of values throws instead of silently shifting every point after the gap.
+
 If a value came out of GeoJSON, convert it rather than reordering it by hand:
 
 ```js
-import { fromGeoJSONPosition, toGeoJSONPosition } from "orihon/standard";
+import { fromGeoJSONPosition, fromGeoJSONPositions, toGeoJSONPosition } from "orihon/standard";
 
-const position = fromGeoJSONPosition(feature.geometry.coordinates); // [lng, lat] -> LatLng
-const exported = toGeoJSONPosition(marker.getLatLng());             // LatLng -> [lng, lat]
+const point = fromGeoJSONPosition(pointFeature.geometry.coordinates);   // [lng, lat] -> LatLng
+const line = fromGeoJSONPositions(lineFeature.geometry.coordinates);    // [[lng, lat], …] -> LatLng[]
+const exported = toGeoJSONPosition(marker.getLatLng());                 // LatLng -> [lng, lat]
 ```
 
 `LatLng` is a frozen value: read `latlng.lat` / `latlng.lng`, and build a changed coordinate

@@ -4,6 +4,20 @@ import ts from "typescript";
 
 const root = resolve(import.meta.dirname, "..");
 const sourceEntry = join(root, "src", "index.ts");
+/**
+ * Optional entries are part of the published surface, so the catalogue covers them too. Each
+ * one is listed with the specifier a reader actually imports; low-level helpers that exist to
+ * build those entries are excluded below rather than documented as if they were product API.
+ */
+const optionalEntries = [
+  ["orihon/source", join(root, "src", "feature-source.ts")],
+  ["orihon/draw", join(root, "src", "draw", "index.ts")],
+  ["orihon/controls", join(root, "src", "controls.ts")],
+  ["orihon/geo", join(root, "src", "geo-entry.ts")],
+  ["orihon/popup-content", join(root, "src", "popup-content.ts")],
+  ["orihon/pmtiles", join(root, "src", "layers", "pmtiles.ts")],
+  ["orihon/mlt", join(root, "src", "layers", "mlt.ts")]
+];
 const guideRoot = join(root, "examples", "developer-guide");
 const functionsRoot = join(guideRoot, "functions");
 const confluenceFile = join(root, "docs", "developer-guide", "confluence-source.json");
@@ -49,6 +63,32 @@ const groupDescriptions = {
 // the type-level authority, but it is often too terse or implementation-oriented
 // for a guide page.
 const clearSummaries = {
+  latLngs: "Преобразует список координат «широта, долгота» в именованные координаты Orihon: одно слово на массив вместо `lat` и `lng` у каждой точки.",
+  lngLats: "То же для порядка «долгота, широта» — так координаты отдают MapLibre и большинство серверных API.",
+  fromGeoJSONPositions: "Преобразует массив `coordinates` из GeoJSON в список именованных координат, игнорируя необязательную высоту.",
+  featureSource: "Создаёт реактивное хранилище GeoJSON-объектов, которое одновременно питает geoJSON, textLayer и ObjectManager.",
+  drawControl: "Добавляет на карту панель рисования точек, линий и полигонов с редактированием, undo/redo и снапом.",
+  drawHandle: "Описывает одну точку редактирования геометрии: её координату, роль и место в кольце.",
+  snapLatLng: "Притягивает координату к ближайшей вершине или ребру указанных слоёв в пределах заданного радиуса.",
+  resolveDrawLocale: "Возвращает набор подписей Draw для языка или сливает пользовательские строки с базовым набором.",
+  fullscreenControl: "Добавляет кнопку перехода карты в полноэкранный режим и обратно.",
+  measureControl: "Добавляет инструмент измерения расстояний и площадей прямо на карте.",
+  miniMap: "Добавляет обзорную мини-карту с собственной подложкой и рамкой текущего вида.",
+  popupConditionMatches: "Проверяет условие описания попапа против данных объекта, не собирая сам попап.",
+  createEChartsPopupRenderer: "Создаёт renderer графиков ECharts для блоков popupContent с типом chart.",
+  createPMTilesProvider: "Создаёт провайдер векторных тайлов, читающий один PMTiles-архив по HTTP Range-запросам.",
+  createPMTilesRasterSource: "Открывает PMTiles-архив как источник растровых тайлов для собственного конвейера отрисовки.",
+  deserializePMTilesDirectory: "Разбирает каталог PMTiles из varint-потока в список записей о тайлах.",
+  findPMTilesEntry: "Находит в каталоге PMTiles запись, покрывающую указанный tileId, с учётом run-length.",
+  zxyToTileId: "Переводит координаты тайла z/x/y в идентификатор кривой Гильберта, которым PMTiles адресует данные.",
+  createMLTProvider: "Создаёт провайдер векторных тайлов формата MLT с тем же контрактом, что и createMVTProvider.",
+  decodeMLT: "Декодирует MLT-тайл в массив GeoJSON-объектов.",
+  decodePackedMLT: "Декодирует MLT-тайл в упакованные типизированные массивы без промежуточных объектов.",
+  encodePackedMLT: "Кодирует упакованный тайл в бинарный формат MLT.",
+  looksLikeMLT: "Быстро определяет по сигнатуре, является ли буфер тайлом MLT.",
+  popupContent: "Собирает содержимое попапа из декларативного описания вместо ручной сборки HTML.",
+  sanitizePopupHtml: "Очищает произвольный HTML до безопасного фрагмента, пригодного для вставки в попап.",
+  bufferPoint: "Строит геодезический круг заданного радиуса вокруг координаты как GeoJSON-полигон.",
   attributionControl: "Показывает на карте авторство и лицензии активных источников данных.",
   bounds: "Создаёт расширяемую географическую область по двум углам, массиву координат или существующему объекту границ.",
   buildHeat: "Вычисляет поле значений и изолинии без создания слоя карты — для предварительной обработки, анализа или собственного renderer.",
@@ -128,6 +168,12 @@ const clearSummaries = {
 };
 
 const special = {
+  createMap: {
+    note: "Камера движется только через методы: \`setView(center, zoom)\` завершает движение и шлёт moveend/zoomend, \`updateView(center, zoom)\` выполняет один шаг непрерывного движения (follow-cam, кадр анимации, живой поток позиций) и оставляет жест открытым. \`center\`, \`zoom\`, \`size\`, \`pixelOrigin\`, \`layers\`, \`controls\`, \`panes\` и \`options\` — только для чтения; диапазон масштаба меняется через \`setMinZoom\` / \`setMaxZoom\`, границы — через \`setMaxBounds\`, язык — через \`setLocale\`. \`fitBounds\` и \`fitWorld\` принимают \`animation: 'none' | 'fly'\` вместо булева флага. \`localeReady\` сообщает, когда запрошенная локаль реально применена (в Core паки грузятся лениво). \`destroy()\` терминален: камера после него бездействует, а \`addLayer\` / \`addControl\` / \`createPane\` бросают DestroyedError; \`isDestroyed\` позволяет это проверить."
+  },
+  offlineTileCache: {
+    note: "\`prefetch(urls)\` возвращает счётчики queued/cached/failed, но одного числа отказов для офлайна мало: передайте \`onError(failure)\` и получайте \`{ url, stage, cause }\`, где \`stage\` различает отклонение по \`urlPrefixes\` (\`'url'\`), сетевой сбой (\`'fetch'\`) и отказ Cache Storage, например по квоте (\`'cache'\`). Бросок внутри колбэка не прерывает загрузку. \`prefetchTileLayer\` требует bounds или явные xRange/yRange и отказывается качать мир целиком."
+  },
   marker: {
     note: "Выберите один режим: встроенная фигура (shape/color/size), content или icon. Смешанные режимы и устаревший html отклоняются. Пустой content остаётся пустым. setContent(), setIcon() и setAppearance() явно переключают режим; anchor для иконки задаётся через iconAnchor."
   },
@@ -145,8 +191,8 @@ console.log(coordinates); // [37.618423, 55.751244]`,
   },
   bounds: {
     signature: `function bounds(): LatLngBounds
-function bounds(value: LatLngBoundsExpression): LatLngBounds
-function bounds(a: LatLngExpression, b: LatLngExpression): LatLngBounds`,
+function bounds(value: LatLngBoundsLike): LatLngBounds
+function bounds(a: LatLngLike, b: LatLngLike): LatLngBounds`,
     note: "Это географические границы. Для прямоугольника в экранных или мировых пикселях используйте `pointBounds()`.",
     example: `import { bounds, rectangle } from "orihon";
 
@@ -166,7 +212,10 @@ map.fitBounds(deliveryArea, { padding: 30 });`
 // MapLibre и GeoJSON используют longitude, latitude.
 const berlin = lngLat(13.405, 52.52);
 
-marker(berlin).addTo(map);`
+marker(berlin).bindPopup("Берлин").addTo(map);
+// Карта выше создана с центром в Москве, поэтому переводим вид на маркер.
+map.setView(berlin, 10);
+showResult(berlin);`
   },
   latLng: {
     signature: `function latLng(value: LatLngLike): LatLng
@@ -194,11 +243,15 @@ const heat = heatLayer(points, {
   interactive: true
 }).addTo(map);
 
-heat.bindTooltip(({ feature }) =>
-  feature.kind === "line"
-    ? \`Изолиния: \${feature.fieldValue.toFixed(1)}\`
-    : \`Зона: \${feature.lowerValue.toFixed(1)}–\${feature.upperValue?.toFixed(1) ?? "∞"}\`
-);`,
+// getHoveredFeature() отдаёт типизированный объект под курсором: в контексте tooltip
+// он лежит в data, который статически типизирован как unknown.
+heat.bindTooltip(() => {
+  const feature = heat.getHoveredFeature();
+  if (!feature) return "";
+  return feature.kind === "line"
+    ? "Изолиния: " + feature.fieldValue.toFixed(1)
+    : "Зона: " + feature.lowerValue.toFixed(1) + "–" + (feature.upperValue?.toFixed(1) ?? "∞");
+});`,
     note: "В режиме \`both\` цвет и линии используют одно scalar field. \`auto\` выбирает WebGPU для проверенного диапазона heatmap-only и WASM для contour-режимов; при ошибке ускорителя есть детерминированный fallback.",
     sections: [
       {
@@ -235,9 +288,11 @@ heat.bindTooltip(({ feature }) =>
   },
   buildHeat: {
     summary: "Строит scalar field и, при необходимости, изолинии без создания слоя карты.",
-    example: `import { buildHeat } from "orihon";
+    example: `import { bounds, buildHeat } from "orihon";
 
-const result = await buildHeat(points, bounds, {
+const area = bounds({ lat: 55.45, lng: 37.05 }, { lat: 56.03, lng: 38.15 });
+
+const result = await buildHeat(points, area, {
   mode: "both",
   backend: "auto",
   cols: 512,
@@ -283,7 +338,7 @@ function icon(options?: DivIconOptions): DivIcon`,
   searchProvider: {
     signature: `function searchProvider<T extends SearchResult>(source: T[], options?: SearchProviderOptions<T>): SearchProvider<T>
 function searchProvider<T extends SearchResult>(source: SearchAdapter<T>, options?: { limit?: number }): SearchProvider<T>`,
-    note: "Локальный массив получает встроенный поиск по тексту; адаптер позволяет подключить серверные search, geocode и reverse без второй фабрики."
+    note: "Локальный массив получает встроенный поиск по тексту; адаптер позволяет подключить серверные search, geocode и reverse без второй фабрики. Границы нормализуются: \`search()\` возвращает \`[]\`, \`geocode()\` и \`reverse()\` — \`null\`. Если адаптер не реализует \`reverse()\`, вызов возвращает \`null\`: отсутствующая возможность остаётся видимой, а не маскируется синтетическим результатом с координатами в поле \`name\`. Прежнее поведение включается явно — \`{ fallbackReverse: 'coordinates' }\`."
   },
   objectManager: {
     signature: `function objectManager(options?: LocalObjectManagerOptions): ObjectManager
@@ -291,7 +346,7 @@ function objectManager(options: RemoteObjectManagerOptions): RemoteObjectManager
 function objectManager(options: PointObjectManagerOptions): MarkerCollection
 function objectManager(options: UnifiedObjectManagerOptions): ObjectManager | RemoteObjectManager | MarkerCollection`,
     returnType: "ObjectManager | RemoteObjectManager | MarkerCollection",
-    note: "Одна фабрика покрывает обычные объекты, удалённый loader с отменой устаревших запросов и points-режим с DOM/SVG/WebGL/hybrid renderer. Remote \`reload({ signal }?)\` запускает загрузку сразу и возвращает Promise объектов; отмена отклоняет его с AbortError. Автоматические загрузки используют debounceMs и события load/error/abort. ObjectManager отключается от карты через \`detach()\`, удаляет записи через \`removeObjects(ids)\`; \`destroy()\` терминален и отменяет незавершённые импорты. Для миллионов объектов используйте \`addAsync(..., { render:false })\`, затем \`prepareLayout()\`.",
+    note: "Одна фабрика покрывает обычные объекты, удалённый loader с отменой устаревших запросов и points-режим с DOM/SVG/WebGL/hybrid renderer. Remote \`reload({ signal }?)\` запускает загрузку сразу и возвращает Promise объектов; отмена отклоняет его с AbortError. Автоматические загрузки используют debounceMs и события load/error/abort. ObjectManager отключается от карты через \`detach()\`, удаляет записи через \`removeObjects(ids)\`; \`destroy()\` терминален: операция, начатая до него, отклоняется с AbortError, а новый вызов у уничтоженного менеджера — с DestroyedError (\`code: 'ERR_DESTROYED'\`). Класс выбирается формой опций, поэтому для настроек, собранных динамически, предпочитайте именованные \`remoteObjectManager({ loader })\` и \`markerCollection(points)\`, оставив \`objectManager()\` локальному менеджеру. Для миллионов объектов используйте \`addAsync(..., { render:false })\`, затем \`prepareLayout()\`.",
     sections: [{
       title: "Взаимоисключающие источники",
       bullets: ["Выберите локальные опции/source, loader или points; смешанные источники отклоняются до подписок и чтения итератора.", "debounceMs/replace требуют loader. points использует renderer и не принимает clusterize/clusterRenderer/style."]
@@ -303,22 +358,28 @@ function objectManager(options: UnifiedObjectManagerOptions): ObjectManager | Re
         ["Полигон", "`polygon.fill`, `fillOpacity`, `stroke`, `strokeOpacity`, `strokeWidth`", "Совпадает с vocabulary обычных vector paths."]
       ]
     }],
-    example: `import { objectManager } from "orihon";
+    example: `import { objectManager, remoteObjectManager, markerCollection } from "orihon";
 
 const local = objectManager({ clusterize: true }).addTo(map);
 await local.addAsync(objects, { render: false });
 await local.prepareLayout();
 
-const remote = objectManager({
-  loader: ({ bounds, zoom, signal }) => loadObjects(bounds, zoom, signal),
+// Удалённый режим лучше запрашивать именованной фабрикой: класс виден в вызове.
+const remote = remoteObjectManager({
+  loader: async ({ bounds, zoom, signal }) => {
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    signal?.throwIfAborted?.();
+    return objects.slice(0, 100);
+  },
   debounceMs: 120
-}).addTo(map);
+});
 
-const accessiblePoints = objectManager({
-  points,
+const accessiblePoints = markerCollection(points.slice(0, 1000), {
   renderer: "svg",
   htmlButtonLimit: 500
-}).addTo(map);`
+});
+
+showResult(local.getStats());`
   },
   webglPointLayer: {
     note: "Для крупных iterable/async-iterable используйте \`setDataAsync()\`: слой готовит приватные packed buffers и атомарно заменяет активный GPU snapshot только после успешного импорта."
@@ -337,11 +398,11 @@ const basemap = tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 }).addTo(map);
 
 console.log(basemap.getStats?.());`,
-    note: "В Advanced entry \`renderer:'auto'\` выбирает WebGPU, затем WebGL и DOM fallback. Явные GPU renderer сохраняют общий cache/request/prefetch/zoom-backstop pipeline.",
+    note: "Без \`renderer\` слой всегда DOM — одинаково в \`orihon/core\`, \`orihon/standard\` и \`orihon\`: импорт Advanced entry расширяет выбор, но не меняет то, что строит уже написанный вызов. \`renderer:'auto'\` — предпочтение: WebGPU, затем WebGL, затем DOM, и молча деградирует. \`renderer:'webgl'\` и \`renderer:'webgpu'\` — требование: они дают именно эту реализацию либо бросают UnsupportedCapabilityError (\`code: 'ERR_UNSUPPORTED_CAPABILITY'\`), потому что тихий откат на DOM выглядел бы как GPU-путь в разработке и профилировался бы как DOM в продакшене. Обе GPU-реализации делят общий cache/request/prefetch/zoom-backstop pipeline.",
     sections: [{
       title: "Выбор backend",
       rows: [
-        ["renderer", "\`auto\` · \`dom\` · \`webgpu\` · \`webgl\`", "Auto выбирает лучший доступный renderer; явное значение задаёт предпочтительный путь с безопасным fallback."],
+        ["renderer", "\`dom\` (по умолчанию) · \`auto\` · \`webgl\` · \`webgpu\`", "\`dom\` — значение по умолчанию во всех tier. \`auto\` выбирает лучший доступный путь и молча откатывается до DOM. \`webgl\` и \`webgpu\` — требование без fallback: недоступная реализация приводит к UnsupportedCapabilityError."],
         ["cacheSize", "\`number\`", "Максимальное число тайлов в общем WTinyLFU-кэше."],
         ["maxRequests", "\`number\`", "Ограничивает параллельные запросы изображений."],
         ["maxNewPerFrame", "\`number\`", "Ограничивает создание новых записей за кадр, защищая main thread."],
@@ -350,7 +411,7 @@ console.log(basemap.getStats?.());`,
     }]
   },
   geoJSON: {
-    note: "Координаты GeoJSON всегда имеют порядок [longitude, latitude]. Для больших источников используйте асинхронную загрузку и \`renderer:'auto' | 'webgl'\`."
+    note: "Координаты GeoJSON всегда имеют порядок [longitude, latitude]. Принимает реактивный \`FeatureSource\` из \`orihon/source\`: пока слой на карте, дельты add/update/remove применяются инкрементально по идентификаторам — нетронутые слои не пересоздаются, — и только \`reset\` заменяет коллекцию целиком. Canvas- и WebGL-батчи перестраиваются на любое изменение, потому что у батча нет отдельного слоя на объект. Для больших источников используйте асинхронную загрузку и \`renderer:'auto' | 'webgl'\`."
   },
   preparePointBatchAsync: {
     summary: "Кооперативно подготавливает большой iterable или async iterable точек без длительной блокировки main thread."
@@ -375,58 +436,114 @@ function pathBatch(options: FeaturePathBatchOptions): WebGLStyledPathBatch`,
     summary: "Триангулирует и рисует пакет полигонов через WebGL."
   },
   textLayer: {
-    summary: "Размещает текст в географической точке как лёгкий слой с управлением стилем и видимостью."
+    summary: "Размещает текст в географической точке как лёгкий слой с управлением стилем и видимостью.",
+    note: "Принимает общий \`FeatureSource\`, но, в отличие от \`geoJSON\`, перестраивает раскладку подписей на любое изменение источника: жадное разрешение коллизий зависит от полного видимого набора, поэтому одна сдвинувшаяся подпись способна вытеснить соседние. Это свойство алгоритма, а не недостающая оптимизация."
   }
 };
 
 const explicitExamples = {
-  createMapAdapter: `import { createMapAdapter } from "orihon";
-
-const adapter = createMapAdapter(container, {
-  center: { lat: 55.75, lng: 37.62 },
-  zoom: 10
-});
-adapter.update({ zoom: 11 });
-adapter.destroy();`,
   createGeometryWorkerPool: `import { createGeometryWorkerPool } from "orihon";
 
 const pool = createGeometryWorkerPool();
 try {
-  const prepared = await pool.preparePoints(rawPoints);
-  // use prepared
+  const packed = await pool.preparePoints(points.slice(0, 5000));
+  showResult({ count: packed.count, skipped: packed.skipped, useWorker: pool.useWorker });
 } finally {
   pool.destroy();
 }`,
+  markerCollection: `import { markerCollection } from "orihon";
+
+const collection = markerCollection(points.slice(0, 2000), { renderer: "auto" }).addTo(map);
+showResult({ size: collection.size, renderer: collection.renderer });`,
+  remoteObjectManager: `import { remoteObjectManager } from "orihon";
+
+const manager = remoteObjectManager({
+  debounceMs: 150,
+  loader: async ({ bounds, zoom, signal }) => {
+    // Здесь был бы запрос к серверу по текущему виду карты.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    signal?.throwIfAborted?.();
+    return objects.slice(0, 200);
+  }
+}).addTo(map);
+const loaded = await manager.reload();
+showResult({ loaded: loaded.length, stats: manager.getStats() });`,
+  registerLocalePacks: `import { registerLocalePacks, resolveLocale } from "orihon";
+
+registerLocalePacks({ ru: { ...resolveLocale("ru"), zoomIn: "Ближе", zoomOut: "Дальше" } });
+map.setLocale("ru");
+await map.localeReady;
+showResult({ zoomIn: map.locale.zoomIn, zoomOut: map.locale.zoomOut });`,
+  wTinyLfu: `import { wTinyLfu } from "orihon";
+
+const cache = wTinyLfu(64);
+let evicted = 0;
+for (const point of points.slice(0, 500)) {
+  // add() возвращает ключ, вытесненный этой вставкой, или undefined.
+  if (cache.add(point.lat.toFixed(3) + ":" + point.lng.toFixed(3))) evicted++;
+}
+showResult({ size: cache.size, capacity: 64, evicted });`,
   wmtsTileLayer: `import { wmtsTileLayer } from "orihon";
 
-wmtsTileLayer("https://example.test/wmts", {
+// Первый аргумент — REST-шаблон WMTS. {TileMatrix}, {TileRow} и {TileCol} обязательны,
+// остальные плейсхолдеры подставляются из options.
+wmtsTileLayer("https://example.test/wmts/{Layer}/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png", {
   layer: "basemap",
   tileMatrixSet: "EPSG:3857",
   format: "image/png"
 }).addTo(map);`,
   createWMTSFromCapabilities: `import { createWMTSFromCapabilities, wmtsTileLayer } from "orihon";
 
-const xml = await fetch("/wmts?SERVICE=WMTS&REQUEST=GetCapabilities").then(r => r.text());
+// В реальном проекте XML приходит из GetCapabilities сервиса.
+const xml = \`<Capabilities xmlns="http://www.opengis.net/wmts/1.0">
+  <Layer>
+    <ows:Identifier>basemap</ows:Identifier>
+    <Style><ows:Identifier>default</ows:Identifier></Style>
+    <Format>image/png</Format>
+    <TileMatrixSet>EPSG:3857</TileMatrixSet>
+    <ResourceURL format="image/png" resourceType="tile"
+      template="https://example.test/wmts/basemap/default/EPSG:3857/{TileMatrix}/{TileRow}/{TileCol}.png" />
+  </Layer>
+</Capabilities>\`;
+
 const config = createWMTSFromCapabilities(xml);
-wmtsTileLayer(config.template, config.options).addTo(map);`,
+wmtsTileLayer(config.template, config.options).addTo(map);
+showResult(config);`,
   webglSymbolLayer: `import { webglSymbolLayer } from "orihon";
 
-webglSymbolLayer({ atlas: imageBitmap })
-  .setData(symbols)
-  .addTo(map);`,
+// Каждый instance описан полностью: слой не додумывает размер, поворот и цвет.
+const layer = webglSymbolLayer().addTo(map);
+layer.setInstances(points.slice(0, 500).map((point) => ({
+  lat: point.lat,
+  lng: point.lng,
+  icon: "dot",
+  size: 14,
+  rotation: 0,
+  opacity: 1,
+  tint: [0.26, 0.84, 0.78, 1]
+})));
+showResult({ count: layer.getCount() });`,
   textLayer: `import { textLayer } from "orihon";
 
-textLayer({ lat: 55.751, lng: 37.618 }, "Москва", {
-  color: "#0f172a",
-  font: "600 14px system-ui"
+// Слой подписывает GeoJSON-объекты, а текст берёт из функции text(feature).
+textLayer([
+  { type: "Feature", properties: { name: "Москва" }, geometry: { type: "Point", coordinates: [37.618, 55.751] } },
+  { type: "Feature", properties: { name: "Зеленоград" }, geometry: { type: "Point", coordinates: [37.214, 55.991] } }
+], {
+  text: (feature) => String(feature.properties?.name ?? ""),
+  font: "600 14px system-ui",
+  fill: "#0f172a",
+  halo: "#ffffff",
+  haloWidth: 3
 }).addTo(map);`,
-  preparePointBatchAsync: `import { preparePointBatchAsync, webglPointLayer } from "orihon";
+  preparePointBatchAsync: `import { preparePointBatchAsync } from "orihon";
 
+// Готовит типизированный буфер, не блокируя main thread: результат — данные, а не слой.
 const packed = await preparePointBatchAsync(points, {
   chunkSize: 20_000,
   yieldMode: "task"
 });
-webglPointLayer().setPackedData(packed).addTo(map);`
+showResult({ count: packed.count, skipped: packed.skipped, floats: packed.points.length });`
 };
 
 function parseConfluence(markdown) {
@@ -471,6 +588,12 @@ function exportedFunctionRecords(entryPath) {
   const entrySource = program.getSourceFile(entryPath);
   if (!entrySource) throw new Error(`TypeScript entry not found: ${entryPath}`);
   const records = [];
+  // Optional entries mostly declare their functions in place rather than re-exporting them.
+  for (const statement of entrySource.statements) {
+    const exported = ts.getCombinedModifierFlags(statement) & ts.ModifierFlags.Export;
+    if (!exported || !ts.isFunctionDeclaration(statement) || !statement.name) continue;
+    records.push(toRecord(statement.name.text, statement, entrySource, entryPath));
+  }
   for (const statement of entrySource.statements) {
     if (!ts.isExportDeclaration(statement) || statement.isTypeOnly || !statement.moduleSpecifier ||
         !statement.exportClause || !ts.isNamedExports(statement.exportClause)) continue;
@@ -728,16 +851,290 @@ function requireText(path) {
   return textCache.get(path);
 }
 
+/**
+ * Within a section the order is by expected reach, not alphabet: what almost every application
+ * calls comes first, then the common-but-optional, then the specialised. Alphabetical order put
+ * `attributionControl` above `zoomControl` and `icon` above `marker`, which buries the entry
+ * points a reader is actually looking for. Anything absent from this list sorts after it, by name.
+ */
+const usageRank = [
+  // Карта и камера
+  "createMap", "featureGroup",
+  // Растровые тайлы
+  "tileLayer", "vectorTileLayer", "wmsTileLayer", "wmtsTileLayer", "createPMTilesRasterSource", "wTinyLfu",
+  // Векторные данные
+  "geoJSON", "polyline", "polygon", "circle", "circleMarker", "rectangle", "textLayer",
+  "featureSource", "createMVTProvider", "createPMTilesProvider", "createMLTProvider",
+  // Маркеры и оверлеи
+  "marker", "popup", "tooltip", "icon", "imageOverlay", "popupContent", "svgOverlay", "videoOverlay",
+  "sanitizeSvgElement", "sanitizePopupHtml", "createEChartsPopupRenderer", "popupConditionMatches",
+  // Элементы управления
+  "zoomControl", "scaleControl", "layersControl", "attributionControl", "geolocationControl",
+  "customControl", "drawControl", "fullscreenControl", "miniMap", "measureControl", "snapLatLng", "drawHandle",
+  // ObjectManager и поиск
+  "objectManager", "remoteObjectManager", "markerCollection", "searchProvider", "routingLayer",
+  "createSuggestWidget", "createSuggestProvider", "trafficLayer", "spatialGridIndex",
+  "createStraightLineRoutingProvider",
+  // WebGL
+  "webglPointLayer", "pathBatch", "webglSymbolLayer", "webglPolygonBatch",
+  // Тепловые карты — buildHeat остаётся среди вычислений: он не создаёт слой.
+  "heatLayer", "heatSupport",
+  // Вычисления без отрисовки
+  "latLng", "lngLat", "latLngs", "lngLats", "bounds", "point", "distance", "destination",
+  "fromGeoJSONPosition", "fromGeoJSONPositions",
+  "toGeoJSONPosition", "bufferPoint", "geodesicInterpolate", "project", "unproject", "zoomForBounds",
+  "pointBounds", "metersToPixels", "clampLat", "wrapLng", "scale", "decodeMVT",
+  "createWMTSFromCapabilities", "buildClusterIndex", "queryClusterLayout", "buildClusterLayout",
+  "preparePointBatch", "preparePointBatchAsync", "buildHeat", "markerShapeMetrics",
+  // Локализация
+  "resolveLocale", "ensureLocalePacks", "registerLocalePacks", "resolveDrawLocale",
+  // Производительность и инфраструктура
+  "offlineTileCache", "performanceInspector", "createMapAdapter", "defineOrihonElement",
+  "createGeometryWorkerPool"
+];
+const usageIndex = new Map(usageRank.map((name, index) => [name, index]));
+function rankOf(name) {
+  return usageIndex.has(name) ? usageIndex.get(name) : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * The example on a page is both the snippet a reader copies and the code the playground runs, so
+ * it has to be a whole program: a snippet that calls `.addTo(map)` without ever creating a map is
+ * not something anyone can paste into an empty project. Snippets stay authored as the interesting
+ * part only; this builds the map around them and folds the extra names into the existing import
+ * lines so the result still reads as one file.
+ */
+const ENTRY_ORDER = ["orihon/core", "orihon/standard", "orihon", ...optionalEntries.map(([entry]) => entry)];
+
+function exportedNames(path) {
+  const source = program.getSourceFile(path);
+  const symbol = source ? checker.getSymbolAtLocation(source) : null;
+  return symbol ? checker.getExportsOfModule(symbol).map((item) => item.name) : [];
+}
+
+// Which entry actually exports a name decides which import line an example may use. Folding
+// `createMap` into `import { … } from "orihon/geo"` produced code that ran here — the frame strips
+// imports — and failed the moment a reader pasted it into a project.
+const entryExports = new Map([
+  ["orihon/core", new Set(exportedNames(join(root, "src", "core.ts")))],
+  ["orihon/standard", new Set(exportedNames(join(root, "src", "standard.ts")))],
+  ["orihon", new Set(exportedNames(sourceEntry))],
+  ...optionalEntries.map(([entry, path]) => [entry, new Set(exportedNames(path))])
+]);
+
+function resolveImportEntry(name, pageEntry) {
+  if (entryExports.get(pageEntry)?.has(name)) return pageEntry;
+  for (const candidate of ENTRY_ORDER) if (entryExports.get(candidate)?.has(name)) return candidate;
+  return null;
+}
+
+function freeIdentifiers(code) {
+  const source = ts.createSourceFile("example.js", code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const declared = new Set();
+  const used = new Set();
+  const visit = (node) => {
+    if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) && ts.isIdentifier(node.name)) {
+      declared.add(node.name.text);
+    }
+    if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) declared.add(node.name.text);
+    if (ts.isIdentifier(node)) {
+      const parent = node.parent;
+      const isMemberName =
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isPropertyAssignment(parent) && parent.name === node) ||
+        (ts.isMethodDeclaration(parent) && parent.name === node) ||
+        (ts.isBindingElement(parent) && parent.propertyName === node);
+      if (!isMemberName) used.add(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return [...used].filter((name) => !declared.has(name));
+}
+
+function importLinesFor(body, entry, name, rendersMap) {
+  const grouped = new Map();
+  const claim = (identifier) => {
+    const target = resolveImportEntry(identifier, entry);
+    if (!target) return;
+    if (!grouped.has(target)) grouped.set(target, new Set());
+    grouped.get(target).add(identifier);
+  };
+  for (const identifier of freeIdentifiers(body)) claim(identifier);
+  const order = [entry, ...ENTRY_ORDER.filter((candidate) => candidate !== entry)];
+  const lines = [];
+  for (const target of order) {
+    const names = grouped.get(target);
+    if (!names) continue;
+    const sorted = [...names].sort((a, b) => (a === name ? -1 : b === name ? 1 : a.localeCompare(b)));
+    lines.push(`import { ${sorted.join(", ")} } from "${target}";`);
+  }
+  if (rendersMap) lines.push('import "orihon/orihon.css";');
+  return lines;
+}
+
+const PREAMBLE_NAMES = ["map", "center", "OSM"];
+
+// The playground used to inject demo data into every snippet, so the page showed code that ran
+// here and nowhere else. An example now declares what it uses, which is also what a reader needs
+// in order to paste it into an empty project.
+const DEMO_DATA = {
+  weightedPoints: {
+    code: `const weightedPoints = Array.from({ length: 2500 }, (item, index) => ({
+  lat: 55.45 + Math.random() * 0.58,
+  lng: 37.05 + Math.random() * 1.1,
+  weight: 1 + (index % 9)
+}));`
+  },
+  points: {
+    needs: ["weightedPoints"],
+    code: "const points = weightedPoints.map((point, index) => ({ ...point, data: { id: index, value: point.weight } }));"
+  },
+  objects: {
+    needs: ["points"],
+    code: `const objects = points.slice(0, 1200).map((point, index) => ({
+  id: \`object-\${index}\`,
+  coordinates: { lat: point.lat, lng: point.lng },
+  properties: { title: \`Объект \${index + 1}\`, value: point.weight, active: index % 7 !== 0 }
+}));`
+  },
+  demoBounds: {
+    code: "const demoBounds = bounds({ lat: 55.45, lng: 37.05 }, { lat: 56.03, lng: 38.15 });"
+  },
+  geojson: {
+    code: `const geojson = {
+  type: "FeatureCollection",
+  features: [
+    { type: "Feature", properties: { name: "Маршрут" }, geometry: { type: "LineString", coordinates: [[37.35, 55.65], [37.62, 55.75], [37.92, 55.86]] } },
+    { type: "Feature", properties: { name: "Зона" }, geometry: { type: "Polygon", coordinates: [[[37.42, 55.62], [37.78, 55.62], [37.78, 55.88], [37.42, 55.88], [37.42, 55.62]]] } }
+  ]
+};`
+  },
+  nextFeature: {
+    needs: ["geojson"],
+    code: "const nextFeature = geojson.features[0];"
+  }
+};
+
+function demoDeclarations(body) {
+  const declared = new Set(
+    [...body.matchAll(/(?:const|let|var|function)\s+([A-Za-z_$][A-Za-z0-9_$]*)/g)].map((match) => match[1])
+  );
+  // A property key is not a use of the demo data: `{ points: route.length }` was pulling in a
+  // 2500-point fixture the example never read.
+  const identifiers = new Set(freeIdentifiers(body));
+  const wanted = [];
+  const add = (key) => {
+    if (wanted.includes(key)) return true;
+    // The example already builds this value itself; injecting a second declaration would shadow
+    // or redeclare it, so leave the whole dependency chain alone.
+    if (declared.has(key)) return false;
+    for (const dependency of DEMO_DATA[key].needs ?? []) if (!add(dependency)) return false;
+    wanted.push(key);
+    return true;
+  };
+  for (const key of Object.keys(DEMO_DATA)) if (identifiers.has(key)) add(key);
+  return wanted.map((key) => DEMO_DATA[key].code);
+}
+
+// `return` at the top level is a syntax error in a module, so an example ending with one is not
+// something a reader can paste anywhere. Turn it into the statement it was standing in for.
+function normalizeReturn(body) {
+  const lines = body.split("\n");
+  const index = lines.findIndex((line) => /^return\b/.test(line));
+  if (index < 0) return body;
+  const head = lines.slice(0, index).join("\n").trimEnd();
+  const match = /^return\s+([\s\S]*?);?\s*$/.exec(lines.slice(index).join("\n").trim());
+  const expression = match ? match[1].trim() : "";
+  if (!expression) return head;
+  const prints = /showResult\s*\(|console\s*\./.test(head);
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(expression) || /^[{[]/.test(expression)) {
+    return prints ? head : `${head}\nconsole.log(${expression});`;
+  }
+  return `${head}\n${expression};`;
+}
+
+// A snippet that only declares a value runs to completion with an empty output panel, which reads
+// as a broken example. Print the last thing it computed, the way a reader would while exploring.
+function withVisibleResult(body, rendersMap) {
+  if (rendersMap || /\bshowResult\s*\(|\bconsole\s*\./.test(body)) return body;
+  const declared = [...body.matchAll(/^\s*(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=/gm)];
+  const last = declared.at(-1);
+  return last ? `${body}\nconsole.log(${last[1]});` : body;
+}
+
+function runnableExample(code, entry, name) {
+  const foreignImports = [];
+  const bodyLines = [];
+  for (const line of code.split("\n")) {
+    if (!/^\s*import\b/.test(line)) { bodyLines.push(line); continue; }
+    // Orihon imports are regenerated from what the code actually uses; anything else is the
+    // reader's own dependency and stays exactly as written.
+    if (!/["']orihon(\/|["'])/.test(line)) foreignImports.push(line.trim());
+  }
+  let body = normalizeReturn(bodyLines.join("\n").trim());
+  // `showResult` only exists inside the playground frame. The example is the code a reader copies
+  // into their own project, so it prints the way that project would.
+  body = body.replaceAll("showResult(", "console.log(");
+  const declarations = demoDeclarations(body);
+  const ownsMap = /\bcreateMap\s*\(/.test(body);
+  const needsMap = !ownsMap && PREAMBLE_NAMES.some((key) => freeIdentifiers(body).includes(key));
+  body = withVisibleResult(body, needsMap || ownsMap);
+
+  const preamble = needsMap
+    ? [
+      'const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";',
+      "const center = { lat: 55.751244, lng: 37.618423 };",
+      'const map = createMap("map", { center, zoom: 9 });',
+      'tileLayer(OSM, { attribution: "© OpenStreetMap contributors" }).addTo(map);'
+    ].join("\n")
+    : "";
+  const source = [preamble, declarations.join("\n\n"), body].filter(Boolean).join("\n\n");
+  const imports = [...foreignImports, ...importLinesFor(source, entry, name, needsMap || ownsMap)];
+  return [imports.join("\n"), source].filter(Boolean).join("\n\n");
+}
+
 function groupFor(path, name) {
   const p = path.replaceAll("\\", "/");
   const computationFunctions = new Set([
     "buildClusterIndex", "buildClusterLayout",
     "bounds", "clampLat", "destination", "distance", "geodesicInterpolate",
-    "latLng", "lngLat", "metersToPixels", "point", "pointBounds", "project", "scale",
+    "latLng", "lngLat", "latLngs", "lngLats", "fromGeoJSONPositions",
+    "metersToPixels", "point", "pointBounds", "project", "scale",
     "unproject", "wrapLng", "zoomForBounds", "buildHeat", "createWMTSFromCapabilities",
     "decodeMVT", "markerShapeMetrics", "queryClusterLayout",
     "preparePointBatch", "preparePointBatchAsync"
   ]);
+  // The optional entries land outside the path heuristics below, so they are placed by name:
+  // otherwise drawControl, featureSource and popupContent all fall into the infrastructure bin.
+  const byName = {
+    bufferPoint: "Вычисления без отрисовки",
+    fromGeoJSONPosition: "Вычисления без отрисовки",
+    toGeoJSONPosition: "Вычисления без отрисовки",
+    pathBatch: "WebGL",
+    featureSource: "Векторные данные",
+    popupContent: "Маркеры и оверлеи",
+    sanitizePopupHtml: "Маркеры и оверлеи",
+    popupConditionMatches: "Маркеры и оверлеи",
+    createEChartsPopupRenderer: "Маркеры и оверлеи",
+    drawControl: "Элементы управления",
+    drawHandle: "Элементы управления",
+    snapLatLng: "Элементы управления",
+    fullscreenControl: "Элементы управления",
+    measureControl: "Элементы управления",
+    miniMap: "Элементы управления",
+    createPMTilesProvider: "Векторные данные",
+    createPMTilesRasterSource: "Растровые тайлы",
+    createMLTProvider: "Векторные данные",
+    decodeMLT: "Вычисления без отрисовки",
+    decodePackedMLT: "Вычисления без отрисовки",
+    encodePackedMLT: "Вычисления без отрисовки",
+    looksLikeMLT: "Вычисления без отрисовки",
+    deserializePMTilesDirectory: "Вычисления без отрисовки",
+    findPMTilesEntry: "Вычисления без отрисовки",
+    zxyToTileId: "Вычисления без отрисовки"
+  };
+  if (byName[name]) return byName[name];
   if (computationFunctions.has(name)) return "Вычисления без отрисовки";
   if (name === "createMap" || name === "featureGroup" || p.endsWith("/camera.ts")) return "Карта и камера";
   if (/tile-layer|\/wms-|\/wmts-|tiny-lfu/.test(p)) return "Растровые тайлы";
@@ -752,7 +1149,7 @@ function groupFor(path, name) {
 }
 
 function entryFor(group, name) {
-  const core = new Set(["createMap", "tileLayer", "point", "pointBounds", "latLng", "lngLat", "bounds", "project", "unproject", "distance", "destination", "geodesicInterpolate", "metersToPixels", "clampLat", "wrapLng", "scale", "zoomForBounds"]);
+  const core = new Set(["createMap", "tileLayer", "point", "pointBounds", "latLng", "lngLat", "latLngs", "lngLats", "fromGeoJSONPositions", "bounds", "project", "unproject", "distance", "destination", "geodesicInterpolate", "metersToPixels", "clampLat", "wrapLng", "scale", "zoomForBounds"]);
   const standard = new Set(["featureGroup", "wmsTileLayer", "wmtsTileLayer", "createWMTSFromCapabilities", "marker", "markerShapeMetrics", "icon", "textLayer", "polyline", "polygon", "rectangle", "circle", "circleMarker", "geoJSON", "popup", "tooltip", "imageOverlay", "videoOverlay", "svgOverlay", "sanitizeSvgElement", "zoomControl", "scaleControl", "geolocationControl", "attributionControl", "layersControl", "customControl", "resolveLocale", "ensureLocalePacks", "registerLocalePacks"]);
   if (core.has(name)) return "orihon/core";
   if (standard.has(name)) return "orihon/standard";
@@ -824,11 +1221,24 @@ for (const page of confluence.pages) {
 }
 
 const obsolete = new Set(["webglHeatLayer", "heatIsolineLayer", "buildHeatIsolines"]);
-const functions = exportedFunctionRecords(sourceEntry)
-  .filter((record, index, all) => !obsolete.has(record.name) && all.findIndex((item) => item.name === record.name) === index)
+/**
+ * Exported so their own entry can build itself, not for applications to call. Documenting them
+ * would advertise internals as product API; `orihon/easy` is absent for a different reason — its
+ * only function is `createMap`, which the root entry already documents, and the rest of that API
+ * is methods on the returned map.
+ */
+const entryInternals = new Set(["createDrawModeIcon", "drawLocaleFromMapLabel", "sniffPackedMLT"]);
+const optionalRecords = optionalEntries.flatMap(([entry, path]) =>
+  exportedFunctionRecords(path).map((record) => ({ ...record, entryOverride: entry }))
+);
+const functions = [...exportedFunctionRecords(sourceEntry), ...optionalRecords]
+  .filter((record, index, all) =>
+    !obsolete.has(record.name) &&
+    !entryInternals.has(record.name) &&
+    all.findIndex((item) => item.name === record.name) === index)
   .map((record) => {
     const group = groupFor(record.sourcePath, record.name);
-    const entry = entryFor(group, record.name);
+    const entry = record.entryOverride ?? entryFor(group, record.name);
     const imported = legacy.get(record.name) ?? {};
     const override = special[record.name] ?? {};
     return {
@@ -839,7 +1249,14 @@ const functions = exportedFunctionRecords(sourceEntry)
       entry,
       summary: override.summary || clearSummaries[record.name] || imported.summary || record.sourceDescription || fallbackSummary(record),
       purpose: detailedPurpose(record, group, override, imported),
-      example: override.example || explicitExamples[record.name] || imported.example || autoExample(record, entry),
+      // The example is also the code that runs, so a snippet written against the current API
+      // outranks the imported Confluence text: several of those still used placeholders and
+      // variables that never existed, which a reader could not run and could not copy either.
+      example: runnableExample(
+        override.example || explicitExamples[record.name] || playgroundExamples[record.name] || imported.example || autoExample(record, entry),
+        entry,
+        record.name
+      ),
       playground: playgroundExamples[record.name] || generatedPlayground(record),
       note: override.note || imported.note || "",
       sections: override.sections || [],
@@ -847,7 +1264,10 @@ const functions = exportedFunctionRecords(sourceEntry)
       source: relative(root, record.sourcePath).replaceAll("\\", "/")
     };
   })
-  .sort((a, b) => groupOrder.indexOf(a.group) - groupOrder.indexOf(b.group) || a.name.localeCompare(b.name));
+  .sort((a, b) =>
+    groupOrder.indexOf(a.group) - groupOrder.indexOf(b.group) ||
+    rankOf(a.name) - rankOf(b.name) ||
+    a.name.localeCompare(b.name));
 
 await rm(functionsRoot, { recursive: true, force: true });
 await mkdir(functionsRoot, { recursive: true });
@@ -940,7 +1360,7 @@ function renderHome(items, navigation) {
     <p class="eyebrow">orihon@${escapeHtml(pkg.version)} · актуальный src/index.ts</p>
     <h1>Руководство разработчика</h1>
     <p><strong>ORIHON — Offers Responsive Interactions, Handles Overlays Natively.</strong></p>
-    <p>Одна публичная функция — одна отдельная страница. Сигнатуры и список функций берутся из текущего TypeScript API; описания перенесены из Confluence и обновлены для действующей архитектуры.</p>
+    <p>Одна публичная функция — одна отдельная страница. Каталог покрывает корневой вход <code>orihon</code> и опциональные <code>orihon/source</code>, <code>orihon/draw</code>, <code>orihon/controls</code>, <code>orihon/geo</code>, <code>orihon/popup-content</code>, <code>orihon/pmtiles</code>, <code>orihon/mlt</code>; у каждой страницы указан вход, из которого её импортируют. Список и сигнатуры берутся из текущих TypeScript-входов, поэтому удалённая функция исчезает, а новая появляется сама. <code>orihon/easy</code> отдельных страниц не имеет: его API — это <code>createMap</code> из корневого входа и методы возвращённой карты, см. <a href="https://github.com/whahedev/orihon/blob/main/docs/EASY.md">docs/EASY.md</a>. Описания перенесены из Confluence и обновлены под действующую архитектуру.</p>
     <div class="hero-badges"><span>${items.length} функций</span><span>${groupOrder.length} разделов</span><span>Core · Standard · Advanced</span></div>
   </section>
   <aside class="callout">
@@ -1000,13 +1420,12 @@ function renderFunctionPage(item, previous, next, navigation) {
     <section class="doc-section"><h2>Импорт</h2>${codeBlock(imported, "ts")}</section>
     <section class="doc-section"><h2>Сигнатура и результат</h2>${codeBlock(item.signature, "ts")}<p class="returns"><strong>Возвращает:</strong> <code>${escapeHtml(item.returnType)}</code> — ${escapeHtml(describeReturn(item.name, item.returnType))}</p></section>
     <section class="doc-section"><h2>Параметры</h2>${parameters}${optionTables}</section>
-    <section class="doc-section"><h2>Пример</h2>${codeBlock(item.example, "ts")}</section>
     <section class="doc-section playground-section" data-playground data-function="${escapeAttr(item.name)}">
-      <div class="playground-heading"><div><h2>Интерактивный пример</h2><p>Измените код слева и запустите его. Карта справа создаётся заново перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v${escapeHtml(pkg.version)}</span></div>
+      <div class="playground-heading"><div><h2>Пример</h2><p>Тот же код, что можно скопировать к себе, — и он же выполняется на карте справа. Здесь отбрасываются только строки <code>import</code>: всё остальное, включая создание карты, выполняется как есть, а вывод <code>console.log()</code> попадает в панель результата. Контейнер карты очищается перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v${escapeHtml(pkg.version)}</span></div>
       <div class="playground-shell">
         <div class="playground-editor">
           <div class="playground-toolbar"><span>JavaScript</span><div><button type="button" data-playground-reset>Сбросить</button><button class="run" type="button" data-playground-run>Выполнить</button></div></div>
-          <textarea data-playground-code spellcheck="false" aria-label="Код примера ${escapeAttr(item.name)}">${escapeHtml(item.playground)}</textarea>
+          <textarea data-playground-code spellcheck="false" aria-label="Код примера ${escapeAttr(item.name)}">${escapeHtml(item.example)}</textarea>
           <p class="playground-status" data-playground-status>Ожидание карты…</p>
           <pre class="playground-result" data-playground-output aria-live="polite" hidden></pre>
         </div>
@@ -1036,7 +1455,7 @@ function describeParameter(functionName, parameter) {
   const type = parameter.type;
   const exact = {
     "bounds.a": "Необязательная исходная область: одна координата, массив координат, пара противоположных углов, существующий LatLngBounds или объект { south, west, north, east }. Без значения создаётся пустая область для последующего extend().",
-    "bounds.b": "Необязательный второй противоположный угол. Используется, когда первый аргумент — одна координата; порядок массива — [широта, долгота].",
+    "bounds.b": "Необязательный второй противоположный угол. Используется, когда первый аргумент — одна координата. Координаты именованные: \`{ lat, lng }\` или \`latLng(lat, lng)\`; голая пара чисел не принимается, потому что её не отличить от GeoJSON-позиции \`[lng, lat]\`.",
     "distance.a": "Начальная географическая координата измеряемого отрезка.",
     "distance.b": "Конечная географическая координата измеряемого отрезка.",
     "destination.origin": "Исходная географическая координата, от которой откладываются расстояние и азимут.",

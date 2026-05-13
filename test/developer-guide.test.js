@@ -36,6 +36,27 @@ test("developer guide has one physical page per catalogued public function", asy
   ]) {
     assert.equal(manifest.functions.some((item) => item.name === internalName), false, `${internalName} is internal`);
   }
+  // The catalogue covers the optional entries too, so their product API must be present and
+  // their build-only helpers must not be.
+  for (const internalName of ["createDrawModeIcon", "drawLocaleFromMapLabel", "sniffPackedMLT"]) {
+    assert.equal(manifest.functions.some((item) => item.name === internalName), false, `${internalName} is an entry internal`);
+  }
+  for (const [entry, names] of Object.entries({
+    "orihon/source": ["featureSource"],
+    "orihon/draw": ["drawControl"],
+    "orihon/controls": ["fullscreenControl", "measureControl", "miniMap"],
+    "orihon/geo": ["bufferPoint"],
+    "orihon/popup-content": ["popupContent", "sanitizePopupHtml"],
+    "orihon/pmtiles": ["createPMTilesProvider"],
+    "orihon/mlt": ["createMLTProvider", "encodePackedMLT"]
+  })) {
+    for (const name of names) {
+      const item = manifest.functions.find((entryItem) => entryItem.name === name);
+      assert.ok(item, `${name} must be documented`);
+      assert.equal(item.entry, entry, `${name} must be attributed to ${entry}`);
+    }
+  }
+
   for (const publicName of [
     "tileLayer", "objectManager", "remoteObjectManager", "markerCollection",
     "searchProvider", "pathBatch", "icon", "bounds",
@@ -164,7 +185,9 @@ test("developer guide uses concrete purpose and parameter explanations", async (
   const lngLatPage = await readFile(new URL("examples/developer-guide/functions/lngLat/index.html", root), "utf8");
   assert.match(lngLatPage, /function lngLat\(lng: number, lat: number\): LatLng/);
   assert.match(lngLatPage, /MapLibre и массивах координат GeoJSON/);
-  assert.match(lngLatPage, /marker\(berlin\)\.addTo\(map\)/);
+  assert.match(lngLatPage, /const map = createMap\(&quot;map&quot;, \{ center, zoom: 9 \}\)/);
+  assert.match(lngLatPage, /marker\(berlin\)/);
+  assert.match(lngLatPage, /map\.setView\(berlin, 10\)/);
 
   const functionsRoot = new URL("examples/developer-guide/functions/", root);
   const manifest = JSON.parse(await readFile(new URL("examples/developer-guide/manifest.json", root), "utf8"));

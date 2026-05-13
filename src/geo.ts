@@ -5,9 +5,14 @@ const TILE_SIZE = 256;
 export type PointLike = Point | [number, number] | { x: number; y: number };
 /** Named geographic or CRS coordinates; bare tuples are deliberately not accepted. */
 export type LatLngLike = LatLng | { lat: number; lng: number };
+/**
+ * Everything `bounds()` and `new LatLngBounds()` already accept at runtime. A list of
+ * coordinates belongs here: fitting a computed route was otherwise a type error even though
+ * the implementation walks the array and extends the box.
+ */
 export type LatLngBoundsLike =
   | LatLngBounds
-  | [LatLngLike, LatLngLike]
+  | readonly LatLngLike[]
   | { south: number; west: number; north: number; east: number };
 
 export class Point {
@@ -197,6 +202,78 @@ export function fromGeoJSONPosition(position: readonly [number, number, ...numbe
     throw new TypeError("fromGeoJSONPosition requires [longitude, latitude] with finite numbers.");
   }
   return new LatLng(position[1], position[0]);
+}
+
+/** A bare coordinate pair. Which number comes first is decided by the function that reads it. */
+export type CoordinateTuple = readonly [number, number, ...number[]];
+
+/**
+ * Both accepted shapes of a coordinate list. Pairs group the numbers visually, which is what a
+ * hand-written literal needs; a flat run is what typed arrays, CSV columns and workers already
+ * hold, and converting it costs no intermediate pair objects.
+ */
+export type CoordinateList = readonly CoordinateTuple[] | ArrayLike<number>;
+
+function coordinateList(input: CoordinateList, name: string, latitudeFirst: boolean): LatLng[] {
+  if (!input || typeof input !== "object" || typeof (input as ArrayLike<number>).length !== "number") {
+    throw new TypeError(`${name} requires an array of coordinate pairs or a flat run of numbers.`);
+  }
+  const order = latitudeFirst ? "latitude, longitude" : "longitude, latitude";
+  const result: LatLng[] = [];
+  if (Array.isArray((input as readonly CoordinateTuple[])[0])) {
+    const pairs = input as readonly CoordinateTuple[];
+    for (let index = 0; index < pairs.length; index++) {
+      const pair = pairs[index];
+      if (!Array.isArray(pair) || pair.length < 2) {
+        throw new TypeError(`${name}: item ${index} is not a [${order}] pair.`);
+      }
+      result.push(latitudeFirst ? new LatLng(pair[0], pair[1]) : new LatLng(pair[1], pair[0]));
+    }
+    return result;
+  }
+  const values = input as ArrayLike<number>;
+  // An odd length is a dropped or duplicated number, which would otherwise shift every point
+  // after it by one place and stay silent.
+  if (values.length % 2 !== 0) {
+    throw new TypeError(`${name}: flat input needs an even number of values, got ${values.length}.`);
+  }
+  for (let index = 0; index < values.length; index += 2) {
+    result.push(latitudeFirst
+      ? new LatLng(values[index], values[index + 1])
+      : new LatLng(values[index + 1], values[index]));
+  }
+  return result;
+}
+
+/**
+ * Convert latitude-first coordinates to named ones, so a list costs one word instead of `lat` and
+ * `lng` on every point. Accepts `[[lat, lng], …]` or a flat `[lat, lng, lat, lng, …]`.
+ */
+export function latLngs(points: CoordinateList): LatLng[] {
+  return coordinateList(points, "latLngs", true);
+}
+
+/**
+ * The same for longitude-first coordinates — the order MapLibre, GeoJSON and most server APIs
+ * use. For GeoJSON `coordinates` arrays prefer `fromGeoJSONPositions()`, which also tolerates the
+ * optional altitude.
+ */
+export function lngLats(points: CoordinateList): LatLng[] {
+  return coordinateList(points, "lngLats", false);
+}
+
+/**
+ * List form of `fromGeoJSONPosition()`: a GeoJSON `coordinates` array, altitudes ignored.
+ *
+ * The element type is looser than the single-position one on purpose. This input is almost
+ * always a variable that came out of `JSON.parse` or a fetch, where the tuple shape is already
+ * gone; every position is checked at runtime one line below either way.
+ */
+export function fromGeoJSONPositions(positions: readonly (readonly number[])[]): LatLng[] {
+  if (!Array.isArray(positions)) {
+    throw new TypeError("fromGeoJSONPositions requires an array of [longitude, latitude] positions.");
+  }
+  return positions.map((position) => fromGeoJSONPosition(position as readonly [number, number, ...number[]]));
 }
 
 /** Convert named coordinates to a fresh standard GeoJSON longitude/latitude pair. */
@@ -403,7 +480,8 @@ export function metersToPixels(meters: number, latitude: number, zoom: number): 
   return Math.abs(Number(meters)) * scale(zoom) / (2 * Math.PI * EARTH_RADIUS * latitudeScale);
 }
 
-type ViewSize = PointLike | { width: number; height: number };
+/** Viewport extent accepted by `zoomForBounds`: a pixel point or an explicit size. */
+export type ViewSize = PointLike | { width: number; height: number };
 
 export function zoomForBounds(viewSize: ViewSize, targetBounds: LatLngBoundsLike, padding = 32, maxZoom = 18): number {
   const b = bounds(targetBounds);

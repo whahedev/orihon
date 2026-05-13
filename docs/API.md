@@ -314,7 +314,7 @@ last successful routes. Routing and the current SuggestWidget request emit
 
 This section is the compact index of the supported surface. Factory functions use lower camel case and return the corresponding class (`marker()` → `Marker`, `objectManager()` → `ObjectManager`). Factories and classes are equivalent; factories are convenient in JavaScript, while classes are useful for extension and `instanceof` checks.
 
-Coordinates passed to Orihon are named `{ lat, lng }` values or `LatLng` instances. Bare numeric tuples are rejected. Use `fromGeoJSONPosition([longitude, latitude])` at a GeoJSON boundary and `toGeoJSONPosition(position)` when exporting. `latLng(latitude, longitude)` and `lngLat(longitude, latitude)` remain explicit two-argument constructors. GeoJSON coordinate arrays retain their standard longitude-first order. See [next-major migration](MIGRATION-NEXT-MAJOR.md).
+Coordinates passed to Orihon are named `{ lat, lng }` values or `LatLng` instances. Bare numeric tuples are rejected. Use `fromGeoJSONPosition([longitude, latitude])` at a GeoJSON boundary and `toGeoJSONPosition(position)` when exporting. `latLng(latitude, longitude)` and `lngLat(longitude, latitude)` remain explicit two-argument constructors. A list names its order once instead of per point: `latLngs()` and `lngLats()` take either `[[a, b], …]` or a flat run of numbers, and `fromGeoJSONPositions()` takes a GeoJSON `coordinates` array. GeoJSON coordinate arrays retain their standard longitude-first order. See [next-major migration](MIGRATION-NEXT-MAJOR.md).
 
 ### Events and base layers
 

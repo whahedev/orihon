@@ -1,5 +1,5 @@
 import { LatLngBounds, bounds, project, TILE_SIZE, type LatLngBoundsLike } from "../geo.js";
-import { TileLayer } from "../layers/tile-layer.js";
+import type { RasterTileLayer } from "../layers/tile-layer.js";
 
 const DEFAULT_MAX_TILES = 4096;
 const DEFAULT_PREFETCH_CONCURRENCY = 8;
@@ -51,6 +51,13 @@ export interface OfflineServiceWorkerOptions {
   /** Only these URL prefixes are network-cached. Empty = serve cache hits only, never cache new GETs. */
   urlPrefixes?: string[];
 }
+
+/**
+ * Prefetch only needs a tile URL scheme. `tileLayer()` returns the `RasterTileLayer` contract,
+ * which the concrete `TileLayer` and `GPUTileLayer` both satisfy; requiring the class here made
+ * the two public functions impossible to combine without a cast.
+ */
+export type PrefetchableTileLayer = Pick<RasterTileLayer, "getTileUrl"> & { getTileSize?: () => number };
 
 interface PrefetchTileLayerBaseOptions {
   zooms: number[];
@@ -160,7 +167,7 @@ export class OfflineTileCache {
   }
 
   async prefetchTileLayer(
-    layer: TileLayer,
+    layer: PrefetchableTileLayer,
     options: PrefetchTileLayerOptions
   ): Promise<OfflineTileCacheStats> {
     if (!options.bounds && !options.xRange && !options.yRange) {

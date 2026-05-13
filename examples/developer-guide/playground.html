@@ -22,26 +22,31 @@
     const badge = document.querySelector("#badge");
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
     const api = await import("/dist/orihon.esm.js?developer-guide=1");
+    // The catalogue documents the optional entries too, so their functions have to be in scope.
+    // Loaded in parallel and awaited only when a snippet runs: the first paint must not wait on
+    // seven extra modules, and a missing artifact must not take the whole playground down.
+    const optionalApi = {};
+    const optionalApiReady = Promise.all([
+      "/dist/feature-source.js",
+      "/dist/draw/index.js",
+      "/dist/controls.js",
+      "/dist/geo-entry.js",
+      "/dist/popup-content.js",
+      "/dist/layers/pmtiles.js",
+      "/dist/layers/mlt.js"
+    ].map((path) => import(`${path}?developer-guide=1`).then(
+      (module) => Object.assign(optionalApi, module),
+      (error) => console.warn(`playground: optional entry ${path} unavailable`, error)
+    )));
 
-    let map = null;
+    const createdMaps = [];
     let runId = 0;
     let outputText = "";
-    const center = ({ lat: 55.751244, lng: 37.618423 });
-    const demoBounds = [({ lat: 55.45, lng: 37.05 }), ({ lat: 56.03, lng: 38.15 })];
-    const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-    const weightedPoints = createWeightedPoints(2500);
-    const points = weightedPoints.map((point, index) => ({ ...point, data: { id: index, value: point.weight } }));
-    const objects = points.slice(0, 1200).map((point, index) => ({
-      id: `object-${index}`,
-      coordinates: ({ lat: point.lat, lng: point.lng }),
-      properties: { title: `Объект ${index + 1}`, value: point.weight, active: index % 7 !== 0 }
-    }));
-    const geojson = {
-      type: "FeatureCollection",
-      features: [
-        { type: "Feature", properties: { name: "Маршрут" }, geometry: { type: "LineString", coordinates: [[37.35,55.65],[37.62,55.75],[37.92,55.86]] } },
-        { type: "Feature", properties: { name: "Зона" }, geometry: { type: "Polygon", coordinates: [[[37.42,55.62],[37.78,55.62],[37.78,55.88],[37.42,55.88],[37.42,55.62]]] } }
-      ]
+
+    const consoleLines = [];
+    const consoleView = {
+      log: echo("log"), info: echo("info"), warn: echo("warn"),
+      error: echo("error"), debug: echo("debug"), table: echo("table")
     };
 
     resetMap();
@@ -57,25 +62,25 @@
       const current = ++runId;
       resetMap();
       outputText = "";
+      consoleLines.length = 0;
       parent.postMessage({ type: "orihon-playground-result", text: "" }, "*");
       badge.textContent = message.name ? `${message.name}() · выполняется` : "выполняется";
       try {
         const code = stripImports(String(message.code ?? ""));
+        await optionalApiReady;
         const context = {
+          ...optionalApi,
           ...api,
           Orihon: api,
-          map,
-          center,
-          demoBounds,
-          OSM,
-          points,
-          weightedPoints,
-          objects,
-          data: points,
-          geojson,
-          nextFeature: geojson.features[0],
+          // Wrapped so a run's map is torn down before the next one, even though the example
+          // owns it now: otherwise repeated runs would stack live maps on one container.
+          createMap: (container, options) => {
+            const created = api.createMap(container, options);
+            createdMaps.push(created);
+            return created;
+          },
           showResult,
-          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+          console: consoleView
         };
         const names = Object.keys(context);
         const fn = new AsyncFunction(...names, `"use strict";\n${code}`);
@@ -91,12 +96,24 @@
       }
     });
 
+    // Each example creates its own map, because the example is also the code a reader copies
+    // into an empty project. All this does is hand the next run a clean `#map` container.
     function resetMap() {
-      map?.remove();
+      for (const created of createdMaps.splice(0)) {
+        try { created.destroy(); } catch { /* already gone */ }
+      }
       document.querySelector("#map").replaceChildren();
-      map = api.createMap("map", { center, zoom: 9, controls: false, locale: "ru" });
-      api.tileLayer(OSM, { renderer: "dom", attribution: "© OpenStreetMap contributors" }).addTo(map);
-      api.scaleControl({ position: "bottom-left" }).addTo(map);
+    }
+
+    // Examples print with console.log, because that is what a reader would write in their own
+    // project. The panel mirrors those lines so the run is not silent inside the sandboxed frame.
+    function echo(level) {
+      return (...args) => {
+        globalThis.console[level](...args);
+        consoleLines.push(args.map((value) => format(value)).join(" "));
+        outputText = consoleLines.join("\n");
+        parent.postMessage({ type: "orihon-playground-result", text: outputText }, "*");
+      };
     }
 
     function showResult(value, label = "Результат") {
@@ -127,25 +144,6 @@
         .trim();
     }
 
-    function createWeightedPoints(count) {
-      let state = 0x6d2b79f5;
-      const random = () => {
-        state = Math.imul(state ^ state >>> 15, state | 1);
-        state ^= state + Math.imul(state ^ state >>> 7, state | 61);
-        return ((state ^ state >>> 14) >>> 0) / 4294967296;
-      };
-      const hubs = [[55.75,37.62,1],[55.64,37.42,.65],[55.88,37.75,.8],[55.55,37.9,.45]];
-      return Array.from({ length: count }, (_, index) => {
-        const hub = hubs[index % hubs.length];
-        const angle = random() * Math.PI * 2;
-        const radius = Math.sqrt(random()) * .24;
-        return {
-          lat: hub[0] + Math.sin(angle) * radius,
-          lng: hub[1] + Math.cos(angle) * radius * 1.7,
-          weight: Math.max(.05, hub[2] * (.45 + random() * .55))
-        };
-      });
-    }
   </script>
 </body>
 </html>

@@ -127,6 +127,9 @@ export {
   latLng,
   lngLat,
   fromGeoJSONPosition,
+  latLngs,
+  lngLats,
+  fromGeoJSONPositions,
   toGeoJSONPosition,
   bounds,
   project,
@@ -145,6 +148,16 @@ export {
 } from "./geo.js";
 
 export type { OrihonEvent, EventHandler, EventFor } from "./events.js";
+// Named in the signatures of root exports (`textLayer`, `zoomForBounds`), so they must be
+// nameable from the root entry too, not only from `orihon/core`.
+export type {
+  FeatureId,
+  FeatureSourceChange,
+  FeatureSourceDelta,
+  FeatureSourceListener,
+  ReadonlyFeatureSource,
+  SourceSnapshot
+} from "./source-types.js";
 export type { LayerOptions, LayerEventMap, QueryHit, QueryOptions, QuerySource } from "./layer.js";
 export type { RendererOptions } from "./renderer.js";
 export type { BehaviorOptions, MapBehaviorName, MapEventMap, MapOptions, MapSize, ControlPosition, CameraAnimation, CameraMotionOptions, FitBoundsOptions } from "./map.js";
@@ -152,7 +165,7 @@ export type { CameraState, CameraOrigin } from "./camera.js";
 export type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 export type { CoordinateReferenceSystem, CRSInput } from "./crs.js";
 export type { GridLayerOptions, ResolvedGridLayerOptions } from "./layers/grid-layer.js";
-export type { PointLike, LatLngLike, LatLngBoundsLike } from "./geo.js";
+export type { PointLike, LatLngLike, LatLngBoundsLike, ViewSize } from "./geo.js";
 export type { TileCoordinates, TileTemplate, TileLayerOptions, TileRedrawFlag, RasterTileRendererKind, RasterTileLayer, RasterTileStats, GPUTileFactory, TileLayerEventMap, RasterTileEventDetail } from "./layers/tile-layer.js";
 export type { GPUTileBackend, GPUTileLayerOptions, GPUTileLayerStats, GPUTileLayerEventMap } from "./layers/gpu-tile-layer.js";
 export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-layer.js";

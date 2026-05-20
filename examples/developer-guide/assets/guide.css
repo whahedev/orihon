@@ -99,12 +99,12 @@ code, pre, kbd { font-family: "Cascadia Code", "SFMono-Regular", Consolas, monos
 .group-heading h2 { margin: 0; font-size: 1.75rem; letter-spacing: -.035em; }
 .group-heading span { color: var(--muted); font: 700 .82rem monospace; }
 .group-description { color: var(--muted); }
-.api-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: .75rem; margin-top: 1.25rem; }
-.api-card { min-height: 10rem; display: flex; flex-direction: column; padding: 1rem; text-decoration: none; background: linear-gradient(145deg, rgba(13, 32, 45, .9), rgba(10, 24, 35, .82)); border: 1px solid var(--line); border-radius: .8rem; transition: border-color .15s ease, transform .15s ease; }
-.api-card:hover { transform: translateY(-2px); border-color: var(--accent); }
-.api-card > code { color: var(--accent); font-size: .92rem; font-weight: 700; }
-.api-card p { margin: .8rem 0; color: #bdd0da; font-size: .9rem; line-height: 1.5; }
-.api-card span { margin-top: auto; color: var(--muted); font-size: .74rem; }
+.api-table td:first-child { white-space: nowrap; }
+.api-table td:first-child a { color: var(--accent); font-weight: 700; text-decoration: none; }
+.api-table td:first-child a:hover { text-decoration: underline; }
+.api-table td:nth-child(2) code { color: var(--muted); }
+.api-table tbody tr:hover { background: rgba(67, 213, 199, .05); }
+.api-group .table-wrap { margin-top: 1.25rem; }
 
 .breadcrumbs { display: flex; gap: .55rem; margin-bottom: 2rem; color: var(--muted); font-size: .82rem; }
 .breadcrumbs a { text-decoration: none; }

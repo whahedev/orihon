@@ -4,115 +4,46 @@
 
 # Orihon
 
-**ORIHON — Offers Responsive Interactions, Handles Overlays Natively.**
+**A fast, typed browser map engine with a small path from first map to large-scale GIS.**
 
 [![npm](https://img.shields.io/npm/v/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![downloads](https://img.shields.io/npm/dm/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![CI](https://github.com/whahedev/orihon/actions/workflows/ci.yml/badge.svg)](https://github.com/whahedev/orihon/actions/workflows/ci.yml)
-[![full size](https://img.shields.io/badge/full-<150_KiB_gzip-0f766e)](https://github.com/whahedev/orihon#size)
+[![full size](https://img.shields.io/badge/full-<150_KiB_gzip-0f766e)](#size)
 [![license](https://img.shields.io/badge/license-Apache%202.0-0f766e)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-ready-3178c6)](./tsconfig.json)
 
-Production-ready SVG/PNG logos, favicons and design tokens are published under [`orihon/brand/*`](./docs/BRAND.md).
+Orihon is a free, open-source browser mapping library. Start with a map-centric API for common work, move to explicit layers when you need more control, and opt into GPU rendering and large-data tools only when the application needs them.
 
-## Unfold the world.
+Apache 2.0. No engine key. No paid runtime license.
 
-Orihon is a free, open-source browser map engine. Apache 2.0. Use it anywhere.
+## Start here
 
-Want to build visually? Try Orihon Studio.
+Starting from an empty folder? One command writes a project that already draws a map:
 
-Orihon is a lightweight, high-performance mapping library built around a simple idea:
+```sh
+npm create orihon-app my-map
+cd my-map
+npm install
+npm run dev
+```
 
-**less weight, more space.**
+Templates are `vanilla` and `react`, both on Vite; `npm create orihon-app my-map -- --template react --yes` skips the prompts. The generated project already contains the stylesheet import, a container with a height, an attribution and one working map, so the first thing you see is a map rather than a setup checklist.
 
-Inspired by the Japanese folding book, Orihon treats the map as a continuous surface — compact in form, boundless when unfolded.
-
-Layers appear.  
-Geometry moves.  
-Surfaces connect.  
-The world keeps unfolding.
-
-Every build ships under **150 KiB gzipped** — and you rarely need the whole engine: a basemap costs **~15 KiB**, everyday GIS **~36 KiB**, and the full GPU stack **~123 KiB**. See [Size](#size) for the enforced budgets.
-
-On our own point-rendering workload, Orihon renders and pans faster than Leaflet, OpenLayers and MapLibre. Run it yourself rather than take our word for it: [`examples/bench-compare`](examples/bench-compare) drives the same dataset through all four engines in your browser ([live](https://whahedev.github.io/orihon/bench/)).
-
-No unnecessary weight.  
-No artificial boundaries.  
-No complexity for complexity’s sake.
-
-Just a fast, continuous canvas for building maps.
-
-**Orihon — small in size, boundless in space.**
-
-Use the tiny core for simple maps. Add everyday GIS in Standard (still **no WebGL**). Pull Advanced (`orihon`) only when volume or camera stress needs GPU — points, heat, GL tiles, GL GeoJSON lines.
-
-## Install
+Already have a Vite, React, Vue or other ESM application?
 
 ```sh
 npm install orihon
 ```
 
-Coordinate order is explicit when you need it:
-
-```ts
-const moscow = latLng(55.751244, 37.618423); // latitude, longitude
-const berlin = lngLat(13.405, 52.52);        // longitude, latitude (MapLibre / GeoJSON order)
-
-marker(berlin).addTo(map);
-```
-
-A list names its order once, not `lat` and `lng` on every point:
-
-```ts
-polyline(latLngs([[55.75, 37.62], [56.33, 44.00], [59.94, 30.31]]));
-polyline(lngLats(maplibreCoordinates));
-polyline(fromGeoJSONPositions(feature.geometry.coordinates));
-```
-
-`latLngs()` and `lngLats()` also take a flat run of numbers — `latLngs([55.75, 37.62, 56.33, 44.00])`
-or a `Float64Array` straight from a worker — and reject an odd length rather than shifting every
-point after the gap.
-
-Development and release tooling requires **Node.js 22 or newer**; the repository pins **Node.js 24.20.0 LTS** in `.node-version`. Browser consumers are unaffected by this build-time requirement.
-
-## Package complexity: tiers
-
-Orihon is built as three intentional surfaces. Start narrow; grow only when the product needs it.
-
-| Tier | Import | What you get |
-| --- | --- | --- |
-| **Core** | `orihon/core` | Map, events, geometry, DOM tiles, grid |
-| **Standard** | `orihon/standard` | Core + markers, SVG/canvas vectors, GeoJSON (`svg`/`canvas`), popups, controls, overlays, locales — **no WebGL** |
-| **Advanced** | `orihon` | Standard + WebGL (points, heat, path batch, raster tiles), MVT, ObjectManager, routing, traffic, offline, workers, adapters |
-
-Optional entries keep product-specific integrations outside those tier budgets: `orihon/easy`, `orihon/source`, `orihon/draw`, `orihon/react`, `orihon/pmtiles`, `orihon/mlt` (MLT **encoder**), `orihon/mvt-wasm` / `orihon/webgpu` (Standard-only opt-in), `orihon/controls`, `orihon/geo` and `orihon/popup-content`.
-
-## API complexity
-
-Package size and API difficulty are separate axes:
-
-| API level | Intended use |
-| --- | --- |
-| **Easy** | A Standard-powered adapter for first maps: options create a basemap and map methods add common objects. |
-| **Layer API** | Explicit composition with `tileLayer()`, `marker()`, `geoJSON()` and other layers. |
-| **Rendering API** | Backend selection, packed data, workers, WebGL/WebGPU and renderer diagnostics. |
-
-The map fills its container, and a `<div>` has no height of its own — give it one, or nothing
-will be visible:
-
-```html
-<div id="map"></div>
-```
-
-```css
-#map { height: 400px; }
-```
+Then create a map with `orihon/easy`:
 
 ```js
 import { createMap } from "orihon/easy";
+import "orihon/orihon.css";
 
 const map = createMap("map", {
-  center: { lat: 55.751244, lng: 37.618423 },
+  center: { lat: 52.52, lng: 13.405 },
   zoom: 12,
   basemap: {
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -121,621 +52,417 @@ const map = createMap("map", {
 });
 
 map.addMarker({
-  position: { lat: 55.751244, lng: 37.618423 },
+  position: { lat: 52.52, lng: 13.405 },
   appearance: { shape: "pin", color: "#2563eb" },
-  popup: "Москва"
+  popup: "Berlin"
 });
-
-map.addPolyline({
-  points: route,
-  style: { stroke: "#2563eb", strokeWidth: 4 }
-});
-map.addPolygon({
-  rings: district,
-  style: { fill: "#2563eb", fillOpacity: 0.2 }
-});
-map.addGeoJSON({ data: places });
-map.addTileLayer({ url: "https://example.test/{z}/{x}/{y}.png" });
 ```
 
-`orihon/easy` is map-centric and **object-first**: `addMarker`, `addPolyline`, `addPolygon`, `addGeoJSON` and `addTileLayer` each take one options object (nested `appearance` / `style` / `points` / `rings` / `url`). The Layer API remains layer-centric (`marker(position).addTo(map)`). There is no third declarative `map.add({ type, ... })` dialect and no positional Easy overloads. `basemap` / `setBasemap()` accept either raster configuration or any ready `Layer`, including WMS, WMTS and custom implementations. A MapLibre-style `addSource()` is deliberately deferred until Orihon has a real named, reusable source lifecycle instead of disguising a layer as a source. See the [Easy API guide](./docs/EASY.md).
-
-For data reused by several renderers, `orihon/source` provides a small reactive `FeatureSource`. One source can drive `geoJSON`, `textLayer` and `ObjectManager`, so an application can change rendering strategy without replacing its update model. Consumers depend only on the read-only structural protocol exported from Core; mutation, batching and storage remain optional. See the [FeatureSource guide](./docs/FEATURE_SOURCE.md).
-
-**GPU policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `heatLayer({ backend: "auto" })`, `tileLayer({ renderer: "webgl"|"webgpu"|"auto" })`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets). `tileLayer({ renderer: "auto" })` uses the unified GPU tile pipeline: WebGPU when available, then WebGL, then DOM. Importing the Advanced entry does not change what a plain `tileLayer(url)` builds — that is DOM everywhere — and naming `"webgl"` or `"webgpu"` outright is a requirement that refuses rather than falling back. Normal vector-tile applications use `createMVTProvider` / `decodeMVT`; low-level packed decoding is isolated in `orihon/mvt`.
-
-```js
-// Core — basemap only
-import { createMap, tileLayer } from "orihon/core";
-
-// Standard — everyday GIS UI (SVG/canvas GeoJSON)
-import { createMap, tileLayer, marker, geoJSON, zoomControl } from "orihon/standard";
-
-// Advanced — GPU when volume / camera stress needs it
-import { createMap, objectManager, webglPointLayer, geoJSON, createMVTProvider, tileLayer } from "orihon";
-
-tileLayer(url); // DOM — the stable default in every tier
-tileLayer(url, { renderer: "auto" }); // WebGPU → WebGL → DOM
-createMVTProvider("/tiles/{z}/{x}/{y}.pbf"); // MVT, MLT, WASM — same call
-
-// Product integrations stay separate
-import { drawControl } from "orihon/draw";
-import { Map, TileLayer, Marker, Popup } from "orihon/react";
-import { createPMTilesProvider } from "orihon/pmtiles";
-import { encodePackedMLT } from "orihon/mlt"; // encoder only
-import { fullscreenControl, measureControl, miniMap, graticuleLayer } from "orihon/controls";
-import { bufferPoint } from "orihon/geo";
-```
-
-Gzip budgets stay attached to the tiers: core ≤ 18 KiB, standard ≤ 38 KiB, full (Advanced + WebGL/WebGPU/WASM) ≤ 132 KiB. Prefer the smallest entry that covers the feature set — the [Size](#size) table lists every artifact and what CI enforces.
-
-**ObjectManager** is the Advanced-tier answer to heavy datasets: render and manage 100,000+ map objects without keeping 100,000 DOM markers alive.
-
-For 100k–1M imports, prefer `await manager.addAsync(iterable, { chunkSize: 10_000, yieldMode: "task" })`. It accepts synchronous or asynchronous iterables, reports progress, supports `AbortSignal`, and coalesces layout invalidation until the import finishes. `add()` remains the fastest synchronous path for bounded inputs.
-
-## Quick Start
-
-Start at `orihon/standard`: it covers ordinary GIS work, and every symbol below keeps the same
-name and behaviour if you later move the import to the Advanced `orihon` root. For a first map
-with even less to learn, `orihon/easy` above is the shorter path.
-
-The container needs a height here too — see the snippet above.
-
-```js
-import { createMap, tileLayer, marker, polyline } from "orihon/standard";
-import "orihon/orihon.css";
-
-const map = createMap("map", {
-  center: ({ lat: 52.520008, lng: 13.404954 }),
-  zoom: 10
-});
-
-tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution: "\u00a9 OpenStreetMap contributors"
-}).addTo(map);
-
-marker(({ lat: 52.520008, lng: 13.404954 }), { title: "Berlin" }).addTo(map);
-
-polyline([
-  ({ lat: 52.51, lng: 13.37 }),
-  ({ lat: 52.53, lng: 13.41 }),
-  ({ lat: 52.50, lng: 13.44 })
-], { stroke: "#0f766e", strokeWidth: 4 }).addTo(map);
-```
-
-Moving to `orihon` unlocks ObjectManager, WebGL/WebGPU renderers and packed tile formats; it does
-not change what the code above does. GPU raster tiles stay opt-in through
-`tileLayer(url, { renderer: "auto" })`.
-
-Script-tag / CDN build:
+Your page needs a container with a real size:
 
 ```html
-<link rel="stylesheet" href="./node_modules/orihon/dist/orihon.css" />
-<script src="./node_modules/orihon/dist/orihon.global.js"></script>
-<script>
-  const map = Orihon.createMap("map", { center: { lat: 52.52, lng: 13.405 }, zoom: 10 });
-</script>
+<div id="map"></div>
+
+<style>
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+  }
+
+  #map {
+    height: 100vh;
+    min-height: 360px;
+  }
+</style>
 ```
 
-## What Is Included
+That is enough for a pannable, zoomable OpenStreetMap basemap with a marker and popup.
 
-### Core
+A `<div>` has no height of its own, which is the most common reason a first map looks broken: tiles are requested, layers exist, nothing is painted. Orihon says so in the console instead of leaving you to guess — see [Troubleshooting](./docs/TROUBLESHOOTING.md#zero-size-container).
 
-- Web Mercator map: pan, wheel zoom, touch pinch, double-click zoom, box zoom, inertia and navigation helpers.
-- Events (`OrihonEvent`), typed geometry (`Point`, `Bounds`, `LatLng`, `LatLngBounds`) and projection helpers.
-- Grid and tile layers with stable generations, bounded DOM reuse, TMS, Retina and source bounds.
-- Familiar map API: `addTo`, `remove`, `setView`, `panTo`, `fitBounds`, `flyTo`, `on`, `off`.
+## Add common map objects
 
-### Standard
-
-Everything in Core, plus:
-
-- Markers, icons / `DivIcon`, SVG polylines, polygons with holes, rectangles, circles and circle markers.
-- GeoJSON with `filter`, `style`, `pointToLayer`, `onEachFeature`.
-- Popups and tooltips (`bindPopup`, `bindTooltip`, auto-pan).
-- Image / video / SVG overlays, WMS and WMTS tiles, canvas labels with collision, canvas base layer, `LayerGroup` / `FeatureGroup`.
-- Zoom, scale, attribution, geolocation, layers and custom controls with locales (`en`, `ru`, `ar`, `tr`, `zh`, `de`, `fr`, `da`, `hi`).
-
-### Advanced
-
-Everything in Standard, plus:
-
-- `MarkerCollection` — viewport-culled, recycled HTML markers; `renderer:"svg"` with one real SVG circle per point, shared group style/camera transform, spatially distributed HTML buttons (`htmlButtonLimit` + `buttonCellSize`) and selected-object priority through `setSelected()`; automatic WebGL from 2,500 points; or `renderer:"hybrid"` with bounded HTML over a WebGL remainder. Internal marker nodes stay out of the map-wide frame loop.
-- `ObjectManager` / `RemoteObjectManager` — high-volume collections with viewport DOM, clustering and stale-request cancellation.
-- `WebGLPointLayer`, unified `HeatLayer` / `heatLayer()` / `buildHeat()` (continuous heat, WASM isolines, or both from one scalar field), and MVT-capable `VectorTileLayer`. The former Canvas heat, point-splat WebGL heat and standalone isoline layers have been removed.
-- Provider-based search, suggest, routing and traffic.
-- Offline tile cache / Service Worker helpers, geometry workers, performance inspector and framework / Web Component adapters.
-
-Runtime profile across tiers: reusable DOM panes, tile cache limits, SVG path reuse, spatial grid queries and differential marker rendering.
-
-## TypeScript
-
-The source is strict TypeScript. `npm run build` writes ESM modules, source maps and generated declarations to `dist`.
-
-Use named imports:
+The Easy API is map-centric and object-first. Each operation takes one options object, so the fields are visible in autocomplete and there are no positional Easy overloads to memorize.
 
 ```js
-import { createMap, tileLayer, marker, featureGroup, circle, rectangle, layersControl } from "orihon";
-import "orihon/orihon.css";
+map.addPolyline({
+  points: [
+    { lat: 52.51, lng: 13.37 },
+    { lat: 52.53, lng: 13.41 },
+    { lat: 52.50, lng: 13.44 }
+  ],
+  style: {
+    stroke: "#2563eb",
+    strokeWidth: 4
+  }
+});
 
-const map = createMap("map", { center: ({ lat: 52.52, lng: 13.405 }), zoom: 10 });
-const streets = tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-const places = featureGroup([
-  marker(({ lat: 52.52, lng: 13.405 })).bindPopup("Berlin"),
-  circle(({ lat: 52.54, lng: 13.43 }), { radiusMeters: 750 }),
-  rectangle([({ lat: 52.49, lng: 13.35 }), ({ lat: 52.54, lng: 13.45 })])
-]).addTo(map);
+map.addPolygon({
+  rings: [
+    { lat: 52.50, lng: 13.38 },
+    { lat: 52.54, lng: 13.39 },
+    { lat: 52.53, lng: 13.45 },
+    { lat: 52.50, lng: 13.38 }
+  ],
+  style: {
+    fill: "#2563eb",
+    fillOpacity: 0.2,
+    stroke: "#2563eb"
+  },
+  popup: "District"
+});
+
+const places = map.addGeoJSON({
+  data: {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { name: "Alexanderplatz" },
+        geometry: {
+          type: "Point",
+          coordinates: [13.4132, 52.5219]
+        }
+      }
+    ]
+  }
+});
 
 map.fitBounds(places.getBounds());
-layersControl({ Streets: streets }, { Places: places }).addTo(map);
 ```
 
-## ObjectManager
+Easy currently covers the common first-map operations:
 
-Render and manage 100,000+ map objects without keeping 100,000 DOM markers alive.
+- `addMarker({ position, ... })`
+- `addPolyline({ points, ... })`
+- `addPolygon({ rings, ... })`
+- `addGeoJSON({ data, ... })`
+- `addTileLayer({ url, ... })`
+- `setBasemap(...)` / `getBasemap()`
+
+The objects returned by those methods are normal Orihon layers, not wrappers. You can use their events, popup APIs, setters and normal `remove()` lifecycle immediately.
+
+See the [Easy API guide](./docs/EASY.md) for the complete contract.
+
+## When you need more control
+
+You do not need to choose the whole architecture before drawing the first map.
+
+Start with `orihon/easy`. Move to the Layer API only where the application needs explicit composition:
 
 ```js
-import { createMap, objectManager, tileLayer } from "orihon";
-import "orihon/orihon.css";
+import { polygon } from "orihon/standard";
 
-const map = createMap("map", { center: ({ lat: 55.75, lng: 37.62 }), zoom: 11 });
-tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+const area = polygon(
+  [
+    { lat: 52.50, lng: 13.38 },
+    { lat: 52.54, lng: 13.39 },
+    { lat: 52.53, lng: 13.45 },
+    { lat: 52.50, lng: 13.38 }
+  ],
+  {
+    fill: "#0f766e",
+    fillOpacity: 0.2,
+    stroke: "#0f766e"
+  }
+).addTo(map);
+
+area.bindPopup("Custom layer");
+```
+
+The two public sentence forms are intentional:
+
+| API | Sentence | Use it for |
+| --- | --- | --- |
+| **Easy** | `map.addMarker({ ... })` | First maps and common application work |
+| **Layer API** | `marker(position).addTo(map)` | Explicit composition and the full layer surface |
+
+There is no third generic `map.add({ type, ... })` dialect.
+
+## Coordinates without guessing
+
+Application-facing geographic coordinates use named values:
+
+```js
+const berlin = { lat: 52.52, lng: 13.405 };
+```
+
+When converting from another convention, make the order explicit:
+
+```js
+import {
+  latLng,
+  lngLat,
+  fromGeoJSONPosition,
+  toGeoJSONPosition
+} from "orihon/standard";
+
+const moscow = latLng(55.751244, 37.618423); // latitude, longitude
+const berlin = lngLat(13.405, 52.52);        // longitude, latitude
+
+const point = fromGeoJSONPosition([13.405, 52.52]);
+const geojsonPosition = toGeoJSONPosition(point); // [13.405, 52.52]
+```
+
+A list names its order once instead of repeating `lat` and `lng` on every point:
+
+```js
+import { latLngs, lngLats, fromGeoJSONPositions, polyline } from "orihon/standard";
+
+polyline(latLngs([[52.51, 13.37], [52.53, 13.41], [52.50, 13.44]]));
+polyline(lngLats(maplibreCoordinates));
+polyline(fromGeoJSONPositions(feature.geometry.coordinates));
+```
+
+`latLngs()` and `lngLats()` also read a flat run of numbers — `latLngs([52.51, 13.37, 52.53, 13.41])`, or a `Float64Array` straight from a worker, which skips building one pair object per point. An odd length throws instead of shifting every later point by one place.
+
+GeoJSON keeps the standard `[longitude, latitude]` order. Normal Orihon geographic APIs prefer `{ lat, lng }` so a bare numeric tuple cannot silently swap the two.
+
+## Choose a package tier later
+
+Package size and API difficulty are separate concerns. The Easy API is a beginner-oriented adapter over Standard; Core, Standard and Advanced describe capability and bundle size.
+
+| Tier | Import | What it includes |
+| --- | --- | --- |
+| **Core** | `orihon/core` | Map, camera, events, geometry, DOM raster tiles and grid primitives |
+| **Standard** | `orihon/standard` | Core + markers, SVG/canvas vectors, GeoJSON, popups, overlays, controls and locales |
+| **Advanced** | `orihon` | Standard + WebGL/WebGPU, MVT, heat, ObjectManager, workers, routing, traffic and offline tooling |
+
+A normal application can stay on Standard indefinitely. Importing the Advanced root is for cases where dataset size, rendering load or infrastructure features justify it.
+
+GPU rendering is explicit:
+
+```js
+import { tileLayer } from "orihon";
+
+tileLayer("/tiles/{z}/{x}/{y}.png");
+// DOM renderer — stable default.
+
+tileLayer("/tiles/{z}/{x}/{y}.png", { renderer: "auto" });
+// Prefer WebGPU, then WebGL, then DOM.
+
+tileLayer("/tiles/{z}/{x}/{y}.png", { renderer: "webgl" });
+// WebGL is required; unsupported capability throws instead of silently changing renderer.
+```
+
+Optional product-specific entry points stay separate from those tiers:
+
+- `orihon/easy` — map-centric first-map API
+- `orihon/source` — reactive `FeatureSource`
+- `orihon/react` — React bindings
+- `orihon/draw` — drawing and editing
+- `orihon/controls` — fullscreen, measure, minimap and graticule
+- `orihon/geo` — additional geographic helpers
+- `orihon/popup-content` — declarative rich popup content
+- `orihon/pmtiles`, `orihon/mvt`, `orihon/mlt`, `orihon/mvt-wasm` — packed tile formats
+- `orihon/webgpu` — explicit WebGPU integration
+
+## Common next steps
+
+### Reactive data
+
+If the same data should drive several renderers, use `FeatureSource` instead of rebuilding application state around a particular layer:
+
+```js
+import { featureSource } from "orihon/source";
+import { geoJSON } from "orihon/standard";
+
+const source = featureSource();
+const layer = geoJSON(source).addTo(map);
+
+source.add({
+  type: "Feature",
+  id: "station-1",
+  properties: { name: "Central Station" },
+  geometry: {
+    type: "Point",
+    coordinates: [13.3694, 52.5251]
+  }
+});
+```
+
+One source can feed GeoJSON, labels and high-volume rendering. See [FeatureSource](./docs/FEATURE_SOURCE.md).
+
+### Large datasets
+
+The Advanced entry includes `ObjectManager`, GPU point/path rendering, heatmaps, vector tiles, workers and performance diagnostics. `ObjectManager` is intended for tens of thousands to millions of application objects without one DOM marker per object.
+
+For large cooperative imports:
+
+```js
+import { objectManager } from "orihon";
 
 const manager = objectManager({
   clusterize: true,
-  clusterRadiusPixels: 60,
   clusterRenderer: "auto",
   layoutWorker: "auto"
 }).addTo(map);
 
-await manager.addAsync(
-  Array.from({ length: 50_000 }, (_, id) => ({
-    type: "Feature",
-    id,
-    geometry: {
-      type: "Point",
-      coordinates: [37.4 + Math.random() * 0.5, 55.6 + Math.random() * 0.3]
-    },
-    properties: { name: `Point ${id}` }
-  })),
-  { chunkSize: 10_000, yieldMode: "task" }
-);
-```
-
-### Object state and data-driven styling
-
-`ManagedObject.properties` stores durable object data. Runtime UI/application flags live separately in `ObjectState` (selected, hovered, alarms, etc.) and are never written back into `properties`.
-
-```js
-const manager = objectManager({
-  clusterRenderer: "auto",
-  style: (object, state, context) => ({
-    fill:
-      context.selected
-        ? "#7c3aed"
-        : context.hovered
-          ? "#f59e0b"
-          : state.alarm === true
-            ? "#dc2626"
-            : object.properties?.status === "offline"
-              ? "#64748b"
-              : "#16a34a",
-    fillOpacity: state.disabled === true ? 0.3 : 0.9,
-    size: context.zoom >= 14 ? 13 : 7
-  })
-});
-
-manager.setObjectState("truck-42", { alarm: true });
-manager.setSelected("truck-42");
-```
-
-Point styles use the same vocabulary as vector fills: `fill`, `fillOpacity`, `size`. The former `color` and `opacity` names remain compatibility aliases; canonical fields win when both are present. Style priority: base defaults → legacy category/alert/selected/hover (`styleByCategory`) → custom `style` → normalization. Custom resolvers are not auto-wrapped with purple/orange selection colors — use `context.selected` / `context.hovered` explicitly. `setObjectState` shallow-merges scalars (`undefined` deletes a key; `null` is kept). Batch updates use `setObjectStates`. Changing state patches only touched WebGL color/size slots when the GPU buffer topology is unchanged. `clear()` clears object data and states but keeps the configured style resolver.
-
-### Managed geometries, icons, labels, and scene modes
-
-Points use `coordinates: { lat, lng }`. GeoJSON-style `geometry` accepts `Point` (`[lng, lat]`), `LineString`, and `Polygon` in one manager. Bare coordinate tuples are no longer accepted outside GeoJSON; see [next-major migration](docs/MIGRATION-NEXT-MAJOR.md).
-
-```js
-const manager = objectManager({
-  clusterize: true,
-  visualization: "auto",
-  visualizationByZoom: { heatmapUntil: 7, clustersUntil: 12 },
-  declutter: true,
-  search: { fields: ["properties.name", "properties.vehicleNumber"] },
-  time: {
-    value: (object) =>
-      typeof object.properties?.timestamp === "number"
-        ? object.properties.timestamp
-        : null
-  },
-  clusterProperties: {
-    alarms: {
-      operation: "count",
-      filter: (object) => object.properties?.alarm === true
-    },
-    totalCargo: {
-      operation: "sum",
-      value: (object) => Number(object.properties?.cargo ?? 0)
-    }
-  },
-  style: (object, state, context) => ({
-    fill: state.selected ? "#7c3aed" : state.alarm ? "#dc2626" : "#2563eb",
-    fillOpacity: 0.9,
-    size: context.zoom >= 14 ? 18 : 12,
-    icon: object.properties?.type === "truck" ? "truck" : null,
-    rotation: Number(object.properties?.heading ?? 0),
-    label:
-      context.zoom >= 13
-        ? {
-            text: String(object.properties?.name ?? ""),
-            fontSize: 12,
-            haloColor: "#ffffff",
-            haloWidth: 2,
-            offset: [0, -20],
-            priority: state.selected ? 1000 : 0
-          }
-        : null,
-    trail:
-      object.properties?.type === "truck"
-        ? { enabled: true, maxPoints: 40, color: "#2563eb", width: 2, opacity: 0.5 }
-        : null,
-    line: object.geometry?.type === "LineString"
-      ? { stroke: "#2563eb", strokeWidth: 3, dashArray: [8, 4] }
-      : undefined,
-    polygon: object.geometry?.type === "Polygon"
-      ? { fill: "#0f766e", fillOpacity: 0.2, stroke: "#0f766e", strokeWidth: 1.5 }
-      : undefined
-  })
-});
-
-manager.registerIcon("truck", truckImage);
-manager.add([
-  {
-    id: "truck-42",
-    geometry: { type: "Point", coordinates: [37.618423, 55.751244] },
-    properties: { type: "truck", name: "Truck 42", heading: 90, timestamp: Date.now() }
-  }
-]);
-manager.updateObject("truck-42", { coordinates: ({ lat: 55.76, lng: 37.63 }) }, { animate: true, durationMs: 800 });
-manager.search("truck 42", { limit: 10 });
-manager.setTimeRange(Date.now() - 3600_000, Date.now());
-```
-
-**Icons:** GPU sprite atlas rebuilt only on `registerIcon` / `removeIcon` / `clearIcons` — not on object moves. Missing icons fall back to a default symbol. Tint uses `iconTint` when set, otherwise point `fill` (or legacy `color`).
-
-**Rotation:** degrees (`0` up, `90` right). Per-instance GPU attribute on symbol quads (`rotationAlignment: "screen"` in v1).
-
-**Labels / declutter:** `style.label` plus optional `declutter: true`. Higher `priority` wins; `collisionMode: "always"` bypasses declutter (selected/hovered default to always).
-
-**Visualization:** `"objects" | "clusters" | "heatmap" | "auto"`. Switching modes keeps `ObjectState`, search, and temporal indexes.
-
-**Search / time:** opt-in local token index and temporal range filter. Coordinate/state updates do not rebuild search; time filtering applies before clustering/heatmap.
-
-**Motion / trails:** `updateObject(..., { animate: true })` / `moveObject`. Spatial index uses target coordinates; symbol rendering can interpolate. Trails append on logical moves and batch-render with styled paths.
-
-**Lines / polygons:** managed geometries route to path/polygon batches. Dash + gradient are supported on the styled path pipeline (canvas-backed with distance-along-line data; WebGL shaders are the next hardening step). Style-only updates avoid retriangulation when geometry is unchanged.
-
-## GeoJSON And WMS
-
-GeoJSON supports every standard geometry, polygon holes and the familiar callbacks `filter`, `style`, `pointToLayer` and `onEachFeature`. Vector rendering performs viewport culling and zoom-level simplification for large paths. Data can be appended, restyled, reset and exported without rebuilding the map:
-
-```js
-const data = geoJSON(featureCollection, {
-  filter: (feature) => feature.properties?.visible !== false,
-  style: (feature) => ({ stroke: feature.properties?.color }),
-  pointToLayer: (feature, position) => circleMarker(position, { radiusPixels: 7 }),
-  onEachFeature: (feature, layer) => layer.bindPopup(feature.properties?.title)
-}).addTo(map);
-
-data.addData(nextFeature).setStyle({ strokeWidth: 4 });
-const snapshot = data.toGeoJSON();
-data.resetStyle();
-```
-
-Large inputs have a responsive asynchronous path. A raw JSON `string` or `Blob` is parsed in a dedicated Worker when the browser permits it; a parsed object is consumed on the main thread in bounded chunks, avoiding a second full structured clone. `AsyncIterable<GeoJSONData>` is accepted for application-owned streaming:
-
-```js
-const controller = new AbortController();
-const lines = geoJSON(null, {
-  renderer: "webgl",
-  interactive: false,
-  retainFeatures: false,
-  maxFeatures: 1_000_000
-}).addTo(map);
-
-await lines.addDataAsync(fileBlob, {
-  chunkSize: 5_000,
-  maxBytes: 256 * 1024 * 1024,
-  signal: controller.signal,
-  onProgress: (processed, total) => console.log(processed, total)
+await manager.addAsync(objects, {
+  chunkSize: 10_000,
+  yieldMode: "task",
+  signal: abortController.signal
 });
 ```
 
-`addDataAsync()` accepts parsed GeoJSON, raw JSON text/Blob, or an async stream. Its defaults are `chunkSize:5000`, `useWorker:true`, `yieldMode:"frame"` and a 256 MiB raw-input limit. If Blob workers are unavailable (for example because of CSP), parsing falls back to the main thread while ingestion remains chunked. `yieldMode:"task"` is useful before a map is attached or in a background import workflow.
+The detailed data, styling, clustering, heatmap and lifecycle contracts live in the [API reference](./docs/API.md) instead of this README.
 
-For write-once, non-interactive path sets at hundreds of thousands to millions of features, combine `addDataAsync()` with `renderer:"webgl"` and `retainFeatures:false`. This keeps only the packed path buffer; discarded features are intentionally unavailable through `toGeoJSON()` or later per-feature restyling. During continuous pan/zoom, the WebGL path batch camera-warps its last exact frame and throttles full GPU redraws; an exact frame is rendered after the camera settles. Direct `pathBatch({ mode:"uniform" })` users can tune `cameraRedrawIntervalMs` (default 250 ms; `0` restores every-frame redraw) and `cameraSettleDelayMs` (default 120 ms).
+### React
 
-WMS GetMap URLs are generated per tile with WMS 1.1.1 or 1.3.0 axis ordering and either `EPSG:3857` or `EPSG:4326` bounds:
+React bindings are published from `orihon/react` and use the same map/layer concepts. React and React DOM are optional peer dependencies, so non-React applications do not pull them in.
 
-```js
-const districts = wmsTileLayer("https://maps.example.test/wms", {
-  layers: "public:districts",
-  format: "image/png",
-  transparent: true,
-  version: "1.3.0",
-  crs: "EPSG:3857"
-}).addTo(map);
+See the [API reference](./docs/API.md) and the runnable example under [`examples/react`](./examples/react).
 
-districts.setParams({ styles: "selected" });
-```
+### Drawing and controls
 
-Custom tile grids use the `GridLayer` extension class; media overlays expose the normal layer lifecycle:
+Drawing/editing is opt-in through `orihon/draw`. Additional UI such as fullscreen, measurement, minimap and graticule lives under `orihon/controls`.
 
-```js
-class CustomTiles extends GridLayer {}
-videoOverlay("traffic.mp4", [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })], { poster: "preview.png" }).addTo(map);
-svgOverlay(document.querySelector("svg"), [({ lat: 52.48, lng: 13.30 }), ({ lat: 52.55, lng: 13.45 })]).addTo(map);
-```
+Keeping these entry points separate means a normal map does not pay for product-specific UI it never uses.
 
-## Rich Popup Content
+## TypeScript and API contracts
 
-Every interactive layer accepts text, numbers, DOM nodes, async factories or mountable component objects. Mountable content is useful for charts and framework roots because Orihon calls its cleanup when the popup closes:
+Orihon is written in strict TypeScript and publishes generated declarations for every public entry point.
 
-```js
-marker(({ lat: 52.52, lng: 13.405 }))
-  .bindPopup(({ data }) => ({
-    mount(container) {
-      const canvas = document.createElement("canvas");
-      container.append(canvas);
-      const chart = new Chart(canvas, {
-        type: "bar",
-        data: data.chartData
-      });
-      return () => chart.destroy();
-    }
-  }), { className: "analytics-popup" })
-  .addTo(map);
-```
+The public API follows a small set of rules:
 
-The factory context contains `map`, `latlng`, `source`, `event` and `data`. An `HTMLElement`, `<img>` or `<video controls>` can be returned directly. Strings are inserted as text, not interpreted as HTML.
+- options objects are preferred when several independent values would otherwise become positional arguments;
+- geographic units are visible in names such as `durationMs`, `radiusMeters` and `radiusPixels`;
+- `addTo(map)` attaches reusable layers and controls; `remove()` detaches them;
+- resource-owning services use terminal, idempotent `destroy()`;
+- cancellation uses `AbortSignal` / `AbortError`;
+- calls made after terminal destruction use `DestroyedError` rather than pretending the operation was cancelled;
+- live map state is read-only from the public surface and changes through explicit methods;
+- built-in events are typed by event name and payload.
 
-Collections expose object-aware factories:
+The complete conventions are documented in [API-DESIGN.md](./docs/API-DESIGN.md).
 
-```js
-objects.bindPopup((object, id, context) => renderObjectCard(object, context));
-objects.bindClusterPopup((items, ids) => renderClusterChart(items));
+## Performance
 
-geoJSON(data, {
-  popup: (feature) => renderFeatureCard(feature)
-});
+Orihon keeps rendering cost proportional to the job instead of forcing every application through the heaviest pipeline.
 
-webglPointLayer(points)
-  .bindPopup(({ event, data }) => renderPointCard(data, event.index));
-```
+Core and Standard stay CPU/DOM. Advanced adds GPU backends for the workloads where they pay off: large point sets, heat, GPU raster tiles and large vector paths.
 
-Calling `bindPopup` automatically enables click handling for WebGL points and image/video/SVG overlays.
+The repository includes two reproducible browser demos:
 
-## UI And Localization
+- [Scale showcase](./examples/showcase) — Core → Standard → Advanced, then large-data scenes ([live](https://whahedev.github.io/orihon/showcase/))
+- [Engine benchmark](./examples/bench-compare) — the same point workload through Orihon, Leaflet, OpenLayers and MapLibre ([live](https://whahedev.github.io/orihon/bench/))
 
-Built-in UI locales (English is the default): `en`, `ru`, `ar`, `tr`, `zh`, `de`, `fr`, `da`, `hi`. Controls inherit the map locale; individual controls can override it. Presets are also exported as `enLocale`, `ruLocale`, `arLocale`, and so on, plus a `locales` map. The scale supports metric, imperial or combined units, and custom controls accept text, DOM nodes or a render callback without using `innerHTML`:
-
-```js
-const map = createMap("map", {
-  center: ({ lat: 52.52, lng: 13.405 }),
-  zoom: 10,
-  locale: "de",
-  ariaLabel: "Objektkarte"
-});
-
-scaleControl({ units: "both" }).addTo(map);
-customControl((currentMap) => `z${currentMap.getZoom()}`, {
-  position: "bottom-left",
-  ariaLabel: "Aktueller Zoom"
-}).addTo(map);
-
-const place = marker(({ lat: 52.52, lng: 13.405 }), { opacity: 0.8, zIndexOffset: 100 })
-  .bindPopup("Objekt", { autoPan: true, keepInView: true })
-  .addTo(map);
-```
-
-## Services And Behaviors
-
-The services layer stays provider-based: Orihon owns orchestration, cancellation and display, while an app can plug in local or commercial data providers.
-
-```js
-const search = searchProvider([
-  { name: "Berlin", center: ({ lat: 52.520, lng: 13.405 }) },
-  { name: "Hamburg", center: ({ lat: 53.551, lng: 9.994 }) }
-]);
-
-createSuggestWidget({
-  input: document.querySelector("#search"),
-  provider: createSuggestProvider((query, context) => search.search(query, context)),
-  label: (item) => item.name,
-  onSelect: (item) => map.setView(item.center, 11)
-});
-
-const routes = routingLayer({
-  provider: createStraightLineRoutingProvider(),
-  alternatives: true
-}).addTo(map);
-
-await routes.route([({ lat: 52.52, lng: 13.40 }), ({ lat: 52.55, lng: 13.45 })]);
-routes.select(1);
-
-const traffic = trafficLayer("/traffic/{z}/{x}/{y}.png").addTo(map);
-traffic.on("statechange", ({ state }) => console.log(state));
-traffic.refresh();
-
-map.behaviors.disable("scrollZoom");
-map.behaviors.enable("dblClick");
-```
-
-## Advanced Modules
-
-Orihon 1.0 keeps advanced modules opt-in for large datasets and production diagnostics without making the everyday map heavier.
-
-Scale showcase: [`examples/showcase`](examples/showcase) — Core → Standard → Advanced, then 100k+ stress scenes (open `index.html`, or [live](https://whahedev.github.io/orihon/showcase/)). Comparative engine bench: [`examples/bench-compare`](examples/bench-compare) — same point workload across Orihon, Leaflet, OpenLayers and MapLibre (open `index.html`, or [live](https://whahedev.github.io/orihon/bench/)).
-
-```js
-const points = webglPointLayer([], {
-  pointSize: 4,
-  color: "#e11d48"
-}).addTo(map);
-
-await points.setDataAsync(bigPointArray, {
-  chunkSize: 50_000,
-  yieldMode: "task"
-});
-
-const heat = heatLayer(weightedPoints, {
-  mode: "both",             // "heatmap" | "isolines" | "both"
-  backend: "auto",          // "auto" | "wasm" | "webgpu"
-  evaluation: "static",     // full dataset; use "zoom" for local refinement
-  labels: true,
-  step: "auto",             // spatially adaptive levels; or an absolute interval
-  bands: true,               // fill every contour zone, including edges
-  cover: true,
-  interactive: true          // line/zone hover, click, query and selection
-}).addTo(map);
-
-heat
-  .bindTooltip(({ data }) => data.kind === "line"
-    ? `Contour ${data.value}`
-    : `Zone ${data.lowerValue}–${data.upperValue ?? "∞"}`)
-  .bindPopup(({ data }) => JSON.stringify(data));
-
-heat.on("select", ({ feature }) => console.log("selected", feature));
-heat.on("contextmenu", ({ feature }) => openAnalysisMenu(feature));
-heat.clearSelection();
-
-// The same feature is available through the common map query API.
-const hit = map.query([320, 240], { layers: [heat] })[0]?.feature;
-
-// The same flags work on ObjectManager's packed 100k–1M heat visualization.
-const sensors = objectManager({
-  visualization: "heatmap",
-  heatmapDisplay: "both",
-  heatmapBackend: "auto",
-  heatmapEvaluation: "static",
-  heatmapIsolineLabels: true,
-  heatmapIsolineStep: 0.25,
-  heatmapWeight: (object) => Number(object.properties?.value ?? 1)
-}).addTo(map);
-
-const vectorTiles = vectorTileLayer({
-  provider: async ({ x, y, z, signal }) => {
-    const response = await fetch(`/tiles/${z}/${x}/${y}.json`, { signal });
-    return response.json();
-  },
-  style: (feature) => ({ stroke: feature.properties.color })
-}).addTo(map);
-
-const mvtProvider = createMVTProvider("/mvt/{z}/{x}/{y}.pbf", { layer: "roads" });
-vectorTileLayer({
-  provider: mvtProvider,
-  renderer: "canvas",
-  paint: [
-    { layer: "water", type: "fill", fill: "#a0c8f0" },
-    { layer: "roads", type: "line", stroke: "#fff", strokeWidth: 1.5, minZoom: 8 }
-  ]
-}).addTo(map);
-
-points.setViewTransform({ rotation: 25, pitch: 35 });
-
-const inspector = performanceInspector(map);
-const snapshot = await inspector.measureFrames(30);
-
-const prepared = preparePointBatch(rawPoints);
-const cache = offlineTileCache({ cacheName: "city-tiles" });
-await cache.prefetchTileLayer(streets, {
-  bounds: map.getBounds(),
-  zooms: [10, 11, 12]
-});
-const swScript = cache.createServiceWorkerScript({
-  urlPrefixes: ["https://tile.openstreetmap.org/"]
-});
-
-defineOrihonElement();
-```
-
-## Browser And CDN Builds
-
-`npm run build` emits:
-
-- `dist/core.js`, `dist/standard.js`, `dist/index.js` and `.d.ts` for tree-shakeable modular ESM.
-- `dist/orihon.core.esm.js`, `dist/orihon.standard.esm.js` and `dist/orihon.esm.js` as minified single-file ESM bundles.
-- `dist/orihon.global.js`, a standalone IIFE that exposes `globalThis.Orihon` and resolved `globalThis.OrihonReady` without a runtime `import()`.
-- `dist/orihon.css`.
-- `dist/release-manifest.json` with raw and gzip artifact sizes.
-
-For a script-tag/global setup:
-
-```html
-<link rel="stylesheet" href="./dist/orihon.css" />
-<script src="./dist/orihon.global.js"></script>
-<script>
-  const map = Orihon.createMap("map", { center: { lat: 52.52, lng: 13.405 }, zoom: 10 });
-</script>
-```
+Run the benchmarks rather than relying on a headline number; browser, GPU, dataset shape and interaction pattern all matter.
 
 ## Size
 
-Nothing Orihon ships crosses **150 KiB gzip**, and `npm run size` fails the build
-if anything does. The same command also checks this table against
-`dist/release-manifest.json` and against the budgets in `scripts/check-size.mjs`,
-so a published size claim cannot drift away from the artifact it describes.
+Nothing Orihon ships crosses **150 KiB gzip**. `npm run size` fails the build when a published artifact exceeds its budget and checks this table against `dist/release-manifest.json`.
 
 | Artifact | Budget | What it carries |
-| --- | --- | --- |
+| --- | ---: | --- |
 | `orihon.geo.esm.js` | ≤ 2 KiB gzip | Geometry helpers only |
 | `orihon.popup-content.esm.js` | ≤ 5 KiB gzip | Popup content blocks |
-| `orihon.controls.esm.js` | ≤ 8 KiB gzip | Optional controls (imports shared modules) |
+| `orihon.controls.esm.js` | ≤ 8 KiB gzip | Optional controls |
 | `orihon.draw.esm.js` | ≤ 12 KiB gzip | Draw/edit tools |
 | `orihon.core.esm.js` | ≤ 18 KiB gzip | Map, events, geometry, DOM tiles |
-| `orihon.standard.esm.js` | ≤ 38 KiB gzip | Core + markers, vectors, GeoJSON, popups, controls — no WebGL |
-| `orihon.esm.js` | ≤ 132 KiB gzip | Advanced: Standard + WebGL/WebGPU, MVT, ObjectManager, WASM |
+| `orihon.standard.esm.js` | ≤ 38 KiB gzip | Everyday GIS, no WebGL |
+| `orihon.esm.js` | ≤ 132 KiB gzip | Advanced: Standard + GPU, MVT, ObjectManager and WASM |
 | `orihon.react.esm.js` | ≤ 118 KiB gzip | React bindings over the Advanced surface |
-| `orihon.global.js` | ≤ 149 KiB gzip | Script-tag build: no code splitting, lazy chunks inlined |
+| `orihon.global.js` | ≤ 149 KiB gzip | Standalone script-tag build |
 
-Budgets sit a little above the current build on purpose: a zero-slack budget turns
-every unrelated change into a size incident. `dist/release-manifest.json` records
-the exact bytes of the build you install.
+Prefer the smallest entry point that contains the capability you need. Exact raw and gzip sizes for the current build are written to `dist/release-manifest.json`.
 
-Raw minified sizes are larger; production cost is the gzip figure. Prefer modular
-imports when you do not need the full surface — WebGPU compute, PNG export,
-non-English locales and adaptive isoline levels already load as separate chunks.
+## Browser builds
+
+`npm run build` emits modular ESM, generated TypeScript declarations, minified single-file ESM bundles, CSS and a standalone `globalThis.Orihon` build.
+
+Main artifacts include:
+
+- `dist/core.js`
+- `dist/standard.js`
+- `dist/index.js`
+- `dist/orihon.core.esm.js`
+- `dist/orihon.standard.esm.js`
+- `dist/orihon.esm.js`
+- `dist/orihon.global.js`
+- `dist/orihon.css`
+
+If you self-host the standalone files, a script-tag page can use:
+
+```html
+<link rel="stylesheet" href="/vendor/orihon/orihon.css" />
+<script src="/vendor/orihon/orihon.global.js"></script>
+<script>
+  const map = Orihon.createMap("map", {
+    center: { lat: 52.52, lng: 13.405 },
+    zoom: 12
+  });
+</script>
+```
+
+The global build exposes `globalThis.Orihon` and `globalThis.OrihonReady`.
 
 ## Documentation
 
-- [API reference](docs/API.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Migrating from Leaflet](docs/MIGRATION-LEAFLET.md)
-- [Migrating to the next major](docs/MIGRATION-NEXT-MAJOR.md)
-- [Security model](docs/SECURITY.md)
-- [Development, versions and benchmarks](docs/DEVELOPMENT.md)
-- [License FAQ](docs/LICENSE-FAQ.md)
-- [Enhancement roadmap](docs/ROADMAP.md)
-- [Recipes](docs/RECIPES.md)
-- [Plugin development](docs/PLUGINS.md)
-- [Scale showcase](examples/showcase) (open `index.html` · [live](https://whahedev.github.io/orihon/showcase/))
-- [Engine benchmark](examples/bench-compare) (open `index.html` · [live](https://whahedev.github.io/orihon/bench/))
-- [European temperature heatmap and isolines](examples/temperature-isolines) — one million clickable GPU observations, heatmap/isolines modes, labels and point popups
+Start with the guide that matches what you are doing:
+
+- [Easy API](./docs/EASY.md) — first maps and map-centric methods
+- [API reference](./docs/API.md) — complete public surface
+- [Project starter](./packages/create-orihon-app) — what `npm create orihon-app` writes
+- [Recipes](./docs/RECIPES.md) — task-oriented examples
+- [FeatureSource](./docs/FEATURE_SOURCE.md) — shared reactive data
+- [Troubleshooting](./docs/TROUBLESHOOTING.md) — blank maps, missing tiles, renderer errors
+- [Migrating from Leaflet](./docs/MIGRATION-LEAFLET.md)
+- [Migrating to the next major](./docs/MIGRATION-NEXT-MAJOR.md)
+- [Security model](./docs/SECURITY.md)
+- [Developer Guide](./examples/developer-guide) — generated searchable function catalogue with runnable examples
 - [Examples hub](https://whahedev.github.io/orihon/)
+- [Plugin development](./docs/PLUGINS.md)
+- [Development, versions and benchmarks](./docs/DEVELOPMENT.md)
+- [Pricing](./docs/PRICING.md) — what is free and what Studio adds
+- [Enhancement roadmap](./docs/ROADMAP.md)
 
-## Design Goals
+## Development
 
-- Keep Core / Standard / Advanced as explicit product tiers with gzip budgets on each entry.
-- Make common GIS tasks easy without hiding browser primitives.
-- Prefer fast DOM transforms and compact data structures over heavyweight render stacks.
-- Let advanced services such as search, routing, traffic and proprietary tiles be plugged in through providers.
+Repository development and release tooling requires **Node.js 22 or newer**. `.node-version` pins the tested LTS version.
+
+```sh
+npm install
+npm run build
+npm run check
+```
+
+Useful commands:
+
+```sh
+npm run typecheck
+npm test
+npm run test:browser
+npm run test:e2e
+npm run size
+npm run docs:build
+npm run docs:check
+npm run demo:docs
+npm run demo:showcase
+npm run demo:bench
+```
+
+`npm run check` runs the type checks, unit tests, size budgets and documentation consistency checks used before publishing.
+
+## Design goals
+
+- Make the first map require very little API knowledge.
+- Keep one predictable grammar inside each API level.
+- Make coordinates, units, ownership and lifecycle explicit.
+- Keep Core, Standard and Advanced as capability tiers with enforced size budgets.
+- Let applications move from DOM/SVG/canvas to GPU rendering without replacing their map model.
+- Keep I/O-heavy services provider-based so applications can supply local, commercial or test implementations.
+- Prefer browser primitives and small data structures over mandatory heavyweight runtime stacks.
+
+## Brand assets
+
+Production-ready SVG/PNG logos, favicons and design tokens are published under [`orihon/brand/*`](./docs/BRAND.md).
 
 ## License
 
-Orihon is a free, open-source browser map engine licensed under the **Apache License 2.0**. Use it anywhere — personal projects, education, and commercial products included. No separate paid engine license.
+Orihon is licensed under the **Apache License 2.0**. Use it in personal, educational and commercial projects without a separate paid engine license.
 
-Want to build visually? Try Orihon Studio (`npm run demo:studio`).
+See [LICENSE](./LICENSE), [LICENSE-NOTICE.md](./LICENSE-NOTICE.md) and the [License FAQ](./docs/LICENSE-FAQ.md).
 
 Copyright 2026 whahe.
-
-See [LICENSE](./LICENSE), [LICENSE-NOTICE.md](./LICENSE-NOTICE.md) and the [License FAQ](docs/LICENSE-FAQ.md).

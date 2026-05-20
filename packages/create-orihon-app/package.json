@@ -1,0 +1,28 @@
+{
+  "name": "create-orihon-app",
+  "version": "1.0.6",
+  "description": "Scaffold an Orihon map project that already draws a map.",
+  "type": "module",
+  "bin": {
+    "create-orihon-app": "index.mjs"
+  },
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "templates",
+    "README.md"
+  ],
+  "keywords": ["orihon", "map", "maps", "gis", "starter", "template", "vite"],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/whahedev/orihon.git",
+    "directory": "packages/create-orihon-app"
+  },
+  "homepage": "https://github.com/whahedev/orihon#readme",
+  "engines": {
+    "node": ">=20"
+  }
+}

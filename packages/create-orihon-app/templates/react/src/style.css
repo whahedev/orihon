@@ -1,0 +1,13 @@
+/* A map fills its container, and a <div> has no height of its own.
+   Give the map element a height or the map renders into nothing. */
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+.orihon-map {
+  height: 100vh;
+  min-height: 360px;
+}

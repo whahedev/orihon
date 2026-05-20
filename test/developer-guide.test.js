@@ -117,7 +117,12 @@ test("developer guide exposes only the unified current heat API", async () => {
   const manifest = JSON.parse(manifestSource);
   const heatNames = manifest.functions.filter((item) => item.group === "Тепловые карты и изолинии").map((item) => item.name);
   assert.deepEqual(heatNames, ["heatLayer", "heatSupport"]);
-  assert.match(home, /Heat API обновлён/);
+  for (const name of ["heatLayer", "buildHeat", "heatSupport"]) {
+    assert.match(home, new RegExp(`functions/${name}/`), `${name} is listed on the home page`);
+  }
+  for (const gone of ["webglHeatLayer", "heatIsolineLayer", "buildHeatIsolines"]) {
+    assert.doesNotMatch(home, new RegExp(gone), `${gone} is no longer part of the catalogue`);
+  }
   assert.match(layer, /mode:[\s\S]*backend:[\s\S]*evaluation:[\s\S]*worker:/);
   assert.match(layer, /Состав <code>options<\/code>[\s\S]*<code>backend<\/code>[\s\S]*<code>evaluation<\/code>/);
   assert.match(layer, /WASM\/WebGPU|WebGPU[\s\S]*WASM/);
@@ -154,7 +159,7 @@ test("developer guide separates render-free computation functions", async () => 
 
 test("developer guide separates package tiers from API complexity", async () => {
   const home = await readFile(new URL("examples/developer-guide/index.html", root), "utf8");
-  assert.match(home, /Package tier ≠ сложность API/);
+  assert.match(home, /Уровень пакета и сложность API — разные вещи/);
   assert.match(home, /Easy, Layer API и Rendering API/);
   assert.match(home, /orihon\/easy/);
 });

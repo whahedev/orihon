@@ -1163,11 +1163,10 @@ function fallbackSummary(record) {
   return `Создаёт или вычисляет \`${record.name}\` с типизированными параметрами Orihon.`;
 }
 
+// The page header already states the summary above the fold, so repeating it as the first
+// sentence of this section made every page open by saying the same thing twice.
 function detailedPurpose(record, group, override, imported) {
-  const summary = override.summary || clearSummaries[record.name] || imported.summary || record.sourceDescription || fallbackSummary(record);
-  const groupContext = groupDescriptions[group];
-  const usage = override.note || imported.note || purposeHint(record, group, groupContext);
-  return `${summary}\n\n${usage}`;
+  return override.note || imported.note || purposeHint(record, group, groupDescriptions[group]);
 }
 
 function purposeHint(record, group, groupContext) {
@@ -1346,40 +1345,51 @@ function renderHome(items, navigation) {
   const groups = groupOrder.map((group) => {
     const groupItems = items.filter((item) => item.group === group);
     if (!groupItems.length) return "";
+    const rows = groupItems.map((item) => `<tr>
+        <td><a href="./functions/${encodeURIComponent(item.name)}/"><code>${escapeHtml(item.name)}()</code></a></td>
+        <td><code>${escapeHtml(item.entry)}</code></td>
+        <td>${escapeHtml(item.summary)}</td>
+      </tr>`).join("");
     return `<section class="api-group" id="${slug(group)}">
       <div class="group-heading"><div><p class="eyebrow">Раздел</p><h2>${escapeHtml(group)}</h2></div><span>${groupItems.length}</span></div>
       <p class="group-description">${escapeHtml(groupDescriptions[group])}</p>
-      <div class="api-grid">${groupItems.map((item) => `<a class="api-card" href="./functions/${encodeURIComponent(item.name)}/">
-        <code>${escapeHtml(item.name)}()</code>
-        <p>${escapeHtml(item.summary)}</p>
-        <span>${escapeHtml(item.entry)} →</span>
-      </a>`).join("")}</div>
+      <div class="table-wrap"><table class="api-table">
+        <thead><tr><th>Команда</th><th>Импорт из</th><th>Что делает</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
     </section>`;
   }).join("");
+
+  const firstMap = [
+    'import { createMap } from "orihon/easy";',
+    'import "orihon/orihon.css";',
+    "",
+    'const map = createMap("map", {',
+    "  center: { lat: 52.52, lng: 13.405 },",
+    "  zoom: 12,",
+    "  basemap: {",
+    '    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",',
+    '    attribution: "© OpenStreetMap contributors"',
+    "  }",
+    "});"
+  ].join("\n");
+
   const content = `<section class="hero">
-    <p class="eyebrow">orihon@${escapeHtml(pkg.version)} · актуальный src/index.ts</p>
+    <p class="eyebrow">orihon@${escapeHtml(pkg.version)} · ${items.length} функций из текущих TypeScript-входов</p>
     <h1>Руководство разработчика</h1>
-    <p><strong>ORIHON — Offers Responsive Interactions, Handles Overlays Natively.</strong></p>
-    <p>Одна публичная функция — одна отдельная страница. Каталог покрывает корневой вход <code>orihon</code> и опциональные <code>orihon/source</code>, <code>orihon/draw</code>, <code>orihon/controls</code>, <code>orihon/geo</code>, <code>orihon/popup-content</code>, <code>orihon/pmtiles</code>, <code>orihon/mlt</code>; у каждой страницы указан вход, из которого её импортируют. Список и сигнатуры берутся из текущих TypeScript-входов, поэтому удалённая функция исчезает, а новая появляется сама. <code>orihon/easy</code> отдельных страниц не имеет: его API — это <code>createMap</code> из корневого входа и методы возвращённой карты, см. <a href="https://github.com/whahedev/orihon/blob/main/docs/EASY.md">docs/EASY.md</a>. Описания перенесены из Confluence и обновлены под действующую архитектуру.</p>
+    <p>Каждая публичная функция — своя страница: сигнатура, параметры и пример, который выполняется здесь же на карте. Ниже — весь каталог: команда, вход, из которого её импортируют, и что она делает. Список берётся из входов <code>src/</code>, поэтому удалённая функция исчезает, а новая появляется сама.</p>
     <div class="hero-badges"><span>${items.length} функций</span><span>${groupOrder.length} разделов</span><span>Core · Standard · Advanced</span></div>
   </section>
-  <aside class="callout">
-    <strong>Package tier ≠ сложность API.</strong>
-    Core, Standard и Advanced отвечают за состав и gzip budget. Easy, Layer API и Rendering API отвечают за уровень управления.
-    <code>orihon/easy</code> работает поверх Standard и остаётся map-centric / object-first:
-    <code>map.addMarker({ position, appearance })</code>, <code>map.addPolyline({ points, style })</code>,
-    <code>map.addPolygon({ rings, style })</code>, <code>map.addGeoJSON({ data })</code>,
-    <code>map.addTileLayer({ url })</code>. Декларативный <code>map.add({ type })</code> и позиционные Easy-формы удалены.
-    Возвращаемые значения — обычные объекты Orihon. Standard по-прежнему layer-centric:
-    <code>marker(…).addTo(map)</code>.
-  </aside>
-  <aside class="callout">
-    <strong>Heat API обновлён.</strong>
-    Старые <code>webglHeatLayer</code>, <code>heatIsolineLayer</code> и <code>buildHeatIsolines</code> исключены. Используйте
-    <a href="./functions/heatLayer/"><code>heatLayer()</code></a>,
-    <a href="./functions/buildHeat/"><code>buildHeat()</code></a> и
-    <a href="./functions/heatSupport/"><code>heatSupport()</code></a>.
-  </aside>
+  <section class="doc-section" id="с-чего-начать">
+    <h2>С чего начать</h2>
+    <p>Из пустой папки одна команда создаёт проект, в котором карта уже рисуется — со стилями, высотой контейнера и attribution:</p>
+    ${codeBlock("npm create orihon-app my-map\ncd my-map\nnpm install\nnpm run dev", "sh")}
+    <p>В существующем приложении — установка и первая карта:</p>
+    ${codeBlock("npm install orihon", "sh")}
+    ${codeBlock(firstMap, "js")}
+    <p>Контейнеру нужна собственная высота: у <code>&lt;div&gt;</code> её нет, и карта отрисуется в ничто. Orihon сообщает об этом в консоль — см. <a href="https://github.com/whahedev/orihon/blob/master/docs/TROUBLESHOOTING.md#zero-size-container">Troubleshooting</a>.</p>
+    <p>Уровень пакета и сложность API — разные вещи. <code>orihon/core</code>, <code>orihon/standard</code> и <code>orihon</code> отвечают за состав и gzip-бюджет, а Easy, Layer API и Rendering API — за уровень управления; <code>orihon/easy</code> работает поверх Standard и остаётся map-centric (<code>map.addMarker({ position })</code>), а Layer API — layer-centric (<code>marker(position).addTo(map)</code>). Полный контракт Easy — в <a href="https://github.com/whahedev/orihon/blob/master/docs/EASY.md">docs/EASY.md</a>, весь публичный список команд — в <a href="https://github.com/whahedev/orihon/blob/master/docs/API.md">docs/API.md</a>.</p>
+  </section>
   ${groups}`;
   return shell({
     title: "Все функции",

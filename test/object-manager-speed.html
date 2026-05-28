@@ -29,6 +29,10 @@
         margin-top: 10px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.04);
         font-family: ui-monospace, Consolas, monospace; font-size: 11px; white-space: pre-wrap;
       }
+      /* The live animation line ticks every frame. It had been overwriting the measurements
+         above it, so ingest, layout and pan results vanished the moment Animate was running. */
+      .stats.live { margin-top: 6px; color: #9fb6c2; }
+      .stats.live:empty { display: none; }
     </style>
   </head>
   <body data-state="idle">
@@ -38,6 +42,7 @@
       <p class="muted">
         Mass path: <code>sceneFeatures:false</code>, clusters off, packed WebGL.
         Анимируется только подмножество точек — остальной миллион стоит.
+        Подложка OSM включена для наглядности; <code>?basemap=0</code> убирает её и сеть из замеров.
       </p>
       <div class="row" id="count-buttons">
         <button type="button" data-count="25000">25k</button>
@@ -59,11 +64,13 @@
         <button type="button" id="stop">Stop</button>
       </div>
       <div class="stats" id="stats">idle</div>
+      <div class="stats live" id="live"></div>
     </aside>
     <script type="module">
       import {
         createMap,
-        objectManager
+        objectManager,
+        tileLayer
       } from "/dist/orihon.esm.js";
 
       const params = new URLSearchParams(location.search);
@@ -71,14 +78,32 @@
       let moving = Math.max(10, Number(params.get("moving")) || 500);
       const ticksWanted = Math.max(4, Number(params.get("ticks")) || 10);
       const autorun = params.get("autorun") === "1";
+      // The automated run turns the basemap off: it measures ObjectManager, and tiles would put
+      // the network inside the numbers. A person opening this page wants to see where the points
+      // actually are, so it is on by default.
+      const basemap = params.get("basemap") !== "0";
+
+      // The extent the points are generated into, and the extent the camera frames. One
+      // constant for both, so the benchmark always looks at the data it just created.
+      const DATA_SOUTH = 35;
+      const DATA_NORTH = 63;
+      const DATA_WEST = -15;
+      const DATA_EAST = 40;
 
       const statsEl = document.getElementById("stats");
+      const liveEl = document.getElementById("live");
       const map = createMap("map", {
         center: ({ lat: 55.75, lng: 37.62 }),
         zoom: 6,
-        zoomControl: true,
+        controls: true,
         inertia: false
       });
+
+      if (basemap) {
+        tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap contributors"
+        }).addTo(map);
+      }
 
       const manager = objectManager({
         clusterize: false,
@@ -89,6 +114,9 @@
         declutter: false,
         visualization: "objects"
       }).addTo(map);
+
+      // Handles for poking at a run from the console or an automated check.
+      window.__omDebug = { map, manager };
 
       let busy = false;
       let animTimer = 0;
@@ -139,11 +167,17 @@
         statsEl.textContent = text;
       }
 
+      /** Per-frame animation state, kept out of the measurement block so neither erases the other. */
+      function setLive(text) {
+        liveEl.textContent = text;
+      }
+
       function stopAnimate() {
         if (animTimer) {
           clearInterval(animTimer);
           animTimer = 0;
         }
+        setLive("");
         document.getElementById("animate").classList.remove("active");
       }
 
@@ -164,6 +198,7 @@
           `objects ${s.objects.toLocaleString("en-US")} · renderer ${s.renderer}`,
           extra.ingestMs != null ? `ingest ${extra.ingestMs.toFixed(0)}ms` : null,
           extra.layoutMs != null ? `layout ${extra.layoutMs.toFixed(0)}ms` : null,
+          extra.paintMs != null ? `first paint ${extra.paintMs.toFixed(0)}ms${basemap ? " (basemap tiles included)" : ""}` : null,
           extra.animateAvgMs != null
             ? `animate ${extra.moving} · avg ${extra.animateAvgMs.toFixed(1)}ms · max ${extra.animateMaxMs.toFixed(1)}ms`
             : null,
@@ -198,7 +233,7 @@
               const v = ((id * 1597334677) >>> 0) / 4294967296;
               batch[i] = {
                 id,
-                coordinates: ({ lat: 35 + u * 28, lng: -15 + v * 55 }),
+                coordinates: ({ lat: DATA_SOUTH + u * (DATA_NORTH - DATA_SOUTH), lng: DATA_WEST + v * (DATA_EAST - DATA_WEST) }),
                 properties: { moving: id < moving }
               };
             }
@@ -211,12 +246,23 @@
           }
           manager.endBulk({ render: false });
           const ingestMs = performance.now() - t0;
-          map.setView(({ lat: 55.75, lng: 37.62 }), 6);
+          // Frame the generated extent instead of a fixed view over Moscow. The points cover all
+          // of Europe, so that camera showed about one percent of them — and five of the five
+          // hundred that move, which made a working animation look like a broken one.
+          map.fitBounds([
+            ({ lat: DATA_SOUTH, lng: DATA_WEST }),
+            ({ lat: DATA_NORTH, lng: DATA_EAST })
+          ], { padding: 24 });
+          const layoutZoom = map.getZoom();
           const l0 = performance.now();
-          await manager.prepareLayout(6);
-          await waitFrames(3);
+          await manager.prepareLayout(layoutZoom);
+          // Layout is the manager's own work. The frames after it belong to the whole page — with
+          // a basemap they carry tile decoding too, and folding them into one number made the
+          // layout look fifty times slower than it is.
           const layoutMs = performance.now() - l0;
-          const result = report({ ingestMs, layoutMs, ticks: 0 });
+          await waitFrames(3);
+          const paintMs = performance.now() - l0;
+          const result = report({ ingestMs, layoutMs, paintMs, ticks: 0 });
           document.body.dataset.state = "loaded";
           return result;
         } catch (err) {
@@ -266,7 +312,7 @@
           manager.updateObjects(updates.filter(Boolean), { animate: true, durationMs: duration });
           samples.push(performance.now() - t0);
           if (!options.once) {
-            setStats(
+            setLive(
               `animating ${n.toLocaleString("en-US")} / ${total.toLocaleString("en-US")} · ` +
                 `last ${samples[samples.length - 1].toFixed(1)}ms · step ${step.toFixed(3)}°`
             );
@@ -291,6 +337,9 @@
           });
         }
 
+        // The frame counter only feeds the one-shot report; leaving it running would stack a
+        // new rAF loop on every press of Animate.
+        cancelAnimationFrame(fpsRaf);
         stopAnimate();
         document.getElementById("animate").classList.add("active");
         runTick();
@@ -333,7 +382,7 @@
         btn.addEventListener("click", () => {
           moving = Number(btn.dataset.moving);
           syncButtons();
-          setStats(`moving subset = ${moving.toLocaleString("en-US")} (нажмите Animate subset)`);
+          setLive(`moving subset = ${moving.toLocaleString("en-US")} (нажмите Animate subset)`);
           if (animTimer) {
             stopAnimate();
             void animateSubset({ once: false });

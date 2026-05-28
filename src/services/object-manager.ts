@@ -248,6 +248,12 @@ export interface ObjectManagerOptions {
   clusterProperties?: ClusterPropertiesConfig;
   /** Optional heatmap value/weight for visualization:"heatmap"|"auto". */
   heatmapWeight?: ((object: ManagedObject, id?: ObjectId) => number) | null;
+  /**
+   * Field value that maps to the top of the gradient. Without it the scale is relative to
+   * whatever the current peak happens to be, so a field of uniformly low weights still paints
+   * its warmest corner red. Set it when `heatmapWeight` returns an absolute scale.
+   */
+  heatmapReferenceMax?: number | null;
   /** Heat visualization from one scalar field: colors, contours, or both. Default "heatmap". */
   heatmapDisplay?: HeatMode;
   /** Draw one caption per visible contour level. Default true. */
@@ -569,6 +575,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       time: null,
       clusterProperties: {},
       heatmapWeight: null,
+      heatmapReferenceMax: null,
       heatmapDisplay: "heatmap",
       heatmapIsolineLabels: true,
       heatmapBackend: "auto",
@@ -615,6 +622,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       time: this.options.time,
       clusterProperties: this.options.clusterProperties,
       heatmapWeight: this.options.heatmapWeight,
+      heatmapReferenceMax: this.options.heatmapReferenceMax,
       heatmapDisplay: this.options.heatmapDisplay,
       heatmapIsolineLabels: this.options.heatmapIsolineLabels,
       heatmapBackend: this.options.heatmapBackend,

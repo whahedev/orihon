@@ -130,8 +130,8 @@
 
       <div class="legend">
         <div><span class="swatch" style="background:#14b8a6"></span>IoT ≤30°C · <span class="swatch" style="background:#dc2626"></span>аларм T&gt;30</div>
-        <div><span class="swatch" style="background:#22c55e"></span>heatmap T≤30 · <span class="swatch" style="background:#eab308"></span><span class="swatch" style="background:#dc2626"></span>T&gt;30</div>
-        <div><span class="swatch" style="background:#84cc16"></span>isolines по полю T (зелёный→красный)</div>
+        <div><span class="swatch" style="background:#eab308"></span><span class="swatch" style="background:#dc2626"></span>heatmap — плотность алармов T&gt;30 (холодные датчики не рисуются)</div>
+        <div><span class="swatch" style="background:#84cc16"></span>isolines — средняя T окрестности, уровни 20 · 25 · 30 · 35 · 40 °C (mean field, плотность не влияет)</div>
         <div><span class="swatch" style="background:#e2e8f0"></span>самолёты + следы · клик — попап</div>
         <div><span class="swatch" style="background:#22c55e"></span>коридоры · <span class="swatch" style="background:#0f766e"></span>зоны хабов</div>
       </div>
@@ -473,13 +473,54 @@
       }
 
       const MASS = 250_000;
-      const TEMP_ISOLINE_GRADIENT = {
-        0: "#22c55e",
-        0.35: "#84cc16",
-        0.5: "#eab308",
-        0.72: "#f97316",
-        1: "#dc2626"
-      };
+      /**
+       * The heat field is a sum of overlapping kernels, so its peak follows point density, not
+       * degrees. Feeding it a constant number of points makes that peak a constant too, which is
+       * what turns the colour scale from relative-to-the-current-hottest into an absolute one.
+       */
+      const HEAT_SAMPLE = 10_000;
+      /**
+       * The isolines run a mean field, so a cell holds the average weight of its neighbourhood
+       * rather than the sum. Values are therefore in weight units and the reference is simply the
+       * largest weight a single sensor can carry — no density to measure, nothing to re-measure
+       * when the sample or the kernel changes.
+       */
+      const HEAT_REFERENCE_MAX = 1;
+
+      /** Map °C → heat weight: 5→green, 30→yellow threshold, 45→red. */
+      function tempToHeatWeight(temp) {
+        if (!Number.isFinite(temp)) return 0;
+        if (temp <= TEMP_ALARM) {
+          return 0.08 + clamp01((temp - TEMP_MIN) / (TEMP_ALARM - TEMP_MIN)) * 0.42;
+        }
+        return 0.5 + clamp01((temp - TEMP_ALARM) / (TEMP_MAX - TEMP_ALARM)) * 0.5;
+      }
+
+      /** The inverse, for reading a field level back as the temperature it stands for. */
+      function weightToTemp(weight) {
+        if (weight <= 0.5) return TEMP_MIN + ((weight - 0.08) / 0.42) * (TEMP_ALARM - TEMP_MIN);
+        return TEMP_ALARM + ((weight - 0.5) / 0.5) * (TEMP_MAX - TEMP_ALARM);
+      }
+
+      /**
+       * A mean field value is the neighbourhood's average weight, which converts straight back to
+       * °C at any density. Contours are chosen in degrees and converted once, and a label prints
+       * the degrees it was built from instead of deriving them from a field fraction.
+       */
+      const fieldValueForTemp = (temp) => tempToHeatWeight(temp) * HEAT_REFERENCE_MAX;
+      const TEMP_ISOLINE_DEGREES = [20, 25, 30, 35, 40];
+      const TEMP_ISOLINE_LEVELS = TEMP_ISOLINE_DEGREES.map(fieldValueForTemp);
+      const TEMP_ISOLINE_LABELS = new Map(
+        TEMP_ISOLINE_LEVELS.map((value, index) => [Math.round(value * 100), TEMP_ISOLINE_DEGREES[index]])
+      );
+      /** Written in degrees too; gradient keys above 1 are field values, positioned by referenceMax. */
+      const TEMP_ISOLINE_GRADIENT = Object.fromEntries([
+        [0, "#22c55e"],
+        [fieldValueForTemp(25), "#84cc16"],
+        [fieldValueForTemp(TEMP_ALARM), "#eab308"],
+        [fieldValueForTemp(37), "#f97316"],
+        [fieldValueForTemp(TEMP_MAX), "#dc2626"]
+      ]);
 
       /** Live °C readings keyed by numeric sensor id (heatmap + popup + style). */
       let sensorTemps = new Float32Array(0);
@@ -514,13 +555,15 @@
         return Number.isFinite(raw) ? raw : Number.NaN;
       }
 
-      /** Map °C → heat weight: 5→green, 30→yellow threshold, 45→red. */
-      function tempToHeatWeight(temp) {
-        if (!Number.isFinite(temp)) return 0;
-        if (temp <= TEMP_ALARM) {
-          return 0.08 + clamp01((temp - TEMP_MIN) / (TEMP_ALARM - TEMP_MIN)) * 0.42;
-        }
-        return 0.5 + clamp01((temp - TEMP_ALARM) / (TEMP_MAX - TEMP_ALARM)) * 0.5;
+      /**
+       * Weight for the manager heatmap, which is fed every point and so has no fixed density to
+       * anchor an absolute scale to. Cold sensors weigh exactly zero, so a field with no alarms
+       * is empty rather than merely low — and an empty field cannot be stretched back up to red
+       * by normalisation. This is also what the legend promises: heatmap of T>30.
+       */
+      function tempToAlarmWeight(temp) {
+        if (!Number.isFinite(temp) || temp <= TEMP_ALARM) return 0;
+        return clamp01((temp - TEMP_ALARM) / (TEMP_MAX - TEMP_ALARM));
       }
 
       /** Packed WebGL buffers: latlng f32 + merc64 + draw merc f32 + rgba f32 + size f32. */
@@ -537,7 +580,7 @@
           layoutWorker: "auto",
           search: mass ? null : { fields: ["properties.name", "properties.city", "properties.kind"] },
           time: mass ? null : { value: (object) => Number(object.properties?.timestamp) || 0 },
-          heatmapWeight: (object, id) => tempToHeatWeight(sensorTempOf(object, id)),
+          heatmapWeight: (object, id) => tempToAlarmWeight(sensorTempOf(object, id)),
           clusterProperties: mass ? {} : {
             alarms: {
               operation: "count",
@@ -809,7 +852,15 @@
               sensors.add(slice);
               document.getElementById("kpi-iot").textContent = end.toLocaleString("en-US");
               statsEl.textContent = `ingest ${end.toLocaleString("en-US")} / ${n.toLocaleString("en-US")}…`;
-              await new Promise((r) => requestAnimationFrame(r));
+              // A hidden or background tab never fires rAF, and this loop then stalls forever
+              // between chunks: the page sits at part of its data with the counters reset and
+              // the loops never started. Yield to whichever comes first.
+              await new Promise((r) => {
+                let done = false;
+                const finish = () => { if (!done) { done = true; r(); } };
+                requestAnimationFrame(finish);
+                setTimeout(finish, 32);
+              });
             }
           } finally {
             sensors.endBulk({ render: false });
@@ -854,7 +905,9 @@
           return;
         }
         if (sensors.filter) sensors.setFilter(null);
-        if (alarmsOnly && alarmIds.size) sensors.setVisibleIds(alarmIds);
+        // No alarms is an answer, not a missing filter. Testing `alarmIds.size` here meant that
+        // lowering the share to zero showed every sensor instead of none.
+        if (alarmsOnly) sensors.setVisibleIds(alarmIds);
         else sensors.setVisibleIds(null);
       }
 
@@ -912,6 +965,17 @@
         }
         refresh();
       }
+
+      // Handle for inspecting a live run from the console: the interesting state lives in
+      // module scope, and a frozen KPI cannot be told from a frozen tab without it.
+      window.__liveDebug = {
+        sensors,
+        temps: () => sensorTemps,
+        alarms: () => alarmIds,
+        share: () => tempHotShare,
+        rebalance: () => rebalanceTemperatures(),
+        isolines: () => isolineLayer
+      };
 
       let hotShareTimer = 0;
 
@@ -1229,39 +1293,32 @@
         ops.setFilter(null);
       }
 
-      /** Subsample sensors for isolines — full 1M marching-squares freezes the tab. */
+      /** A constant sample keeps the field's absolute scale comparable across every volume. */
       function isolineBudget() {
-        if (count >= MASS) return 20_000;
-        if (count >= 80_000) return 28_000;
-        return Math.min(40_000, Math.max(4_000, count));
+        return HEAT_SAMPLE;
       }
 
       function collectIsolinePoints() {
         const n = sensorTemps.length || sensors.items.size;
         if (!n) return [];
         const budget = isolineBudget();
-        const stride = Math.max(1, Math.ceil(n / budget));
+        const hubs = HUBS.length;
+        // Sensors are handed to hubs round-robin by id, so a fixed stride that shares a factor
+        // with the hub count feeds the field only some cities: stride 4 over 24 hubs reached
+        // SVO, LHR, WAW, FRA, PRG and OSL, and left the other eighteen without contours at four
+        // times the density. Walking each hub separately keeps every city in at equal density,
+        // so a contour follows temperature rather than how many points happened to be sampled.
+        const perHub = Math.max(1, Math.floor(budget / hubs));
         const out = [];
-        for (let id = 0; id < n && out.length < budget; id += stride) {
-          const obj = sensors.items.get(id);
-          const pos = objectLatLng(obj);
-          if (!pos) continue;
-          const w = tempToHeatWeight(sensorTemps[id]);
-          if (w <= 1e-6) continue;
-          out.push([pos.lat, pos.lng, w]);
-        }
-        // Enrich with a denser hot sample so 2–20% alarms still draw warm contours.
-        if (alarmIds.size && out.length < budget) {
-          const hotStride = Math.max(1, Math.ceil(alarmIds.size / Math.max(1, budget - out.length)));
-          let i = 0;
-          for (const id of alarmIds) {
-            if (i++ % hotStride !== 0) continue;
-            if (id % stride === 0) continue;
-            const obj = sensors.items.get(id);
-            const pos = objectLatLng(obj);
+        for (let hub = 0; hub < hubs; hub++) {
+          for (let k = 0; k < perHub; k++) {
+            const id = hub + k * hubs;
+            if (id >= n) break;
+            const pos = objectLatLng(sensors.items.get(id));
             if (!pos) continue;
-            out.push([pos.lat, pos.lng, tempToHeatWeight(sensorTemps[id])]);
-            if (out.length >= budget) break;
+            const w = tempToHeatWeight(sensorTemps[id]);
+            if (w <= 1e-6) continue;
+            out.push([pos.lat, pos.lng, w]);
           }
         }
         return out;
@@ -1283,8 +1340,14 @@
             mode: "isolines",
             backend: "auto",
             evaluation: "static",
+            // Without this a contour would follow how many sensors a city has as much as how hot
+            // they are, and the same temperature would read colder wherever points are sparser.
+            fieldModel: "mean",
             bands: false,
-            levels: [0.28, 0.42, 0.55, 0.7, 0.85],
+            levels: TEMP_ISOLINE_LEVELS,
+            // Without this the layer normalises against whatever the current peak happens to
+            // be, and a field with no hot points still paints its warmest corner red.
+            referenceMax: HEAT_REFERENCE_MAX,
             radius: 16,
             blur: 12,
             scaleZoom: 5,
@@ -1296,8 +1359,13 @@
             labels: true,
             isolineLabelFont: "600 11px ui-sans-serif, system-ui, sans-serif",
             isolineLabelColor: "#0f172a",
-            isolineLabelFormat: (ring) =>
-              `${Math.round(TEMP_MIN + ring.t * (TEMP_MAX - TEMP_MIN))}°`
+            // `ring.t` is a fraction of the field, not of the temperature range. Mapping it
+            // straight onto 5…45 °C printed 13° for a contour built at 20 °C, and never
+            // reached 30 at all. Each contour reports the degrees it was requested for.
+            isolineLabelFormat: (ring) => {
+              const exact = TEMP_ISOLINE_LABELS.get(Math.round(ring.value * 100));
+              return `${exact ?? Math.round(weightToTemp(ring.value / HEAT_REFERENCE_MAX))}°`;
+            }
           }).addTo(map);
           return;
         }

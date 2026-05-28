@@ -237,6 +237,18 @@ export class DrawHandler extends Evented<DrawEventMap> {
     return this;
   }
 
+  /**
+   * Record the current geometry in the undo history. An editor living outside the plugin — a host
+   * application with its own handles — mutates a layer directly, and without this the change never
+   * reaches undo/redo, so the next undo would silently restore geometry from before it.
+   */
+  recordEdit(layer: MutableLayer): this {
+    this.#assertAlive();
+    this.#commit();
+    this.emit("editcomplete", { layer, geojson: this.toGeoJSON() });
+    return this;
+  }
+
   cancel(): this {
     this.#generation++;
     this.#cancelShape();

@@ -419,6 +419,10 @@ export class WebGLPointLayer extends InteractiveLayer<ResolvedWebGLPointLayerOpt
     } else {
       this._bufferDirty = true;
     }
+    // Moving a point has to ask for a repaint, exactly as changing its colour or size does.
+    // Without this the new coordinates sit in the GPU buffer and `render()` takes its
+    // camera-unchanged shortcut, so positions only appeared the next time the camera moved.
+    this.#requestGpuPaint();
     return this;
   }
 

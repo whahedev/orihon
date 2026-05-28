@@ -71,6 +71,7 @@ export interface ObjectSceneOptions {
   time?: ObjectTimeConfig | null;
   clusterProperties?: ClusterPropertiesConfig;
   heatmapWeight?: ((object: { properties?: Record<string, unknown> }, id?: string | number) => number) | null;
+  heatmapReferenceMax?: number | null;
   heatmapDisplay?: HeatMode;
   heatmapIsolineLabels?: boolean;
   heatmapBackend?: HeatBackend;
@@ -87,6 +88,7 @@ function objectHeatLayerOptions(options: {
   backend: HeatBackend;
   evaluation: HeatEvaluation;
   isolineStep: "auto" | number;
+  referenceMax: number | null;
 }) {
   return {
     pane: "overlay" as const,
@@ -99,6 +101,8 @@ function objectHeatLayerOptions(options: {
     backend: options.backend,
     evaluation: options.evaluation,
     step: options.isolineStep,
+    // Null keeps the historical behaviour: normalize against the field's own peak.
+    referenceMax: options.referenceMax ?? undefined,
     labels: options.labels,
     levels: 5,
     minOpacity: 0.05,
@@ -134,6 +138,7 @@ export class ObjectSceneController {
   visualization: ObjectVisualizationMode = "objects";
   visualizationByZoom: ObjectVisualizationByZoom = { heatmapUntil: 7, clustersUntil: 12 };
   heatmapWeight: ((object: { properties?: Record<string, unknown> }, id?: string | number) => number) | null = null;
+  heatmapReferenceMax: number | null = null;
   heatmapDisplay: HeatMode = "heatmap";
   heatmapIsolineLabels = true;
   heatmapBackend: HeatBackend = "auto";
@@ -162,6 +167,7 @@ export class ObjectSceneController {
     };
     this.clusterProperties = options.clusterProperties ?? {};
     this.heatmapWeight = options.heatmapWeight ?? null;
+    this.heatmapReferenceMax = options.heatmapReferenceMax ?? null;
     this.heatmapDisplay = options.heatmapDisplay ?? "heatmap";
     this.heatmapIsolineLabels = options.heatmapIsolineLabels !== false;
     this.heatmapBackend = options.heatmapBackend ?? "auto";
@@ -429,7 +435,8 @@ export class ObjectSceneController {
         labels: this.heatmapIsolineLabels,
         backend: this.heatmapBackend,
         evaluation: this.heatmapEvaluation,
-        isolineStep: this.heatmapIsolineStep
+        isolineStep: this.heatmapIsolineStep,
+        referenceMax: this.heatmapReferenceMax
       }));
       this.heatLayer.addTo(map);
       return;
@@ -454,7 +461,8 @@ export class ObjectSceneController {
         labels: this.heatmapIsolineLabels,
         backend: this.heatmapBackend,
         evaluation: this.heatmapEvaluation,
-        isolineStep: this.heatmapIsolineStep
+        isolineStep: this.heatmapIsolineStep,
+        referenceMax: this.heatmapReferenceMax
       }));
       this.heatLayer.addTo(map);
     }

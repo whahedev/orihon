@@ -11,6 +11,7 @@ export interface ResolvedMediaOverlayOptions extends LayerOptions {
   className: string;
   interactive: boolean;
   zIndex: number;
+  rotation: number;
 }
 
 export interface MediaOverlayEventMap {
@@ -83,6 +84,17 @@ export abstract class MediaOverlay<
     return this;
   }
 
+  /** Clockwise degrees around the centre of the bounds. */
+  getRotation(): number {
+    return Number(this.options.rotation) || 0;
+  }
+
+  setRotation(rotation: number): this {
+    this.writableOptions.rotation = Number(rotation) || 0;
+    this.render();
+    return this;
+  }
+
   setZIndex(zIndex: number): this {
     this.writableOptions.zIndex = Number(zIndex);
     const element = this.mediaElement();
@@ -103,6 +115,13 @@ export abstract class MediaOverlay<
     element.style.top = `${northWest.y}px`;
     element.style.width = `${Math.max(0, southEast.x - northWest.x)}px`;
     element.style.height = `${Math.max(0, southEast.y - northWest.y)}px`;
+    // Rotation is painted, not projected: the bounds stay axis-aligned, so getBounds(), the
+    // layer-point maths above and anything reading the corners are untouched by it. An unrotated
+    // overlay keeps an empty transform rather than an identity one, which would promote every
+    // image on the map to its own compositing layer.
+    const rotation = Number(this.options.rotation) || 0;
+    element.style.transformOrigin = "center center";
+    element.style.transform = rotation ? `rotate(${rotation}deg)` : "";
   }
 
   protected syncInteractive(): void {

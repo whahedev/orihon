@@ -5,10 +5,10 @@
 // finish the job. Everything a first map needs and people forget — the CSS import, a container
 // with a real height, an attribution — is in the template rather than in prose someone has to
 // follow correctly.
-import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { cp, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
@@ -119,11 +119,7 @@ export async function create(argv = [], { cwd = process.cwd(), interactive = tru
       filter: (source) => basename(source) !== "node_modules"
     });
     const gitignore = join(target, "_gitignore");
-    if (existsSync(gitignore)) {
-      await cp(gitignore, join(target, ".gitignore"));
-      await writeFile(gitignore, "", "utf8");
-      await (await import("node:fs/promises")).rm(gitignore);
-    }
+    if (existsSync(gitignore)) await rename(gitignore, join(target, ".gitignore"));
 
     const manifestPath = join(target, "package.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -151,7 +147,22 @@ export async function create(argv = [], { cwd = process.cwd(), interactive = tru
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("index.mjs")) {
+/**
+ * `file://${argv[1]}` is not a URL on Windows — the path is `C:\…`, so the comparison never
+ * matched and the CLI exited having done nothing. npm installs this file behind a `bin` shim, so
+ * the entry point has to be recognised through whatever path that shim passes.
+ */
+function runningAsScript() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (runningAsScript()) {
   create(process.argv.slice(2)).catch((error) => {
     console.error(`\n${error.message}\n`);
     process.exit(1);

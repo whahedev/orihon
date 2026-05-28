@@ -12,6 +12,7 @@ export interface SVGOverlayOptions extends LayerOptions {
   className?: string;
   interactive?: boolean;
   zIndex?: number;
+  rotation?: number;
 }
 
 interface ResolvedSVGOverlayOptions extends LayerOptions {
@@ -21,6 +22,7 @@ interface ResolvedSVGOverlayOptions extends LayerOptions {
   className: string;
   interactive: boolean;
   zIndex: number;
+  rotation: number;
 }
 
 export class SVGOverlay extends MediaOverlay<SVGElement, ResolvedSVGOverlayOptions> {
@@ -35,6 +37,7 @@ export class SVGOverlay extends MediaOverlay<SVGElement, ResolvedSVGOverlayOptio
       className: "",
       interactive: false,
       zIndex: 0,
+      rotation: 0,
       ...options
     } as ResolvedSVGOverlayOptions);
     this.content = content;

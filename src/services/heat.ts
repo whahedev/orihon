@@ -2,12 +2,14 @@ import type { LatLngBoundsLike } from "../geo.js";
 import {
   buildHeatFieldCpu,
   createHeatFieldRequest,
+  meanHeatField,
   packHeatPoints,
+  unitWeightRequest,
   type HeatFieldGrid,
   type HeatFieldInput,
   type PackedHeatPoints
 } from "./heat-field.js";
-import { heatFieldWasmError, heatFieldWasmSupported } from "./heat-field-wasm.js";
+import { heatFieldWasmError, heatFieldWasmSupported, type HeatFieldKernelRequest } from "./heat-field-wasm.js";
 import type { HeatFieldWebGpuProfile } from "./heat-field-webgpu.js";
 import type { AdaptiveIsolineLevelSelection } from "./adaptive-isoline-levels.js";
 import {
@@ -29,6 +31,19 @@ export interface HeatOptions extends Omit<HeatIsolineBuildOptions, "isolineStep"
   backend?: HeatBackend;
   /** Absolute contour interval, or `"auto"` for adaptive levels. */
   step?: "auto" | number;
+  /**
+   * `"sum"` accumulates the weights that land in a cell, so a dense area reads hotter than a
+   * sparse one carrying the same values. `"mean"` divides by the mass of the same kernel, which
+   * removes density from the answer: values come back in the units of the weights themselves.
+   * Costs a second field pass. Default `"sum"`.
+   */
+  fieldModel?: "sum" | "mean";
+  /**
+   * Mean model only. Cells whose kernel gathered less than this fraction of the densest cell's
+   * mass keep a floor under the divisor, so a lone point cannot read as a full-strength average
+   * in empty space. Default 0.05.
+   */
+  meanSupport?: number;
   /** `auto` starts considering WebGPU at this many points. Default 100000. */
   webgpuThreshold?: number;
 }
@@ -45,7 +60,7 @@ export interface HeatProfile {
   readbackMs: number;
   totalMs: number;
   /** Weighted grid aggregation + separable Gaussian KDE. */
-  fieldModel: "clustered-gaussian";
+  fieldModel: "clustered-gaussian" | "clustered-gaussian-mean";
   /** Actual absolute interval selected for uniformly-spaced contours. */
   isolineStep?: number;
   fallbackReason?: string;
@@ -101,6 +116,7 @@ export async function buildPackedHeat(
   const started = now();
   const mode = options.mode ?? "heatmap";
   const requestedBackend = options.backend ?? "auto";
+  const fieldModel = options.fieldModel === "mean" ? "mean" : "sum";
   const request = createHeatFieldRequest(points, bounds, options);
   if (!request) return null;
   const threshold = Math.max(1, Math.floor(options.webgpuThreshold ?? 100_000));
@@ -108,38 +124,47 @@ export async function buildPackedHeat(
     ? (mode === "heatmap" && points.count >= threshold && points.count <= 500_000 && heatFieldWebGpuAvailable() ? "webgpu" : "wasm")
     : requestedBackend;
 
-  let backend: ResolvedHeatBackend;
-  let fieldGrid: Float32Array;
-  let peak: number;
+  // Assigned by the first buildField call, which always runs before the profile is read.
+  let backend: ResolvedHeatBackend = "js";
   let fallbackReason: string | undefined;
   let webgpu: HeatFieldWebGpuProfile | undefined;
   const fieldStarted = now();
 
-  if (preferred === "webgpu") {
-    webgpu = {};
-    const { buildHeatFieldWebGpu } = await import("./heat-field-webgpu.js");
-    const result = await buildHeatFieldWebGpu(request, webgpu);
-    if (result) {
-      backend = "webgpu";
-      fieldGrid = result.grid;
-      peak = result.peak;
-    } else {
-      fallbackReason = webgpu.error ?? "WebGPU field build failed";
-      const cpu = buildHeatFieldCpu(request, "wasm");
+  /** One field, through whichever backend was resolved, with the CPU fallback attached. */
+  const buildField = async (
+    kernelRequest: HeatFieldKernelRequest
+  ): Promise<{ grid: Float32Array; peak: number }> => {
+    if (preferred === "webgpu") {
+      webgpu ??= {};
+      const { buildHeatFieldWebGpu } = await import("./heat-field-webgpu.js");
+      const result = await buildHeatFieldWebGpu(kernelRequest, webgpu);
+      if (result) {
+        backend = "webgpu";
+        return result;
+      }
+      fallbackReason ??= webgpu.error ?? "WebGPU field build failed";
+      const cpu = buildHeatFieldCpu(kernelRequest, "wasm");
       backend = cpu.backend;
-      fieldGrid = cpu.grid;
-      peak = cpu.peak;
+      return cpu;
     }
-  } else {
     const wasmAvailable = heatFieldWasmSupported();
-    const cpu = buildHeatFieldCpu(request, "wasm");
+    const cpu = buildHeatFieldCpu(kernelRequest, "wasm");
     backend = cpu.backend;
-    fieldGrid = cpu.grid;
-    peak = cpu.peak;
     if (!wasmAvailable || cpu.backend !== "wasm") {
-      fallbackReason = heatFieldWasmError() || "WASM field backend unavailable";
+      fallbackReason ??= heatFieldWasmError() || "WASM field backend unavailable";
     }
-  }
+    return cpu;
+  };
+
+  const summed = await buildField(request);
+  // A mean field is the same kernel twice: once over the weights, once over unit weights. Doing
+  // it here rather than inside each backend keeps WASM and WebGPU untouched, at the cost of a
+  // second pass — which is what a density-independent scale costs.
+  const mean = fieldModel === "mean"
+    ? meanHeatField(summed, await buildField(unitWeightRequest(request)), options.meanSupport)
+    : null;
+  const fieldGrid = mean?.grid ?? summed.grid;
+  const peak = mean?.peak ?? summed.peak;
 
   const field: HeatGrid = {
     grid: fieldGrid,
@@ -187,7 +212,7 @@ export async function buildPackedHeat(
       contoursMs,
       readbackMs: webgpu?.readbackMs ?? 0,
       totalMs: now() - started,
-      fieldModel: "clustered-gaussian",
+      fieldModel: fieldModel === "mean" ? "clustered-gaussian-mean" : "clustered-gaussian",
       isolineStep: contours?.isolineStep,
       fallbackReason,
       webgpu,

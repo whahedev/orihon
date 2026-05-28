@@ -13,6 +13,7 @@ export interface ImageOverlayOptions extends LayerOptions {
   errorOverlayUrl?: string;
   interactive?: boolean;
   zIndex?: number;
+  rotation?: number;
 }
 
 interface ResolvedImageOverlayOptions extends LayerOptions {
@@ -26,6 +27,7 @@ interface ResolvedImageOverlayOptions extends LayerOptions {
   errorOverlayUrl: string;
   interactive: boolean;
   zIndex: number;
+  rotation: number;
 }
 
 export interface ImageOverlayEventMap {
@@ -50,6 +52,7 @@ export class ImageOverlay extends MediaOverlay<HTMLImageElement, ResolvedImageOv
       errorOverlayUrl: "",
       interactive: false,
       zIndex: 0,
+      rotation: 0,
       ...options
     } as ResolvedImageOverlayOptions);
     this.url = String(url);

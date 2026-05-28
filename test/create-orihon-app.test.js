@@ -3,6 +3,7 @@ import test from "node:test";
 import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { create } from "../packages/create-orihon-app/index.mjs";
 
 // The starter is the consumer flow: whatever it writes is what a first-time user runs. These
@@ -116,4 +117,45 @@ test("every template is listed in the help and reachable by name", async () => {
   const help = lines.join("\n");
   assert.match(help, /npm create orihon-app/);
   for (const template of ["vanilla", "react"]) assert.match(help, new RegExp(template));
+});
+
+// The other tests call `create()` directly, which cannot catch a CLI that parses its arguments
+// and then never runs — the entry-point guard is only exercised by starting the file as a process.
+test("running the file as a command scaffolds and reports where", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const root = await mkdtemp(join(tmpdir(), "orihon-create-"));
+  try {
+    const cli = fileURLToPath(new URL("../packages/create-orihon-app/index.mjs", import.meta.url));
+    const { stdout } = await promisify(execFile)(
+      process.execPath,
+      [cli, "cli-app", "--template", "vanilla", "--yes"],
+      { cwd: root }
+    );
+    assert.match(stdout, /Created cli-app in /);
+    assert.match(stdout, /npm run dev/);
+    assert.match(await read(join(root, "cli-app"), "src/main.js"), /createMap\("map"/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the command exits non-zero on a bad template instead of doing nothing", async () => {
+  const { execFile } = await import("node:child_process");
+  const root = await mkdtemp(join(tmpdir(), "orihon-create-"));
+  try {
+    const cli = fileURLToPath(new URL("../packages/create-orihon-app/index.mjs", import.meta.url));
+    const failure = await new Promise((resolve) => {
+      execFile(
+        process.execPath,
+        [cli, "nope", "--template", "svelte", "--yes"],
+        { cwd: root },
+        (error, stdout, stderr) => resolve({ code: error?.code, stderr })
+      );
+    });
+    assert.equal(failure.code, 1);
+    assert.match(failure.stderr, /Unknown template "svelte"/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

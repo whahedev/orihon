@@ -15,6 +15,7 @@ export interface VideoOverlayOptions extends LayerOptions {
   playsInline?: boolean;
   controls?: boolean;
   poster?: string;
+  rotation?: number;
 }
 
 interface ResolvedVideoOverlayOptions extends LayerOptions {
@@ -30,6 +31,7 @@ interface ResolvedVideoOverlayOptions extends LayerOptions {
   playsInline: boolean;
   controls: boolean;
   poster: string;
+  rotation: number;
 }
 
 export interface VideoOverlayEventMap {
@@ -49,6 +51,7 @@ export class VideoOverlay extends MediaOverlay<HTMLVideoElement, ResolvedVideoOv
       className: "",
       interactive: false,
       zIndex: 0,
+      rotation: 0,
       autoplay: true,
       loop: true,
       muted: true,

@@ -27,6 +27,11 @@ import {
 } from "../services/heat.js";
 import { pickLabelAnchor } from "../services/label-layout.js";
 
+/**
+ * Colour stops keyed by field value. Keys at or below 1 are fractions of `referenceMax`, or of
+ * the current grid peak when none is set; keys above 1 are absolute field values and need
+ * `referenceMax` to be positioned — the same convention `levels` uses.
+ */
 export type HeatGradient = Record<number, string>;
 export interface HeatAsyncDataOptions extends HeatFieldAsyncDataOptions {}
 
@@ -655,7 +660,9 @@ export class HeatLayer extends InteractiveLayer<ResolvedHeatLayerOptions, HeatEv
       minPeak: this.options.minPeak,
       webgpuThreshold: this.options.webgpuThreshold,
       mode: this.options.mode,
-      backend: this.options.backend
+      backend: this.options.backend,
+      fieldModel: this.options.fieldModel,
+      meanSupport: this.options.meanSupport
     };
     const serialBounds = { south: area.south, west: area.west, north: area.north, east: area.east };
     let result = this.options.worker
@@ -1065,9 +1072,15 @@ export class HeatLayer extends InteractiveLayer<ResolvedHeatLayerOptions, HeatEv
     const ctx = canvas.getContext("2d");
     if (!ctx) return new Uint8ClampedArray(1024);
     const gradient = ctx.createLinearGradient(0, 0, 256, 0);
+    // Same rule as `levels`: a key above 1 is an absolute field value. It needs `referenceMax`
+    // to become a position on the ramp, because without one the scale moves with every rebuild
+    // and this palette is built once.
+    const reference = this.options.referenceMax;
+    const absolute = typeof reference === "number" && reference > 0;
     const stops = Object.entries(this.options.gradient)
       .map(([value, color]) => [Number(value), color] as const)
       .filter(([value]) => Number.isFinite(value))
+      .map(([value, color]) => [absolute && value > 1 ? value / reference : value, color] as const)
       .sort((a, b) => a[0] - b[0]);
     if (!stops.length) stops.push([0, "blue"], [1, "red"]);
     for (const [stop, color] of stops) gradient.addColorStop(clamp01(stop), color);

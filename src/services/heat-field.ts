@@ -221,6 +221,54 @@ export function buildHeatFieldCpu(
   return { ...requestMetadata(request), ...result, backend: "js" };
 }
 
+/**
+ * The same request with every weight replaced by 1. Applying the kernel to it gives the mass
+ * each cell drew from — the denominator of a mean field.
+ */
+export function unitWeightRequest(request: HeatFieldKernelRequest): HeatFieldKernelRequest {
+  const end = Math.min(request.points.length, request.pointCount * 3);
+  const points = new Float32Array(end);
+  for (let i = 0; i < end; i += 3) {
+    points[i] = request.points[i];
+    points[i + 1] = request.points[i + 1];
+    points[i + 2] = request.points[i + 2] > 0 ? 1 : 0;
+  }
+  return { ...request, points, pointCount: Math.floor(end / 3) };
+}
+
+/**
+ * Divide a summed field by the mass of the same kernel, turning "how much weight landed here"
+ * into "what the weights here average". A summed field cannot tell a hot sparse area from a warm
+ * dense one; a mean field can, and its values are in the units of the weights themselves, so a
+ * reference maximum is whatever a single point can carry rather than a measured density.
+ *
+ * `support` guards the sparse tail: where the kernel gathered almost nothing, the quotient is
+ * decided by one or two points and would read as a full-strength average in the middle of empty
+ * space. Cells below that fraction of the densest cell keep a floor under the divisor, so they
+ * fade out instead of flaring up.
+ */
+export function meanHeatField(
+  sum: { grid: Float32Array; peak: number },
+  mass: { grid: Float32Array; peak: number },
+  support = 0.05
+): { grid: Float32Array; peak: number } {
+  const floor = Math.max(mass.peak * clampSupport(support), 1e-12);
+  const grid = new Float32Array(sum.grid.length);
+  let peak = 0;
+  for (let i = 0; i < grid.length; i++) {
+    const divisor = Math.max(mass.grid[i], floor);
+    const value = sum.grid[i] / divisor;
+    grid[i] = value;
+    if (value > peak) peak = value;
+  }
+  return { grid, peak };
+}
+
+function clampSupport(support: number): number {
+  if (!Number.isFinite(support)) return 0.05;
+  return Math.max(1e-6, Math.min(1, support));
+}
+
 /** Reference implementation; kept for parity tests and environments without WASM. */
 export function buildHeatFieldJs(request: HeatFieldKernelRequest): { grid: Float32Array; peak: number } {
   const { cols, rows, westMerc, northMerc, widthMerc, heightMerc, kernelMerc } = request;

@@ -192,3 +192,15 @@ test("media overlays become interactive when a popup is bound", () => {
   assert.equal(video.options.interactive, true);
   assert.equal(svg.options.interactive, true);
 });
+
+test("a rotated overlay keeps its bounds", () => {
+  const overlayBounds = [{ lat: 52.48, lng: 13.30 }, { lat: 52.55, lng: 13.45 }];
+  const image = imageOverlay("image.png", overlayBounds);
+  assert.equal(image.getRotation(), 0);
+  image.setRotation(30);
+  assert.equal(image.getRotation(), 30);
+  // Rotation is a paint step, so everything that reads the corners must be unaffected by it.
+  assert.equal(image.getBounds().toBBoxString(), "13.3,52.48,13.45,52.55");
+  assert.equal(videoOverlay("v.mp4", overlayBounds, { rotation: -45 }).getRotation(), -45);
+  assert.equal(svgOverlay("<svg xmlns='http://www.w3.org/2000/svg'/>", overlayBounds).setRotation("nonsense").getRotation(), 0);
+});

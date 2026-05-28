@@ -66,6 +66,26 @@ test("draw history undoes and redoes loaded snapshots", () => {
   assert.equal(draw.toGeoJSON().features.length, 1);
 });
 
+test("recordEdit puts an outside edit on the undo stack", () => {
+  const draw = new DrawHandler();
+  draw.loadData({ type: "LineString", coordinates: [[1, 2], [3, 4]] });
+  const [line] = draw.featureGroup.getLayers();
+  const edited = [];
+  draw.on("editcomplete", (event) => edited.push(event.layer));
+
+  // A host application with its own handles mutates the layer directly; nothing in the plugin
+  // observes that, so without recordEdit the change never reaches the history.
+  line.setLatLngs([{ lat: 20, lng: 10 }, { lat: 4, lng: 3 }]);
+  draw.recordEdit(line);
+  assert.deepEqual(edited, [line]);
+  assert.deepEqual(draw.toGeoJSON().features[0].geometry.coordinates[0], [10, 20]);
+
+  draw.undo();
+  assert.deepEqual(draw.toGeoJSON().features[0].geometry.coordinates[0], [1, 2]);
+  draw.redo();
+  assert.deepEqual(draw.toGeoJSON().features[0].geometry.coordinates[0], [10, 20]);
+});
+
 test("draw locales include redo labels", async () => {
   const { resolveDrawLocale } = await import("../dist/draw/locale.js");
   assert.equal(resolveDrawLocale("en").drawRedo, "Redo");

@@ -150,6 +150,67 @@ try {
   assert.ok(layerWorker.rings > 0);
   assert.equal(Boolean(layerWorker.frameDriven), false);
   assert.deepEqual(layerWorker.events, { clickTarget: true, feature: true, plainPoint: true, selection: true, nullHover: true, rebuild: true });
+
+  // `levels` above 1 have always been absolute field values. Gradient stops now read the same
+  // way, so a caller does not keep two conventions side by side in neighbouring options.
+  const gradientScale = await page.evaluate(async () => {
+    const { createMap, heatLayer } = await import("/dist/index.js");
+    const REFERENCE = 40;
+    const points = Array.from({ length: 900 }, (_, index) => {
+      const angle = index * 0.21;
+      const radius = 0.01 + (index % 30) * 0.0012;
+      return [50.08 + Math.sin(angle) * radius, 14.42 + Math.cos(angle) * radius, 0.4 + (index % 7) / 10];
+    });
+    const paint = async (gradient) => {
+      const host = document.createElement("div");
+      host.style.cssText = "position:absolute;left:0;top:0;width:420px;height:320px";
+      document.body.append(host);
+      const map = createMap(host, { center: { lat: 50.08, lng: 14.42 }, zoom: 9, controls: false });
+      const layer = heatLayer(points, {
+        mode: "heatmap",
+        backend: "wasm",
+        evaluation: "static",
+        worker: false,
+        cols: 96,
+        rows: 72,
+        scaleZoom: 9,
+        referenceMax: REFERENCE,
+        gradient
+      }).addTo(map);
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const canvas = layer.canvas;
+      const data = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+      let signature = 0;
+      let painted = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 8) continue;
+        painted += 1;
+        signature = (signature * 31 + data[i] * 7 + data[i + 1] * 3 + data[i + 2]) >>> 0;
+      }
+      layer.remove();
+      map.destroy();
+      host.remove();
+      return { painted, signature };
+    };
+    // The same ramp written both ways: fractions of referenceMax, and absolute field values.
+    const fractional = await paint({ 0: "#22c55e", 0.25: "#eab308", 1: "#dc2626" });
+    const absolute = await paint({ 0: "#22c55e", 10: "#eab308", 40: "#dc2626" });
+    // A different absolute ramp must not collapse onto the same picture.
+    const shifted = await paint({ 0: "#22c55e", 36: "#eab308", 40: "#dc2626" });
+    return { fractional, absolute, shifted };
+  });
+  assert.ok(gradientScale.fractional.painted > 0, "the reference ramp paints something");
+  assert.equal(
+    gradientScale.absolute.signature,
+    gradientScale.fractional.signature,
+    "absolute gradient stops divided by referenceMax match the fractional ones"
+  );
+  assert.notEqual(
+    gradientScale.shifted.signature,
+    gradientScale.fractional.signature,
+    "moving an absolute stop changes the picture, so the keys are not being clamped away"
+  );
+
   console.log(`heat browser ok · wasm+contours · webgpu ${result.webgpuSupported ? "adapter" : "fallback-ready"}`);
 } finally {
   await browser.close();

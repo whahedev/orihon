@@ -219,6 +219,26 @@ Style fields are named for what they do: `stroke`, `strokeWidth`, `fill`, `fillO
 | `svgOverlay(element, bounds, options)` | standard | SVG pinned to an area |
 | `videoOverlay(url, bounds, options)` | standard | Video pinned to an area |
 | `sanitizeSvgElement(svg)` | standard | Strip scripts and event attributes before overlaying |
+
+The three media overlays share `setBounds`, `setOpacity`, `setZIndex` and `setRotation`. Rotation is
+in clockwise degrees and is painted on top of the box, so `getBounds()` keeps answering with the
+same axis-aligned corners whatever the angle:
+
+```js
+import { createMap, tileLayer, imageOverlay } from "orihon";
+
+const map = createMap("map", { center: { lat: 52.52, lng: 13.405 }, zoom: 12 });
+tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors"
+}).addTo(map);
+
+const plan = imageOverlay("floor-plan.png", [
+  { lat: 52.51, lng: 13.39 },
+  { lat: 52.53, lng: 13.42 }
+], { opacity: 0.8, rotation: 17 }).addTo(map);
+
+plan.setRotation(0);
+```
 | `popupContent(spec, options)` | popup-content | Build popup content from blocks instead of HTML |
 | `sanitizePopupHtml(html)` | popup-content | Safe fragment from untrusted HTML |
 | `createEChartsPopupRenderer(options)` | popup-content | Chart blocks inside a popup |

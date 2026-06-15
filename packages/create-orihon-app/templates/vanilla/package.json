@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "orihon": "^1.0.6"
+    "orihon": "^2.0.0"
   },
   "devDependencies": {
     "vite": "^5.4.0"

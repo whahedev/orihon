@@ -4,7 +4,7 @@ Comparative browser bench: **Orihon**, **Leaflet**, **OpenLayers**, **MapLibre G
 
 `npm run demo:bench` first rebuilds Orihon and serves the repository, so the benchmark uses the current local `dist`. Opening `index.html` directly remains supported and uses the pinned CDN fallback.
 
-Pinned comparison set (verified 2026-08-21): Orihon 1.0.6, Leaflet 1.9.4, Leaflet.markercluster 1.5.3, OpenLayers 10.10.0 and MapLibre GL 6.4.1. Keep pins explicit so exported results remain reproducible; update this table and all CSS/JS URLs together. MapLibre v6 is loaded through its ESM-only `maplibre-gl.mjs` entry.
+Pinned comparison set (verified 2026-08-21): Orihon 2.0.0, Leaflet 1.9.4, Leaflet.markercluster 1.5.3, OpenLayers 10.10.0 and MapLibre GL 6.4.1. Keep pins explicit so exported results remain reproducible; update this table and all CSS/JS URLs together. MapLibre v6 is loaded through its ESM-only `maplibre-gl.mjs` entry.
 
 Live: https://whahedev.github.io/orihon/bench/
 

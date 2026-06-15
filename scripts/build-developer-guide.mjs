@@ -1313,14 +1313,14 @@ function shell({ title, description, navigation, content, pageClass = "", canoni
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="${escapeAttr(description)}" />
-  <title>${escapeHtml(title)} · Orihon Developer Guide</title>
+  <title>${escapeHtml(title)} · Orihon Maps Developer Guide</title>
   <link rel="icon" href="/assets/brand/svg/orihon-favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/examples/developer-guide/assets/guide.css" />
 </head>
 <body class="${escapeAttr(pageClass)}" data-canonical-path="${escapeAttr(canonicalPath)}">
   <header class="topbar">
-    <a class="brand" href="/examples/developer-guide/" aria-label="Orihon Developer Guide">
-      <img src="/assets/brand/svg/orihon-logo-horizontal.svg" alt="Orihon" />
+    <a class="brand" href="/examples/developer-guide/" aria-label="Orihon Maps Developer Guide">
+      <img src="/assets/brand/svg/orihon-logo-horizontal.svg" alt="Orihon Maps" />
       <span>Developer Guide</span>
     </a>
     <button class="nav-toggle" type="button" data-nav-toggle aria-label="Открыть навигацию">☰</button>
@@ -1333,7 +1333,7 @@ function shell({ title, description, navigation, content, pageClass = "", canoni
   </header>
   <aside class="sidebar" data-sidebar>
     <div class="sidebar-intro"><a href="/examples/developer-guide/">Все функции</a><span>${functions.length} страниц</span></div>
-    <nav aria-label="Функции Orihon">${navigation}</nav>
+    <nav aria-label="Функции Orihon Maps">${navigation}</nav>
     <p class="empty-search" data-empty-search hidden>Ничего не найдено.</p>
   </aside>
   <main class="content">${content}</main>
@@ -1394,7 +1394,7 @@ function renderHome(items, navigation) {
   ${groups}`;
   return shell({
     title: "Все функции",
-    description: "Локальное руководство разработчика по публичным функциям Orihon",
+    description: "Локальное руководство разработчика по публичным функциям Orihon Maps",
     navigation,
     content,
     pageClass: "guide-home",

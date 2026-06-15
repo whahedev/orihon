@@ -9,9 +9,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const CDN_JS = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.esm.js";
-const CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.css";
-const CDN_GLOBAL = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.global.js";
+// Pinned to the version being released, read from package.json so a release cannot leave a
+// demo pointing at the previous one. test/benchmark-contract.test.js asserts the match.
+const { version } = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+const CDN_BASE = `https://cdn.jsdelivr.net/npm/orihon@${version}/dist`;
+const CDN_JS = `${CDN_BASE}/orihon.esm.js`;
+const CDN_CSS = `${CDN_BASE}/orihon.css`;
+const CDN_GLOBAL = `${CDN_BASE}/orihon.global.js`;
 
 function patchLoadOrihon(source, { withBenchLink = false } = {}) {
   const benchLink = withBenchLink

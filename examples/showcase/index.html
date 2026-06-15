@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.css" id="orihon-css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/orihon@2.0.0/dist/orihon.css" id="orihon-css" />
     <style>
       :root {
         --ink: #172026;
@@ -541,8 +541,8 @@ function setStatus(text, tone = "ok") {
 }
 
 async function loadOrihon() {
-  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.esm.js";
-  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.css";
+  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@2.0.0/dist/orihon.esm.js";
+  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@2.0.0/dist/orihon.css";
   const link =
     document.getElementById("orihon-css") ||
     document.querySelector("link[data-orihon-css]");
@@ -554,14 +554,15 @@ async function loadOrihon() {
         : "../bench/";
   const http = location.protocol === "http:" || location.protocol === "https:";
   if (http) {
+    const localBuild = "?bench=" + Date.now().toString(36);
     try {
-      const mod = await import("/dist/index.js");
-      if (link) link.href = "/dist/orihon.css";
+      const mod = await import("/dist/orihon.esm.js" + localBuild);
+      if (link) link.href = "/dist/orihon.css" + localBuild;
       return mod;
     } catch {
       try {
-        const mod = await import("/dist/orihon.esm.js");
-        if (link) link.href = "/dist/orihon.css";
+        const mod = await import("/dist/index.js" + localBuild);
+        if (link) link.href = "/dist/orihon.css" + localBuild;
         return mod;
       } catch {
         /* fall through to CDN */

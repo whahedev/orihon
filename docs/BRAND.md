@@ -1,8 +1,19 @@
-# Orihon brand assets
+# Orihon Maps brand assets
 
 **ORIHON — Offers Responsive Interactions, Handles Overlays Natively.**
 
 This expansion communicates the library's product promise: responsive map interaction and native overlay handling.
+
+## The name
+
+| | Use |
+| --- | --- |
+| **Orihon Maps** | The product. Page titles, the README masthead, package descriptions, site chrome, anywhere the thing is being named rather than typed. |
+| `orihon` | The identifier. The npm package, every import specifier and subpath, the `Orihon` global and class, the `oh-` CSS prefix, asset filenames. |
+
+Running technical prose keeps the short form — "an Orihon map", "normal Orihon layers" — the way
+MapLibre GL JS is called MapLibre once the title has done its job. Spell the product out where a
+reader arrives, not in every sentence after.
 
 The npm package includes production SVG and PNG artwork in `assets/brand`. These files are visual assets only and do not add JavaScript to the runtime bundle.
 

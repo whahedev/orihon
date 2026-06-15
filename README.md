@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="./assets/brand/svg/orihon-logo-horizontal.svg" alt="Orihon — folded map and route logo" width="520" />
+  <img src="./assets/brand/svg/orihon-logo-horizontal.svg" alt="Orihon Maps — folded map and route logo" width="520" />
 </p>
 
-# Orihon
+# Orihon Maps
 
 **A fast, typed browser map engine with a small path from first map to large-scale GIS.**
 
@@ -13,9 +13,13 @@
 [![license](https://img.shields.io/badge/license-Apache%202.0-0f766e)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-ready-3178c6)](./tsconfig.json)
 
-Orihon is a free, open-source browser mapping library. Start with a map-centric API for common work, move to explicit layers when you need more control, and opt into GPU rendering and large-data tools only when the application needs them.
+Orihon Maps is a free, open-source browser mapping library. Start with a map-centric API for common work, move to explicit layers when you need more control, and opt into GPU rendering and large-data tools only when the application needs them.
 
 Apache 2.0. No engine key. No paid runtime license.
+
+The product is **Orihon Maps**; the package is `orihon`. Every install, import and global uses the
+short identifier — `npm i orihon`, `from "orihon"`, `globalThis.Orihon` — and so does this document
+wherever it is talking about code rather than about the product.
 
 ## Start here
 

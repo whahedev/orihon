@@ -2,6 +2,141 @@
 
 ## Unreleased
 
+## 2.0.0 — 2026-08-30
+
+- **Docs — the product is named Orihon Maps; the package stays `orihon`.** The README masthead,
+  the developer guide's chrome and both package descriptions said plain "Orihon", which is the
+  identifier people type rather than the name of the thing. They carry the product name now. The
+  npm package, every import specifier, the `Orihon` global and the `oh-` CSS prefix are untouched,
+  the README states the split outright, and `docs/BRAND.md` records it so the two halves cannot
+  drift apart. Running technical prose keeps the short form.
+
+- **Added — `DrawHandler.recordEdit(layer)` puts an outside edit on the undo stack.** A host
+  application with its own handles mutates a drawn layer directly and nothing inside the plugin
+  observes it, so the change never reached the snapshot stack: the next undo restored geometry
+  from before the edit and silently discarded the work. `recordEdit()` commits the current state
+  and announces it through `editcomplete`, which is what the plugin's own edit mode already does.
+
+- **Added — media overlays turn.** An overlay could be resized and repositioned but never rotated,
+  so a scanned plan had to be re-exported straight before it could be pinned to a map. `rotation`
+  on `imageOverlay`, `videoOverlay` and `svgOverlay`, plus `setRotation()` / `getRotation()`, is
+  painted on top of the box rather than projected into it: the bounds stay axis-aligned, so
+  `getBounds()`, the layer-point maths and every caller reading the corners are untouched by the
+  angle. An unrotated overlay keeps an empty transform rather than an identity one, which would
+  otherwise promote every image on the map to its own compositing layer.
+
+- **Added — `fieldModel: "mean"` makes a heat field read values instead of density.** A heat field
+  is a sum, so it cannot tell a hot sparse area from a warm crowded one; contours followed the
+  cities with the most sensors and the same temperature read up to 7.6° colder wherever points
+  thinned out. The mean divides the summed field by the same kernel over unit weights, so density
+  cancels and values come back in the units of the weights — which makes `referenceMax` whatever
+  one point can carry rather than a number somebody has to measure. Neither backend changed: a
+  mean is the existing kernel run twice, and that second pass is the cost (200,000 points: 4-6ms
+  summed, 8-10ms mean). `meanSupport` keeps a floor under the divisor where the kernel gathered
+  almost nothing, so the sparse tail fades instead of reading as a full-strength average in empty
+  space. The summed default is byte-identical to not passing the option.
+
+- **Fixed — the object-manager demo's isolines covered six hubs out of twenty-four, and labelled
+  the wrong degrees.** Sensors are handed to hubs round-robin by id and the isoline sample walked
+  ids with a fixed stride, so at 40,000 sensors `gcd(4, 24) = 4` and the field only ever saw six
+  cities, each at four times its true density. The sample now takes an equal number of points from
+  every hub. Separately, a contour built at 20 °C was labelled 13°: the label took a fraction of
+  the *field* and mapped it onto the temperature range as if it were a fraction of that scale.
+  Contours are chosen in degrees now and converted once through the same weight function the field
+  is built from, so a label prints the value it was requested for.
+
+- **Added — a `gradient` key above 1 is an absolute field value, the way `levels` already was.**
+  Two neighbouring options carried two conventions, so a caller writing an absolute scale had to
+  divide every colour stop by `referenceMax` by hand, and a key like `30` silently collapsed to the
+  top of the ramp instead of erroring. Keys at or below 1 keep their meaning, so nothing existing
+  moves. The rule needs `referenceMax` because the palette is built once and a scale derived from
+  the current peak would go stale on the next rebuild.
+
+- **Fixed — the demo heat scale meant "the hottest thing currently on screen".** Both heat views
+  normalised against the field's own peak, and that peak follows point density rather than degrees
+  — the same temperatures at 1,000 / 4,000 / 10,000 points peak 9.9 / 15.8 / 46.5 — so the map
+  stayed red with the T>30 share at zero. Isolines now feed the field a constant sample so the peak
+  is a constant worth naming, and the manager heatmap stops weighting cold sensors at all, because
+  an empty field cannot be stretched back up to red by any normalisation: 0 painted pixels at a 0%
+  share, 160,393 at 50%.
+
+- **Added — `heatmapReferenceMax` on ObjectManager, and two demo fixes found with it.** The option
+  is the missing half of `heatmapWeight`: an absolute weight scale that the renderer would
+  otherwise normalise away against the field's own peak. It changes nothing by default. Alongside
+  it, `applySensorPointVisibility` guarded on `alarmIds.size`, so an empty alarm set read as "no
+  filter" and showed all 40,000 sensors instead of none; and the ingest loop yielded with
+  `requestAnimationFrame` alone, which a hidden tab never fires, leaving the page frozen between
+  chunks for anyone who opened it in a second tab.
+
+- **Fixed — a WebGL point layer did not repaint when a point moved.** `patchPoint()` uploaded the
+  new coordinates and returned; the next `render()` saw an unchanged camera, took its identity-warp
+  shortcut and drew nothing, so new positions sat in the buffer until a zoom or a pan forced a real
+  pass — an animation that appeared to run in steps of one gesture. `patchColor()` and
+  `patchSize()` have always ended with a repaint request; `patchPoint()` does now. The request is
+  still deferred rather than forced, so the protection against repainting a million points
+  mid-gesture is untouched. Measured at 500 points on a 220ms interval: 0 draw calls in 2.2s
+  before, 11 after.
+
+- **Fixed — the object-manager speed benchmark measured and displayed the wrong things.** Its
+  camera sat on a hard-coded view of Moscow while points are generated across Europe, so five of
+  five hundred moving points were on screen — a working animation that looked broken; the extent is
+  one set of constants shared by the generator and the camera now. It had no tile layer at all, so
+  points floated on the panel background. `layoutMs` timed `prepareLayout()` plus three animation
+  frames, which charged the manager for everything else the page did in them: 2,200-3,000ms with a
+  basemap against 45ms without, a fifty-fold difference that said nothing about layout — `layout`
+  and `first paint` are separate now. And Load, Animate and Pan all wrote into one status block, so
+  starting the animation erased the ingest and layout numbers. Also `zoomControl: true`, which
+  Orihon has never accepted, replaced with the `controls` option it reads.
+
+- **Fixed — the starter's tests could not see a CLI that never ran.** They called `create()`
+  directly, so two tests now start the file as a process: one asserts it scaffolds and prints
+  where, the other that a bad template exits 1 with the reason. The entry-point guard is rewritten
+  too, because a Windows path is not a URL and half its condition never matched there. (`npm create
+  orihon-app` still fails with E404 until the package is published; that, and not the code, was the
+  whole of the reported failure.)
+
+- **Docs — the guide catalogue has the same shape as the API reference.** The landing page spent
+  roughly ten lines of chrome before the first command, then listed 105 functions as one card each.
+  It opens the way the README does now — the two commands that produce a running map, the container
+  height first maps forget, and the one distinction worth stating up front: package tier is not API
+  level — followed by the catalogue as the same three-column table the reference uses, which fits a
+  37-function section on one screen. Function pages lost a repetition: the header already stated
+  the summary the section below it opened by repeating.
+
+- **Docs — the README is organised around what the reader is doing.** It opened with the pitch and
+  reached the first map somewhere below it. It now opens with the two ways to get a running map and
+  each section answers one question: add objects, take more control, convert coordinates, pick a
+  tier, go bigger. Nothing true was dropped — the coordinate-list converters and the
+  container-height warning are folded into the sections where a reader meets them, and the plugins,
+  development and pricing guides are back in a documentation list that now covers every file under
+  `docs/`. The size table is untouched, because `scripts/check-size.mjs` asserts every budget in it.
+
+- **Docs — the API reference is a list of commands, and `npm create orihon-app` writes a project
+  that already draws a map.** The reference was organised the way the source is, so finding the
+  command for a task meant knowing which file it lived in; it is grouped by what the reader is
+  trying to do now, one line per entry — the command, the entry point to import it from, and what
+  it does. Checking it against the built surface rather than memory caught three wrong claims: the
+  React map component is `Map`, not `OrihonMap`; a React marker takes its popup as a `<Popup>`
+  child, not a `popup` prop; and `layersControl` takes `{ label: layer }` records. The starter
+  covers the four things a first map fails on — the stylesheet import, a container height, an
+  attribution, and which entry point to import from — with vanilla and react templates on Vite, and
+  doubles as the integration test for the real consumer flow.
+
+- **Added — `latLngs()`, `lngLats()`, `coordinateList()` and `fromGeoJSONPositions()` name the
+  coordinate order once per list.** Passing coordinates cost `lat` and `lng` on every point, so a
+  three-point line was 95 characters of which the numbers were 30. Bare tuples are still refused —
+  `[55.75, 37.62]` and `[37.62, 55.75]` are both valid coordinates and a wrong guess draws in the
+  ocean — but the order does not have to be repeated per point to stay explicit. `latLngs()` and
+  `lngLats()` also read a flat run of numbers, including a typed array straight from a worker,
+  which skips building one pair object per point; an odd length throws rather than shifting every
+  later point by one place.
+
+- **Added — the map says so when its container has no height.** A container with no height is the
+  first-map failure that looks like a broken library: tiles are requested, layers exist,
+  `invalidateSize()` records 0×0 without complaint, and nothing in the API says why the page is
+  blank. The map checks its own box once, a frame after setup, and prints what to do, with a link
+  to `docs/TROUBLESHOOTING.md`.
+
 - **Docs — one example per guide page, and it is the code that runs.** The pages carried a static
   «Пример» and a separate «Интерактивный пример» with different code, so the editor showed
   something the reader had not seen. There is one block now: the example is what you copy and

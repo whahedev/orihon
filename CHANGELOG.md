@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2.0.1 — 2026-08-30
+
+- **Fixed — WebGL points drifted and snapped back while zooming.** A layer above 8,000 points is
+  drawn on a canvas overscanned by 120-280 px and offset by that pad, and during a gesture the
+  surface is CSS-warped rather than repainted. The warp scaled about the canvas's own corner, which
+  sits outside the container by exactly that pad, and never took the offset back out: every point
+  landed `pad * (scale - 1)` px away — 120 px at one zoom level in — then jumped into place when the
+  repaint arrived. Panning was always right, because it keeps `scale === 1` and the term vanishes;
+  layers under 8,000 points were right too, because they get no pad. The showcase's 100,000-vehicle
+  scene showed it on every zoom. `test/webgl-warp-browser.mjs` now measures a point's warped
+  position against its projection and fails at 120 px without the fix.
+
 ## 2.0.0 — 2026-08-30
 
 - **Docs — the product is named Orihon Maps; the package stays `orihon`.** The README masthead,

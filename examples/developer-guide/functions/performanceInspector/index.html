@@ -20,7 +20,7 @@
       <input data-api-search type="search" placeholder="Функция…  /" autocomplete="off" />
       <kbd>/</kbd>
     </label>
-    <span class="version">v2.0.0</span>
+    <span class="version">v2.0.1</span>
   </header>
   <aside class="sidebar" data-sidebar>
     <div class="sidebar-intro"><a href="/examples/developer-guide/">Все функции</a><span>105 страниц</span></div>
@@ -71,7 +71,7 @@
     <section class="doc-section"><h2>Сигнатура и результат</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>function performanceInspector(map: Orihon, options?: PerformanceInspectorOptions): PerformanceInspector</code></pre></div><p class="returns"><strong>Возвращает:</strong> <code>PerformanceInspector</code> — значение типа PerformanceInspector, описанное в сигнатуре выше</p></section>
     <section class="doc-section"><h2>Параметры</h2><div class="table-wrap"><table><thead><tr><th>Параметр</th><th>Тип</th><th>Обязателен</th><th>По умолчанию</th><th>Описание</th></tr></thead><tbody><tr><td><code>map</code></td><td><code>Orihon</code></td><td>да</td><td>—</td><td>Экземпляр карты Orihon, с которым должна работать функция.</td></tr><tr><td><code>options</code></td><td><code>PerformanceInspectorOptions | undefined</code></td><td>нет</td><td>—</td><td>Необязательные настройки поведения. Все поддерживаемые поля, их единицы и назначение перечислены в таблице ниже.</td></tr></tbody></table></div><div class="option-detail"><h3>Состав <code>options</code></h3><p>Объект <code>PerformanceInspectorOptions | undefined</code> поддерживает следующие поля:</p><div class="table-wrap"><table><thead><tr><th>Поле</th><th>Тип</th><th>Обязательное</th><th>Назначение</th></tr></thead><tbody><tr><td><code>sampleFrames</code></td><td><code>number | undefined</code></td><td>нет</td><td>Числовая настройка «sample frames».</td></tr><tr><td><code>includeMemory</code></td><td><code>boolean | undefined</code></td><td>нет</td><td>Если true, включает параметр «include memory»; false отключает его.</td></tr></tbody></table></div></div></section>
     <section class="doc-section playground-section" data-playground data-function="performanceInspector">
-      <div class="playground-heading"><div><h2>Пример</h2><p>Тот же код, что можно скопировать к себе, — и он же выполняется на карте справа. Здесь отбрасываются только строки <code>import</code>: всё остальное, включая создание карты, выполняется как есть, а вывод <code>console.log()</code> попадает в панель результата. Контейнер карты очищается перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v2.0.0</span></div>
+      <div class="playground-heading"><div><h2>Пример</h2><p>Тот же код, что можно скопировать к себе, — и он же выполняется на карте справа. Здесь отбрасываются только строки <code>import</code>: всё остальное, включая создание карты, выполняется как есть, а вывод <code>console.log()</code> попадает в панель результата. Контейнер карты очищается перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v2.0.1</span></div>
       <div class="playground-shell">
         <div class="playground-editor">
           <div class="playground-toolbar"><span>JavaScript</span><div><button type="button" data-playground-reset>Сбросить</button><button class="run" type="button" data-playground-run>Выполнить</button></div></div>

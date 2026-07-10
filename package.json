@@ -1,6 +1,6 @@
 {
   "name": "orihon",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Orihon Maps — a free, open-source browser map engine. Apache 2.0. Use it anywhere.",
   "type": "module",
   "main": "./dist/index.js",
@@ -94,7 +94,7 @@
     "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
     "pretest": "npm run build",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:browser": "node test/browser-smoke.mjs && node test/tile-gpu-browser.mjs && node test/geojson-async-browser.mjs && node test/heat-browser.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs",
+    "test:browser": "node test/browser-smoke.mjs && node test/tile-gpu-browser.mjs && node test/geojson-async-browser.mjs && node test/heat-browser.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs && node test/webgl-warp-browser.mjs",
     "test:server": "node scripts/browser-test-server.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",

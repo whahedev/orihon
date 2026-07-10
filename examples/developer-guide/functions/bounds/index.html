@@ -20,7 +20,7 @@
       <input data-api-search type="search" placeholder="Функция…  /" autocomplete="off" />
       <kbd>/</kbd>
     </label>
-    <span class="version">v2.0.0</span>
+    <span class="version">v2.0.1</span>
   </header>
   <aside class="sidebar" data-sidebar>
     <div class="sidebar-intro"><a href="/examples/developer-guide/">Все функции</a><span>105 страниц</span></div>
@@ -73,7 +73,7 @@ function bounds(value: LatLngBoundsLike): LatLngBounds
 function bounds(a: LatLngLike, b: LatLngLike): LatLngBounds</code></pre></div><p class="returns"><strong>Возвращает:</strong> <code>LatLngBounds</code> — объект LatLngBounds с южной, западной, северной и восточной границами; его можно передать в fitBounds или rectangle</p></section>
     <section class="doc-section"><h2>Параметры</h2><div class="table-wrap"><table><thead><tr><th>Параметр</th><th>Тип</th><th>Обязателен</th><th>По умолчанию</th><th>Описание</th></tr></thead><tbody><tr><td><code>a</code></td><td><code>LatLngLike | LatLngLike[] | LatLngBoundsLike | null | undefined</code></td><td>нет</td><td>—</td><td>Необязательная исходная область: одна координата, массив координат, пара противоположных углов, существующий LatLngBounds или объект { south, west, north, east }. Без значения создаётся пустая область для последующего extend().</td></tr><tr><td><code>b</code></td><td><code>LatLngLike | LatLngBoundsLike | undefined</code></td><td>нет</td><td>—</td><td>Необязательный второй противоположный угол. Используется, когда первый аргумент — одна координата. Координаты именованные: `{ lat, lng }` или `latLng(lat, lng)`; голая пара чисел не принимается, потому что её не отличить от GeoJSON-позиции `[lng, lat]`.</td></tr></tbody></table></div></section>
     <section class="doc-section playground-section" data-playground data-function="bounds">
-      <div class="playground-heading"><div><h2>Пример</h2><p>Тот же код, что можно скопировать к себе, — и он же выполняется на карте справа. Здесь отбрасываются только строки <code>import</code>: всё остальное, включая создание карты, выполняется как есть, а вывод <code>console.log()</code> попадает в панель результата. Контейнер карты очищается перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v2.0.0</span></div>
+      <div class="playground-heading"><div><h2>Пример</h2><p>Тот же код, что можно скопировать к себе, — и он же выполняется на карте справа. Здесь отбрасываются только строки <code>import</code>: всё остальное, включая создание карты, выполняется как есть, а вывод <code>console.log()</code> попадает в панель результата. Контейнер карты очищается перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v2.0.1</span></div>
       <div class="playground-shell">
         <div class="playground-editor">
           <div class="playground-toolbar"><span>JavaScript</span><div><button type="button" data-playground-reset>Сбросить</button><button class="run" type="button" data-playground-run>Выполнить</button></div></div>

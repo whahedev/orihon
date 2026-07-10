@@ -1,6 +1,6 @@
 {
   "name": "create-orihon-app",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Scaffold an Orihon Maps project that already draws a map.",
   "type": "module",
   "bin": {
@@ -14,7 +14,15 @@
     "templates",
     "README.md"
   ],
-  "keywords": ["orihon", "map", "maps", "gis", "starter", "template", "vite"],
+  "keywords": [
+    "orihon",
+    "map",
+    "maps",
+    "gis",
+    "starter",
+    "template",
+    "vite"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

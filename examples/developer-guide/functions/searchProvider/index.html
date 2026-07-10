@@ -20,7 +20,7 @@
       <input data-api-search type="search" placeholder="Функция…  /" autocomplete="off" />
       <kbd>/</kbd>
     </label>
-    <span class="version">v2.0.0</span>
+    <span class="version">v2.0.1</span>
   </header>
   <aside class="sidebar" data-sidebar>
     <div class="sidebar-intro"><a href="/examples/developer-guide/">Все функции</a><span>105 страниц</span></div>
@@ -72,7 +72,7 @@
 function searchProvider&lt;T extends SearchResult&gt;(source: SearchAdapter&lt;T&gt;, options?: { limit?: number }): SearchProvider&lt;T&gt;</code></pre></div><p class="returns"><strong>Возвращает:</strong> <code>SearchProvider&lt;TResult&gt;</code> — значение типа SearchProvider&lt;TResult&gt;, описанное в сигнатуре выше</p></section>
     <section class="doc-section"><h2>Параметры</h2><div class="table-wrap"><table><thead><tr><th>Параметр</th><th>Тип</th><th>Обязателен</th><th>По умолчанию</th><th>Описание</th></tr></thead><tbody><tr><td><code>source</code></td><td><code>TResult[]</code></td><td>да</td><td>—</td><td>Исходная коллекция элементов указанного типа. Для Iterable элементы читаются в порядке обхода.</td></tr><tr><td><code>options</code></td><td><code>SearchProviderOptions&lt;TResult&gt; | undefined</code></td><td>нет</td><td>—</td><td>Необязательные настройки поведения. Все поддерживаемые поля, их единицы и назначение перечислены в таблице ниже.</td></tr></tbody></table></div><div class="option-detail"><h3>Состав <code>options</code></h3><p>Объект <code>SearchProviderOptions&lt;TResult&gt; | undefined</code> поддерживает следующие поля:</p><div class="table-wrap"><table><thead><tr><th>Поле</th><th>Тип</th><th>Обязательное</th><th>Назначение</th></tr></thead><tbody><tr><td><code>limit</code></td><td><code>number | undefined</code></td><td>нет</td><td>Максимальное количество элементов в результате.</td></tr><tr><td><code>fallbackReverse</code></td><td><code>ReverseFallback | undefined</code></td><td>нет</td><td>Настройка «fallback reverse» типа ReverseFallback | undefined.</td></tr><tr><td><code>text</code></td><td><code>((item: TResult) =&gt; string) | undefined</code></td><td>нет</td><td>Функция, возвращающая индексируемый или отображаемый текст элемента.</td></tr></tbody></table></div></div></section>
     <section class="doc-section playground-section" data-playground data-function="searchProvider">
-      <div class="playground-heading"><div><h2>Пример</h2><p>Тот же код, что можно скопировать к себе, — и он же выполняется на карте справа. Здесь отбрасываются только строки <code>import</code>: всё остальное, включая создание карты, выполняется как есть, а вывод <code>console.log()</code> попадает в панель результата. Контейнер карты очищается перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v2.0.0</span></div>
+      <div class="playground-heading"><div><h2>Пример</h2><p>Тот же код, что можно скопировать к себе, — и он же выполняется на карте справа. Здесь отбрасываются только строки <code>import</code>: всё остальное, включая создание карты, выполняется как есть, а вывод <code>console.log()</code> попадает в панель результата. Контейнер карты очищается перед каждым запуском, поэтому эксперименты не накапливают слои.</p></div><span>Локальная сборка v2.0.1</span></div>
       <div class="playground-shell">
         <div class="playground-editor">
           <div class="playground-toolbar"><span>JavaScript</span><div><button type="button" data-playground-reset>Сбросить</button><button class="run" type="button" data-playground-run>Выполнить</button></div></div>

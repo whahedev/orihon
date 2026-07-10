@@ -750,8 +750,12 @@ export class WebGLPointLayer extends InteractiveLayer<ResolvedWebGLPointLayerOpt
       const throttled = !warpCovers && now - this._lastGpuMs < minInterval;
       if (warpCovers || throttled) {
         const s = 2 ** (zoom - this._paintedZoom);
-        const tx = this._paintedOriginX * s - ox;
-        const ty = this._paintedOriginY * s - oy;
+        // The canvas sits at `-paintedPad`, so its own origin is that far outside the container and
+        // scaling about it moves that offset too: without the last term every point lands
+        // `paintedPad * (s - 1)` px away — 120 px at one zoom level in — and snaps back when the
+        // repaint lands. Panning kept `s === 1`, which is why only zoom showed it.
+        const tx = this._paintedOriginX * s - ox - this._paintedPad * (s - 1);
+        const ty = this._paintedOriginY * s - oy - this._paintedPad * (s - 1);
         if (s === 1 && tx * tx + ty * ty < 1e-4) return;
         this.canvas.style.left = `${-this._paintedPad}px`;
         this.canvas.style.top = `${-this._paintedPad}px`;

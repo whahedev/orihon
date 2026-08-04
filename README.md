@@ -4,6 +4,8 @@
 
 # Orihon Maps
 
+<!-- stable-2x-polish-32 -->
+
 **A fast, typed browser map engine with a small path from first map to large-scale GIS.**
 
 [![npm](https://img.shields.io/npm/v/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)

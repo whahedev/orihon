@@ -5,6 +5,8 @@ on:
     branches: [master]
     paths:
       - "examples/bench-compare/**"
+      - "examples/lab/**"
+      - "examples/site/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -27,8 +29,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare site
         run: |
-          mkdir -p _site
-          cp -R examples/bench-compare/. _site/
+          mkdir -p _site/lab _site/bench
+          cp examples/site/index.html _site/index.html
+          cp -R examples/lab/. _site/lab/
+          cp -R examples/bench-compare/. _site/bench/
+          # Lab local server helpers are not needed on Pages.
+          rm -f _site/lab/server.js
+          rm -rf _site/lab/examples
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

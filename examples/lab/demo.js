@@ -57,7 +57,13 @@ import {
   wrapLng,
   zoomControl,
   zoomForBounds
-} from "/dist/index.js";
+} from "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.esm.js";
+
+const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.2";
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register(new URL("./wms-sw.js", import.meta.url)).catch(() => {});
+}
 
 const byId = (id) => document.getElementById(id);
 const eventLog = byId("event-log");
@@ -545,7 +551,7 @@ const wmsLayer = wmsTileLayer(new URL("./wms", location.href).href, {
   minZoom: 9,
   opacity: 0.72,
   cacheSize: 64,
-  attribution: "Orihon local WMS"
+  attribution: "Orihon demo WMS"
 });
 
 class CenterRenderer extends Renderer {
@@ -2002,9 +2008,16 @@ byId("offline-sw").addEventListener("click", () => {
   updateStageEightOutput({ serviceWorker: { bytes: script.length, preview: script.slice(0, 180) } });
 });
 byId("release-manifest").addEventListener("click", async () => {
-  const manifest = await fetch("/dist/release-manifest.json").then((response) => response.json());
-  stageEightMessage = `release ${manifest.version}`;
-  updateStageEightOutput({ releaseManifest: manifest });
+  const pkg = await fetch(`${ORIHON_CDN}/package.json`).then((response) => response.json());
+  stageEightMessage = `release ${pkg.version}`;
+  updateStageEightOutput({
+    package: {
+      name: pkg.name,
+      version: pkg.version,
+      description: pkg.description,
+      cdn: ORIHON_CDN
+    }
+  });
 });
 byId("define-map-element").addEventListener("click", () => {
   const element = defineOrihonElement();

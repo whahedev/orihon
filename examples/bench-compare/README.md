@@ -75,7 +75,7 @@ npm run demo:bench
 
 Open http://localhost:4176/
 
-Live: https://whahedev.github.io/orihon/
+Live: https://whahedev.github.io/orihon/bench/
 
 Libraries load from CDN (Orihon / Leaflet / OpenLayers / MapLibre). Export JSON after a completed run.
 

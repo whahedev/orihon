@@ -48,7 +48,7 @@
     "demo:locale": "npx --yes serve examples/locale-demo -p 4173",
     "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
     "demo:webgl": "npx --yes serve . -p 4175",
-    "demo:bench": "npx --yes serve . -p 4176",
+    "demo:bench": "npx --yes serve examples/bench-compare -p 4176",
     "demo:lab": "node examples/lab/server.js"
   },
   "keywords": [

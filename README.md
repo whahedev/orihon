@@ -324,7 +324,7 @@ Orihon 1.0 keeps advanced modules opt-in for large datasets and production diagn
 
 Public stress demo: [`examples/webgl-points-demo`](examples/webgl-points-demo) — switch **100k / 500k / 1M** points and live-read FPS, frame time, memory, visible and rendered counts through `performanceInspector` (`npm run demo:webgl`).
 
-Comparative engine bench: [`examples/bench-compare`](examples/bench-compare) — same point workload across Orihon, Leaflet, OpenLayers and MapLibre (`npm run demo:bench`).
+Comparative engine bench: [`examples/bench-compare`](examples/bench-compare) — same point workload across Orihon, Leaflet, OpenLayers and MapLibre (`npm run demo:bench`, live at [whahedev.github.io/orihon](https://whahedev.github.io/orihon/)).
 
 ```js
 const points = webglPointLayer(bigPointArray, {
@@ -402,7 +402,7 @@ Raw minified sizes are larger; production cost is the gzip figure. Prefer modula
 - [Recipes](docs/RECIPES.md)
 - [Plugin development](docs/PLUGINS.md)
 - [WebGL points demo](examples/webgl-points-demo) (`npm run demo:webgl`)
-- [Engine benchmark](examples/bench-compare) (`npm run demo:bench`)
+- [Engine benchmark](examples/bench-compare) (`npm run demo:bench` · [live](https://whahedev.github.io/orihon/))
 
 ## Design Goals
 

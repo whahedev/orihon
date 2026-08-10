@@ -67,14 +67,17 @@ objectManager({ clusterize: false, clusterRenderer: "auto" }).add(objects).addTo
 
 ## Run
 
+Local (CDN-backed — no build required):
+
 ```bash
-npm run build
 npm run demo:bench
 ```
 
-Open http://localhost:4176/examples/bench-compare/
+Open http://localhost:4176/
 
-Export JSON after a completed run.
+Live: https://whahedev.github.io/orihon/
+
+Libraries load from CDN (Orihon / Leaflet / OpenLayers / MapLibre). Export JSON after a completed run.
 
 ## Notes
 

@@ -522,6 +522,7 @@ export class WebGLTileLayer extends Layer<ResolvedOptions> {
       const c = candidates[i];
       this.#createTile(c.x, c.y, activeZoom, c.key);
     }
+    if (candidates.length > maxNew) this.#scheduleRedraw();
 
     this._needed = needed;
     this._neededCount = needed.size;

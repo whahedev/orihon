@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Orihon Lab</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.css" />
+    <link rel="stylesheet" href="./vendor/orihon.css" />
     <link rel="stylesheet" href="./demo.css" />
   </head>
   <body>
@@ -18,7 +18,7 @@
         <header class="inspector-header">
           <div>
             <h1>Orihon Lab</h1>
-            <p id="runtime-status">v1.0.2 · ESM · TypeScript</p>
+            <p id="runtime-status">vendor · ESM · TypeScript</p>
           </div>
           <span class="health-dot" id="health-dot" title="Состояние карты"></span>
         </header>
@@ -46,7 +46,7 @@
                 <option value="dark">Carto Dark Matter</option>
                 <option value="canvas">Только Canvas</option>
               </select>
-              <label class="toggle-row"><span><i class="swatch swatch-canvas"></i>Canvas base</span><input id="layer-canvas" type="checkbox" checked /></label>
+              <label class="toggle-row"><span><i class="swatch swatch-canvas"></i>Canvas base</span><input id="layer-canvas" type="checkbox" /></label>
               <label class="toggle-row"><span><i class="swatch swatch-wms"></i>WMS: центр Москвы</span><input id="layer-wms" type="checkbox" /></label>
               <label class="toggle-row"><span><i class="swatch swatch-traffic"></i>TrafficLayer</span><input id="layer-traffic" type="checkbox" /></label>
               <label class="toggle-row"><span><i class="swatch swatch-renderer"></i>Renderer</span><input id="layer-renderer" type="checkbox" checked /></label>
@@ -99,7 +99,7 @@
 
             <fieldset class="control-section">
               <legend>Интерактивные overlays</legend>
-              <label class="toggle-row"><span><i class="swatch swatch-image"></i>ImageOverlay</span><input id="layer-image" type="checkbox" checked /></label>
+              <label class="toggle-row"><span><i class="swatch swatch-image"></i>ImageOverlay</span><input id="layer-image" type="checkbox" /></label>
               <label class="toggle-row"><span><i class="swatch swatch-video"></i>VideoOverlay</span><input id="layer-video" type="checkbox" /></label>
               <label class="toggle-row"><span><i class="swatch swatch-svg"></i>SVGOverlay</span><input id="layer-svg" type="checkbox" /></label>
               <label class="toggle-row"><span><i class="swatch swatch-icon"></i>Icon marker</span><input id="layer-icon-marker" type="checkbox" checked /></label>

@@ -13,6 +13,7 @@ const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
   ".svg": "image/svg+xml; charset=utf-8"
 };
 
@@ -170,7 +171,23 @@ const server = createServer(async (request, response) => {
   }
 
   let filePath;
-  if (pathname.startsWith("/demo/")) {
+  if (pathname.startsWith("/demo/vendor/")) {
+    const name = pathname.slice("/demo/vendor/".length).replaceAll("/", path.sep);
+    if (!name || name.includes("..") || path.isAbsolute(name)) {
+      response.writeHead(403).end("Forbidden");
+      return;
+    }
+    filePath = name === "package.json"
+      ? path.resolve(repoRoot, "package.json")
+      : path.resolve(repoRoot, "dist", name);
+    if (
+      (name === "package.json" && filePath !== path.resolve(repoRoot, "package.json")) ||
+      (name !== "package.json" && !filePath.startsWith(`${path.resolve(repoRoot, "dist")}${path.sep}`))
+    ) {
+      response.writeHead(403).end("Forbidden");
+      return;
+    }
+  } else if (pathname.startsWith("/demo/")) {
     const relative = pathname.slice("/demo/".length).replaceAll("/", path.sep);
     filePath = path.resolve(labDir, relative);
     if (filePath !== labDir && !filePath.startsWith(`${labDir}${path.sep}`)) {

@@ -57,9 +57,9 @@ import {
   wrapLng,
   zoomControl,
   zoomForBounds
-} from "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.esm.js";
+} from "./vendor/orihon.esm.js";
 
-const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.2";
+const ORIHON_CDN = new URL("./vendor/", import.meta.url).href.replace(/\/?$/, "");
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register(new URL("./wms-sw.js", import.meta.url)).catch(() => {});
@@ -532,7 +532,6 @@ function setBasemap(key, { syncSelect = true } = {}) {
   updateMapOutput();
 }
 
-canvasLayer.addTo(map);
 basemapLayers.osm.addTo(map);
 
 const traffic = trafficLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -683,7 +682,7 @@ const rasterOverlay = imageOverlay(makeOverlayPng(), [[55.68, 37.47], [55.83, 37
   interactive: true,
   zIndex: 0,
   alt: "Raster overlay test"
-}).addTo(map).bringToBack();
+});
 rasterOverlay.bindPopup(() => imagePopup("ImageOverlay"));
 const videoDemoOverlay = videoOverlay("", [[55.705, 37.505], [55.75, 37.605]], {
   opacity: 0.82,
@@ -1608,6 +1607,21 @@ byId("invalidate-size").addEventListener("click", () => {
   map.invalidateSize();
   updateMapOutput({ invalidated: true });
 });
+
+function refreshMapSize() {
+  map.invalidateSize();
+  requestAnimationFrame(() => {
+    map.invalidateSize();
+    requestAnimationFrame(() => map.invalidateSize());
+  });
+}
+
+for (const eventName of ["fullscreenchange", "webkitfullscreenchange", "MSFullscreenChange"]) {
+  document.addEventListener(eventName, refreshMapSize);
+}
+window.addEventListener("orientationchange", refreshMapSize);
+refreshMapSize();
+
 byId("list-layers").addEventListener("click", () => updateMapOutput({ eachLayerCalled: true }));
 byId("custom-pane").addEventListener("change", (event) => {
   if (event.target.checked) {
@@ -2060,7 +2074,14 @@ byId("evented-toggle").addEventListener("click", () => {
 byId("pause-events").addEventListener("change", (event) => { paused = event.target.checked; });
 byId("clear-events").addEventListener("click", () => { eventLog.textContent = ""; });
 
-runtimeStatus.textContent = "v1.0.1 · ESM · TypeScript";
+fetch(`${ORIHON_CDN}/package.json`)
+  .then((response) => (response.ok ? response.json() : null))
+  .then((pkg) => {
+    runtimeStatus.textContent = pkg?.version ? `v${pkg.version} · ESM · TypeScript` : "vendor · ESM · TypeScript";
+  })
+  .catch(() => {
+    runtimeStatus.textContent = "vendor · ESM · TypeScript";
+  });
 byId("map-aria-label").textContent = map.getContainer().getAttribute("aria-label") || "";
 updateMapReadout();
 syncViewInputs();

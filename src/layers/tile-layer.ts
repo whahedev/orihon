@@ -101,6 +101,7 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   _queue: TileRecord[] = [];
   _pendingSourceZoom: number | null = null;
   _zoomSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+  _fillFrame = 0;
   /** Current-zoom tile plane; camera applied once via CSS transform. */
   level: HTMLDivElement | null = null;
   readonly _retina: boolean;
@@ -147,6 +148,7 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
 
   override onRemove(): void {
     this.#clearZoomSwitchTimer();
+    this.#clearFillFrame();
     this._generation++;
     this.#clearTileMap(this.tiles, false);
     this.#clearTileMap(this.previousTiles, false);
@@ -258,12 +260,14 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     }
 
     if (candidates.length > 1) candidates.sort((a, b) => a.distance - b.distance);
-    // Cap new HTTP tile starts per frame so fast pan/zoom stress doesn't stall the main thread.
+    // Cap new DOM tile creates per frame so fast pan/zoom stress doesn't stall the main thread,
+    // then schedule another pass until the viewport is fully covered.
     const maxNew = 6;
     for (let i = 0; i < candidates.length && i < maxNew; i++) {
       const candidate = candidates[i];
       this.#addTile(candidate.x, candidate.y, activeZoom, candidate.key);
     }
+    if (candidates.length > maxNew) this.#scheduleFillFrame();
 
     for (const [key, tile] of this.tiles) if (!needed.has(key)) this.#releaseTile(key, tile);
     // Retained tiles from the previous zoom live on the root container (not the scaled level).
@@ -272,6 +276,27 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     this.#pumpQueue();
     this.#checkLoadComplete();
     this.#retirePreviousWhenReady();
+  }
+
+  #scheduleFillFrame(): void {
+    if (this._fillFrame) return;
+    if (typeof requestAnimationFrame !== "function") {
+      queueMicrotask(() => {
+        if (this.map) this.render();
+      });
+      return;
+    }
+    this._fillFrame = requestAnimationFrame(() => {
+      this._fillFrame = 0;
+      if (this.map) this.render();
+    });
+  }
+
+  #clearFillFrame(): void {
+    if (this._fillFrame && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this._fillFrame);
+    }
+    this._fillFrame = 0;
   }
 
   #scheduleZoomSwitch(sourceZoom: number): void {
@@ -323,6 +348,7 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   #resetView(): void {
     if (this._tileZoom === null && !this.tiles.size && !this.previousTiles.size) return;
     this.#clearZoomSwitchTimer();
+    this.#clearFillFrame();
     this._generation++;
     this.#clearTileMap(this.tiles, true);
     this.#clearTileMap(this.previousTiles, true);

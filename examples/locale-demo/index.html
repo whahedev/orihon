@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orihon — locale switcher</title>
+    <link rel="stylesheet" href="./orihon.css" />
+    <style>
+      :root {
+        --ink: #1a2330;
+        --muted: #5b6b7c;
+        --line: #d7e0ea;
+        --panel: #f4f7fa;
+        --accent: #0f766e;
+        --accent-soft: #d9f3ef;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 500px at 10% -10%, var(--accent-soft) 0%, transparent 55%),
+          linear-gradient(180deg, #eef3f7 0%, #f8fafc 40%, #eef2f6 100%);
+      }
+
+      html[dir="rtl"] body,
+      [dir="rtl"] {
+        font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      }
+
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100vh;
+      }
+
+      header, footer { padding: 1rem 1.25rem; }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem 1.5rem;
+        align-items: end;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, white 70%, transparent);
+        backdrop-filter: blur(8px);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1.35rem;
+        letter-spacing: -0.02em;
+      }
+
+      header p {
+        margin: 0.25rem 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        align-items: center;
+      }
+
+      label[for="locale-select"] {
+        font-size: 0.85rem;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      #locale-select {
+        appearance: none;
+        min-width: 12rem;
+        padding: 0.55rem 2rem 0.55rem 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background:
+          white
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%235b6b7c' d='M1 1l5 5 5-5'/%3E%3C/svg%3E")
+          no-repeat right 0.75rem center;
+        color: var(--ink);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      html[dir="rtl"] #locale-select,
+      [dir="rtl"] #locale-select {
+        background-position: left 0.75rem center;
+        padding: 0.55rem 0.85rem 0.55rem 2rem;
+      }
+
+      #locale-select:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.45rem 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: white;
+        color: var(--accent);
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      main {
+        padding: 1rem 1.25rem 1.25rem;
+        display: grid;
+        gap: 0.85rem;
+      }
+
+      #map {
+        /* Map panes use left/transform; never inherit page RTL. */
+        direction: ltr;
+        unicode-bidi: isolate;
+        width: 100%;
+        height: min(72vh, 720px);
+        min-height: 420px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--panel);
+        box-shadow: 0 18px 40px rgba(26, 35, 48, 0.08);
+      }
+
+      .hint {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      code {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.86em;
+      }
+    </style>
+  </head>
+  <body>
+    <header id="page-chrome">
+      <div>
+        <h1 id="page-title">Orihon locale switcher</h1>
+        <p id="page-subtitle">Map controls use the <code>locale</code> option.</p>
+      </div>
+      <div class="toolbar">
+        <label for="locale-select" id="locale-label">Language</label>
+        <select id="locale-select" aria-label="UI locale">
+          <option value="en">English (en)</option>
+          <option value="ru">Русский (ru)</option>
+          <option value="ar">العربية (ar)</option>
+          <option value="tr" selected>Türkçe (tr)</option>
+          <option value="zh">中文 (zh)</option>
+          <option value="de">Deutsch (de)</option>
+          <option value="fr">Français (fr)</option>
+          <option value="da">Dansk (da)</option>
+          <option value="hi">हिन्दी (hi)</option>
+        </select>
+        <span class="badge" id="locale-badge">locale: tr</span>
+      </div>
+    </header>
+
+    <main>
+      <div id="map" role="application" dir="ltr"></div>
+      <p class="hint" id="page-hint">
+        Switch the language to recreate the map with a new <code>locale</code> value.
+      </p>
+    </main>
+
+    <footer id="page-footer">
+      Built artifacts: <code>orihon.global.js</code> · PolyForm Noncommercial 1.0.0
+    </footer>
+
+    <script src="./orihon.global.js"></script>
+    <script>
+      const {
+        createMap,
+        tileLayer,
+        marker,
+        circleMarker,
+        polyline,
+        geolocationControl,
+        locales
+      } = Orihon;
+
+      const CENTER = [52.520008, 13.404954];
+      const GATE = [52.516275, 13.377704];
+      const MUSEUM = [52.5186, 13.4081];
+      const DEFAULT_ZOOM = 12;
+
+      const PAGE_COPY = {
+        en: {
+          title: "Orihon locale switcher",
+          subtitle: 'Map controls use the <code>locale</code> option.',
+          label: "Language",
+          hint: "Switch the language to recreate the map with a new <code>locale</code> value. Center: Berlin.",
+          marker: "Berlin center",
+          popup: "<strong>Berlin</strong><br>Orihon locale test",
+          gate: "Brandenburg Gate"
+        },
+        ru: {
+          title: "Orihon — переключение локали",
+          subtitle: "Элементы управления карты берут язык из параметра <code>locale</code>.",
+          label: "Язык",
+          hint: "Смените язык — карта пересоздаётся с новым значением <code>locale</code>. Центр: Берлин.",
+          marker: "Центр Берлина",
+          popup: "<strong>Берлин</strong><br>Тест локали Orihon",
+          gate: "Бранденбургские ворота"
+        },
+        ar: {
+          title: "Orihon — تبديل اللغة",
+          subtitle: "عناصر التحكم تأخذ اللغة من خيار <code>locale</code>.",
+          label: "اللغة",
+          hint: "غيّر اللغة لإعادة إنشاء الخريطة بقيمة <code>locale</code> جديدة. المركز: برلين.",
+          marker: "وسط برلين",
+          popup: "<strong>برلين</strong><br>اختبار لغة Orihon",
+          gate: "بوابة براندنبورغ"
+        },
+        tr: {
+          title: "Orihon dil değiştirici",
+          subtitle: "Harita kontrolleri <code>locale</code> seçeneğini kullanır.",
+          label: "Dil",
+          hint: "Dili değiştirince harita yeni <code>locale</code> değeriyle yeniden oluşturulur. Merkez: Berlin.",
+          marker: "Berlin merkezi",
+          popup: "<strong>Berlin</strong><br>Orihon dil testi",
+          gate: "Brandenburg Kapısı"
+        },
+        zh: {
+          title: "Orihon 语言切换",
+          subtitle: "地图控件语言由 <code>locale</code> 参数决定。",
+          label: "语言",
+          hint: "切换语言会以新的 <code>locale</code> 重建地图。中心：柏林。",
+          marker: "柏林中心",
+          popup: "<strong>柏林</strong><br>Orihon 语言测试",
+          gate: "勃兰登堡门"
+        },
+        de: {
+          title: "Orihon Sprachumschalter",
+          subtitle: "Kartensteuerung nutzt die Option <code>locale</code>.",
+          label: "Sprache",
+          hint: "Beim Sprachwechsel wird die Karte mit neuem <code>locale</code>-Wert neu erzeugt. Zentrum: Berlin.",
+          marker: "Berlin Mitte",
+          popup: "<strong>Berlin</strong><br>Orihon-Sprachtest",
+          gate: "Brandenburger Tor"
+        },
+        fr: {
+          title: "Orihon — changement de langue",
+          subtitle: "Les contrôles de la carte utilisent l'option <code>locale</code>.",
+          label: "Langue",
+          hint: "Changer la langue recrée la carte avec une nouvelle valeur <code>locale</code>. Centre : Berlin.",
+          marker: "Centre de Berlin",
+          popup: "<strong>Berlin</strong><br>Test de locale Orihon",
+          gate: "Porte de Brandebourg"
+        },
+        da: {
+          title: "Orihon sprogskifter",
+          subtitle: "Kortkontroller bruger indstillingen <code>locale</code>.",
+          label: "Sprog",
+          hint: "Skift sprog for at genskabe kortet med en ny <code>locale</code>-værdi. Centrum: Berlin.",
+          marker: "Berlin centrum",
+          popup: "<strong>Berlin</strong><br>Orihon sprogtest",
+          gate: "Brandenburger Tor"
+        },
+        hi: {
+          title: "Orihon भाषा स्विचर",
+          subtitle: "मानचित्र नियंत्रण <code>locale</code> विकल्प का उपयोग करते हैं।",
+          label: "भाषा",
+          hint: "भाषा बदलने पर मानचित्र नए <code>locale</code> मान के साथ फिर बनता है। केंद्र: बर्लिन।",
+          marker: "बर्लिन केंद्र",
+          popup: "<strong>बर्लिन</strong><br>Orihon भाषा परीक्षण",
+          gate: "ब्रैंडनबर्ग गेट"
+        }
+      };
+
+      const select = document.getElementById("locale-select");
+      const badge = document.getElementById("locale-badge");
+      const mapEl = document.getElementById("map");
+
+      let map = null;
+      let currentLocale = select.value;
+
+      function applyPageCopy(code) {
+        const copy = PAGE_COPY[code] || PAGE_COPY.en;
+        const rtl = code === "ar";
+        // Keep the document LTR so map geometry (left/transform) stays stable.
+        // Apply RTL only to page chrome around the map.
+        document.documentElement.lang = code;
+        document.documentElement.dir = "ltr";
+        document.body.dir = "ltr";
+        for (const id of ["page-chrome", "page-hint", "page-footer"]) {
+          document.getElementById(id).dir = rtl ? "rtl" : "ltr";
+        }
+        mapEl.setAttribute("dir", "ltr");
+        document.title = copy.title;
+        document.getElementById("page-title").textContent = copy.title;
+        document.getElementById("page-subtitle").innerHTML = copy.subtitle;
+        document.getElementById("locale-label").textContent = copy.label;
+        document.getElementById("page-hint").innerHTML = copy.hint;
+        select.setAttribute("aria-label", copy.label);
+        return copy;
+      }
+
+      function createDemoMap(localeCode, view) {
+        const copy = applyPageCopy(localeCode);
+        const ui = locales[localeCode] || locales.en;
+
+        const next = createMap(mapEl, {
+          center: view.center,
+          zoom: view.zoom,
+          locale: localeCode,
+          ariaLabel: ui.mapLabel
+        });
+
+        tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+          maxZoom: 19
+        }).addTo(next);
+
+        geolocationControl({ position: "top-left" }).addTo(next);
+
+        marker(CENTER, { title: copy.marker })
+          .bindPopup(copy.popup)
+          .addTo(next);
+
+        circleMarker(GATE, {
+          radius: 8,
+          stroke: "#0f766e",
+          fill: "#14b8a6",
+          fillOpacity: 0.85
+        })
+          .bindPopup(copy.gate)
+          .addTo(next);
+
+        polyline([GATE, CENTER, MUSEUM], {
+          stroke: "#b45309",
+          strokeWidth: 4
+        }).addTo(next);
+
+        badge.textContent = `locale: "${localeCode}" · ${ui.zoomIn} / ${ui.zoomOut}`;
+        return next;
+      }
+
+      function setLocale(localeCode) {
+        const view = map
+          ? { center: map.getCenter().toArray(), zoom: map.getZoom() }
+          : { center: CENTER, zoom: DEFAULT_ZOOM };
+
+        if (map) {
+          map.destroy();
+          map = null;
+        }
+
+        currentLocale = localeCode;
+        select.value = localeCode;
+        map = createDemoMap(localeCode, view);
+        requestAnimationFrame(() => {
+          map?.invalidateSize(true);
+        });
+        window.__orihonTrDemo = { map, locale: localeCode, ui: map.locale };
+      }
+
+      select.addEventListener("change", () => {
+        setLocale(select.value);
+      });
+
+      setLocale(currentLocale);
+    </script>
+  </body>
+</html>

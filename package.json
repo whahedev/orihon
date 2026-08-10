@@ -1,0 +1,87 @@
+{
+  "name": "orihon",
+  "version": "1.0.2",
+  "description": "Unfold the world. A lightweight, high-performance mapping library — less weight, more space.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./standard": {
+      "types": "./dist/standard.d.ts",
+      "import": "./dist/standard.js"
+    },
+    "./bundle": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/orihon.esm.js"
+    },
+    "./global": "./dist/orihon.global.js",
+    "./orihon.css": "./dist/orihon.css",
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "./dist/orihon.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
+    "pretest": "npm run build",
+    "test": "node --test test",
+    "test:browser": "node test/browser-smoke.mjs",
+    "test:e2e": "playwright test",
+    "test:fuzz": "node --test test/coordinate-fuzz.test.js",
+    "test:leaks": "node --expose-gc --test test/lifecycle-leak.test.js",
+    "test:plugin": "tsc -p tsconfig.plugin-template.json",
+    "size": "node scripts/check-size.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check": "npm run typecheck && npm test && npm run size",
+    "dist": "npm run build && node scripts/pack-dist.mjs",
+    "prepack": "npm run build && node scripts/strip-publish-maps.mjs",
+    "prepublishOnly": "npm run check",
+    "demo:locale": "npx --yes serve examples/locale-demo -p 4173",
+    "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
+    "demo:webgl": "npx --yes serve . -p 4175",
+    "demo:bench": "npx --yes serve . -p 4176",
+    "demo:lab": "node examples/lab/server.js"
+  },
+  "keywords": [
+    "map",
+    "gis",
+    "tiles",
+    "web-mercator",
+    "orihon"
+  ],
+  "author": "whahe",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "files": [
+    "dist",
+    "docs",
+    "LICENSE",
+    "LICENSE-NOTICE.md",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/whahedev/orihon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/whahedev/orihon/issues"
+  },
+  "homepage": "https://github.com/whahedev/orihon#readme"
+}

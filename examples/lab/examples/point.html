@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orihon point example</title>
+    <link rel="stylesheet" href="/dist/orihon.css" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #f8fafc;
+        color: #172026;
+      }
+
+      .example {
+        display: grid;
+        grid-template-rows: minmax(260px, 1fr) auto;
+        height: 100vh;
+        min-height: 360px;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+      }
+
+      #map {
+        position: relative;
+        min-height: 260px;
+      }
+
+      .hud {
+        position: absolute;
+        left: 12px;
+        top: 12px;
+        z-index: 500;
+        display: grid;
+        gap: 6px;
+        width: min(260px, calc(100% - 24px));
+        padding: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
+        backdrop-filter: blur(8px);
+      }
+
+      .hud h1 {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.2;
+      }
+
+      .hud p {
+        margin: 0;
+        color: #475569;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .readout {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 8px;
+        margin-top: 2px;
+        font-size: 12px;
+      }
+
+      .readout dt {
+        color: #64748b;
+      }
+
+      .readout dd {
+        margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        padding: 10px;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+      }
+
+      button {
+        min-height: 34px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #172026;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: #0f766e;
+      }
+
+      .arrow {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        z-index: 450;
+        width: 54px;
+        height: 2px;
+        transform-origin: 0 50%;
+        background: #e11d48;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+        pointer-events: none;
+      }
+
+      .arrow::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        top: 50%;
+        width: 9px;
+        height: 9px;
+        border-right: 2px solid #e11d48;
+        border-top: 2px solid #e11d48;
+        transform: translateY(-50%) rotate(45deg);
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="example">
+      <section id="map" aria-label="Пример функции point">
+        <div class="hud">
+          <h1>point(x, y)</h1>
+          <p>Создает пиксельное смещение. Нажмите кнопку, чтобы вызвать <code>map.panBy(point(...))</code>.</p>
+          <dl class="readout">
+            <dt>offset</dt>
+            <dd id="offset">point(80, 0)</dd>
+            <dt>center</dt>
+            <dd id="center">...</dd>
+          </dl>
+        </div>
+        <i class="arrow" id="arrow" aria-hidden="true"></i>
+      </section>
+      <nav class="actions" aria-label="Проверка point">
+        <button type="button" data-x="-80" data-y="0">← 80px</button>
+        <button type="button" data-x="0" data-y="-80">↑ 80px</button>
+        <button type="button" data-x="80" data-y="0">80px →</button>
+        <button type="button" data-x="0" data-y="80">↓ 80px</button>
+        <button type="button" data-x="64" data-y="-48">diag</button>
+        <button type="button" id="reset">reset</button>
+      </nav>
+    </main>
+
+    <script type="module">
+      import { createMap, marker, point, tileLayer } from "/dist/index.js";
+
+      const initialCenter = [55.751244, 37.618423];
+      const map = createMap("map", {
+        center: initialCenter,
+        zoom: 13,
+        locale: "ru",
+        zoomControl: false
+      });
+
+      tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
+        maxRequests: 6,
+        cacheSize: 90
+      }).addTo(map);
+
+      marker(initialCenter, { title: "Центр примера" })
+        .bindPopup("Маркер остается в географической точке, а point задает экранное смещение panBy.")
+        .addTo(map);
+
+      const centerOutput = document.querySelector("#center");
+      const offsetOutput = document.querySelector("#offset");
+      const arrow = document.querySelector("#arrow");
+
+      function updateCenter() {
+        const center = map.getCenter();
+        centerOutput.textContent = `${center.lat.toFixed(5)}, ${center.lng.toFixed(5)}`;
+      }
+
+      function showOffset(x, y) {
+        offsetOutput.textContent = `point(${x}, ${y})`;
+        const length = Math.max(24, Math.hypot(x, y));
+        const angle = Math.atan2(y, x) * 180 / Math.PI;
+        arrow.style.width = `${Math.min(110, length)}px`;
+        arrow.style.transform = `rotate(${angle}deg)`;
+      }
+
+      document.querySelectorAll("[data-x]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const x = Number(button.dataset.x);
+          const y = Number(button.dataset.y);
+          const offset = point(x, y);
+          showOffset(offset.x, offset.y);
+          map.panBy(offset);
+        });
+      });
+
+      document.querySelector("#reset").addEventListener("click", () => {
+        showOffset(80, 0);
+        map.setView(initialCenter, 13);
+      });
+
+      map.on("move moveend zoomend", updateCenter);
+      showOffset(80, 0);
+      updateCenter();
+    </script>
+  </body>
+</html>

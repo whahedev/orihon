@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orihon — map engine benchmark</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/dist/orihon.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.5.0/ol.css" />
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.css" />
+    <link rel="stylesheet" href="./bench.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand-block">
+        <p class="brand">Orihon</p>
+        <h1>Engine benchmark</h1>
+        <p class="lede">
+          Same data, sequential runs — points, clusters, heatmap, isolines, GeoJSON, markers, chart popups, filter, live updates, pick and basemap across Orihon, Leaflet, OpenLayers and MapLibre.
+        </p>
+      </div>
+      <div class="controls" id="controls">
+        <label class="field">
+          <span>Scenario</span>
+          <select id="scenario">
+            <option value="points" selected>Points (WebGL / canvas)</option>
+            <option value="clusters">Clusters / ObjectManager</option>
+            <option value="heatmap">Heatmap</option>
+            <option value="isolines">Isolines (from heat)</option>
+            <option value="geojson">GeoJSON lines</option>
+            <option value="markers">DOM markers</option>
+            <option value="popup">Chart popup</option>
+            <option value="filter">Filter + clusters</option>
+            <option value="live">Live updates</option>
+            <option value="pick">Pick / hit-test</option>
+            <option value="basemap">Basemap only</option>
+          </select>
+        </label>
+        <label class="field">
+          <span id="count-label">Points</span>
+          <select id="count">
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+            <option value="1000">1,000</option>
+            <option value="2000">2,000</option>
+            <option value="5000">5,000</option>
+            <option value="10000">10,000</option>
+            <option value="25000">25,000</option>
+            <option value="50000" selected>50,000</option>
+            <option value="100000">100,000</option>
+            <option value="250000">250,000</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Runs</span>
+          <select id="runs">
+            <option value="1">1</option>
+            <option value="3" selected>3 → median</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Preset</span>
+          <select id="preset">
+            <option value="">Custom</option>
+            <option value="marketing">Marketing 50k</option>
+            <option value="stress">Stress 250k</option>
+            <option value="objects">ObjectManager 50k</option>
+            <option value="heatmap">Heatmap 50k</option>
+            <option value="isolines">Isolines 25k</option>
+            <option value="geojson">GeoJSON 5k</option>
+            <option value="markers">Markers 5k</option>
+            <option value="popup">Chart popup 100</option>
+            <option value="filter">Filter 50k</option>
+            <option value="live">Live 50k</option>
+            <option value="pick">Pick 50k</option>
+            <option value="basemap">Basemap</option>
+          </select>
+        </label>
+        <label class="field check">
+          <input type="checkbox" id="engines-orihon" checked />
+          <span>Orihon</span>
+        </label>
+        <label class="field check">
+          <input type="checkbox" id="engines-leaflet" checked />
+          <span>Leaflet</span>
+        </label>
+        <label class="field check">
+          <input type="checkbox" id="engines-ol" checked />
+          <span>OpenLayers</span>
+        </label>
+        <label class="field check">
+          <input type="checkbox" id="engines-maplibre" checked />
+          <span>MapLibre</span>
+        </label>
+        <button type="button" id="run" class="run">Run benchmark</button>
+        <button type="button" id="export" class="ghost" disabled>Export JSON</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="stage-wrap">
+        <div id="stage" class="stage" aria-label="Map stage"></div>
+        <div class="hud" id="hud">
+          <p class="hud-engine" id="hud-engine">Idle</p>
+          <p class="hud-status" id="hud-status">Pick a scenario and run.</p>
+        </div>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <h2>Live results</h2>
+          <div class="table-wrap">
+            <table id="results">
+              <thead id="results-head"></thead>
+              <tbody>
+                <tr class="empty">
+                  <td colspan="8">No runs yet</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="footnote" id="method-note"></p>
+        </section>
+
+        <section class="panel sizes">
+          <h2>Measured library transfer</h2>
+          <p class="footnote">From Resource Timing after scripts load (encoded size when available).</p>
+          <ul class="size-list" id="size-list">
+            <li><span>Waiting for resources…</span><strong>—</strong></li>
+          </ul>
+        </section>
+      </aside>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.5.0/dist/ol.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+# Keep the published tarball library-only and small.
+demo/
+examples/
+test/
+e2e/
+scripts/
+src/
+plugin-template/
+orihon-dist/
+node_modules/
+test-results/
+playwright-report/
+playwright.config.js
+tsconfig.json
+tsconfig.plugin-template.json
+.gitignore
+.npmignore
+*.map
+**/*.map
+dist/**/*.map
+dist/release-manifest.json
+*.tgz

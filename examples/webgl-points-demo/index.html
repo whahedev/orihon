@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orihon — WebGL points demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Syne:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/dist/orihon.css" />
+    <style>
+      :root {
+        --ink: #14202b;
+        --muted: #5c6b7a;
+        --line: #d5dee7;
+        --panel: rgba(255, 252, 248, 0.92);
+        --accent: #0f766e;
+        --accent-ink: #083b38;
+        --warn: #b45309;
+        --good: #047857;
+        --map-wash: #dbe7ef;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        font-family: "Source Sans 3", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: var(--map-wash);
+      }
+
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        min-height: 100%;
+      }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem 1.5rem;
+        align-items: end;
+        justify-content: space-between;
+        padding: 0.95rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, #fffaf4 0%, #f3f7fa 100%);
+      }
+
+      header h1 {
+        margin: 0;
+        font-family: Syne, "Source Sans 3", sans-serif;
+        font-size: 1.45rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+
+      header p {
+        margin: 0.2rem 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+        max-width: 38rem;
+      }
+
+      .stage {
+        position: relative;
+        min-height: 0;
+      }
+
+      #map {
+        width: 100%;
+        height: 100%;
+        min-height: 420px;
+      }
+
+      .hud {
+        position: absolute;
+        z-index: 1000;
+        top: 1rem;
+        left: 1rem;
+        width: min(22rem, calc(100% - 2rem));
+        padding: 0.95rem 1rem 1.05rem;
+        border: 1px solid color-mix(in srgb, var(--line) 80%, var(--accent));
+        border-radius: 0.65rem;
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 10px 30px rgba(20, 32, 43, 0.08);
+      }
+
+      .hud h2 {
+        margin: 0 0 0.65rem;
+        font-family: Syne, sans-serif;
+        font-size: 0.95rem;
+        letter-spacing: -0.02em;
+      }
+
+      .counts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 0.85rem;
+      }
+
+      .counts button {
+        appearance: none;
+        border: 1px solid var(--line);
+        border-radius: 0.4rem;
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.65rem;
+        cursor: pointer;
+      }
+
+      .counts button[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, white);
+        color: var(--accent-ink);
+      }
+
+      .counts button:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.55rem 0.75rem;
+        margin: 0;
+      }
+
+      .metrics div {
+        display: grid;
+        gap: 0.1rem;
+      }
+
+      .metrics dt {
+        margin: 0;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .metrics dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+
+      .status {
+        margin: 0.75rem 0 0;
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+
+      .status[data-tone="busy"] { color: var(--warn); }
+      .status[data-tone="ok"] { color: var(--good); }
+
+      @media (max-width: 640px) {
+        .hud { top: auto; bottom: 1rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>WebGLPointLayer</h1>
+        <p>Million-scale points on one canvas. Switch density and watch FPS, frame time, memory and viewport visibility via <code>performanceInspector</code>.</p>
+      </div>
+    </header>
+
+    <div class="stage">
+      <div id="map" role="application" aria-label="Orihon WebGL points map"></div>
+      <aside class="hud" aria-label="Performance HUD">
+        <h2>Point budget</h2>
+        <div class="counts" role="group" aria-label="Point count">
+          <button type="button" data-count="100000" aria-pressed="true">100k</button>
+          <button type="button" data-count="500000">500k</button>
+          <button type="button" data-count="1000000">1M</button>
+        </div>
+        <dl class="metrics">
+          <div><dt>FPS</dt><dd id="metric-fps">—</dd></div>
+          <div><dt>Frame time</dt><dd id="metric-frame">—</dd></div>
+          <div><dt>Memory</dt><dd id="metric-memory">—</dd></div>
+          <div><dt>Source points</dt><dd id="metric-source">—</dd></div>
+          <div><dt>Visible</dt><dd id="metric-visible">—</dd></div>
+          <div><dt>Rendered</dt><dd id="metric-rendered">—</dd></div>
+        </dl>
+        <p class="status" id="status" data-tone="ok">Loading map…</p>
+      </aside>
+    </div>
+
+    <script type="module" src="./app.js?v=3"></script>
+  </body>
+</html>

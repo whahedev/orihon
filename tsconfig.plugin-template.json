@@ -1,0 +1,10 @@
+{
+  "extends": "./plugin-template/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "orihon/core": ["./dist/core.d.ts"]
+    },
+    "noEmit": true
+  }
+}

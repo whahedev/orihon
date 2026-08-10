@@ -1,0 +1,334 @@
+const MAX_LAT = 85.0511287798066;
+const EARTH_RADIUS = 6378137;
+const TILE_SIZE = 256;
+
+export type PointLike = Point | [number, number] | { x: number; y: number };
+export type LatLngLike = LatLng | [number, number] | { lat: number; lng: number };
+export type LatLngBoundsLike =
+  | LatLngBounds
+  | [LatLngLike, LatLngLike]
+  | { south: number; west: number; north: number; east: number };
+
+export class Point {
+  constructor(public x: number, public y: number) {
+    this.x = Number(x);
+    this.y = Number(y);
+  }
+
+  clone(): Point {
+    return new Point(this.x, this.y);
+  }
+
+  add(value: PointLike): Point {
+    const other = point(value);
+    return new Point(this.x + other.x, this.y + other.y);
+  }
+
+  subtract(value: PointLike): Point {
+    const other = point(value);
+    return new Point(this.x - other.x, this.y - other.y);
+  }
+
+  multiplyBy(value: number): Point {
+    return new Point(this.x * value, this.y * value);
+  }
+
+  divideBy(value: number): Point {
+    return new Point(this.x / value, this.y / value);
+  }
+
+  round(): Point {
+    return new Point(Math.round(this.x), Math.round(this.y));
+  }
+
+  floor(): Point {
+    return new Point(Math.floor(this.x), Math.floor(this.y));
+  }
+
+  ceil(): Point {
+    return new Point(Math.ceil(this.x), Math.ceil(this.y));
+  }
+
+  distanceTo(value: PointLike): number {
+    const other = point(value);
+    return Math.hypot(other.x - this.x, other.y - this.y);
+  }
+
+  equals(value: PointLike): boolean {
+    const other = point(value);
+    return other.x === this.x && other.y === this.y;
+  }
+
+  toArray(): [number, number] {
+    return [this.x, this.y];
+  }
+}
+
+export function point(value: PointLike): Point;
+export function point(x: number, y: number): Point;
+export function point(value: PointLike | number, y?: number): Point {
+  if (value instanceof Point) return value;
+  if (Array.isArray(value)) return new Point(value[0], value[1]);
+  if (typeof value === "object") return new Point(value.x, value.y);
+  return new Point(value, Number(y));
+}
+
+export class Bounds {
+  min: Point;
+  max: Point;
+
+  constructor(a?: PointLike | PointLike[], b?: PointLike) {
+    this.min = new Point(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+    this.max = new Point(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+    if (Array.isArray(a) && a.length > 0 && typeof a[0] !== "number") {
+      for (const value of a as PointLike[]) this.extend(value);
+    } else if (a) {
+      this.extend(a as PointLike);
+    }
+    if (b) this.extend(b);
+  }
+
+  extend(value: PointLike | Bounds): this {
+    if (value instanceof Bounds) {
+      if (value.isValid()) {
+        this.extend(value.min);
+        this.extend(value.max);
+      }
+      return this;
+    }
+    const next = point(value);
+    this.min.x = Math.min(this.min.x, next.x);
+    this.min.y = Math.min(this.min.y, next.y);
+    this.max.x = Math.max(this.max.x, next.x);
+    this.max.y = Math.max(this.max.y, next.y);
+    return this;
+  }
+
+  getCenter(): Point {
+    return this.min.add(this.max).divideBy(2);
+  }
+
+  getSize(): Point {
+    return this.max.subtract(this.min);
+  }
+
+  contains(value: PointLike | Bounds): boolean {
+    if (value instanceof Bounds) {
+      return this.contains(value.min) && this.contains(value.max);
+    }
+    const next = point(value);
+    return next.x >= this.min.x && next.x <= this.max.x && next.y >= this.min.y && next.y <= this.max.y;
+  }
+
+  intersects(value: Bounds): boolean {
+    return value.max.x >= this.min.x && value.min.x <= this.max.x && value.max.y >= this.min.y && value.min.y <= this.max.y;
+  }
+
+  isValid(): boolean {
+    return Number.isFinite(this.min.x) && Number.isFinite(this.min.y) && Number.isFinite(this.max.x) && Number.isFinite(this.max.y);
+  }
+}
+
+export function pointBounds(a?: PointLike | PointLike[], b?: PointLike): Bounds {
+  return new Bounds(a, b);
+}
+
+export class LatLng {
+  constructor(public lat: number, public lng: number) {
+    this.lat = Number(lat);
+    this.lng = Number(lng);
+  }
+
+  clone(): LatLng {
+    return new LatLng(this.lat, this.lng);
+  }
+
+  equals(value: LatLngLike, maxMargin = 1e-9): boolean {
+    const other = latLng(value);
+    return Math.max(Math.abs(this.lat - other.lat), Math.abs(this.lng - other.lng)) <= maxMargin;
+  }
+
+  distanceTo(value: LatLngLike): number {
+    return distance(this, value);
+  }
+
+  wrap(): LatLng {
+    return new LatLng(this.lat, wrapLng(this.lng));
+  }
+
+  toArray(): [number, number] {
+    return [this.lat, this.lng];
+  }
+
+  toString(): string {
+    return `LatLng(${this.lat}, ${this.lng})`;
+  }
+}
+
+export function latLng(value: LatLngLike): LatLng;
+export function latLng(lat: number, lng: number): LatLng;
+export function latLng(value: LatLngLike | number, lng?: number): LatLng {
+  if (value instanceof LatLng) return value;
+  if (Array.isArray(value)) return new LatLng(value[0], value[1]);
+  if (typeof value === "object") return new LatLng(value.lat, value.lng);
+  return new LatLng(value, Number(lng));
+}
+
+export class LatLngBounds {
+  south = Number.POSITIVE_INFINITY;
+  west = Number.POSITIVE_INFINITY;
+  north = Number.NEGATIVE_INFINITY;
+  east = Number.NEGATIVE_INFINITY;
+
+  constructor(a?: LatLngLike | LatLngLike[] | LatLngBoundsLike, b?: LatLngLike) {
+    if (a instanceof LatLngBounds) {
+      this.extend(a);
+    } else if (Array.isArray(a) && a.length > 0 && Array.isArray(a[0])) {
+      for (const value of a as LatLngLike[]) this.extend(value);
+    } else if (Array.isArray(a) && a.length === 2 && typeof a[0] === "number") {
+      this.extend(a as LatLngLike);
+    } else if (a && "south" in a) {
+      this.extend([a.south, a.west]);
+      this.extend([a.north, a.east]);
+    } else if (a) {
+      this.extend(a as LatLngLike);
+    }
+    if (b) this.extend(b);
+  }
+
+  extend(value: LatLngLike | LatLngBoundsLike): this {
+    if (value instanceof LatLngBounds || (!Array.isArray(value) && "south" in value)) {
+      const other = value instanceof LatLngBounds ? value : latLngBounds(value);
+      if (other.isValid()) {
+        this.extend([other.south, other.west]);
+        this.extend([other.north, other.east]);
+      }
+      return this;
+    }
+    const next = latLng(value as LatLngLike);
+    this.south = Math.min(this.south, next.lat);
+    this.west = Math.min(this.west, next.lng);
+    this.north = Math.max(this.north, next.lat);
+    this.east = Math.max(this.east, next.lng);
+    return this;
+  }
+
+  getCenter(): LatLng {
+    return new LatLng((this.south + this.north) / 2, (this.west + this.east) / 2);
+  }
+
+  getSouthWest(): LatLng { return new LatLng(this.south, this.west); }
+  getNorthEast(): LatLng { return new LatLng(this.north, this.east); }
+  getNorthWest(): LatLng { return new LatLng(this.north, this.west); }
+  getSouthEast(): LatLng { return new LatLng(this.south, this.east); }
+
+  contains(value: LatLngLike | LatLngBoundsLike): boolean {
+    if (value instanceof LatLngBounds || (!Array.isArray(value) && "south" in value)) {
+      const other = value instanceof LatLngBounds ? value : latLngBounds(value);
+      return other.south >= this.south && other.north <= this.north && other.west >= this.west && other.east <= this.east;
+    }
+    const next = latLng(value as LatLngLike);
+    return next.lat >= this.south && next.lat <= this.north && next.lng >= this.west && next.lng <= this.east;
+  }
+
+  intersects(value: LatLngBoundsLike): boolean {
+    const other = latLngBounds(value);
+    return other.north >= this.south && other.south <= this.north && other.east >= this.west && other.west <= this.east;
+  }
+
+  pad(ratio: number): LatLngBounds {
+    const latBuffer = Math.abs(this.north - this.south) * ratio;
+    const lngBuffer = Math.abs(this.east - this.west) * ratio;
+    return new LatLngBounds([this.south - latBuffer, this.west - lngBuffer], [this.north + latBuffer, this.east + lngBuffer]);
+  }
+
+  equals(value: LatLngBoundsLike, maxMargin = 1e-9): boolean {
+    const other = latLngBounds(value);
+    return this.getSouthWest().equals(other.getSouthWest(), maxMargin) && this.getNorthEast().equals(other.getNorthEast(), maxMargin);
+  }
+
+  isValid(): boolean {
+    return Number.isFinite(this.south) && Number.isFinite(this.west) && Number.isFinite(this.north) && Number.isFinite(this.east);
+  }
+
+  toBBoxString(): string {
+    return `${this.west},${this.south},${this.east},${this.north}`;
+  }
+}
+
+export function latLngBounds(a?: LatLngLike | LatLngLike[] | LatLngBoundsLike, b?: LatLngLike): LatLngBounds {
+  return a instanceof LatLngBounds && b === undefined ? a : new LatLngBounds(a, b);
+}
+
+// Backwards-compatible geographic bounds factory (legacy 0.2 API).
+export function bounds(a: LatLngLike, b: LatLngLike): LatLngBounds {
+  return new LatLngBounds(a, b);
+}
+
+export function extendBounds(target: LatLngBounds | null, value: LatLngLike): LatLngBounds {
+  return (target ?? new LatLngBounds()).extend(value);
+}
+
+export function clampLat(lat: number): number {
+  return Math.max(-MAX_LAT, Math.min(MAX_LAT, lat));
+}
+
+export function wrapLng(lng: number): number {
+  return ((((lng + 180) % 360) + 360) % 360) - 180;
+}
+
+export function scale(zoom: number): number {
+  return TILE_SIZE * 2 ** zoom;
+}
+
+export function project(value: LatLngLike, zoom = 0): Point {
+  const ll = latLng(value);
+  const size = scale(zoom);
+  const sin = Math.sin((clampLat(ll.lat) * Math.PI) / 180);
+  return new Point(
+    ((wrapLng(ll.lng) + 180) / 360) * size,
+    (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * size
+  );
+}
+
+export function unproject(value: PointLike, zoom = 0): LatLng {
+  const source = point(value);
+  const size = scale(zoom);
+  const lng = (source.x / size) * 360 - 180;
+  const n = Math.PI - (2 * Math.PI * source.y) / size;
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return new LatLng(lat, wrapLng(lng));
+}
+
+export function distance(a: LatLngLike, b: LatLngLike): number {
+  const p1 = latLng(a);
+  const p2 = latLng(b);
+  const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
+  const dLng = ((p2.lng - p1.lng) * Math.PI) / 180;
+  const lat1 = (p1.lat * Math.PI) / 180;
+  const lat2 = (p2.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+export function metersToPixels(meters: number, latitude: number, zoom: number): number {
+  const latitudeScale = Math.max(1e-6, Math.cos((clampLat(Number(latitude)) * Math.PI) / 180));
+  return Math.abs(Number(meters)) * scale(zoom) / (2 * Math.PI * EARTH_RADIUS * latitudeScale);
+}
+
+type ViewSize = PointLike | { width: number; height: number };
+
+export function zoomForBounds(viewSize: ViewSize, targetBounds: LatLngBoundsLike, padding = 32, maxZoom = 18): number {
+  const b = latLngBounds(targetBounds);
+  const nw = project([b.north, b.west], 0);
+  const se = project([b.south, b.east], 0);
+  const dx = Math.max(1e-9, Math.abs(se.x - nw.x));
+  const dy = Math.max(1e-9, Math.abs(se.y - nw.y));
+  const width = "width" in viewSize ? viewSize.width : point(viewSize).x;
+  const height = "height" in viewSize ? viewSize.height : point(viewSize).y;
+  const zx = Math.log2(Math.max(1, width - padding * 2) / dx);
+  const zy = Math.log2(Math.max(1, height - padding * 2) / dy);
+  return Math.max(0, Math.min(maxZoom, Math.floor(Math.min(zx, zy))));
+}
+
+export { TILE_SIZE, MAX_LAT, EARTH_RADIUS };

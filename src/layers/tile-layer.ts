@@ -102,6 +102,9 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   _pendingSourceZoom: number | null = null;
   _zoomSwitchTimer: ReturnType<typeof setTimeout> | null = null;
   _fillFrame = 0;
+  /** Level-local origin in world pixels at `_tileZoom` (snapped to tile grid). */
+  _levelOriginX = 0;
+  _levelOriginY = 0;
   /** Current-zoom tile plane; camera applied once via CSS transform. */
   level: HTMLDivElement | null = null;
   readonly _retina: boolean;
@@ -232,8 +235,16 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     const size = this.options.tileSize;
     const displayScale = 2 ** (this.map.zoom - activeZoom);
     const origin = this.map.pixelOrigin;
-    // One transform for the whole level — avoids rewriting every tile style each frame.
-    this.level.style.transform = `translate3d(${-origin.x}px,${-origin.y}px,0) scale(${displayScale})`;
+    // Snap the level anchor to the tile grid near the viewport. Tile elements then
+    // use small local coordinates; composing two ~1e7px transforms loses CSS precision
+    // at high zoom and collapses every tile onto the same screen rect.
+    const levelOriginX = Math.floor(origin.x / displayScale / size) * size;
+    const levelOriginY = Math.floor(origin.y / displayScale / size) * size;
+    const originMoved = levelOriginX !== this._levelOriginX || levelOriginY !== this._levelOriginY;
+    this._levelOriginX = levelOriginX;
+    this._levelOriginY = levelOriginY;
+    this.level.style.transform =
+      `translate3d(${levelOriginX * displayScale - origin.x}px,${levelOriginY * displayScale - origin.y}px,0) scale(${displayScale})`;
 
     const tileOrigin = { x: origin.x / displayScale, y: origin.y / displayScale };
     const left = Math.floor(tileOrigin.x / size) - this.options.buffer;
@@ -268,6 +279,10 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
       this.#addTile(candidate.x, candidate.y, activeZoom, candidate.key);
     }
     if (candidates.length > maxNew) this.#scheduleFillFrame();
+
+    if (originMoved) {
+      for (const tile of this.tiles.values()) this.#placeTileOnLevel(tile);
+    }
 
     for (const [key, tile] of this.tiles) if (!needed.has(key)) this.#releaseTile(key, tile);
     // Retained tiles from the previous zoom live on the root container (not the scaled level).
@@ -339,6 +354,8 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     this.tiles = new Map();
     this._tileZoom = sourceZoom;
     this._generation++;
+    this._levelOriginX = Number.NaN;
+    this._levelOriginY = Number.NaN;
     this._needed = new Set();
     this._loading = 0;
     this._queue = [];
@@ -433,7 +450,7 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   /** Place tile in level-local pixel space; camera scale/translation is on `.oh-tile-level`. */
   #placeTileOnLevel(tile: TileRecord): void {
     const size = this.options.tileSize;
-    setTransform(tile.el, tile.x * size, tile.y * size, 1);
+    setTransform(tile.el, tile.x * size - this._levelOriginX, tile.y * size - this._levelOriginY, 1);
   }
 
   /** Retained tiles sit on the root container and need full world→screen transforms. */

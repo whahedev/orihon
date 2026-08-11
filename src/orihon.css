@@ -408,12 +408,13 @@
 }
 
 .oh-control-pane {
+  z-index: 1000;
   pointer-events: none;
 }
 
 .oh-control-corner {
   position: absolute;
-  z-index: 20;
+  z-index: 1;
   display: grid;
   gap: 8px;
   pointer-events: auto;

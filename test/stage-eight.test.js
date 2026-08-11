@@ -87,6 +87,13 @@ class FakeCanvasContext {
   }
   fillRect() {}
   beginPath() {}
+  moveTo() {}
+  lineTo() {}
+  closePath() {}
+  stroke() {}
+  fillText() {}
+  save() {}
+  restore() {}
   arc() {}
   fill() {}
   drawImage() {}
@@ -163,6 +170,60 @@ test("WebGLHeatLayer packs mercator+weight and exposes count", () => {
   assert.equal(layer.getStats().points, 2);
   layer.clear();
   assert.equal(layer.count, 0);
+});
+
+test("WebGLHeatLayer and HeatIsolineLayer keep points across remove/add", () => {
+  class FakeMap extends Evented {
+    zoom = 10;
+    size = { width: 800, height: 600 };
+    pixelOrigin = { x: 0, y: 0 };
+    panes = { overlay: new FakeElement() };
+    layers = new Set();
+    getZoom() { return this.zoom; }
+    getSize() { return { x: 800, y: 600 }; }
+    getBounds() { return [[52.4, 13.3], [52.6, 13.5]]; }
+    getPane(name) { return this.panes[name] ?? null; }
+    latLngToContainerPoint([lat, lng]) {
+      return { x: (lng + 180) * 2, y: (90 - lat) * 2 };
+    }
+    addLayer(layer) {
+      this.layers.add(layer);
+      layer.onAdd(this);
+      return this;
+    }
+    removeLayer(layer) {
+      if (!this.layers.delete(layer)) return this;
+      layer.onRemove();
+      return this;
+    }
+    hasLayer(layer) { return this.layers.has(layer); }
+    addAttribution() { return this; }
+    removeAttribution() { return this; }
+  }
+
+  const map = new FakeMap();
+  const heat = webglHeatLayer([[52.52, 13.405, 1], [52.53, 13.41, 0.5]]);
+  heat.addTo(map);
+  assert.equal(heat.count, 2);
+  heat.remove();
+  assert.equal(heat.count, 2);
+  heat.addTo(map);
+  assert.equal(heat.count, 2);
+  assert.ok(map.hasLayer(heat));
+  heat.remove();
+
+  const isolines = heatIsolineLayer([[52.52, 13.405, 1], [52.53, 13.41, 0.5]], {
+    levels: 3,
+    dynamic: false,
+    labels: false
+  });
+  isolines.addTo(map);
+  assert.equal(isolines.count, 2);
+  isolines.remove();
+  assert.equal(isolines.count, 2);
+  isolines.addTo(map);
+  assert.equal(isolines.count, 2);
+  assert.ok(map.hasLayer(isolines));
 });
 
 test("WebGLHeatLayer aggregates dense points at low zoom", () => {

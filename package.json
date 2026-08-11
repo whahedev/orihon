@@ -33,7 +33,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
     "pretest": "npm run build",
-    "test": "node --test test",
+    "test": "node --test ./test/",
     "test:browser": "node test/browser-smoke.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",
@@ -50,7 +50,8 @@
     "demo:webgl": "npx --yes serve . -p 4175",
     "demo:bench": "npx --yes serve examples/bench-compare -p 4176",
     "demo:lab": "node examples/lab/server.js",
-    "demo:lab:static": "npx --yes serve examples/lab -p 4275"
+    "demo:lab:static": "npx --yes serve examples/lab -p 4275",
+    "demo:showcase": "npx --yes serve . -p 4177"
   },
   "keywords": [
     "map",

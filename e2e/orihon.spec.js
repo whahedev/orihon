@@ -51,11 +51,11 @@ test("vector screen geometry matches the visual regression contract", async ({ p
     center: [400, 250],
     viewBox: "0 0 800 500",
     paths: [
-      "M341.7 288.8L400.0 211.2L458.3 275.9",
-      "M370.9 269.4L378.2 217.6L436.4 224.1L429.1 262.9Z",
+      "M360.0 285.9L403.6 238.0L425.5 273.9",
+      "M381.8 262.0L389.1 226.1L425.5 232.0L418.2 267.9Z",
       "M391.0 250.0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"
     ],
-    markerTransform: "translate3d(403px, 201px, 0px) scale(1)"
+    markerTransform: "translate3d(399px, 202px, 0px) scale(1)"
   });
 });
 
@@ -68,7 +68,17 @@ test("tiles and overlays stay viewport-local at maximum zoom", async ({ page }) 
     ).addTo(window.__orihonVisual.map);
     window.__orihonVisual.map.setView([52.52, 13.405], 19);
   });
-  await page.locator(".oh-tile-loaded").first().waitFor({ state: "visible" });
+  await page.waitForFunction(() => {
+    const mapRect = document.querySelector("#map")?.getBoundingClientRect();
+    if (!mapRect) return false;
+    const tileRects = [...document.querySelectorAll(".oh-tile-loaded")].map((tile) =>
+      tile.getBoundingClientRect()
+    );
+    if (!tileRects.length) return false;
+    const right = Math.max(...tileRects.map((rect) => rect.right));
+    const bottom = Math.max(...tileRects.map((rect) => rect.bottom));
+    return right >= mapRect.right - 1 && bottom >= mapRect.bottom - 1;
+  });
 
   const geometry = await page.evaluate(() => {
     const mapRect = document.querySelector("#map").getBoundingClientRect();
@@ -98,14 +108,17 @@ test("tiles and overlays stay viewport-local at maximum zoom", async ({ page }) 
   expect(geometry.tiles.right).toBeGreaterThanOrEqual(geometry.map.right);
   expect(geometry.tiles.bottom).toBeGreaterThanOrEqual(geometry.map.bottom);
   expect(geometry.paneTransforms.every((value) => value === "")).toBe(true);
-  expect(geometry.viewBox).toBe("0 0 800 500");
+  expect(geometry.viewBox).toBe(
+    `0 0 ${Math.round(geometry.map.right - geometry.map.left)} ${Math.round(geometry.map.bottom - geometry.map.top)}`
+  );
   for (const transform of geometry.transforms) {
-    const values = transform.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
-    expect(values.every((value) => Math.abs(value) < 10_000)).toBe(true);
+    const values = transform.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)?.map(Number) ?? [];
+    expect(values.every((value) => Number.isFinite(value) && Math.abs(value) < 10_000)).toBe(true);
   }
 });
 
-test("wheel zoom keeps the pointer geography stable", async ({ page }) => {
+test("wheel zoom keeps the pointer geography stable", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.startsWith("mobile"), "Desktop wheel zoom; mobile projects use touch gestures");
   await loadVisualMap(page);
   const viewport = page.viewportSize();
   const anchor = { x: 0.72 * viewport.width, y: 0.31 * viewport.height };

@@ -6,6 +6,7 @@ on:
     paths:
       - "examples/bench-compare/**"
       - "examples/lab/**"
+      - "examples/showcase/**"
       - "examples/site/**"
       - "src/**"
       - "package.json"
@@ -42,14 +43,18 @@ jobs:
           npm run build
       - name: Prepare site
         run: |
-          mkdir -p _site/lab/vendor _site/bench
+          mkdir -p _site/lab/vendor _site/bench _site/showcase/vendor
           cp examples/site/index.html _site/index.html
           cp -R examples/lab/. _site/lab/
           cp -R examples/bench-compare/. _site/bench/
+          cp -R examples/showcase/. _site/showcase/
           cp dist/orihon.esm.js dist/orihon.esm.js.map dist/orihon.css package.json _site/lab/vendor/
+          cp dist/orihon.esm.js dist/orihon.esm.js.map dist/orihon.css package.json _site/showcase/vendor/
           # Lab local server helpers are not needed on Pages.
           rm -f _site/lab/server.js
           rm -rf _site/lab/examples
+          # Showcase pages CSS falls back via vendor when /dist is absent.
+          sed -i 's|href="/dist/orihon.css"|href="./vendor/orihon.css"|' _site/showcase/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

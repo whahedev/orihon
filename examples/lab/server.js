@@ -17,35 +17,35 @@ const mimeTypes = {
   ".svg": "image/svg+xml; charset=utf-8"
 };
 
-const demoWmsBounds = { west: 37.56, south: 55.735, east: 37.67, north: 55.785 };
+const demoWmsBounds = { west: 11.569201, south: 52.104289, east: 11.679201, north: 52.154289 };
 const demoWmsZones = [
   {
     name: "A-101",
     color: "#f59e0b",
-    coordinates: [[37.578, 55.747], [37.596, 55.742], [37.611, 55.748], [37.605, 55.759], [37.585, 55.761]]
+    coordinates: [[11.587201, 52.116289], [11.605201, 52.111289], [11.620201, 52.117289], [11.614201, 52.128289], [11.594201, 52.130289]]
   },
   {
     name: "B-204",
     color: "#8b5cf6",
-    coordinates: [[37.612, 55.75], [37.631, 55.746], [37.642, 55.755], [37.634, 55.768], [37.616, 55.765]]
+    coordinates: [[11.621201, 52.119289], [11.640201, 52.115289], [11.651201, 52.124289], [11.643201, 52.137289], [11.625201, 52.134289]]
   },
   {
     name: "C-307",
     color: "#10b981",
-    coordinates: [[37.639, 55.757], [37.659, 55.754], [37.666, 55.766], [37.651, 55.777], [37.637, 55.769]]
+    coordinates: [[11.648201, 52.126289], [11.668201, 52.123289], [11.675201, 52.135289], [11.660201, 52.146289], [11.646201, 52.138289]]
   }
 ];
 const demoWmsRiver = [
-  [37.56, 55.744], [37.579, 55.747], [37.598, 55.743], [37.617, 55.744],
-  [37.634, 55.751], [37.651, 55.757], [37.67, 55.759]
+  [11.569201, 52.113289], [11.588201, 52.116289], [11.607201, 52.112289], [11.626201, 52.113289],
+  [11.643201, 52.120289], [11.660201, 52.126289], [11.679201, 52.128289]
 ];
 const demoWmsRoute = [
-  [37.569, 55.772], [37.589, 55.766], [37.61, 55.77], [37.632, 55.775], [37.66, 55.771]
+  [11.578201, 52.141289], [11.598201, 52.135289], [11.619201, 52.139289], [11.641201, 52.144289], [11.669201, 52.140289]
 ];
 const demoWmsPlaces = [
-  { name: "West gate", coordinates: [37.574, 55.751] },
-  { name: "Central hub", coordinates: [37.623, 55.758] },
-  { name: "East gate", coordinates: [37.657, 55.765] }
+  { name: "West gate", coordinates: [11.583201, 52.120289] },
+  { name: "Central hub", coordinates: [11.632201, 52.127289] },
+  { name: "East gate", coordinates: [11.666201, 52.134289] }
 ];
 
 function mercatorCoordinate([lng, lat]) {
@@ -73,7 +73,7 @@ function transparentWmsSvg(width, height) {
 
 function serveDemoWms(url, response) {
   const get = (name, fallback = "") => url.searchParams.get(name) ?? url.searchParams.get(name.toUpperCase()) ?? fallback;
-  const layers = get("layers", "demo:central-moscow");
+  const layers = get("layers", "demo:central-magdeburg");
   const version = get("version", "1.3.0");
   const crs = get("crs", get("srs", "EPSG:3857")).toUpperCase();
   const width = Math.max(1, Math.min(1024, Number(get("width", "256")) || 256));
@@ -108,7 +108,7 @@ function serveDemoWms(url, response) {
     return `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
   }).join(" ") + (close ? " Z" : "");
   const selected = new Set(layers.split(",").map((entry) => entry.trim().toLowerCase()));
-  const showAll = selected.has("demo:central-moscow") || selected.size === 0;
+  const showAll = selected.has("demo:central-magdeburg") || selected.size === 0;
   const showZones = showAll || selected.has("demo:planning-zones");
   const showWater = showAll || selected.has("demo:water");
   const showTransport = showAll || selected.has("demo:transport");

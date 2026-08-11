@@ -234,8 +234,40 @@ input {
 .swatch-image { background: #f2c94c; }
 .swatch-video { background: #be123c; }
 .swatch-svg { background: #0d8879; }
+.swatch-heatmap { background: linear-gradient(90deg, #2563eb, #22c55e, #ef4444); }
+.swatch-isolines { background: #0f172a; box-shadow: inset 0 0 0 2px #f8fafc; }
 .swatch-icon { background: #1f2937; }
 .swatch-div-icon { background: #e11d48; }
+
+.oh-lab-custom-control {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.oh-lab-lang-control {
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #c8d0d5;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(23, 32, 38, 0.08);
+}
+
+.oh-lab-lang-control select {
+  display: block;
+  min-width: 7.5rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.oh-lab-lang-control select:focus {
+  outline: 2px solid #0f766e;
+  outline-offset: 1px;
+}
 
 .lab-div-icon {
   display: grid;

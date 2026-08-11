@@ -674,6 +674,19 @@ export class Orihon extends Evented {
   getSize(): Point { return new Point(this.size.width, this.size.height); }
   getMaxBounds(): LatLngBounds | null { return this.options.maxBounds ? new LatLngBounds(this.options.maxBounds) : null; }
 
+  setLocale(input: LocaleInput): this {
+    Object.assign(this.locale, resolveLocale(input));
+    if (!this.options.ariaLabel) {
+      this.container.setAttribute("aria-label", this.locale.mapLabel);
+    }
+    for (const control of this.controls) {
+      Object.assign(control.locale, this.locale);
+      control.render();
+    }
+    this.emit("localechange", { locale: this.locale });
+    return this;
+  }
+
   addLayer(layer: Layer): this {
     if (this.layers.has(layer)) return this;
     this.layers.add(layer);

@@ -266,7 +266,7 @@ export class HeatIsolineLayer extends Layer<ResolvedHeatIsolineOptions> {
       this.canvas.remove();
     }
     this.canvas = null;
-    this._points = [];
+    // Keep `_points` so remove→add toggles can rebuild; rings are view-derived.
     this._rings = [];
     this._peak = 0;
     this._palette = null;

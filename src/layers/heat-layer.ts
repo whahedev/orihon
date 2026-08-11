@@ -125,7 +125,7 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
     this.brushRadius = 0;
     this.grad = null;
     this.palette = undefined;
-    this.latlngs = [];
+    // Keep `latlngs` so remove→add toggles still draw; use `clear()` to wipe points.
     super.onRemove();
   }
 

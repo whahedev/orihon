@@ -206,15 +206,8 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
   }
 
   clear(): this {
-    this.data = new Float32Array();
-    this._count = 0;
-    this._aggData = new Float32Array(0);
-    this._aggCount = 0;
-    this._aggZoom = Number.NaN;
-    this._drawData = new Float32Array(0);
-    this._drawn = 0;
+    this.#releaseCpuBuffers();
     this._gpuBytes = 0;
-    this._bufferDirty = true;
     this.render();
     return this;
   }
@@ -270,7 +263,17 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
     }
     this.canvas = null;
     this.renderer = "none";
-    this.#releaseCpuBuffers();
+    // Keep source points (`data` / `_count`) so remove→add toggles still draw.
+    // Drop only derived GPU-facing caches; call `clear()` to wipe points.
+    this._aggData = new Float32Array(0);
+    this._aggCount = 0;
+    this._aggZoom = Number.NaN;
+    this._drawData = new Float32Array(0);
+    this._drawn = 0;
+    this._drawSignature = "";
+    this._bufferDirty = true;
+    this._cssW = 0;
+    this._cssH = 0;
     super.onRemove();
   }
 
@@ -395,8 +398,10 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
       uniform float u_minOpacity;
       uniform float u_opacity;
       void main() {
-        // FBO texture is upside-down vs screen NDC in WebGL1.
-        float t = texture2D(u_intensity, vec2(v_uv.x, 1.0 - v_uv.y)).r;
+        // Intensity pass already maps CSS Y-down → NDC Y-up, so FBO v matches
+        // screen NDC. Do not flip again here (that mirrors heat about mid-Y and
+        // makes blobs drift opposite the basemap on zoom).
+        float t = texture2D(u_intensity, v_uv).r;
         if (t < u_minOpacity) discard;
         // Soft curve keeps mid-density blues/greens before clipping to red.
         t = clamp(pow(t, 0.85), 0.0, 1.0);

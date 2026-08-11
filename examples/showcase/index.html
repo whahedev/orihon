@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orihon — Scale showcase</title>
+    <meta
+      name="description"
+      content="Use only the surface you need. Core → Standard → Advanced, then 100k+ vehicles, IoT, fleets, clusters, aircraft and incident heat."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/dist/orihon.css" id="orihon-css" />
+    <style>
+      :root {
+        --ink: #172026;
+        --muted: #5b6b75;
+        --line: rgba(23, 32, 38, 0.14);
+        --panel: rgba(255, 255, 255, 0.92);
+        --accent: #0f766e;
+        --accent-ink: #083b38;
+        --warn: #b45309;
+        --good: #047857;
+        --shadow: 0 12px 36px rgba(23, 32, 38, 0.12);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        color: var(--ink);
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+        background: #dbe7ef;
+      }
+
+      #map {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+      }
+
+      .chrome {
+        position: absolute;
+        z-index: 1000;
+        inset: 0;
+        pointer-events: none;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto 1fr auto;
+        padding: 1rem;
+        gap: 0.75rem;
+      }
+
+      .chrome > * { pointer-events: auto; }
+
+      .brand-panel {
+        grid-column: 1;
+        grid-row: 1;
+        width: min(22.5rem, calc(100vw - 2rem));
+        padding: 1rem 1.1rem 1.15rem;
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        box-shadow: var(--shadow);
+      }
+
+      .brand {
+        margin: 0;
+        font-family: "Space Grotesk", sans-serif;
+        font-size: clamp(2rem, 5vw, 2.55rem);
+        font-weight: 700;
+        letter-spacing: -0.045em;
+        line-height: 0.92;
+      }
+
+      .tagline {
+        margin: 0.45rem 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.35;
+      }
+
+      .tier-ladder {
+        display: grid;
+        gap: 0.35rem;
+        margin-top: 1rem;
+      }
+
+      .tier {
+        appearance: none;
+        width: 100%;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: baseline;
+        gap: 0.65rem 0.85rem;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 0.55rem;
+        background: #fff;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 140ms ease, background 140ms ease;
+      }
+
+      .tier:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+      .tier[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 12%, white);
+      }
+
+      .tier .size {
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        font-size: 0.95rem;
+        letter-spacing: -0.03em;
+        color: var(--accent-ink);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .tier .name {
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 600;
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .tier .hint {
+        grid-column: 1 / -1;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+        line-height: 1.35;
+      }
+
+      .unfold {
+        margin: 0;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .surface-line {
+        margin: 0.85rem 0 0;
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 0.92rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .hud {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+        align-self: start;
+        width: min(16.5rem, calc(100vw - 2rem));
+        padding: 0.85rem 0.95rem;
+        border: 1px solid var(--line);
+        border-radius: 0.75rem;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        box-shadow: var(--shadow);
+      }
+
+      .hud h2 {
+        margin: 0 0 0.55rem;
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 0.82rem;
+        letter-spacing: -0.02em;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.45rem 0.65rem;
+        margin: 0;
+      }
+
+      .metrics dt {
+        margin: 0;
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .metrics dd {
+        margin: 0.1rem 0 0;
+        font-variant-numeric: tabular-nums;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .struggle {
+        margin: 0.7rem 0 0;
+        color: var(--warn);
+        font-size: 0.78rem;
+        line-height: 1.35;
+        display: none;
+      }
+
+      .struggle.is-on { display: block; }
+
+      .bench-link {
+        display: inline-block;
+        margin-top: 0.55rem;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .bench-link:hover { text-decoration: underline; }
+
+      .bottom {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        display: grid;
+        gap: 0.55rem;
+        width: min(64rem, 100%);
+        justify-self: center;
+      }
+
+      .scenario-copy {
+        margin: 0;
+        padding: 0.55rem 0.8rem;
+        width: fit-content;
+        max-width: 100%;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+        font-size: 0.86rem;
+        color: var(--muted);
+      }
+
+      .scenario-copy strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .rail {
+        display: none;
+        gap: 0.45rem;
+        overflow-x: auto;
+        padding-bottom: 0.15rem;
+        scrollbar-width: thin;
+      }
+
+      .rail.is-on { display: flex; }
+
+      .rail button {
+        appearance: none;
+        flex: 0 0 auto;
+        display: grid;
+        gap: 0.12rem;
+        min-width: 7.5rem;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 0.65rem;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        box-shadow: var(--shadow);
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .rail button[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 12%, white);
+      }
+
+      .rail .count {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .rail .label {
+        font-size: 0.72rem;
+        color: var(--muted);
+        line-height: 1.25;
+      }
+
+      .status {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .status[data-tone="busy"] { color: var(--warn); }
+      .status[data-tone="ok"] { color: var(--good); }
+
+      .heat-toggle {
+        display: none;
+        align-items: center;
+        gap: 0.4rem;
+        margin: 0;
+        padding: 0.45rem 0.7rem;
+        width: fit-content;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+        font-size: 0.78rem;
+        color: var(--muted);
+      }
+
+      .heat-toggle.is-on { display: inline-flex; }
+
+      @media (max-width: 720px) {
+        .chrome {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto auto 1fr auto;
+          padding: 0.7rem;
+        }
+        .brand-panel,
+        .hud,
+        .bottom {
+          grid-column: 1;
+          width: auto;
+          justify-self: stretch;
+        }
+        .brand-panel { grid-row: 1; }
+        .hud { grid-row: 2; }
+        .bottom { grid-row: 4; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map" role="application" aria-label="Orihon scale showcase map"></div>
+
+    <div class="chrome">
+      <aside class="brand-panel" aria-label="Orihon tiers">
+        <p class="brand">Orihon</p>
+        <p class="tagline">Unfold the world.</p>
+
+        <div class="tier-ladder" role="group" aria-label="Library surface">
+          <button class="tier" type="button" data-tier="core" aria-pressed="false">
+            <span class="size">≤22 KiB</span>
+            <span class="name">Core</span>
+            <span class="hint">Map, tiles, events — nothing else.</span>
+          </button>
+          <p class="unfold" aria-hidden="true">↓ unfold</p>
+          <button class="tier" type="button" data-tier="standard" aria-pressed="false">
+            <span class="size">≤35 KiB</span>
+            <span class="name">Standard</span>
+            <span class="hint">Everyday GIS. Still no WebGL.</span>
+          </button>
+          <p class="unfold" aria-hidden="true">↓ unfold</p>
+          <button class="tier" type="button" data-tier="advanced" aria-pressed="true">
+            <span class="size">≤70 KiB</span>
+            <span class="name">Advanced</span>
+            <span class="hint">GPU when volume needs it.</span>
+          </button>
+        </div>
+        <p class="surface-line">Use only the surface you need.</p>
+      </aside>
+
+      <aside class="hud" aria-label="Live metrics">
+        <h2>Live</h2>
+        <dl class="metrics">
+          <div><dt>FPS</dt><dd id="metric-fps">—</dd></div>
+          <div><dt>Frame</dt><dd id="metric-frame">—</dd></div>
+          <div><dt>Objects</dt><dd id="metric-objects">—</dd></div>
+          <div><dt>Renderer</dt><dd id="metric-renderer">—</dd></div>
+        </dl>
+        <p class="struggle is-on" id="struggle">Leaflet starts to struggle here.</p>
+        <a class="bench-link" id="bench-link" href="../bench-compare/">Compare engines →</a>
+        <p class="status" id="status" data-tone="ok">Loading…</p>
+      </aside>
+
+      <div class="bottom">
+        <p class="scenario-copy" id="scenario-copy"><strong>City fleet</strong> · 100,000 vehicles</p>
+        <div class="rail is-on" id="scenario-rail" role="group" aria-label="Advanced stress scenarios">
+          <button type="button" data-scenario="vehicles" aria-pressed="true">
+            <span class="count">100k</span>
+            <span class="label">Vehicles</span>
+          </button>
+          <button type="button" data-scenario="iot" aria-pressed="false">
+            <span class="count">250k</span>
+            <span class="label">IoT devices</span>
+          </button>
+          <button type="button" data-scenario="fleet" aria-pressed="false">
+            <span class="count">12k</span>
+            <span class="label">Delivery fleet</span>
+          </button>
+          <button type="button" data-scenario="properties" aria-pressed="false">
+            <span class="count">50k</span>
+            <span class="label">Clustered properties</span>
+          </button>
+          <button type="button" data-scenario="aircraft" aria-pressed="false">
+            <span class="count">8k</span>
+            <span class="label">Live aircraft</span>
+          </button>
+          <button type="button" data-scenario="incidents" aria-pressed="false">
+            <span class="count">80k</span>
+            <span class="label">Incident heat</span>
+          </button>
+        </div>
+        <label class="heat-toggle" id="heat-toggle">
+          <input id="isolines" type="checkbox" />
+          Isolines
+        </label>
+      </div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -29,6 +29,7 @@ import {
   latLng,
   latLngBounds,
   layersControl,
+  locales,
   marker,
   metersToPixels,
   objectManager,
@@ -52,12 +53,14 @@ import {
   svgOverlay,
   videoOverlay,
   webglPointLayer,
-  heatLayer,
+  webglHeatLayer,
+  heatIsolineLayer,
   wmsTileLayer,
   wrapLng,
   zoomControl,
   zoomForBounds
 } from "./vendor/orihon.esm.js";
+import { DEFAULT_LAB_LOCALE, applyLabDomI18n, labT } from "./i18n.js";
 
 const ORIHON_CDN = new URL("./vendor/", import.meta.url).href.replace(/\/?$/, "");
 
@@ -428,13 +431,59 @@ for (const tab of document.querySelectorAll(".tab")) {
   });
 }
 
+const HOME = { name: "Magdeburg", lat: 52.120533, lng: 11.627624, zoom: 12 };
+/** Same ramp / knobs as examples/bench-compare heat scenarios. */
+const HEAT_GRADIENT = {
+  0.0: "rgba(0,0,255,0)",
+  0.15: "blue",
+  0.35: "cyan",
+  0.55: "lime",
+  0.75: "yellow",
+  0.9: "orange",
+  1.0: "red"
+};
+const HEAT_HUBS = [
+  [HOME.lat, HOME.lng, 1],
+  [HOME.lat + 0.018, HOME.lng - 0.028, 0.9],
+  [HOME.lat - 0.022, HOME.lng + 0.018, 0.75],
+  [HOME.lat + 0.03, HOME.lng + 0.035, 0.6],
+  [HOME.lat - 0.012, HOME.lng - 0.04, 0.55]
+];
+const TURKEY = { name: "Türkiye", lat: 39.0, lng: 35.2, zoom: 6 };
+const DEMO_ORIGIN = { lat: 55.751244, lng: 37.618423 };
+const LOCALE_OPTIONS = [
+  { id: "en", label: "English" },
+  { id: "de", label: "Deutsch" },
+  { id: "ru", label: "Русский" },
+  { id: "tr", label: "Türkçe" },
+  { id: "fr", label: "Français" },
+  { id: "zh", label: "中文" },
+  { id: "ar", label: "العربية" },
+  { id: "da", label: "Dansk" },
+  { id: "hi", label: "हिन्दी" }
+];
+let currentLabLocale = DEFAULT_LAB_LOCALE;
+let activeSuggestWidget = null;
+
+function t(key, vars) {
+  return labT(currentLabLocale, key, vars);
+}
+
+function at(lat, lng) {
+  return [lat - DEMO_ORIGIN.lat + HOME.lat, lng - DEMO_ORIGIN.lng + HOME.lng];
+}
+
+function atLngLat(lng, lat) {
+  const [nextLat, nextLng] = at(lat, lng);
+  return [nextLng, nextLat];
+}
+
 const map = createMap("map", {
-  center: [55.751244, 37.618423],
-  zoom: 10,
+  center: [HOME.lat, HOME.lng],
+  zoom: HOME.zoom,
   zoomSnap: 0.25,
   wheelZoomStep: 0.35,
-  locale: "ru",
-  ariaLabel: "Демонстрационная карта Orihon",
+  locale: DEFAULT_LAB_LOCALE,
   controls: false
 });
 window.map = map;
@@ -539,9 +588,9 @@ const traffic = trafficLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   opacity: 0.34,
   maxNativeZoom: 19
 });
-const wmsDemoBounds = latLngBounds([[55.735, 37.56], [55.785, 37.67]]);
+const wmsDemoBounds = latLngBounds([[52.104289, 11.569201], [52.154289, 11.679201]]);
 const wmsLayer = wmsTileLayer(new URL("./wms", location.href).href, {
-  layers: "demo:central-moscow",
+  layers: "demo:central-magdeburg",
   format: "image/svg+xml",
   transparent: true,
   version: "1.3.0",
@@ -566,32 +615,32 @@ class CenterRenderer extends Renderer {
 map.createPane("debug").style.zIndex = "18";
 const centerRenderer = new CenterRenderer({ pane: "debug", className: "oh-test-renderer" }).addTo(map);
 
-const mainMarker = marker([55.751244, 37.618423], {
-  title: "Москва",
-  ariaLabel: "Маркер Москвы",
+const mainMarker = marker(at(55.751244, 37.618423), {
+  title: HOME.name,
+  ariaLabel: `Marker ${HOME.name}`,
   draggable: true
 });
 const route = polyline([
-  [55.75, 37.55],
-  [55.79, 37.6],
-  [55.76, 37.69]
+  at(55.75, 37.55),
+  at(55.79, 37.6),
+  at(55.76, 37.69)
 ], { stroke: "#0f766e", strokeWidth: 4 });
 const district = polygon([
-  [55.71, 37.56],
-  [55.73, 37.63],
-  [55.69, 37.68],
-  [55.67, 37.59]
+  at(55.71, 37.56),
+  at(55.73, 37.63),
+  at(55.69, 37.68),
+  at(55.67, 37.59)
 ], { stroke: "#7c3aed", fill: "#7c3aed", fillOpacity: 0.18 });
-const radius = circle([55.79, 37.64], 900, {
+const radius = circle(at(55.79, 37.64), 900, {
   stroke: "#ea580c",
   fill: "#ea580c"
 });
-const testRectangle = rectangle([[55.74, 37.72], [55.79, 37.79]], {
+const testRectangle = rectangle([at(55.74, 37.72), at(55.79, 37.79)], {
   stroke: "#c026d3",
   fill: "#c026d3",
   fillOpacity: 0.12
 });
-const testCircleMarker = circleMarker([55.72, 37.52], {
+const testCircleMarker = circleMarker(at(55.72, 37.52), {
   radius: 12,
   stroke: "#0891b2",
   fill: "#0891b2",
@@ -614,8 +663,8 @@ const letterMarkerIcon = divIcon({
   iconSize: [34, 34],
   className: "lab-div-icon"
 });
-const iconMarker = marker([55.775, 37.54], { title: "Icon", icon: imageMarkerIcon });
-const divMarker = marker([55.72, 37.73], { title: "DivIcon", icon: letterMarkerIcon });
+const iconMarker = marker(at(55.775, 37.54), { title: "Icon", icon: imageMarkerIcon });
+const divMarker = marker(at(55.72, 37.73), { title: "DivIcon", icon: letterMarkerIcon });
 const vectorGroup = featureGroup([
   mainMarker,
   route,
@@ -627,32 +676,32 @@ const vectorGroup = featureGroup([
   divMarker
 ]).addTo(map);
 
-mainMarker.bindPopup(() => chartPopup("Москва", [18, 42, 31, 56, 47]), {
+mainMarker.bindPopup(() => chartPopup(HOME.name, [18, 42, 31, 56, 47]), {
   autoPan: true,
   autoPanPadding: [28, 28],
   keepInView: true,
   className: "oh-rich-popup",
-  ariaLabel: "Информация о маркере"
+  ariaLabel: t("markerInfoAria")
 }).bindTooltip("Marker tooltip");
-route.bindPopup(() => textPopup("Polyline", "Текстовый DOM-узел, привязанный к линии.")).bindTooltip("Polyline tooltip");
+route.bindPopup(() => textPopup("Polyline", t("polylinePopup"))).bindTooltip("Polyline tooltip");
 district.bindPopup(() => imagePopup("Polygon image")).bindTooltip("Polygon tooltip");
 radius.bindPopup(() => videoPopup("Circle video"), { className: "oh-rich-popup" }).bindTooltip("Circle tooltip");
 testRectangle.bindPopup(() => chartPopup("Rectangle metrics", [12, 28, 43, 35, 51]), { className: "oh-rich-popup" }).bindTooltip("Rectangle tooltip");
-testCircleMarker.bindPopup(async () => textPopup("CircleMarker", "Асинхронная фабрика popup завершена.")).bindTooltip("CircleMarker tooltip");
+testCircleMarker.bindPopup(async () => textPopup("CircleMarker", t("asyncPopup"))).bindTooltip("CircleMarker tooltip");
 iconMarker.bindPopup(() => imagePopup("Icon marker")).bindTooltip("Icon tooltip");
-divMarker.bindPopup(() => textPopup("DivIcon", "Произвольный HTML-компонент внутри popup.")).bindTooltip("DivIcon tooltip");
+divMarker.bindPopup(() => textPopup("DivIcon", t("divIconPopup"))).bindTooltip("DivIcon tooltip");
 
 const geoData = {
   type: "FeatureCollection",
   features: [
-    { type: "Feature", id: "point", properties: { kind: "point", color: "#c2410c" }, geometry: { type: "Point", coordinates: [37.59, 55.7] } },
-    { type: "Feature", id: "multi-point", properties: { kind: "multi-point", color: "#0891b2" }, geometry: { type: "MultiPoint", coordinates: [[37.45, 55.78], [37.47, 55.81]] } },
-    { type: "Feature", id: "line", properties: { kind: "line", color: "#2563eb" }, geometry: { type: "LineString", coordinates: [[37.48, 55.74], [37.52, 55.8], [37.58, 55.83]] } },
-    { type: "Feature", id: "polygon-hole", properties: { kind: "polygon", color: "#7c3aed" }, geometry: { type: "Polygon", coordinates: [[[37.7, 55.76], [37.8, 55.76], [37.79, 55.83], [37.7, 55.76]], [[37.73, 55.775], [37.765, 55.78], [37.75, 55.805], [37.73, 55.775]]] } },
-    { type: "Feature", id: "multi-line", properties: { kind: "multi-line", color: "#0f766e" }, geometry: { type: "MultiLineString", coordinates: [[[37.5, 55.69], [37.55, 55.71]], [[37.7, 55.84], [37.76, 55.86]]] } },
-    { type: "Feature", id: "multi-polygon", properties: { kind: "multi-polygon", color: "#be123c" }, geometry: { type: "MultiPolygon", coordinates: [[[[37.82, 55.72], [37.86, 55.72], [37.85, 55.75], [37.82, 55.72]]]] } },
-    { type: "Feature", id: "collection", properties: { kind: "geometry-collection", color: "#4d7c0f" }, geometry: { type: "GeometryCollection", geometries: [{ type: "Point", coordinates: [37.67, 55.86] }, { type: "LineString", coordinates: [[37.62, 55.84], [37.67, 55.86]] }] } },
-    { type: "Feature", id: "filtered", properties: { kind: "filtered", hidden: true }, geometry: { type: "Point", coordinates: [37.62, 55.75] } }
+    { type: "Feature", id: "point", properties: { kind: "point", color: "#c2410c" }, geometry: { type: "Point", coordinates: atLngLat(37.59, 55.7) } },
+    { type: "Feature", id: "multi-point", properties: { kind: "multi-point", color: "#0891b2" }, geometry: { type: "MultiPoint", coordinates: [atLngLat(37.45, 55.78), atLngLat(37.47, 55.81)] } },
+    { type: "Feature", id: "line", properties: { kind: "line", color: "#2563eb" }, geometry: { type: "LineString", coordinates: [atLngLat(37.48, 55.74), atLngLat(37.52, 55.8), atLngLat(37.58, 55.83)] } },
+    { type: "Feature", id: "polygon-hole", properties: { kind: "polygon", color: "#7c3aed" }, geometry: { type: "Polygon", coordinates: [[atLngLat(37.7, 55.76), atLngLat(37.8, 55.76), atLngLat(37.79, 55.83), atLngLat(37.7, 55.76)], [atLngLat(37.73, 55.775), atLngLat(37.765, 55.78), atLngLat(37.75, 55.805), atLngLat(37.73, 55.775)]] } },
+    { type: "Feature", id: "multi-line", properties: { kind: "multi-line", color: "#0f766e" }, geometry: { type: "MultiLineString", coordinates: [[atLngLat(37.5, 55.69), atLngLat(37.55, 55.71)], [atLngLat(37.7, 55.84), atLngLat(37.76, 55.86)]] } },
+    { type: "Feature", id: "multi-polygon", properties: { kind: "multi-polygon", color: "#be123c" }, geometry: { type: "MultiPolygon", coordinates: [[[atLngLat(37.82, 55.72), atLngLat(37.86, 55.72), atLngLat(37.85, 55.75), atLngLat(37.82, 55.72)]]] } },
+    { type: "Feature", id: "collection", properties: { kind: "geometry-collection", color: "#4d7c0f" }, geometry: { type: "GeometryCollection", geometries: [{ type: "Point", coordinates: atLngLat(37.67, 55.86) }, { type: "LineString", coordinates: [atLngLat(37.62, 55.84), atLngLat(37.67, 55.86)] }] } },
+    { type: "Feature", id: "filtered", properties: { kind: "filtered", hidden: true }, geometry: { type: "Point", coordinates: atLngLat(37.62, 55.75) } }
   ]
 };
 const geoLayer = geoJSON(geoData, {
@@ -677,21 +726,21 @@ let geoFeatureSequence = 0;
 let overlayVariant = false;
 let markerIconVariant = false;
 let videoDemoStatus = "generating local WebM";
-const rasterOverlay = imageOverlay(makeOverlayPng(), [[55.68, 37.47], [55.83, 37.82]], {
+const rasterOverlay = imageOverlay(makeOverlayPng(), [at(55.68, 37.47), at(55.83, 37.82)], {
   opacity: 0.32,
   interactive: true,
   zIndex: 0,
   alt: "Raster overlay test"
 });
 rasterOverlay.bindPopup(() => imagePopup("ImageOverlay"));
-const videoDemoOverlay = videoOverlay("", [[55.705, 37.505], [55.75, 37.605]], {
+const videoDemoOverlay = videoOverlay("", [at(55.705, 37.505), at(55.75, 37.605)], {
   opacity: 0.82,
   interactive: true,
   zIndex: 1,
   controls: true,
   poster: makeOverlayPng(true)
 });
-videoDemoOverlay.bindPopup(() => textPopup("VideoOverlay", "Клик обработан поверх интерактивного видеооверлея."));
+videoDemoOverlay.bindPopup(() => textPopup("VideoOverlay", t("videoPopup")));
 makeDemoVideoUrl().then((url) => {
   if (!url) {
     videoDemoStatus = "poster fallback";
@@ -709,7 +758,7 @@ makeDemoVideoUrl().then((url) => {
   updateVideoSourceStatus();
   updateMapOutput();
 });
-const svgDemoOverlay = svgOverlay(makeOverlaySvg(), [[55.765, 37.675], [55.825, 37.795]], {
+const svgDemoOverlay = svgOverlay(makeOverlaySvg(), [at(55.765, 37.675), at(55.825, 37.795)], {
   opacity: 0.86,
   interactive: true,
   zIndex: 2
@@ -729,7 +778,7 @@ const layerSwitcher = layersControl({
   "Canvas base": canvasLayer,
   "Vector group": vectorGroup,
   GeoJSON: geoLayer,
-  "WMS: центр Москвы": wmsLayer,
+  "WMS: Magdeburg": wmsLayer,
   ImageOverlay: rasterOverlay,
   VideoOverlay: videoDemoOverlay,
   SVGOverlay: svgDemoOverlay
@@ -744,15 +793,56 @@ const controls = {
   custom: customControl(() => `z${map.getZoom().toFixed(2)} · ${map.getCenter().lat.toFixed(3)}, ${map.getCenter().lng.toFixed(3)}`, {
     position: "bottom-left",
     className: "oh-lab-custom-control",
-    ariaLabel: "Текущее положение карты"
+    ariaLabel: t("positionControlAria")
   }).addTo(map)
 };
 
+const localeControlRoot = document.createElement("div");
+localeControlRoot.className = "oh-control oh-lab-lang-control";
+const mapLocaleSelect = document.createElement("select");
+mapLocaleSelect.id = "map-locale";
+mapLocaleSelect.setAttribute("aria-label", "Map language");
+for (const option of LOCALE_OPTIONS) {
+  const entry = document.createElement("option");
+  entry.value = option.id;
+  entry.textContent = option.label;
+  mapLocaleSelect.appendChild(entry);
+}
+mapLocaleSelect.value = DEFAULT_LAB_LOCALE;
+localeControlRoot.appendChild(mapLocaleSelect);
+map.controlCorners["top-left"].appendChild(localeControlRoot);
+
+function applyMapLocale(name, { syncPanel = true } = {}) {
+  const localeName = name in locales ? name : DEFAULT_LAB_LOCALE;
+  currentLabLocale = applyLabDomI18n(localeName);
+  map.setLocale(localeName);
+  mapLocaleSelect.value = localeName;
+  mapLocaleSelect.setAttribute("aria-label", t("mapLangAria"));
+  if (syncPanel) {
+    const panel = byId("panel-locale");
+    if (panel) panel.value = localeName;
+  }
+  const status = byId("locale-status");
+  if (status) {
+    const label = LOCALE_OPTIONS.find((entry) => entry.id === localeName)?.label || localeName;
+    status.textContent = t("localeStatus", { label });
+  }
+  byId("map-aria-label").textContent = map.getContainer().getAttribute("aria-label") || map.locale.mapLabel;
+  byId("circle-radius-value").textContent = `${byId("circle-radius").value} ${t("meters")}`;
+  if (activeSuggestWidget) activeSuggestWidget.emptyText = t("noResults");
+  if (controls?.custom?.el) controls.custom.el.setAttribute("aria-label", t("positionControlAria"));
+}
+
+mapLocaleSelect.addEventListener("change", () => applyMapLocale(mapLocaleSelect.value));
+byId("panel-locale")?.addEventListener("change", (event) => {
+  applyMapLocale(event.target.value, { syncPanel: false });
+});
+
 const sampleObjects = [
-  { id: "obj-1", coordinates: [55.748, 37.58], properties: { title: "Объект 1", side: "west" } },
-  { id: "obj-2", geometry: { coordinates: [37.66, 55.77] }, properties: { title: "Объект 2", side: "east" } },
-  { id: "obj-3", coordinates: { lat: 55.72, lng: 37.61 }, properties: { title: "Объект 3", side: "west" } },
-  { id: "obj-4", coordinates: [55.81, 37.68], properties: { title: "Объект 4", side: "east" } }
+  { id: "obj-1", coordinates: at(55.748, 37.58), properties: { title: "Object 1", side: "west" } },
+  { id: "obj-2", geometry: { coordinates: atLngLat(37.66, 55.77) }, properties: { title: "Object 2", side: "east" } },
+  { id: "obj-3", coordinates: { lat: at(55.72, 37.61)[0], lng: at(55.72, 37.61)[1] }, properties: { title: "Object 3", side: "west" } },
+  { id: "obj-4", coordinates: at(55.81, 37.68), properties: { title: "Object 4", side: "east" } }
 ];
 const objects = objectManager({
   minZoom: 2,
@@ -775,12 +865,12 @@ objects.bindClusterPopup((items, ids) => chartPopup(
 ), { className: "oh-rich-popup" });
 
 const cities = [
-  { name: "Москва", lat: 55.751244, lng: 37.618423, zoom: 10 },
-  { name: "Санкт-Петербург", lat: 59.93863, lng: 30.31413, zoom: 10 },
-  { name: "Казань", lat: 55.796127, lng: 49.106405, zoom: 11 },
-  { name: "Екатеринбург", lat: 56.838011, lng: 60.597465, zoom: 11 },
-  { name: "Новосибирск", lat: 55.030204, lng: 82.92043, zoom: 11 },
-  { name: "Владивосток", lat: 43.115536, lng: 131.885485, zoom: 11 }
+  { name: HOME.name, lat: HOME.lat, lng: HOME.lng, zoom: HOME.zoom },
+  { name: TURKEY.name, lat: TURKEY.lat, lng: TURKEY.lng, zoom: TURKEY.zoom },
+  { name: "Berlin", lat: 52.520008, lng: 13.404954, zoom: 11 },
+  { name: "Istanbul", lat: 41.0082, lng: 28.9784, zoom: 11 },
+  { name: "Ankara", lat: 39.9334, lng: 32.8597, zoom: 11 },
+  { name: "Hamburg", lat: 53.5511, lng: 9.9937, zoom: 11 }
 ];
 
 async function fetchSuggestions(query, context) {
@@ -791,8 +881,8 @@ async function fetchSuggestions(query, context) {
       reject(new DOMException("Aborted", "AbortError"));
     }, { once: true });
   });
-  const normalized = query.toLocaleLowerCase("ru-RU");
-  return cities.filter((city) => city.name.toLocaleLowerCase("ru-RU").includes(normalized)).slice(0, context.limit);
+  const normalized = query.toLocaleLowerCase();
+  return cities.filter((city) => city.name.toLocaleLowerCase().includes(normalized)).slice(0, context.limit);
 }
 
 let suggestions = createSuggestProvider(fetchSuggestions, { debounceMs: 120, minLength: 1, limit: 5 });
@@ -811,8 +901,9 @@ const suggestUi = createSuggestWidget({
   label: (city) => `${city.name} · ${city.lat.toFixed(3)}, ${city.lng.toFixed(3)}`,
   onSelect: (city) => map.setView([city.lat, city.lng], city.zoom),
   context: () => ({ center: map.getCenter().toArray() }),
-  emptyText: "Нет результатов"
+  emptyText: t("noResults")
 });
+activeSuggestWidget = suggestUi;
 
 function makeRemoteObjects(bounds, zoom) {
   const south = Math.max(-85, bounds.south);
@@ -878,13 +969,31 @@ const webglPoints = webglPointLayer([], {
   color: "#e11d48",
   opacity: 0.74
 });
-const heatDemo = heatLayer([], {
-  radius: 28,
+const heatPoints = generateHeatPoints(5000);
+const heatDemo = webglHeatLayer(heatPoints, {
+  radius: 20,
   blur: 18,
-  scaleZoom: 12,
-  max: 3,
-  minOpacity: 0.08
-});
+  scaleZoom: HOME.zoom,
+  intensity: 0.32,
+  opacity: 0.75,
+  maxDpr: 1.5,
+  gradient: HEAT_GRADIENT
+}).addTo(map);
+const heatIsolines = heatIsolineLayer(heatPoints, {
+  levels: 5,
+  radius: 20,
+  blur: 18,
+  scaleZoom: HOME.zoom,
+  gradient: HEAT_GRADIENT,
+  colorByLevel: true,
+  strokeWidth: 1.6,
+  opacity: 0.9,
+  labels: true,
+  labelFont: "700 14px ui-sans-serif, system-ui, sans-serif",
+  labelColor: "#0f172a"
+}).addTo(map);
+layerSwitcher.addOverlay(heatDemo, "Heatmap");
+layerSwitcher.addOverlay(heatIsolines, "Isolines");
 webglPoints.bindPopup((context) => chartPopup(
   `WebGL point #${Number(context.event?.index ?? 0) + 1}`,
   [8, 19, 14, 27, 21],
@@ -1108,20 +1217,23 @@ function renderBehaviorDetails() {
   }
 }
 
-function updateGeoJSONStatus(message = "Готов") {
+function updateGeoJSONStatus(message = t("ready")) {
   const exported = geoLayer.toGeoJSON();
   byId("geojson-count").textContent = String(exported.features.length);
   byId("geojson-output").textContent = `${message}\n${cleanObject(exported)}`;
 }
 
-function updateWMSOutput(message = "Готов") {
-  byId("wms-output").textContent = `${message}\nПокрытие: ${wmsDemoBounds.toBBoxString()}\n${wmsLayer.getTileUrl(1, 2, 3)}`;
+function updateWMSOutput(message = t("ready")) {
+  byId("wms-output").textContent = `${message}\n${t("coveragePrefix")}: ${wmsDemoBounds.toBBoxString()}\n${wmsLayer.getTileUrl(1, 2, 3)}`;
 }
 
 function updateStageEightOutput(extra = {}) {
   const webglStats = webglPoints.getStats();
   byId("webgl-count").textContent = `${webglStats.points} · ${webglStats.renderer}`;
-  byId("heat-count").textContent = map.hasLayer(heatDemo) ? "on" : "off";
+  byId("heat-count").textContent = [
+    map.hasLayer(heatDemo) ? "heat" : null,
+    map.hasLayer(heatIsolines) ? "isolines" : null
+  ].filter(Boolean).join("+") || "off";
   byId("perf-summary").textContent = stageEightMessage;
   byId("stage-eight-output").textContent = cleanObject({
     message: stageEightMessage,
@@ -1132,7 +1244,14 @@ function updateStageEightOutput(extra = {}) {
     },
     heatmap: {
       enabled: map.hasLayer(heatDemo),
-      scaleZoom: heatDemo.options.scaleZoom
+      points: heatDemo.getStats().points,
+      scaleZoom: heatDemo.options.scaleZoom,
+      renderer: "webgl"
+    },
+    isolines: {
+      enabled: map.hasLayer(heatIsolines),
+      scaleZoom: heatIsolines.options.scaleZoom,
+      ...heatIsolines.getStats()
     },
     vectorTiles: {
       enabled: map.hasLayer(vectorTiles),
@@ -1169,7 +1288,9 @@ function syncLayerToggles() {
     ["layer-geojson", map.hasLayer(geoLayer)],
     ["layer-image", map.hasLayer(rasterOverlay)],
     ["layer-video", map.hasLayer(videoDemoOverlay)],
-    ["layer-svg", map.hasLayer(svgDemoOverlay)]
+    ["layer-svg", map.hasLayer(svgDemoOverlay)],
+    ["layer-heatmap", map.hasLayer(heatDemo)],
+    ["layer-isolines", map.hasLayer(heatIsolines)]
   ]);
   for (const [id, enabled] of layerStates) byId(id).checked = enabled;
 }
@@ -1271,7 +1392,7 @@ byId("layer-canvas").addEventListener("change", (event) => {
 byId("layer-wms").addEventListener("change", (event) => {
   if (event.target.checked) wmsLayer.addTo(map);
   else wmsLayer.remove();
-  updateWMSOutput(event.target.checked ? "WMS добавлен на карту" : "WMS скрыт");
+  updateWMSOutput(event.target.checked ? t("wmsAdded") : t("wmsHidden"));
   updateMapOutput();
 });
 byId("layer-traffic").addEventListener("change", (event) => {
@@ -1334,6 +1455,18 @@ byId("layer-svg").addEventListener("change", (event) => {
   else svgDemoOverlay.remove();
   updateMapOutput();
 });
+byId("layer-heatmap").addEventListener("change", (event) => {
+  if (event.target.checked) heatDemo.addTo(map);
+  else heatDemo.remove();
+  updateStageEightOutput();
+  updateMapOutput();
+});
+byId("layer-isolines").addEventListener("change", (event) => {
+  if (event.target.checked) heatIsolines.addTo(map);
+  else heatIsolines.remove();
+  updateStageEightOutput();
+  updateMapOutput();
+});
 
 byId("tile-opacity").addEventListener("input", (event) => {
   const opacity = Number(event.target.value) / 100;
@@ -1364,7 +1497,7 @@ byId("geo-add-data").addEventListener("click", () => {
       coordinates: [center.lng + geoFeatureSequence * 0.012, center.lat + geoFeatureSequence * 0.006]
     }
   });
-  updateGeoJSONStatus("addData: добавлена точка");
+  updateGeoJSONStatus(t("geoAddPoint"));
   logEvent("GeoJSON.addData", { count: geoLayer.toGeoJSON().features.length });
 });
 byId("geo-style").addEventListener("click", () => {
@@ -1374,20 +1507,20 @@ byId("geo-style").addEventListener("click", () => {
     fill: "#facc15",
     fillOpacity: 0.32
   }));
-  updateGeoJSONStatus("setStyle: контрастный стиль");
+  updateGeoJSONStatus(t("geoSetStyle"));
 });
 byId("geo-reset-style").addEventListener("click", () => {
   geoLayer.resetStyle();
-  updateGeoJSONStatus("resetStyle: исходный стиль");
+  updateGeoJSONStatus(t("geoReset"));
 });
-byId("geo-export").addEventListener("click", () => updateGeoJSONStatus("toGeoJSON: экспорт текущего состояния"));
+byId("geo-export").addEventListener("click", () => updateGeoJSONStatus(t("geoExport")));
 byId("geo-clear").addEventListener("click", () => {
   geoLayer.clearLayers();
-  updateGeoJSONStatus("clearLayers: слой очищен");
+  updateGeoJSONStatus(t("geoClear"));
 });
 byId("geo-restore").addEventListener("click", () => {
   geoLayer.clearLayers().addData(geoData);
-  updateGeoJSONStatus("addData: исходный набор восстановлен");
+  updateGeoJSONStatus(t("geoRestoreMsg"));
 });
 
 byId("wms-apply").addEventListener("click", () => {
@@ -1396,7 +1529,7 @@ byId("wms-apply").addEventListener("click", () => {
     version: byId("wms-version").value,
     crs: byId("wms-crs").value
   });
-  updateWMSOutput("setParams: запросы обновлены");
+  updateWMSOutput(t("wmsParamsUpdated"));
   updateMapOutput();
 });
 byId("wms-fit").addEventListener("click", () => {
@@ -1409,7 +1542,7 @@ byId("wms-fit").addEventListener("click", () => {
   byId("layer-wms").checked = true;
   byId("objects-enabled").checked = false;
   map.fitBounds(wmsDemoBounds, { padding: 54 });
-  updateWMSOutput("Открыта ограниченная область WMS");
+  updateWMSOutput(t("wmsAreaOpened"));
 });
 byId("wms-url").addEventListener("click", () => updateWMSOutput("getTileUrl(1, 2, 3)"));
 byId("wms-opacity").addEventListener("input", (event) => {
@@ -1427,7 +1560,7 @@ byId("reverse-line").addEventListener("click", () => {
 
 byId("circle-radius").addEventListener("input", (event) => {
   radius.setRadius(Number(event.target.value));
-  byId("circle-radius-value").textContent = `${event.target.value} м`;
+  byId("circle-radius-value").textContent = `${event.target.value} ${t("meters")}`;
   updateMapOutput();
 });
 
@@ -1556,8 +1689,8 @@ byId("zoom-around").addEventListener("click", () => {
 });
 
 const presets = {
-  moscow: { center: [55.751244, 37.618423], zoom: 10 },
-  petersburg: { center: [59.93863, 30.31413], zoom: 10 },
+  magdeburg: { center: [HOME.lat, HOME.lng], zoom: HOME.zoom },
+  turkey: { center: [TURKEY.lat, TURKEY.lng], zoom: TURKEY.zoom },
   world: { center: [20, 10], zoom: 2 }
 };
 for (const button of document.querySelectorAll("[data-preset]")) {
@@ -1600,7 +1733,7 @@ byId("stop-map-api").addEventListener("click", () => {
   updateMapOutput({ navigation: "stop" });
 });
 byId("max-bounds-api").addEventListener("change", (event) => {
-  map.setMaxBounds(event.target.checked ? [[55.55, 37.25], [55.95, 38.05]] : null);
+  map.setMaxBounds(event.target.checked ? [[51.95, 11.35], [52.28, 11.9]] : null);
   updateMapOutput({ navigation: event.target.checked ? "setMaxBounds" : "clearMaxBounds" });
 });
 byId("invalidate-size").addEventListener("click", () => {
@@ -1748,12 +1881,12 @@ function renderSuggestions(items) {
 }
 
 byId("search-run").addEventListener("click", async () => {
-  const query = byId("suggest-ui-input").value || "М";
+  const query = byId("suggest-ui-input").value || "Ma";
   const result = await citySearch.search(query, { center: map.getCenter().toArray() });
   byId("search-output").textContent = cleanObject({ mode: "search", query, result });
 });
 byId("geocode-run").addEventListener("click", async () => {
-  const query = byId("suggest-ui-input").value || "Москва";
+  const query = byId("suggest-ui-input").value || HOME.name;
   const result = await citySearch.geocode(query, { center: map.getCenter().toArray() });
   byId("search-output").textContent = cleanObject({ mode: "geocode", query, result });
   const city = result?.properties;
@@ -1766,27 +1899,27 @@ byId("suggest-ui-cancel").addEventListener("click", () => {
 
 byId("suggest-input").addEventListener("input", async (event) => {
   const request = ++suggestionRequest;
-  byId("suggest-status").textContent = "Поиск";
+  byId("suggest-status").textContent = t("searching");
   const result = await suggestions.suggest(event.target.value, { center: map.getCenter().toArray() });
   if (request !== suggestionRequest) return;
   renderSuggestions(result);
-  byId("suggest-status").textContent = result.length ? `Найдено: ${result.length}` : "Нет результатов";
+  byId("suggest-status").textContent = result.length ? t("found", { count: result.length }) : t("noResults");
   logEvent("SuggestProvider.suggest", { value: result.length });
 });
 byId("suggest-cancel").addEventListener("click", () => {
   suggestionRequest++;
   suggestions.cancel();
-  byId("suggest-status").textContent = "Отменено";
+  byId("suggest-status").textContent = t("cancelled");
   renderSuggestions([]);
 });
 byId("suggest-reset").addEventListener("click", () => {
   suggestions.destroy();
   suggestions = createSuggestProvider(fetchSuggestions, { debounceMs: 120, minLength: 1, limit: 5 });
-  byId("suggest-status").textContent = "Создан новый provider";
+  byId("suggest-status").textContent = t("providerCreated");
 });
 byId("suggest-destroy").addEventListener("click", () => {
   suggestions.destroy();
-  byId("suggest-status").textContent = "Provider уничтожен";
+  byId("suggest-status").textContent = t("providerDestroyed");
   renderSuggestions([]);
 });
 
@@ -1817,7 +1950,7 @@ byId("objects-add").addEventListener("click", () => {
   objects.add({
     id: `random-${Date.now()}`,
     coordinates: [center.lat + (Math.random() - 0.5) * 0.1, lng],
-    properties: { title: "Случайный объект", side: lng < center.lng ? "west" : "east" }
+    properties: { title: t("randomObject"), side: lng < center.lng ? "west" : "east" }
   });
   objectOperation = "add:1";
   updateObjectCount();
@@ -1908,29 +2041,40 @@ for (const name of ["drag", "scrollZoom", "pinchZoom", "dblClick", "boxZoom"]) {
   });
 }
 
-function generateHeatPoints() {
-  const center = map.getCenter();
-  const points = [];
-  for (let i = 0; i < 400; i++) {
-    points.push([
-      center.lat + (Math.random() - 0.5) * 0.14,
-      center.lng + (Math.random() - 0.5) * 0.2,
-      Math.random() * 0.8 + 0.2
-    ]);
+function generateHeatPoints(count = 5000) {
+  let seed = (count ^ 0x51f5a11) >>> 0;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const points = new Array(count);
+  const clustered = Math.floor(count * 0.82);
+  for (let i = 0; i < clustered; i++) {
+    const hub = HEAT_HUBS[(random() * HEAT_HUBS.length) | 0];
+    const sigma = 0.004 + random() * random() * 0.03;
+    const u = Math.max(1e-9, random());
+    const v = random();
+    const r = Math.sqrt(-2 * Math.log(u));
+    const ang = 2 * Math.PI * v;
+    points[i] = [
+      hub[0] + r * Math.cos(ang) * sigma,
+      hub[1] + r * Math.sin(ang) * sigma * 1.45,
+      hub[2] * (0.25 + random() * 0.75)
+    ];
   }
-  for (let i = 0; i < 30; i++) {
-    points.push([
-      center.lat + 0.02 + (Math.random() - 0.5) * 0.01,
-      center.lng - 0.01 + (Math.random() - 0.5) * 0.01,
-      1
-    ]);
-    points.push([
-      center.lat - 0.015 + (Math.random() - 0.5) * 0.01,
-      center.lng - 0.02 + (Math.random() - 0.5) * 0.01,
-      1
-    ]);
+  for (let i = clustered; i < count; i++) {
+    points[i] = [
+      HOME.lat + (random() - 0.5) * 0.12,
+      HOME.lng + (random() - 0.5) * 0.18,
+      0.05 + random() * 0.2
+    ];
   }
   return points;
+}
+
+function applyHeatDataset(points) {
+  heatDemo.setLatLngs(points);
+  heatIsolines.setLatLngs(points);
 }
 
 function generatePointCloud(count) {
@@ -1961,19 +2105,32 @@ byId("webgl-toggle").addEventListener("click", () => {
 });
 byId("heat-toggle").addEventListener("click", () => {
   if (map.hasLayer(heatDemo)) heatDemo.remove();
-  else {
-    if (!heatDemo.options.scaleZoom) heatDemo.options.scaleZoom = map.getZoom();
-    heatDemo.setLatLngs(generateHeatPoints()).addTo(map);
-  }
+  else heatDemo.addTo(map);
+  byId("layer-heatmap").checked = map.hasLayer(heatDemo);
   stageEightMessage = map.hasLayer(heatDemo) ? "heat:on" : "heat:off";
   updateStageEightOutput();
+  updateMapOutput();
 });
 byId("heat-regenerate").addEventListener("click", () => {
   const started = performance.now();
-  heatDemo.setLatLngs(generateHeatPoints());
+  applyHeatDataset(generateHeatPoints(5000));
   if (!map.hasLayer(heatDemo)) heatDemo.addTo(map);
-  stageEightMessage = `heat ${heatDemo.options.scaleZoom ? "regenerated" : "ready"} in ${(performance.now() - started).toFixed(1)} ms`;
+  byId("layer-heatmap").checked = true;
+  if (map.hasLayer(heatIsolines)) heatIsolines.rebuild();
+  stageEightMessage = `heat regenerated in ${(performance.now() - started).toFixed(1)} ms`;
   updateStageEightOutput();
+  updateMapOutput();
+});
+byId("isolines-toggle").addEventListener("click", () => {
+  if (map.hasLayer(heatIsolines)) heatIsolines.remove();
+  else {
+    heatIsolines.addTo(map);
+    heatIsolines.rebuild();
+  }
+  byId("layer-isolines").checked = map.hasLayer(heatIsolines);
+  stageEightMessage = map.hasLayer(heatIsolines) ? "isolines:on" : "isolines:off";
+  updateStageEightOutput();
+  updateMapOutput();
 });
 byId("vector-tiles-toggle").addEventListener("click", () => {
   if (map.hasLayer(vectorTiles)) vectorTiles.remove();
@@ -2083,6 +2240,7 @@ fetch(`${ORIHON_CDN}/package.json`)
     runtimeStatus.textContent = "vendor · ESM · TypeScript";
   });
 byId("map-aria-label").textContent = map.getContainer().getAttribute("aria-label") || "";
+applyMapLocale(DEFAULT_LAB_LOCALE);
 updateMapReadout();
 syncViewInputs();
 updateLowZoomClean();

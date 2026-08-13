@@ -75,7 +75,8 @@
     "demo:bench": "npx --yes serve . -p 4176",
     "demo:showcase": "npx --yes serve . -p 4177",
     "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
-    "demo:studio": "node _local/studio/server.mjs"
+    "demo:studio": "node _local/studio/server.mjs",
+    "embed:examples": "node scripts/embed-examples.mjs"
   },
   "keywords": [
     "map",
@@ -110,8 +111,12 @@
     "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public"

@@ -130,6 +130,18 @@ test("GeoJSON creates point, multi-point and path feature layers", () => {
   assert.equal(layer.toGeoJSON().features.length, 3);
 });
 
+test("GeoJSON maxFeatures stops ingest", () => {
+  const layer = geoJSON({
+    type: "FeatureCollection",
+    features: [
+      { type: "Feature", id: "a", geometry: { type: "Point", coordinates: [13, 52] }, properties: {} },
+      { type: "Feature", id: "b", geometry: { type: "Point", coordinates: [14, 53] }, properties: {} },
+      { type: "Feature", id: "c", geometry: { type: "Point", coordinates: [15, 54] }, properties: {} }
+    ]
+  }, { maxFeatures: 2 });
+  assert.equal(layer.featureEntries.length, 2);
+});
+
 test("GeoJSON propagates feature events and updates point round-trips", () => {
   const layer = geoJSON({
     type: "Feature",

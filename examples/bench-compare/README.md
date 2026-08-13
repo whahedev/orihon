@@ -14,6 +14,7 @@ Comparative browser bench: **Orihon**, **Leaflet**, **OpenLayers**, **MapLibre G
 | **Markers** | DOM markers **hard-capped at 5k**. Orihon `MarkerCollection` (viewport cull). For 50k+ use Points / `markerCollection({ renderer: "auto" })` |
 | **Chart popup** | Marker count = Points (max 5k). Load all markers with charts; stress hops **≤40** times across the set with zoom; Open p50/p95 |
 | **Filter** | Clustered set with filter toggled every discrete camera step (~⅔ active) |
+| **Rich OM** | Orihon ObjectManager + MapLibre GeoJSON: category styles, filter, popup, hover/select, live batches; optional native clustering. Toggle **Clusters**. Leaflet/OL = n/a |
 | **Live updates** | Move ~20% of points every frame for ~3s |
 | **Pick** | Same O(n) project+nearest scan; samples projected from real points |
 | **Basemap** | Tiles only — Orihon `webglTileLayer` vs Leaflet / OL / MapLibre raster |
@@ -38,6 +39,9 @@ Comparative browser bench: **Orihon**, **Leaflet**, **OpenLayers**, **MapLibre G
 
 - Marketing 50k — points × median
 - Stress 250k — points × 1 run
+- Stress 1M (no clusters) — bare WebGL points × 1 run (prefer Orihon + MapLibre only)
+- Rich 1M (with clusters) — ObjectManager / MapLibre GeoJSON full stack × 1 run
+- Rich 1M (no clusters) — same features without clustering (better for styles/hover) × 1 run
 - ObjectManager 50k — clusters
 - Heatmap 50k
 - Isolines 25k
@@ -67,17 +71,18 @@ objectManager({ clusterize: false, clusterRenderer: "auto" }).add(objects).addTo
 
 ## Run
 
-Local (CDN-backed — no build required):
+Local (uses `/dist` when present, else CDN Orihon):
 
 ```bash
+npm run build
 npm run demo:bench
 ```
 
-Open http://localhost:4176/
+Open http://localhost:4176/examples/bench-compare/
 
 Live: https://whahedev.github.io/orihon/bench/
 
-Libraries load from CDN (Orihon / Leaflet / OpenLayers / MapLibre). Export JSON after a completed run.
+Leaflet / OpenLayers / MapLibre still load from CDN. Export JSON after a completed run.
 
 ## Notes
 

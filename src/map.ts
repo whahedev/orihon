@@ -1,4 +1,5 @@
 import { createEl, getContainer, listen, rafThrottle } from "./dom.js";
+import { CRS, resolveCRS, type CoordinateReferenceSystem, type CRSInput } from "./crs.js";
 import { Evented } from "./events.js";
 import {
   LatLng,
@@ -7,16 +8,16 @@ import {
   latLng,
   latLngBounds,
   point,
-  project,
-  unproject,
-  zoomForBounds,
+  TILE_SIZE,
+  distance,
   type LatLngBoundsLike,
   type LatLngLike,
   type PointLike
 } from "./geo.js";
-import type { Layer } from "./layer.js";
+import type { Layer, QueryHit, QueryOptions, ResolvedQueryOptions } from "./layer.js";
 import { AttributionControl, ScaleControl, ZoomControl, type Control } from "./ui/control.js";
 import { resolveLocale, type OrihonLocale, type LocaleInput } from "./ui/locale.js";
+import type { ExportPngOptions, PrintMapOptions } from "./services/map-export.js";
 
 export interface MapOptions {
   center?: LatLngLike;
@@ -37,6 +38,7 @@ export interface MapOptions {
   keyboard?: boolean;
   keyboardPanDelta?: number;
   behaviors?: BehaviorOptions;
+  crs?: CRSInput;
 }
 
 export interface MapSize {
@@ -48,9 +50,10 @@ export type ControlPosition = "top-left" | "top-right" | "bottom-left" | "bottom
 export type MapBehaviorName = "drag" | "scrollZoom" | "pinchZoom" | "dblClick" | "boxZoom";
 export type BehaviorOptions = Partial<Record<MapBehaviorName, boolean>>;
 
-type ResolvedMapOptions = Required<Omit<MapOptions, "behaviors" | "maxBounds">> & {
+type ResolvedMapOptions = Required<Omit<MapOptions, "behaviors" | "maxBounds" | "crs">> & {
   behaviors: BehaviorOptions;
   maxBounds: LatLngBounds | null;
+  crs: CoordinateReferenceSystem;
 };
 
 const DEFAULTS: ResolvedMapOptions = {
@@ -71,7 +74,8 @@ const DEFAULTS: ResolvedMapOptions = {
   ariaLabel: "",
   keyboard: true,
   keyboardPanDelta: 80,
-  behaviors: {}
+  behaviors: {},
+  crs: CRS.EPSG3857
 };
 
 const DEFAULT_BEHAVIORS: Record<MapBehaviorName, boolean> = {
@@ -159,6 +163,7 @@ export class Orihon extends Evented {
   readonly controls = new Set<Control>();
   readonly locale: OrihonLocale;
   readonly behaviors: BehaviorManager;
+  readonly crs: CoordinateReferenceSystem;
   readonly _attributions = new Map<string, number>();
   readonly _viewSession: ViewSession = { move: false, zoom: false };
   readonly _unsub: Array<() => void> = [];
@@ -176,11 +181,13 @@ export class Orihon extends Evented {
       ...DEFAULTS,
       ...options,
       maxBounds: normalizeMaxBounds(options.maxBounds),
+      crs: resolveCRS(options.crs),
       behaviors: { ...DEFAULT_BEHAVIORS, ...options.behaviors }
     };
     this.container = getContainer(container);
     this.locale = resolveLocale(this.options.locale);
     this.behaviors = new BehaviorManager(this, this.options.behaviors);
+    this.crs = this.options.crs;
     this._initialA11y = {
       role: this.container.getAttribute("role"),
       ariaLabel: this.container.getAttribute("aria-label"),
@@ -249,7 +256,7 @@ export class Orihon extends Evented {
         type: "drag",
         pointerId: pointer.id,
         start,
-        origin: project(this.center, this.zoom),
+        origin: this.crs.project(this.center, this.zoom),
         moved: false,
         last: start,
         lastTime: performance.now(),
@@ -283,8 +290,14 @@ export class Orihon extends Evented {
     this._unsub.push(listen(this.container, "pointerdown", (event) => {
       if (event.button !== 0 && event.pointerType === "mouse") return;
       if ((event.target as Element | null)?.closest?.(".oh-control, .oh-marker")) return;
-      event.preventDefault();
-      this.container.setPointerCapture?.(event.pointerId);
+      const interactiveTarget = (event.target as Element | null)?.closest?.(".oh-interactive");
+      // Do not capture a short press on an interactive layer: Chrome retargets
+      // pointerup/click to the capture owner, which makes vector bindPopup()
+      // unreliable. Capture is acquired below once the gesture becomes a pan.
+      if (!interactiveTarget) {
+        event.preventDefault();
+        this.container.setPointerCapture?.(event.pointerId);
+      }
       const pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
       pointers.set(event.pointerId, pointer);
       if (event.shiftKey && this.behaviors.isEnabled("boxZoom")) {
@@ -321,8 +334,8 @@ export class Orihon extends Evented {
         const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
         const midpoint = containerPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
         const nextZoom = this.#clampZoom(gesture.zoom + Math.log2(distance / gesture.distance));
-        const projectedAnchor = project(gesture.anchor, nextZoom);
-        const nextCenter = unproject({
+        const projectedAnchor = this.crs.project(gesture.anchor, nextZoom);
+        const nextCenter = this.crs.unproject({
           x: projectedAnchor.x - midpoint.x + this.size.width / 2,
           y: projectedAnchor.y - midpoint.y + this.size.height / 2
         }, nextZoom);
@@ -339,8 +352,12 @@ export class Orihon extends Evented {
         gesture.lastTime = now;
         const dx = event.clientX - gesture.start.x;
         const dy = event.clientY - gesture.start.y;
-        if (Math.hypot(dx, dy) > 3) gesture.moved = true;
-        const nextCenter = unproject({ x: gesture.origin.x - dx, y: gesture.origin.y - dy }, this.zoom);
+        if (Math.hypot(dx, dy) > 3) {
+          if (!gesture.moved) this.container.setPointerCapture?.(event.pointerId);
+          gesture.moved = true;
+          event.preventDefault();
+        }
+        const nextCenter = this.crs.unproject({ x: gesture.origin.x - dx, y: gesture.origin.y - dy }, this.zoom);
         this.#applyView(nextCenter, this.zoom);
       }
     }));
@@ -460,7 +477,7 @@ export class Orihon extends Evented {
   }
 
   #pixelOriginFor(center = this.center, zoom = this.zoom): Point {
-    const centerPoint = project(center, zoom);
+    const centerPoint = this.crs.project(center, zoom);
     return new Point(centerPoint.x - this.size.width / 2, centerPoint.y - this.size.height / 2);
   }
 
@@ -468,18 +485,18 @@ export class Orihon extends Evented {
     const maxBounds = this.options.maxBounds;
     if (!maxBounds || this.options.maxBoundsViscosity <= 0 || !maxBounds.isValid()) return center;
     if (this.size.width <= 0 || this.size.height <= 0) return center;
-    const northWest = project(maxBounds.getNorthWest(), zoom);
-    const southEast = project(maxBounds.getSouthEast(), zoom);
-    const projected = project(center, zoom);
-    const minX = northWest.x + this.size.width / 2;
-    const maxX = southEast.x - this.size.width / 2;
-    const minY = northWest.y + this.size.height / 2;
-    const maxY = southEast.y - this.size.height / 2;
+    const northWest = this.crs.project(maxBounds.getNorthWest(), zoom);
+    const southEast = this.crs.project(maxBounds.getSouthEast(), zoom);
+    const projected = this.crs.project(center, zoom);
+    const minX = Math.min(northWest.x, southEast.x) + this.size.width / 2;
+    const maxX = Math.max(northWest.x, southEast.x) - this.size.width / 2;
+    const minY = Math.min(northWest.y, southEast.y) + this.size.height / 2;
+    const maxY = Math.max(northWest.y, southEast.y) - this.size.height / 2;
     const clamp = (value: number, min: number, max: number): number => {
       if (min > max) return (min + max) / 2;
       return Math.max(min, Math.min(max, value));
     };
-    return unproject({
+    return this.crs.unproject({
       x: clamp(projected.x, minX, maxX),
       y: clamp(projected.y, minY, maxY)
     }, zoom);
@@ -535,7 +552,7 @@ export class Orihon extends Evented {
     const direction = velocity.divideBy(Math.max(1, Math.hypot(velocity.x, velocity.y)));
     const duration = speed / Math.max(1, this.options.inertiaDeceleration);
     const travel = direction.multiplyBy((speed * duration) / 2);
-    const origin = project(this.center, this.zoom);
+    const origin = this.crs.project(this.center, this.zoom);
     const startTime = performance.now();
     this.stop();
     this._animationActive = true;
@@ -544,7 +561,7 @@ export class Orihon extends Evented {
       if (!this._animationActive || this._destroyed) return;
       const progress = Math.min(1, (now - startTime) / (duration * 1000));
       const eased = 1 - (1 - progress) ** 2;
-      this.#applyView(unproject(origin.subtract(travel.multiplyBy(eased)), this.zoom), this.zoom);
+      this.#applyView(this.crs.unproject(origin.subtract(travel.multiplyBy(eased)), this.zoom), this.zoom);
       if (progress < 1) {
         this.#scheduleAnimation(frame);
         return;
@@ -610,8 +627,8 @@ export class Orihon extends Evented {
     const nextZoom = this.#clampZoom(zoom);
     if (nextZoom === this.zoom) return false;
     const before = this.containerPointToLatLng(anchorPoint);
-    const afterPoint = project(before, nextZoom);
-    const nextCenter = unproject({
+    const afterPoint = this.crs.project(before, nextZoom);
+    const nextCenter = this.crs.unproject({
       x: afterPoint.x - anchorPoint.x + this.size.width / 2,
       y: afterPoint.y - anchorPoint.y + this.size.height / 2
     }, nextZoom);
@@ -621,7 +638,9 @@ export class Orihon extends Evented {
   #render(): void {
     if (this._destroyed) return;
     this.pixelOrigin = this.#pixelOriginFor();
-    for (const layer of this.layers) layer.render();
+    for (const layer of this.layers) {
+      if (layer.wantsFrameRender()) layer.render();
+    }
     for (const control of this.controls) control.render();
   }
 
@@ -674,6 +693,13 @@ export class Orihon extends Evented {
   getSize(): Point { return new Point(this.size.width, this.size.height); }
   getMaxBounds(): LatLngBounds | null { return this.options.maxBounds ? new LatLngBounds(this.options.maxBounds) : null; }
 
+  distance(a: LatLngLike, b: LatLngLike): number {
+    if (this.crs.code !== "Simple") return distance(a, b);
+    const first = latLng(a);
+    const second = latLng(b);
+    return Math.hypot(second.lng - first.lng, second.lat - first.lat);
+  }
+
   setLocale(input: LocaleInput): this {
     Object.assign(this.locale, resolveLocale(input));
     if (!this.options.ariaLabel) {
@@ -712,6 +738,56 @@ export class Orihon extends Evented {
   eachLayer(callback: (layer: Layer) => void, context?: unknown): this {
     for (const layer of [...this.layers]) callback.call(context, layer);
     return this;
+  }
+
+  query(containerPoint: PointLike, options: QueryOptions = {}): QueryHit[] {
+    const target = point(containerPoint);
+    const candidates = options.layers ? [...options.layers] : [...this.layers];
+    const normalized: ResolvedQueryOptions = {
+      tolerance: Math.max(0, Number(options.tolerance ?? 8)),
+      layers: candidates,
+      pane: options.pane ?? "",
+      limit: options.limit === Infinity ? Infinity : Math.max(0, Math.floor(Number(options.limit ?? 1)))
+    };
+    if (normalized.limit === 0) return [];
+
+    const paneOrder = new Map<Element, number>();
+    Array.from(this.viewport.children).forEach((pane, index) => paneOrder.set(pane, index));
+    const layerOrder = new Map(candidates.map((layer, index) => [layer, index]));
+    candidates.sort((a, b) => {
+      const aPane = a.getPane();
+      const bPane = b.getPane();
+      const ap = aPane ? paneOrder.get(aPane) ?? -1 : -1;
+      const bp = bPane ? paneOrder.get(bPane) ?? -1 : -1;
+      return ap === bp ? layerOrder.get(a)! - layerOrder.get(b)! : ap - bp;
+    });
+
+    const hits: QueryHit[] = [];
+    for (let index = candidates.length - 1; index >= 0 && hits.length < normalized.limit; index--) {
+      const layer = candidates[index];
+      if (normalized.pane && (layer.options.pane ?? "overlay") !== normalized.pane) continue;
+      const result = layer.queryHit?.(target, normalized);
+      if (!result) continue;
+      for (const hit of Array.isArray(result) ? result : [result]) {
+        hits.push(hit);
+        if (hits.length >= normalized.limit) break;
+      }
+    }
+    return hits;
+  }
+
+  queryLatLng(value: LatLngLike, options?: QueryOptions): QueryHit[] {
+    return this.query(this.latLngToContainerPoint(value), options);
+  }
+
+  async exportPng(options?: ExportPngOptions): Promise<Blob> {
+    const { exportMapPng } = await import("./services/map-export.js");
+    return exportMapPng(this, options);
+  }
+
+  async print(options?: PrintMapOptions): Promise<void> {
+    const { printMap } = await import("./services/map-export.js");
+    return printMap(this, options);
   }
 
   addControl(control: Control): this {
@@ -782,7 +858,7 @@ export class Orihon extends Evented {
 
   panTo(center: LatLngLike): this { return this.setView(center, this.zoom); }
   panBy(offset: PointLike): this {
-    const nextCenter = unproject(project(this.center, this.zoom).add(point(offset)), this.zoom);
+    const nextCenter = this.crs.unproject(this.crs.project(this.center, this.zoom).add(point(offset)), this.zoom);
     return this.panTo(nextCenter);
   }
   setZoom(zoom: number): this { return this.setView(this.center, zoom); }
@@ -800,12 +876,14 @@ export class Orihon extends Evented {
 
   fitBounds(value: LatLngBoundsLike, options: { padding?: number; animate?: boolean; duration?: number } = {}): this {
     const target = latLngBounds(value);
-    const zoom = zoomForBounds(this.size, target, options.padding ?? 32, this.options.maxZoom);
+    const zoom = this.#zoomForBounds(target, options.padding ?? 32);
     return options.animate ? this.flyTo(target.getCenter(), zoom, options) : this.setView(target.getCenter(), zoom);
   }
 
   fitWorld(options: { padding?: number; animate?: boolean; duration?: number } = {}): this {
-    return this.fitBounds([[-85.0511287798066, -180], [85.0511287798066, 180]], options);
+    return this.fitBounds(this.crs.code === "Simple"
+      ? this.options.maxBounds ?? [[0, 0], [TILE_SIZE, TILE_SIZE]]
+      : [[-85.0511287798066, -180], [85.0511287798066, 180]], options);
   }
 
   flyTo(center: LatLngLike, zoom = this.zoom, options: { duration?: number } = {}): this {
@@ -814,7 +892,7 @@ export class Orihon extends Evented {
 
   flyToBounds(value: LatLngBoundsLike, options: { padding?: number; duration?: number } = {}): this {
     const target = latLngBounds(value);
-    const zoom = zoomForBounds(this.size, target, options.padding ?? 32, this.options.maxZoom);
+    const zoom = this.#zoomForBounds(target, options.padding ?? 32);
     return this.flyTo(target.getCenter(), zoom, options);
   }
 
@@ -826,22 +904,32 @@ export class Orihon extends Evented {
   }
 
   latLngToLayerPoint(value: LatLngLike): Point {
-    return project(value, this.zoom).subtract(this.pixelOrigin);
+    return this.crs.project(value, this.zoom).subtract(this.pixelOrigin);
   }
 
   latLngToContainerPoint(value: LatLngLike): Point {
-    return project(value, this.zoom).subtract(this.pixelOrigin);
+    return this.crs.project(value, this.zoom).subtract(this.pixelOrigin);
   }
 
   containerPointToLatLng(value: PointLike): LatLng {
     const source = point(value);
-    return unproject(source.add(this.pixelOrigin), this.zoom);
+    return this.crs.unproject(source.add(this.pixelOrigin), this.zoom);
   }
 
   getBounds(): LatLngBounds {
     const northWest = this.containerPointToLatLng([0, 0]);
     const southEast = this.containerPointToLatLng([this.size.width, this.size.height]);
     return latLngBounds([southEast.lat, northWest.lng], [northWest.lat, southEast.lng]);
+  }
+
+  #zoomForBounds(target: LatLngBounds, padding: number): number {
+    const a = this.crs.project(target.getNorthWest(), 0);
+    const b = this.crs.project(target.getSouthEast(), 0);
+    const dx = Math.max(1e-9, Math.abs(b.x - a.x));
+    const dy = Math.max(1e-9, Math.abs(b.y - a.y));
+    const zx = Math.log2(Math.max(1, this.size.width - padding * 2) / dx);
+    const zy = Math.log2(Math.max(1, this.size.height - padding * 2) / dy);
+    return Math.max(0, Math.min(this.options.maxZoom, Math.floor(Math.min(zx, zy))));
   }
 
   remove(): this {

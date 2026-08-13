@@ -17,6 +17,20 @@
   outline-offset: -3px;
 }
 
+.oh-map-expanded {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483646 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+.oh-measuring { cursor: crosshair; }
+
+.oh-mini-map-control { padding: 3px; background: #fff; }
+.oh-mini-map { position: relative; overflow: hidden; border: 1px solid #94a3b8; background: #dbe4ea; }
+.oh-mini-map .oh-control-pane { display: none; }
+
 .oh-box-zoom {
   position: absolute;
   z-index: 1200;
@@ -34,6 +48,7 @@
 
 .oh-pane {
   transform-origin: 0 0;
+  pointer-events: none;
 }
 
 /* Pane stack (Leaflet-like): marker z-index uses screen Y and must stay inside marker pane. */
@@ -128,6 +143,7 @@
   padding: 0;
   background: transparent;
   cursor: pointer;
+  pointer-events: auto;
   transform-origin: 0 0;
   will-change: transform;
 }
@@ -162,6 +178,15 @@
   outline: 3px solid #2563eb;
   outline-offset: 3px;
   border-radius: 5px;
+}
+
+.oh-marker-draggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.oh-marker-draggable.oh-marker-dragging {
+  cursor: grabbing;
 }
 
 .oh-marker-icon,

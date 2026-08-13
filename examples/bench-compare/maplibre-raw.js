@@ -34,8 +34,11 @@ export function createMapLibreRawPoints(map, points, options = {}) {
     return shader;
   }
 
+  let vao = null;
+
   function projectionMatrix(args) {
     if (!args) return null;
+    // Match MapLibre v5 custom-layer example (MercatorCoordinate + mainMatrix).
     if (args.defaultProjectionData?.mainMatrix) return args.defaultProjectionData.mainMatrix;
     if (args.modelViewProjectionMatrix) return args.modelViewProjectionMatrix;
     // MapLibre ≤4 passed a raw Float32Array / mat4 as the second argument.
@@ -106,6 +109,14 @@ export function createMapLibreRawPoints(map, points, options = {}) {
       buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+      if (isWebGL2 && gl.createVertexArray) {
+        vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+        gl.bindVertexArray(null);
+      }
     },
     render(context, args) {
       if (!program || !buffer) return;
@@ -116,18 +127,34 @@ export function createMapLibreRawPoints(map, points, options = {}) {
       ctx.uniformMatrix4fv(uMatrix, false, matrix);
       ctx.uniform1f(uSize, pointSize * (window.devicePixelRatio || 1));
       ctx.uniform4fv(uColor, color);
-      ctx.bindBuffer(ctx.ARRAY_BUFFER, buffer);
-      ctx.enableVertexAttribArray(aPos);
-      ctx.vertexAttribPointer(aPos, 2, ctx.FLOAT, false, 0, 0);
+      if (vao && isWebGL2) ctx.bindVertexArray(vao);
+      else {
+        ctx.bindBuffer(ctx.ARRAY_BUFFER, buffer);
+        ctx.enableVertexAttribArray(aPos);
+        ctx.vertexAttribPointer(aPos, 2, ctx.FLOAT, false, 0, 0);
+      }
+      ctx.disable(ctx.DEPTH_TEST);
+      ctx.disable(ctx.STENCIL_TEST);
+      ctx.depthMask(false);
       ctx.enable(ctx.BLEND);
       ctx.blendFunc(ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA);
-      ctx.drawArrays(ctx.POINTS, 0, count);
+      const CHUNK = 262144;
+      if (count <= CHUNK) {
+        ctx.drawArrays(ctx.POINTS, 0, count);
+      } else {
+        for (let start = 0; start < count; start += CHUNK) {
+          ctx.drawArrays(ctx.POINTS, start, Math.min(CHUNK, count - start));
+        }
+      }
+      if (vao && isWebGL2) ctx.bindVertexArray(null);
     },
     onRemove(_mapInstance, context) {
+      if (vao && context.deleteVertexArray) context.deleteVertexArray(vao);
       if (buffer) context.deleteBuffer(buffer);
       if (program) context.deleteProgram(program);
       buffer = null;
       program = null;
+      vao = null;
       gl = null;
     }
   };

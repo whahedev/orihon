@@ -32,6 +32,7 @@ test("SpatialGridIndex updates cells and searches only matching records", () => 
 
   index.set("berlin", [50.938, 6.960], { city: "Cologne" });
   assert.equal(index.search([[52.3, 13.2], [52.7, 13.6]]).length, 0);
+  assert.deepEqual(index.searchIds([[-1, 178], [1, 180]]), ["east"]);
   assert.equal(index.delete("munich"), true);
   assert.equal(index.size, 2);
 });
@@ -47,6 +48,19 @@ test("SpatialGridIndex keeps a compact index for a large point set", () => {
   assert.equal(index.size, 5000);
   assert.ok(index.cellCount < 30);
   assert.equal(index.search([[52, 13], [52.1, 13.1]]).length, 66);
+});
+
+test("ObjectManager maxObjects caps ingest", () => {
+  const manager = objectManager({ maxObjects: 2 });
+  manager.add([
+    { id: 1, coordinates: [52.52, 13.40] },
+    { id: 2, coordinates: [52.53, 13.45] },
+    { id: 3, coordinates: [52.54, 13.50] }
+  ]);
+  assert.equal(manager.items.size, 2);
+  manager.add({ id: 2, coordinates: [52.55, 13.51] });
+  assert.equal(manager.items.size, 2);
+  assert.deepEqual(manager.getObject(2)?.coordinates, [52.55, 13.51]);
 });
 
 test("ObjectManager exposes indexed collection and filter lifecycle", () => {
@@ -139,6 +153,53 @@ test("ObjectManager cluster centers stay near source points", () => {
   assert.ok(Math.abs(position.lng - 13.4055) < 1e-9, `cluster lng ${position.lng}`);
   assert.equal(manager.getStats().renderer, "dom");
   assert.equal(manager.getStats().layoutZoom, 10);
+});
+
+test("ObjectManager spiderfies at max zoom even when clusterZoomOnClick is disabled", () => {
+  class FakeMap extends Evented {
+    zoom = 10;
+    layers = new Set();
+    getBounds() { return [[52.48, 13.30], [52.55, 13.45]]; }
+    latLngToLayerPoint(value) {
+      const lat = Array.isArray(value) ? value[0] : value.lat;
+      const lng = Array.isArray(value) ? value[1] : value.lng;
+      return { x: lng * 1000, y: -lat * 1000 };
+    }
+    containerPointToLatLng(value) {
+      const x = Array.isArray(value) ? value[0] : value.x;
+      const y = Array.isArray(value) ? value[1] : value.y;
+      return { lat: -y / 1000, lng: x / 1000 };
+    }
+    setView() { throw new Error("clusterZoomOnClick=false must not change the view"); }
+    addLayer(layer) { this.layers.add(layer); layer.map = this; return this; }
+    removeLayer(layer) { this.layers.delete(layer); layer.map = null; return this; }
+    addAttribution() { return this; }
+    removeAttribution() { return this; }
+  }
+
+  const map = new FakeMap();
+  const manager = objectManager({
+    clusterize: true,
+    clusterMaxZoom: 10,
+    clusterGridSize: 256,
+    clusterZoomOnClick: false,
+    spiderfyOnMaxZoom: true,
+    clusterRenderer: "dom"
+  });
+  manager.add(Array.from({ length: 12 }, (_, index) => ({
+    id: `spider-${index}`,
+    coordinates: [52.52 + index * 0.000001, 13.405 + index * 0.000001]
+  })));
+  let spiderfied = [];
+  manager.on("spiderfy", (event) => { spiderfied = event.objectIds; });
+  manager.addTo(map);
+  assert.equal(manager.clusters.size, 1);
+
+  const cluster = [...manager.clusters.values()][0];
+  cluster.emit("click", { latlng: cluster.getLatLng() }, false);
+  assert.equal(spiderfied.length, 12);
+  assert.equal([...map.layers].filter((layer) => String(layer.options?.className || "").includes("oh-spider-marker")).length, 12);
+  manager.destroy();
 });
 
 test("ObjectManager webgl renderer uses canvas cluster badges (no DOM Markers)", () => {

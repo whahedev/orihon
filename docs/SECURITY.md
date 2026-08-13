@@ -47,15 +47,16 @@ marker(position).bindPopup({
 ## Markers and DivIcon
 
 - Marker title / fallback label strings use `textContent`.
-- `divIcon({ content })` string content is plain text. Pass a `Node` when the icon must contain structured markup.
+- `divIcon({ content })` string content is always plain text (`textContent`). A string that looks like HTML is **not** parsed. Pass a `Node` when the icon must contain structured markup.
 
 ## SVG overlays
 
 When `svgOverlay` receives an SVG **string**, Orihon parses it and runs `sanitizeSvgElement` before DOM insertion:
 
-- Removes dangerous tags: `script`, `foreignObject`, `iframe`, `object`, `embed`
-- Strips event-handler attributes (`onclick`, …)
-- Strips `javascript:`, `data:` and `vbscript:` URLs from attributes
+- Removes dangerous tags: `script`, `foreignObject`, `iframe`, `object`, `embed`, `style`, `use`, `image`, `feImage`, `a`, `video`, `audio`, SMIL animation
+- Strips event-handler attributes (`onclick`, …) and `style`
+- Allows URL-bearing attributes (`href`, `xlink:href`, `src`) only when the value is empty or a same-document fragment (`#id`)
+- Strips `javascript:`, `data:` and `vbscript:` URLs from remaining attributes
 
 Prefer passing a trusted `SVGElement` you built yourself when the SVG is application-authored.
 
@@ -63,11 +64,20 @@ Prefer passing a trusted `SVGElement` you built yourself when the SVG is applica
 
 `customControl` content may be text, a `Node`, or `(map) => text | Node`. Strings again use `textContent`. There is no `innerHTML` path in the control renderer.
 
+## PNG export and print
+
+`map.exportPng()` composites loaded raster images, existing canvas/WebGL surfaces, sanitized SVG snapshots and image-based markers. It does not use `foreignObject`, `innerHTML`, `html2canvas` or arbitrary DOM rasterization. `DivIcon`, popup HTML and application-owned control markup are omitted; `includeControls` draws only safe control text and backgrounds. SVG `script` and `foreignObject` nodes are removed from the export clone.
+
+Browsers will reject PNG encoding when a non-CORS raster source taints the canvas. Configure tile/image origins for CORS and use `crossOrigin: "anonymous"` where supported. `map.print()` opens only the generated blob URL, not application HTML.
+
+The browser composition regression decodes a real exported PNG and checks canvas/SVG/image ordering, control inclusion, and omission of `DivIcon` / `foreignObject`; the jsdom test remains only a fast API-contract check.
+
 ## Offline cache and Service Worker
 
 `offlineTileCache` helpers are conservative by design:
 
-- **`urlPrefixes`** — without prefixes, the generated Service Worker may *serve* existing cache hits but will **not** network-cache new arbitrary GETs.
+- **`urlPrefixes`** — without prefixes, the generated Service Worker may *serve* existing cache hits but will **not** network-cache new arbitrary GETs. The same prefixes on `offlineTileCache({ urlPrefixes })` also filter `prefetch()`.
+- `prefetch()` rejects `javascript:`, `data:`, `vbscript:`, `blob:` and `file:` URLs even when no prefixes are set.
 - With prefixes, only URLs that start with an allowlisted prefix are eligible for network→cache writes.
 - Opaque responses are never written into the cache from the Service Worker network path.
 - **`prefetchTileLayer`** requires `bounds` or explicit tile ranges and throws if the request would exceed `maxTiles`.
@@ -91,6 +101,22 @@ await cache.prefetchTileLayer(streets, {
 Advanced networking APIs (`RemoteObjectManager`, search, routing, traffic, MVT providers) take **application-supplied** loaders and endpoints. Orihon orchestrates cancellation, viewport bounds and display; it does not ship vendor API keys or default cloud backends.
 
 `RemoteObjectManager` aborts stale viewport requests when the view moves, so abandoned fetches do not apply late results.
+
+`decodeMVT` caps tile bytes (2 MiB), features (16384) and string length (8192) by default. `geoJSON({ maxFeatures })` and `objectManager({ maxObjects })` are optional ingest limits for application data.
+
+## Content Security Policy
+
+A strict CSP can host Orihon without `unsafe-inline` or `unsafe-eval` in the library itself. Typical directives:
+
+| Directive | Why |
+| --- | --- |
+| `worker-src 'self' blob:` | Geometry/cluster workers are blob URLs |
+| `img-src` | Raster tiles, `Icon` / image overlays — include your tile origins |
+| `media-src` | `videoOverlay` sources |
+| `connect-src` | MVT / search / routing / prefetch `fetch()` |
+| `child-src` / `script-src` | Blob Service Worker registration if you use `registerServiceWorker()` without a static `path` |
+
+Mountable popup `Node`s and plugins you inject may still require extra script/style sources; that stays application-owned.
 
 ## What this is not
 

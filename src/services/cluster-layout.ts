@@ -11,6 +11,8 @@ export interface ClusterLayoutRequest {
   clusterize: boolean;
   clusterMaxZoom: number;
   clusterMinZoom?: number;
+  /** Simple CRS coordinates use x=lng/TILE_SIZE, y=lat/TILE_SIZE. */
+  simple?: boolean;
 }
 
 export interface ClusterLayoutCluster {
@@ -56,11 +58,12 @@ export interface ClusterIndex {
   trees: Int32Array[];
 }
 
+function createClusterLayoutRuntime() {
 const MAX_LAT = 85.0511287798066;
 const TILE_SIZE = 256;
 
 /** Normalized Web-Mercator in 0..1 (Supercluster-compatible radius scaling). */
-export function projectMercator01(lat: number, lng: number): { x: number; y: number } {
+function projectMercator01(lat: number, lng: number): { x: number; y: number } {
   let clampedLat = lat;
   if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
   else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
@@ -70,6 +73,10 @@ export function projectMercator01(lat: number, lng: number): { x: number; y: num
     x: (wrappedLng + 180) / 360,
     y: 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)
   };
+}
+
+function projectCoordinate01(lat: number, lng: number, simple = false): { x: number; y: number } {
+  return simple ? { x: lng / TILE_SIZE, y: lat / TILE_SIZE } : projectMercator01(lat, lng);
 }
 
 class DistanceGrid {
@@ -157,7 +164,7 @@ function appendChild(
 /**
  * Build a full zoom hierarchy once (data change). Zoom changes only query this index.
  */
-export function buildClusterIndex(input: Omit<ClusterLayoutRequest, "zoomBucket">): ClusterIndex {
+function buildClusterIndex(input: Omit<ClusterLayoutRequest, "zoomBucket">): ClusterIndex {
   const leafCount = Math.min(input.ids.length, Math.floor(input.coords.length / 2));
   const maxZoom = Math.max(0, Math.floor(input.clusterMaxZoom));
   const minZoom = Math.max(0, Math.min(maxZoom, Math.floor(input.clusterMinZoom ?? 0)));
@@ -183,7 +190,7 @@ export function buildClusterIndex(input: Omit<ClusterLayoutRequest, "zoomBucket"
   for (let i = 0; i < leafCount; i++) {
     const la = coords[i * 2];
     const ln = coords[i * 2 + 1];
-    const p = projectMercator01(la, ln);
+    const p = projectCoordinate01(la, ln, input.simple);
     x[i] = p.x;
     y[i] = p.y;
     lat[i] = la;
@@ -354,7 +361,7 @@ export function buildClusterIndex(input: Omit<ClusterLayoutRequest, "zoomBucket"
   };
 }
 
-export function collectClusterLeaves(
+function collectClusterLeaves(
   index: ClusterIndex,
   nodeId: number,
   out: ClusterLayoutId[] = []
@@ -372,7 +379,7 @@ export function collectClusterLeaves(
 }
 
 /** Expand hierarchy at an integer zoom into ObjectManager layout records. */
-export function queryClusterLayout(
+function queryClusterLayout(
   index: ClusterIndex,
   zoomBucket: number,
   minPoints = index.minPoints,
@@ -456,7 +463,7 @@ export function queryClusterLayout(
 }
 
 /** Build index and query one zoom — drop-in for previous grid API. */
-export function buildClusterLayout(input: ClusterLayoutRequest): ClusterLayoutResult {
+function buildClusterLayout(input: ClusterLayoutRequest): ClusterLayoutResult {
   if (!input.clusterize) {
     const singles: ClusterLayoutSingle[] = [];
     const count = Math.min(input.ids.length, Math.floor(input.coords.length / 2));
@@ -473,7 +480,7 @@ export function buildClusterLayout(input: ClusterLayoutRequest): ClusterLayoutRe
  * Single-zoom greedy clustering (O(n)) for fast first paint.
  * Full hierarchy is built separately via `buildClusterIndex`.
  */
-export function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutResult {
+function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLayoutResult {
   const count = Math.min(input.ids.length, Math.floor(input.coords.length / 2));
   const singles: ClusterLayoutSingle[] = [];
   const clusters: ClusterLayoutCluster[] = [];
@@ -505,7 +512,7 @@ export function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLa
   for (let i = 0; i < count; i++) {
     const la = input.coords[i * 2];
     const ln = input.coords[i * 2 + 1];
-    const p = projectMercator01(la, ln);
+    const p = projectCoordinate01(la, ln, input.simple);
     xs[i] = p.x;
     ys[i] = p.y;
     lats[i] = la;
@@ -573,7 +580,7 @@ export function buildGreedyClusterLayout(input: ClusterLayoutRequest): ClusterLa
   return { clusters, singles };
 }
 
-export function encodeClusterIndex(index: ClusterIndex): {
+function encodeClusterIndex(index: ClusterIndex): {
   payload: Record<string, unknown>;
   transfer: ArrayBuffer[];
 } {
@@ -620,6 +627,27 @@ export function encodeClusterIndex(index: ClusterIndex): {
   return { payload, transfer };
 }
 
+
+  return {
+    projectMercator01,
+    buildClusterIndex,
+    collectClusterLeaves,
+    queryClusterLayout,
+    buildClusterLayout,
+    buildGreedyClusterLayout,
+    encodeClusterIndex
+  };
+}
+
+const clusterRuntime = createClusterLayoutRuntime();
+export const projectMercator01 = clusterRuntime.projectMercator01;
+export const buildClusterIndex = clusterRuntime.buildClusterIndex;
+export const collectClusterLeaves = clusterRuntime.collectClusterLeaves;
+export const queryClusterLayout = clusterRuntime.queryClusterLayout;
+export const buildClusterLayout = clusterRuntime.buildClusterLayout;
+export const buildGreedyClusterLayout = clusterRuntime.buildGreedyClusterLayout;
+export const encodeClusterIndex = clusterRuntime.encodeClusterIndex;
+
 export function decodeClusterIndex(data: Record<string, unknown>): ClusterIndex {
   const treesRaw = data.trees as Array<{ buffer: ArrayBuffer; length: number }>;
   return {
@@ -643,333 +671,88 @@ export function decodeClusterIndex(data: Record<string, unknown>): ClusterIndex 
   };
 }
 
-/**
- * Worker-safe JS source: hierarchical greedy + DistanceGrid (no imports).
- * Exposes buildClusterIndex / queryClusterLayout / buildClusterLayout.
- */
-export const CLUSTER_LAYOUT_WORKER_SOURCE = `
-var MAX_LAT = 85.0511287798066;
-var TILE_SIZE = 256;
-function projectMercator01(lat, lng) {
-  var clampedLat = lat;
-  if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
-  else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
-  var wrappedLng = ((lng + 180) % 360 + 360) % 360 - 180;
-  var sin = Math.sin((clampedLat * Math.PI) / 180);
-  return {
-    x: (wrappedLng + 180) / 360,
-    y: 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)
+function clusterWorkerMain(createRuntime: () => ReturnType<typeof createClusterLayoutRuntime>): void {
+  const api = createRuntime();
+  const scope = globalThis as typeof globalThis & {
+    onmessage: ((event: MessageEvent) => void) | null;
+    postMessage: (message: unknown, transfer?: Transferable[]) => void;
+  };
+  function normalizePoint(value: unknown): [number, number] | null {
+    const record = value && typeof value === "object" ? value as Record<string, unknown> : null;
+    const source = Array.isArray(value) || (record && typeof record.lat === "number" && typeof record.lng === "number")
+      ? value
+      : record && (record.coordinates || record.latlng);
+    if (!source) return null;
+    const lat = Array.isArray(source) ? Number(source[0]) : Number((source as { lat: number }).lat);
+    const lng = Array.isArray(source) ? Number(source[1]) : Number((source as { lng: number }).lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return [lat, lng];
+  }
+  function asCoords(value: unknown): Float64Array {
+    if (value instanceof Float64Array) return value;
+    if (value instanceof Float32Array) return new Float64Array(value);
+    return new Float64Array((value ?? []) as ArrayLike<number>);
+  }
+  scope.onmessage = function (event: MessageEvent) {
+    const data = (event.data || {}) as {
+      id?: unknown;
+      type?: string;
+      ids?: ClusterLayoutId[];
+      coords?: ArrayLike<number>;
+      gridSize?: number;
+      minPoints?: number;
+      clusterize?: boolean;
+      clusterMaxZoom?: number;
+      clusterMinZoom?: number;
+      zoomBucket?: number;
+      points?: unknown[];
+    };
+    const id = data.id;
+    if (data.type === "clusterIndex") {
+      const index = api.buildClusterIndex({
+        ids: data.ids ?? [],
+        coords: asCoords(data.coords),
+        gridSize: data.gridSize ?? 50,
+        minPoints: data.minPoints ?? 2,
+        clusterize: Boolean(data.clusterize),
+        clusterMaxZoom: data.clusterMaxZoom ?? 0,
+        clusterMinZoom: data.clusterMinZoom
+      });
+      const encoded = api.encodeClusterIndex(index);
+      scope.postMessage({ id, type: "clusterIndex", index: encoded.payload }, encoded.transfer);
+      return;
+    }
+    if (data.type === "clusterLayout") {
+      const result = api.buildClusterLayout({
+        ids: data.ids ?? [],
+        coords: asCoords(data.coords),
+        zoomBucket: data.zoomBucket ?? 0,
+        gridSize: data.gridSize ?? 50,
+        minPoints: data.minPoints ?? 2,
+        clusterize: Boolean(data.clusterize),
+        clusterMaxZoom: data.clusterMaxZoom ?? 0,
+        clusterMinZoom: data.clusterMinZoom
+      });
+      scope.postMessage({ id, type: "clusterLayout", clusters: result.clusters, singles: result.singles });
+      return;
+    }
+    const values: number[] = [];
+    let skipped = 0;
+    const points = data.points || [];
+    for (let i = 0; i < points.length; i++) {
+      const point = normalizePoint(points[i]);
+      if (!point) {
+        skipped++;
+        continue;
+      }
+      values.push(point[0], point[1]);
+    }
+    const output = new Float32Array(values);
+    scope.postMessage({ id, type: "preparePoints", points: output.buffer, count: output.length / 2, skipped }, [output.buffer]);
   };
 }
-function DistanceGrid(cellSize) {
-  this.cellSize = Math.max(1e-12, cellSize);
-  this.radius2 = this.cellSize * this.cellSize;
-  this.cells = Object.create(null);
+
+/** Runtime worker blob: same clustering functions as the main thread (no second copy in the bundle). */
+export function clusterLayoutWorkerSource(): string {
+  return "var c=" + createClusterLayoutRuntime.toString() + ";\n(" + clusterWorkerMain.toString() + ")(c);";
 }
-DistanceGrid.prototype.key = function(cx, cy) {
-  return (Math.imul(cx, 73856093) ^ Math.imul(cy, 19349663)) | 0;
-};
-DistanceGrid.prototype.insert = function(x, y, id) {
-  var cx = Math.floor(x / this.cellSize);
-  var cy = Math.floor(y / this.cellSize);
-  var k = this.key(cx, cy);
-  var bucket = this.cells[k];
-  if (bucket) bucket.push(id);
-  else this.cells[k] = [id];
-};
-DistanceGrid.prototype.queryNearest = function(x, y, xs, ys) {
-  var cx = Math.floor(x / this.cellSize);
-  var cy = Math.floor(y / this.cellSize);
-  var best = -1;
-  var bestDist = this.radius2;
-  for (var dx = -1; dx <= 1; dx++) {
-    for (var dy = -1; dy <= 1; dy++) {
-      var bucket = this.cells[this.key(cx + dx, cy + dy)];
-      if (!bucket) continue;
-      for (var i = 0; i < bucket.length; i++) {
-        var id = bucket[i];
-        var ddx = xs[id] - x;
-        var ddy = ys[id] - y;
-        var d2 = ddx * ddx + ddy * ddy;
-        if (d2 <= bestDist) {
-          bestDist = d2;
-          best = id;
-        }
-      }
-    }
-  }
-  return best;
-};
-function appendChild(firstChild, nextSibling, parentId, childId) {
-  nextSibling[childId] = firstChild[parentId];
-  firstChild[parentId] = childId;
-}
-function buildClusterIndex(input) {
-  var ids = input.ids;
-  var coords = input.coords;
-  var leafCount = Math.min(ids.length, Math.floor(coords.length / 2));
-  var maxZoom = Math.max(0, Math.floor(input.clusterMaxZoom));
-  var minZoom = Math.max(0, Math.min(maxZoom, Math.floor(input.clusterMinZoom || 0)));
-  var radius = Math.max(20, Number(input.gridSize) || 50);
-  var minPoints = Math.max(2, Math.floor(input.minPoints));
-  var leafIds = ids.slice(0, leafCount);
-  var capacity = Math.max(leafCount * 2 + 64, 32);
-  var x = new Float64Array(capacity);
-  var y = new Float64Array(capacity);
-  var lat = new Float64Array(capacity);
-  var lng = new Float64Array(capacity);
-  var weight = new Uint32Array(capacity);
-  var zoomArr = new Int8Array(capacity);
-  var parent = new Int32Array(capacity);
-  var firstChild = new Int32Array(capacity);
-  var nextSibling = new Int32Array(capacity);
-  parent.fill(-1);
-  firstChild.fill(-1);
-  nextSibling.fill(-1);
-  for (var i = 0; i < leafCount; i++) {
-    var la = coords[i * 2];
-    var ln = coords[i * 2 + 1];
-    var p = projectMercator01(la, ln);
-    x[i] = p.x;
-    y[i] = p.y;
-    lat[i] = la;
-    lng[i] = ln;
-    weight[i] = 1;
-    zoomArr[i] = maxZoom + 1;
-  }
-  var nodeCount = leafCount;
-  var ox = new Float64Array(capacity);
-  var oy = new Float64Array(capacity);
-  var clusterOf = new Int32Array(capacity);
-  var visited = new Uint8Array(capacity);
-  var nextSlot = new Int32Array(capacity);
-  clusterOf.fill(-1);
-  nextSlot.fill(-1);
-  function grow() {
-    capacity *= 2;
-    function enlarge(src, Ctor) {
-      var next = new Ctor(capacity);
-      next.set(src);
-      return next;
-    }
-    x = enlarge(x, Float64Array);
-    y = enlarge(y, Float64Array);
-    lat = enlarge(lat, Float64Array);
-    lng = enlarge(lng, Float64Array);
-    weight = enlarge(weight, Uint32Array);
-    zoomArr = enlarge(zoomArr, Int8Array);
-    ox = enlarge(ox, Float64Array);
-    oy = enlarge(oy, Float64Array);
-    visited = enlarge(visited, Uint8Array);
-    var np = new Int32Array(capacity);
-    var nf = new Int32Array(capacity);
-    var ns = new Int32Array(capacity);
-    var nc = new Int32Array(capacity);
-    var nslot = new Int32Array(capacity);
-    np.set(parent);
-    nf.set(firstChild);
-    ns.set(nextSibling);
-    nc.set(clusterOf);
-    nslot.set(nextSlot);
-    np.fill(-1, nodeCount);
-    nf.fill(-1, nodeCount);
-    ns.fill(-1, nodeCount);
-    nc.fill(-1, nodeCount);
-    nslot.fill(-1, nodeCount);
-    parent = np;
-    firstChild = nf;
-    nextSibling = ns;
-    clusterOf = nc;
-    nextSlot = nslot;
-  }
-  var trees = new Array(maxZoom + 1);
-  for (var tz = 0; tz <= maxZoom; tz++) trees[tz] = new Int32Array(0);
-  var level = [];
-  for (var li = 0; li < leafCount; li++) level.push(li);
-  if (!input.clusterize || leafCount === 0) {
-    var all = new Int32Array(leafCount);
-    for (var ai = 0; ai < leafCount; ai++) all[ai] = ai;
-    for (var az = minZoom; az <= maxZoom; az++) trees[az] = all;
-  } else {
-    for (var z = maxZoom; z >= minZoom; z--) {
-      var r = radius / (TILE_SIZE * Math.pow(2, z));
-      var grid = new DistanceGrid(r);
-      clusterOf.fill(-1);
-      visited.fill(0);
-      nextSlot.fill(-1);
-      var next = [];
-      for (var j = 0; j < level.length; j++) {
-        var id = level[j];
-        if (visited[id]) continue;
-        var px = x[id];
-        var py = y[id];
-        var origin = grid.queryNearest(px, py, ox, oy);
-        if (origin >= 0) {
-          visited[id] = 1;
-          var clusterId = clusterOf[origin];
-          if (clusterId < 0) {
-            if (nodeCount >= capacity) grow();
-            clusterId = nodeCount++;
-            clusterOf[origin] = clusterId;
-            zoomArr[clusterId] = z;
-            parent[clusterId] = -1;
-            firstChild[clusterId] = -1;
-            nextSibling[clusterId] = -1;
-            visited[origin] = 1;
-            parent[origin] = clusterId;
-            appendChild(firstChild, nextSibling, clusterId, origin);
-            weight[clusterId] = weight[origin];
-            x[clusterId] = x[origin];
-            y[clusterId] = y[origin];
-            lat[clusterId] = lat[origin];
-            lng[clusterId] = lng[origin];
-            var slot = nextSlot[origin];
-            if (slot >= 0) {
-              next[slot] = clusterId;
-              nextSlot[origin] = -1;
-              nextSlot[clusterId] = slot;
-            } else {
-              nextSlot[clusterId] = next.length;
-              next.push(clusterId);
-            }
-          }
-          parent[id] = clusterId;
-          appendChild(firstChild, nextSibling, clusterId, id);
-          var w = weight[id];
-          var cw = weight[clusterId];
-          var nw = cw + w;
-          x[clusterId] = (x[clusterId] * cw + px * w) / nw;
-          y[clusterId] = (y[clusterId] * cw + py * w) / nw;
-          lat[clusterId] = (lat[clusterId] * cw + lat[id] * w) / nw;
-          lng[clusterId] = (lng[clusterId] * cw + lng[id] * w) / nw;
-          weight[clusterId] = nw;
-          ox[origin] = x[clusterId];
-          oy[origin] = y[clusterId];
-          continue;
-        }
-        visited[id] = 1;
-        ox[id] = px;
-        oy[id] = py;
-        clusterOf[id] = -1;
-        grid.insert(px, py, id);
-        nextSlot[id] = next.length;
-        next.push(id);
-      }
-      trees[z] = Int32Array.from(next);
-      level = next;
-    }
-  }
-  return {
-    leafCount: leafCount,
-    nodeCount: nodeCount,
-    maxZoom: maxZoom,
-    minZoom: minZoom,
-    minPoints: minPoints,
-    radius: radius,
-    ids: leafIds,
-    x: x.slice(0, nodeCount),
-    y: y.slice(0, nodeCount),
-    lat: lat.slice(0, nodeCount),
-    lng: lng.slice(0, nodeCount),
-    weight: weight.slice(0, nodeCount),
-    zoom: zoomArr.slice(0, nodeCount),
-    parent: parent.slice(0, nodeCount),
-    firstChild: firstChild.slice(0, nodeCount),
-    nextSibling: nextSibling.slice(0, nodeCount),
-    trees: trees
-  };
-}
-function collectLeaves(index, nodeId, out) {
-  if (nodeId < index.leafCount) {
-    out.push(index.ids[nodeId]);
-    return;
-  }
-  var child = index.firstChild[nodeId];
-  while (child >= 0) {
-    collectLeaves(index, child, out);
-    child = index.nextSibling[child];
-  }
-}
-function queryClusterLayout(index, zoomBucket, minPoints) {
-  var singles = [];
-  var clusters = [];
-  var z = Math.max(index.minZoom, Math.min(index.maxZoom, Math.floor(zoomBucket)));
-  if (zoomBucket > index.maxZoom) {
-    for (var i = 0; i < index.leafCount; i++) {
-      singles.push({ id: index.ids[i], lat: index.lat[i], lng: index.lng[i] });
-    }
-    return { clusters: clusters, singles: singles };
-  }
-  var roots = index.trees[z] || [];
-  var minP = Math.max(2, Math.floor(minPoints == null ? index.minPoints : minPoints));
-  for (var r = 0; r < roots.length; r++) {
-    var nodeId = roots[r];
-    var w = index.weight[nodeId];
-    if (w < minP || nodeId < index.leafCount) {
-      if (nodeId < index.leafCount) {
-        singles.push({ id: index.ids[nodeId], lat: index.lat[nodeId], lng: index.lng[nodeId] });
-      } else {
-        var leaves = [];
-        collectLeaves(index, nodeId, leaves);
-        for (var li = 0; li < leaves.length; li++) {
-          var id = leaves[li];
-          var leafIndex = -1;
-          for (var si = 0; si < index.leafCount; si++) {
-            if (index.ids[si] === id) { leafIndex = si; break; }
-          }
-          if (leafIndex >= 0) singles.push({ id: id, lat: index.lat[leafIndex], lng: index.lng[leafIndex] });
-        }
-      }
-      continue;
-    }
-    var memberIds = [];
-    collectLeaves(index, nodeId, memberIds);
-    clusters.push({ key: "z" + z + ":" + nodeId, lat: index.lat[nodeId], lng: index.lng[nodeId], ids: memberIds });
-  }
-  return { clusters: clusters, singles: singles };
-}
-function buildClusterLayout(input) {
-  if (!input.clusterize) {
-    var singles = [];
-    var count = Math.min(input.ids.length, Math.floor(input.coords.length / 2));
-    for (var i = 0; i < count; i++) {
-      singles.push({ id: input.ids[i], lat: input.coords[i * 2], lng: input.coords[i * 2 + 1] });
-    }
-    return { clusters: [], singles: singles };
-  }
-  var index = buildClusterIndex(input);
-  return queryClusterLayout(index, input.zoomBucket, input.minPoints);
-}
-function encodeClusterIndex(index) {
-  function copyBuf(arr) {
-    return arr.buffer.slice(arr.byteOffset, arr.byteOffset + arr.byteLength);
-  }
-  var trees = [];
-  for (var t = 0; t < index.trees.length; t++) {
-    var tree = index.trees[t];
-    trees.push({ buffer: copyBuf(tree), length: tree.length });
-  }
-  var payload = {
-    leafCount: index.leafCount,
-    nodeCount: index.nodeCount,
-    maxZoom: index.maxZoom,
-    minZoom: index.minZoom,
-    minPoints: index.minPoints,
-    radius: index.radius,
-    ids: index.ids,
-    x: copyBuf(index.x),
-    y: copyBuf(index.y),
-    lat: copyBuf(index.lat),
-    lng: copyBuf(index.lng),
-    weight: copyBuf(index.weight),
-    zoom: copyBuf(index.zoom),
-    parent: copyBuf(index.parent),
-    firstChild: copyBuf(index.firstChild),
-    nextSibling: copyBuf(index.nextSibling),
-    trees: trees
-  };
-  var transfer = [payload.x, payload.y, payload.lat, payload.lng, payload.weight, payload.zoom, payload.parent, payload.firstChild, payload.nextSibling];
-  for (var u = 0; u < trees.length; u++) transfer.push(trees[u].buffer);
-  return { payload: payload, transfer: transfer };
-}
-`;

@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.css" />
+    <link rel="stylesheet" data-orihon-css href="/dist/orihon.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
@@ -39,6 +39,7 @@
             <option value="markers">DOM markers</option>
             <option value="popup">Chart popup</option>
             <option value="filter">Filter + clusters</option>
+            <option value="rich">Rich OM (styles · cluster · filter · live · popup)</option>
             <option value="live">Live updates</option>
             <option value="pick">Pick / hit-test</option>
             <option value="basemap">Basemap only</option>
@@ -59,6 +60,7 @@
             <option value="50000" selected>50,000</option>
             <option value="100000">100,000</option>
             <option value="250000">250,000</option>
+            <option value="1000000">1,000,000</option>
           </select>
         </label>
         <label class="field">
@@ -74,6 +76,9 @@
             <option value="">Custom</option>
             <option value="marketing">Marketing 50k</option>
             <option value="stress">Stress 250k</option>
+            <option value="stress1m">Stress 1M (no clusters)</option>
+            <option value="rich1m">Rich 1M (with clusters)</option>
+            <option value="rich1mnc">Rich 1M (no clusters)</option>
             <option value="objects">ObjectManager 50k</option>
             <option value="heatmap">Heatmap 50k</option>
             <option value="isolines">Isolines 25k</option>
@@ -85,6 +90,10 @@
             <option value="pick">Pick 50k</option>
             <option value="basemap">Basemap</option>
           </select>
+        </label>
+        <label class="field check" id="rich-cluster-wrap" hidden>
+          <input type="checkbox" id="rich-cluster" />
+          <span>Clusters</span>
         </label>
         <label class="field check">
           <input type="checkbox" id="engines-orihon" checked />

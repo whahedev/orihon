@@ -86,11 +86,34 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
     value: LatLngBoundsLike,
     predicate?: (record: SpatialRecord<TValue, TId>) => boolean
   ): Array<SpatialRecord<TValue, TId>> {
+    const result: Array<SpatialRecord<TValue, TId>> = [];
+    this.#forEachInBounds(value, (record) => {
+      const publicRecord = this.#publicRecord(record);
+      if (!predicate || predicate(publicRecord)) result.push(publicRecord);
+    });
+    return result;
+  }
+
+  searchIds(
+    value: LatLngBoundsLike,
+    predicate?: (id: TId, value: TValue) => boolean
+  ): TId[] {
+    const result: TId[] = [];
+    this.#forEachInBounds(value, (record) => {
+      if (!predicate || predicate(record.id, record.value)) result.push(record.id);
+    });
+    return result;
+  }
+
+  #forEachInBounds(
+    value: LatLngBoundsLike,
+    visit: (record: StoredRecord<TValue, TId>) => void
+  ): void {
     const bounds = latLngBounds(value);
-    if (!bounds.isValid()) return [];
+    if (!bounds.isValid()) return;
     const south = Math.max(-90, bounds.south);
     const north = Math.min(90, bounds.north);
-    if (south > north) return [];
+    if (south > north) return;
 
     const rawWidth = Math.abs(bounds.east - bounds.west);
     const fullWorld = rawWidth >= 360;
@@ -112,15 +135,12 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
     const candidates = estimatedCells > this.cells.size * 4
       ? this.records.values()
       : this.#recordsInCells(longitudeRanges, minY, maxY);
-    const result: Array<SpatialRecord<TValue, TId>> = [];
     for (const record of candidates) {
       const { lat, lng } = record.position;
       if (lat < south || lat > north) continue;
       if (!fullWorld && !longitudeRanges.some(([rangeWest, rangeEast]) => lng >= rangeWest && lng <= rangeEast)) continue;
-      const publicRecord = this.#publicRecord(record);
-      if (!predicate || predicate(publicRecord)) result.push(publicRecord);
+      visit(record);
     }
-    return result;
   }
 
   *#recordsInCells(

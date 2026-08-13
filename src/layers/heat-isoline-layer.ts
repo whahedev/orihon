@@ -1,4 +1,4 @@
-import { createEl, rafThrottle } from "../dom.js";
+import { createEl } from "../dom.js";
 import { latLngBounds, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
@@ -8,6 +8,7 @@ import {
   type HeatIsolineInput,
   type HeatIsolineRing
 } from "../services/heat-isolines.js";
+import { pickLabelAnchor } from "../services/label-layout.js";
 
 /** Same stop map as heatmap layers: keys in 0..1 → CSS colors. */
 export type HeatIsolineGradient = Record<number, string>;
@@ -101,8 +102,6 @@ export class HeatIsolineLayer extends Layer<ResolvedHeatIsolineOptions> {
   private _peak = 0;
   private _buildMs = 0;
   private _palette: Uint8ClampedArray | null = null;
-  private readonly _schedule: () => void;
-  private readonly _onView = (): void => this._schedule();
   private readonly _onSettle = (): void => {
     this.rebuild();
   };
@@ -147,7 +146,6 @@ export class HeatIsolineLayer extends Layer<ResolvedHeatIsolineOptions> {
       labels: labels !== false,
       labelFormat: labelFormat ?? defaultLabelFormat
     });
-    this._schedule = rafThrottle(() => this.render());
     this.setLatLngs(points);
   }
 
@@ -249,8 +247,6 @@ export class HeatIsolineLayer extends Layer<ResolvedHeatIsolineOptions> {
       map.on("zoomend", this._onSettle);
       map.on("resize", this._onSettle);
     }
-    map.on("move", this._onView);
-    map.on("zoom", this._onView);
     this.rebuild();
   }
 
@@ -258,8 +254,6 @@ export class HeatIsolineLayer extends Layer<ResolvedHeatIsolineOptions> {
     this.map?.off("moveend", this._onSettle);
     this.map?.off("zoomend", this._onSettle);
     this.map?.off("resize", this._onSettle);
-    this.map?.off("move", this._onView);
-    this.map?.off("zoom", this._onView);
     if (this.canvas) {
       this.canvas.width = 0;
       this.canvas.height = 0;
@@ -407,49 +401,4 @@ function defaultLabelFormat(ring: HeatIsolineRing): string {
   if (v >= 10) return v.toFixed(1);
   if (v >= 1) return v.toFixed(2);
   return v.toFixed(3);
-}
-
-/** Prefer ~40% along the path; fall back to any in-view vertex. */
-function pickLabelAnchor(
-  points: Array<{ x: number; y: number }>,
-  pathLen: number,
-  width: number,
-  height: number,
-  margin = 16
-): { x: number; y: number } | null {
-  const inView = (p: { x: number; y: number }): boolean =>
-    p.x >= margin && p.y >= margin && p.x <= width - margin && p.y <= height - margin;
-
-  if (pathLen > 1 && points.length >= 2) {
-    const target = pathLen * 0.4;
-    let walked = 0;
-    for (let i = 1; i < points.length; i++) {
-      const a = points[i - 1];
-      const b = points[i];
-      const seg = Math.hypot(b.x - a.x, b.y - a.y);
-      if (walked + seg >= target) {
-        const u = seg > 0 ? (target - walked) / seg : 0;
-        const mid = { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
-        if (inView(mid)) return mid;
-        break;
-      }
-      walked += seg;
-    }
-  }
-
-  for (const p of points) {
-    if (inView(p)) return p;
-  }
-  // Last resort: clamp centroid into the viewport so a caption still appears.
-  let sx = 0;
-  let sy = 0;
-  for (const p of points) {
-    sx += p.x;
-    sy += p.y;
-  }
-  const n = points.length || 1;
-  return {
-    x: Math.max(margin, Math.min(width - margin, sx / n)),
-    y: Math.max(margin, Math.min(height - margin, sy / n))
-  };
 }

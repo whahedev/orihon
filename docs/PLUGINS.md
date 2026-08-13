@@ -35,3 +35,17 @@ export class StatusLayer extends Layer {
 ```
 
 Keep the plugin as its own package with `Orihon` as a peer dependency, package exports, strict TypeScript and add/remove lifecycle tests.
+
+## First-party optional entries
+
+| Name | Entry | Budget | Peer dependencies |
+| --- | --- | --- | --- |
+| Draw | `orihon/draw` + `orihon/draw.css` | ≤ 12 KiB gzip | `orihon` |
+| React | `orihon/react` | application-bundled | `react >= 18`, `react-dom >= 18`, `orihon` |
+| PMTiles | `orihon/pmtiles` | optional entry | `orihon` |
+| Controls | `orihon/controls` | ≤ 8 KiB gzip | `orihon` |
+| Geo | `orihon/geo` | ≤ 2 KiB gzip | none |
+
+The PMTiles entry contains a minimal v3 range reader, MVT provider and raster blob source without a runtime dependency on the full `pmtiles` package.
+
+This table is the first-party registry. Third-party plugins should publish their import entry, measured gzip size, Orihon peer range, lifecycle guarantees and data-provider attribution in the same form.

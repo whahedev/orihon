@@ -1,4 +1,24 @@
-import {
+import { createMapLibreRawPoints } from "./maplibre-raw.js";
+import { createMapLibreRichPoints } from "./maplibre-rich.js";
+
+const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.esm.js";
+const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.css";
+
+async function loadOrihon() {
+  // Prefer local build when serving the repo root (`npm run demo:bench`).
+  try {
+    const mod = await import("/dist/orihon.esm.js");
+    const link = document.querySelector('link[data-orihon-css]');
+    if (link) link.href = "/dist/orihon.css";
+    return mod;
+  } catch {
+    const link = document.querySelector('link[data-orihon-css]');
+    if (link) link.href = ORIHON_CDN_CSS;
+    return import(ORIHON_CDN);
+  }
+}
+
+const {
   createMap,
   geoJSON,
   heatIsolineLayer,
@@ -9,8 +29,7 @@ import {
   webglHeatLayer,
   webglPointLayer,
   webglTileLayer
-} from "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.esm.js";
-import { createMapLibreRawPoints } from "./maplibre-raw.js";
+} = await loadOrihon();
 
 const CENTER = [50.1, 14.4];
 const ZOOM = 5;
@@ -99,6 +118,9 @@ const POINT_CACHE = new Map();
 const PRESETS = {
   marketing: { scenario: "points", count: "50000", runs: "3" },
   stress: { scenario: "points", count: "250000", runs: "1" },
+  stress1m: { scenario: "points", count: "1000000", runs: "1" },
+  rich1m: { scenario: "rich", count: "1000000", runs: "1", cluster: true },
+  rich1mnc: { scenario: "rich", count: "1000000", runs: "1", cluster: false },
   objects: { scenario: "clusters", count: "50000", runs: "3" },
   live: { scenario: "live", count: "50000", runs: "1" },
   pick: { scenario: "pick", count: "50000", runs: "3" },
@@ -113,7 +135,7 @@ const PRESETS = {
 
 const SCENARIO_NOTES = {
   points:
-    "WebGL points (Orihon + MapLibre raw buffer), Leaflet canvas markers, OpenLayers vector. Camera = zigzag+zoom ~3s. FPS 60≈ means vsync-capped — prefer p95 / drop% (budget ~18 ms).",
+    "WebGL points (Orihon + MapLibre raw buffer), Leaflet canvas, OL vector. Orihon basemap = webglTileLayer (CSS-warp while moving, same idea as MapLibre). Camera zigzag+zoom ~3s — prefer p95 / drop% over raw FPS.",
   clusters:
     "Orihon ObjectManager (hierarchical greedy radius clusters + WebGL + worker index), Leaflet.markercluster, OL Cluster, MapLibre GeoJSON cluster. Camera = discrete view steps; Orihon does not rebuild clusters on pan-only moves.",
   live:
@@ -130,6 +152,8 @@ const SCENARIO_NOTES = {
     "DOM markers hard-capped at 5,000. Orihon MarkerCollection (viewport-culled DOM). For 50k+ use Points (WebGL) or markerCollection({ renderer: 'auto'|'webgl' }).",
   filter:
     "Clustered collection with setFilter / equivalent toggled every discrete camera step (~half of points). Stresses reclustering under filter churn.",
+  rich:
+    "Orihon ObjectManager + MapLibre GPU rich layer (not GeoJSON — GeoJSON blanks at ~1M). Caps column = Filter/Live/Select/Popup/Hover verified in stress (FLSPH). Clusters: Orihon native; MapLibre GeoJSON cluster only ≤50k.",
   popup:
     "Markers count = Points control (capped at 5,000). All markers load with chart popups; stress only hops ≤40 times (spread across the set) with zoom ~9–13. Open p50/p95 = view+open per hop.",
   basemap:
@@ -146,6 +170,7 @@ const COLUMNS = {
   geojson: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Heap"],
   markers: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Heap"],
   filter: ["Engine", "Init", "Load", "FPS", "p95", "drop%", "Markers", "Heap"],
+  rich: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Markers", "Caps", "Heap"],
   popup: ["Engine", "Init", "Load", "Open p50", "Open p95", "Heap"],
   basemap: ["Engine", "Init", "Load", "FPS", "p95", "max", "drop%", "Heap"]
 };
@@ -165,6 +190,8 @@ const els = {
   sizeList: document.getElementById("size-list"),
   hudEngine: document.getElementById("hud-engine"),
   hudStatus: document.getElementById("hud-status"),
+  richCluster: document.getElementById("rich-cluster"),
+  richClusterWrap: document.getElementById("rich-cluster-wrap"),
   checks: {
     orihon: document.getElementById("engines-orihon"),
     leaflet: document.getElementById("engines-leaflet"),
@@ -557,6 +584,318 @@ function makeObjects(points) {
   }));
 }
 
+function makeRichObjects(points) {
+  const categories = ["alpha", "beta", "gamma"];
+  return points.map((coordinates, index) => ({
+    id: index,
+    coordinates,
+    properties: {
+      title: `R${index}`,
+      category: categories[index % 3],
+      alert: index % 17 === 0,
+      active: index % 3 !== 0
+    }
+  }));
+}
+
+/** Combined rich stress via driver + explicit capability checks. */
+async function stressRich(driver, objects, steps = 16, durationMs = STRESS_MS + 1000) {
+  const deltas = [];
+  const categories = ["all", "alpha", "beta", "gamma", "alert"];
+  const rand = mulberry32(0x51feed ^ objects.length);
+  const liveBatch = Math.max(20, Math.min(120, Math.floor(objects.length * 0.0002)));
+  const popupIds = [];
+  for (let i = 0; i < Math.min(12, objects.length); i++) {
+    popupIds.push((Math.floor(objects.length * ((i + 0.5) / 12))) % objects.length);
+  }
+  const slice = durationMs / steps;
+  const caps = {
+    filter: false,
+    live: false,
+    select: false,
+    popup: false,
+    hover: false
+  };
+
+  // Baseline visible count (all).
+  const baseline = driver.countVisible?.() ?? objects.length;
+  const probeId = popupIds[0] ?? 0;
+  const beforeLive = objects[probeId]?.coordinates
+    ? [objects[probeId].coordinates[0], objects[probeId].coordinates[1]]
+    : null;
+
+  for (let i = 0; i < steps; i++) {
+    if (i % 2 === 0) {
+      const mode = categories[(i / 2) % categories.length | 0];
+      const visible = driver.applyFilter(mode);
+      if (mode !== "all" && typeof visible === "number" && visible < baseline) caps.filter = true;
+      if (mode !== "all" && driver.countVisible && driver.countVisible() < baseline) caps.filter = true;
+    }
+
+    const phase = (i / Math.max(1, steps - 1)) * Math.PI * 2;
+    // Keep the cloud in view — old ±14° pans left an empty basemap for most of the run.
+    driver.setView(
+      CENTER[0] + Math.sin(phase) * 2.2,
+      CENTER[1] + Math.cos(phase * 1.35) * 4.5,
+      Math.max(4, ZOOM + Math.sin(phase * 0.55) * 0.9)
+    );
+
+    if (i % 4 === 0) {
+      const updates = [];
+      for (let n = 0; n < liveBatch; n++) {
+        const id = (rand() * objects.length) | 0;
+        const object = objects[id];
+        if (!object?.coordinates) continue;
+        object.coordinates = [
+          object.coordinates[0] + (rand() - 0.5) * 0.01,
+          object.coordinates[1] + (rand() - 0.5) * 0.014
+        ];
+        updates.push(object);
+      }
+      if (updates.length) {
+        driver.applyLive(updates);
+        caps.live = true;
+      }
+    }
+
+    if (popupIds.length && i % 4 === 1) {
+      const id = popupIds[i % popupIds.length];
+      driver.selectAndPopup(id);
+      if (driver.getSelectedId?.() === id) caps.select = true;
+      if (driver.isPopupOpen?.()) caps.popup = true;
+    }
+    if (popupIds.length && i % 3 === 2) {
+      const id = popupIds[(i + 1) % popupIds.length];
+      driver.hover(id);
+      if (driver.getHoveredId?.() === id) caps.hover = true;
+    }
+
+    let last = 0;
+    const sliceStart = performance.now();
+    await new Promise((resolve) => {
+      const step = (time) => {
+        if (last) deltas.push(time - last);
+        last = time;
+        if (time - sliceStart < slice) requestAnimationFrame(step);
+        else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  // Final explicit probes if mid-stress checks missed (e.g. filtered-away ids).
+  if (!caps.filter) {
+    const v = driver.applyFilter("alpha");
+    const count = typeof v === "number" ? v : driver.countVisible?.();
+    if (typeof count === "number" && count < baseline) caps.filter = true;
+  }
+  driver.applyFilter("all");
+
+  if (!caps.live && beforeLive && objects[probeId]) {
+    objects[probeId].coordinates = [beforeLive[0] + 0.02, beforeLive[1] + 0.02];
+    driver.applyLive([objects[probeId]]);
+    const after = objects[probeId].coordinates;
+    if (after[0] !== beforeLive[0] || after[1] !== beforeLive[1]) caps.live = true;
+  }
+
+  if (popupIds.length) {
+    const id = popupIds[0];
+    driver.selectAndPopup(id);
+    if (driver.getSelectedId?.() === id) caps.select = true;
+    if (driver.isPopupOpen?.()) caps.popup = true;
+    driver.hover(id);
+    if (driver.getHoveredId?.() === id) caps.hover = true;
+  }
+
+  // Bring camera home so the stage still shows the cloud after stress (not an empty pan).
+  driver.setView(CENTER[0], CENTER[1], ZOOM);
+  driver.reset();
+  return { ...summarizeFrames(deltas), caps };
+}
+
+function formatCaps(caps) {
+  if (!caps) return "—";
+  const flags = [
+    ["F", caps.filter],
+    ["L", caps.live],
+    ["S", caps.select],
+    ["P", caps.popup],
+    ["H", caps.hover]
+  ];
+  return flags.map(([letter, ok]) => (ok ? letter : "·")).join("");
+}
+
+function richClusterEnabled() {
+  return Boolean(els.richCluster?.checked);
+}
+
+function makeRichFeatureCollection(objects) {
+  return {
+    type: "FeatureCollection",
+    features: objects.map((object) => ({
+      type: "Feature",
+      id: object.id,
+      properties: {
+        id: object.id,
+        title: object.properties?.title || `R${object.id}`,
+        category: object.properties?.category || "alpha",
+        alert: object.properties?.alert ? 1 : 0
+      },
+      geometry: {
+        type: "Point",
+        coordinates: [object.coordinates[1], object.coordinates[0]]
+      }
+    }))
+  };
+}
+
+const RICH_CIRCLE_COLOR = [
+  "case",
+  ["boolean", ["feature-state", "selected"], false],
+  "#7c3aed",
+  ["boolean", ["feature-state", "hover"], false],
+  "#f59e0b",
+  ["==", ["get", "alert"], 1],
+  "#dc2626",
+  ["match", ["get", "category"], "beta", "#2563eb", "gamma", "#ca8a04", "#0f766e"]
+];
+
+function createOrihonRichDriver(manager, map) {
+  return {
+    applyFilter(mode) {
+      if (mode === "all") manager.setFilter(null);
+      else if (mode === "alert") manager.setFilter((obj) => Boolean(obj.properties?.alert));
+      else manager.setFilter((obj) => obj.properties?.category === mode);
+      return manager.getStats().visibleObjects;
+    },
+    countVisible() {
+      return manager.getStats().visibleObjects;
+    },
+    setView(lat, lng, zoom) {
+      map.setView([lat, lng], zoom);
+    },
+    applyLive(updates) {
+      manager.update(updates);
+    },
+    selectAndPopup(id) {
+      manager.setSelected(id);
+      manager.openPopup(id);
+    },
+    hover(id) {
+      manager.setHovered(id);
+    },
+    getSelectedId() {
+      return manager.getSelectedId();
+    },
+    getHoveredId() {
+      return manager.getHoveredId();
+    },
+    isPopupOpen() {
+      return manager.hasOpenPopup();
+    },
+    reset() {
+      manager.closePopup();
+      manager.setFilter(null);
+      manager.setHovered(null);
+    }
+  };
+}
+
+function createMapLibreRichDriver(map, rich, objects) {
+  const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: "240px", offset: 8 });
+  const byId = new Map(objects.map((object) => [object.id, object]));
+  let popupOpen = false;
+  // Full mousemove hit-tests at 1M freeze the tab (was: blank map + "error" at end).
+  const interactiveHover = objects.length <= 40_000;
+
+  const onClick = (event) => {
+    const oe = event.originalEvent;
+    if (!oe) return;
+    const id = rich.hitTest(oe.clientX, oe.clientY);
+    if (id == null) return;
+    const object = byId.get(id);
+    if (!object) return;
+    rich.setSelected(id);
+    const cat = object.properties?.category || "—";
+    popup
+      .setLngLat([object.coordinates[1], object.coordinates[0]])
+      .setHTML(`<strong>#${id}</strong><br>category · ${cat}${object.properties?.alert ? "<br>alert" : ""}`)
+      .addTo(map);
+    popupOpen = true;
+  };
+  const onMove = (event) => {
+    const oe = event.originalEvent;
+    if (!oe) return;
+    const id = rich.hitTest(oe.clientX, oe.clientY, 14);
+    rich.setHovered(id);
+  };
+
+  map.on("click", onClick);
+  if (interactiveHover) map.on("mousemove", onMove);
+
+  return {
+    applyFilter(mode) {
+      return rich.setFilter(mode);
+    },
+    countVisible() {
+      return rich.drawn;
+    },
+    setView(lat, lng, zoom) {
+      map.jumpTo({ center: [lng, lat], zoom });
+    },
+    applyLive(updates) {
+      rich.applyLive(updates);
+    },
+    selectAndPopup(id) {
+      rich.setSelected(id);
+      const object = byId.get(id);
+      if (!object?.coordinates) return;
+      const cat = object.properties?.category || "—";
+      popup
+        .setLngLat([object.coordinates[1], object.coordinates[0]])
+        .setHTML(`<strong>#${id}</strong><br>category · ${cat}${object.properties?.alert ? "<br>alert" : ""}`)
+        .addTo(map);
+      popupOpen = true;
+    },
+    hover(id) {
+      rich.setHovered(id);
+    },
+    getSelectedId() {
+      return rich.selectedId;
+    },
+    getHoveredId() {
+      return rich.hoveredId;
+    },
+    isPopupOpen() {
+      try {
+        return popupOpen && popup.isOpen();
+      } catch {
+        return false;
+      }
+    },
+    reset() {
+      try {
+        popup.remove();
+      } catch {
+        /* map torn down */
+      }
+      popupOpen = false;
+      rich.setSelected(null);
+      rich.setHovered(null);
+      rich.setFilter("all");
+    },
+    dispose() {
+      try {
+        map.off("click", onClick);
+        if (interactiveHover) map.off("mousemove", onMove);
+      } catch {
+        /* */
+      }
+      this.reset();
+    }
+  };
+}
+
 function createLineFeatureCollection(points) {
   return {
     type: "FeatureCollection",
@@ -673,7 +1012,8 @@ async function pointsOrihon(points) {
     maxZoom: 12,
     controls: false
   });
-  tileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
+  // GPU basemap (CSS-warp while moving) — fair vs MapLibre raster; DOM tiles thrash on every setView.
+  webglTileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19, maxDpr: 1 }).addTo(map);
   await waitFrames(3);
   const initMs = performance.now() - initStart;
 
@@ -2813,6 +3153,306 @@ async function popupMapLibre(points) {
   return { name: `MapLibre (Popup ×${points.length} · ${opens.hops} hops)`, initMs, loadMs, ...opens, heap };
 }
 
+/* -------------------- engines: rich ObjectManager / MapLibre -------------------- */
+
+async function richOrihon(points) {
+  const clusterize = richClusterEnabled();
+  const host = blankHost();
+  const initStart = performance.now();
+  const map = createMap(host, {
+    center: CENTER,
+    zoom: ZOOM,
+    minZoom: 2,
+    maxZoom: 14,
+    controls: false
+  });
+  webglTileLayer(OSM, { attribution: "© OpenStreetMap", maxZoom: 19, maxDpr: 1 }).addTo(map);
+  await waitFrames(3);
+  const initMs = performance.now() - initStart;
+
+  const objects = makeRichObjects(points);
+  const manager = objectManager({
+    clusterize,
+    clusterGridSize: 56,
+    clusterMinPoints: 2,
+    clusterMaxZoom: 15,
+    clusterRenderer: "auto",
+    webglThreshold: 2000,
+    layoutWorker: "auto",
+    layoutWorkerThreshold: 5000,
+    styleByCategory: true,
+    marker: { className: "oh-rich-marker", interactive: true }
+  });
+
+  const loadStart = performance.now();
+  manager.add(objects);
+  await manager.prepareLayout(ZOOM);
+  manager.addTo(map);
+
+  manager.bindPopup((object, id) => {
+    const cat = object.properties?.category || "—";
+    return `<strong>#${id}</strong><br>category · ${cat}${object.properties?.alert ? "<br>alert" : ""}`;
+  }, { maxWidth: 240, autoPan: false });
+  if (clusterize) {
+    manager.bindClusterPopup((objs, ids) => {
+      const alerts = objs.reduce((n, object) => n + (object.properties?.alert ? 1 : 0), 0);
+      return `<strong>Cluster</strong> · ${ids.length}<br>alerts · ${alerts}`;
+    });
+  }
+  manager.on("click", (event) => {
+    if (event.objectId != null) manager.setSelected(event.objectId);
+  });
+
+  await waitFrames(4);
+  const loadMs = performance.now() - loadStart;
+
+  const pan = await stressRich(createOrihonRichDriver(manager, map), objects);
+  await waitFrames(2);
+  const stats = manager.getStats();
+  const heap = readHeap();
+  active = {
+    destroy() {
+      manager.destroy();
+      map.remove();
+    }
+  };
+  return {
+    name: `Orihon OM rich (${stats.renderer}${clusterize ? "+cluster" : ""})`,
+    initMs,
+    loadMs,
+    ...pan,
+    markers: stats.renderedMarkers,
+    heap
+  };
+}
+
+async function richMapLibre(points) {
+  const wantCluster = richClusterEnabled();
+  // GeoJSON FeatureCollection blanks/OOMs around 1M — use custom GPU layer (same idea as points bench).
+  // Native MapLibre clustering stays available only for modest N.
+  const useGeoJsonCluster = wantCluster && points.length <= 50_000;
+  const host = blankHost();
+  const initStart = performance.now();
+  const map = new maplibregl.Map({
+    container: host,
+    style: mapLibreRasterStyle(),
+    center: [CENTER[1], CENTER[0]],
+    zoom: ZOOM,
+    attributionControl: false,
+    fadeDuration: 0
+  });
+  await new Promise((resolve, reject) => {
+    map.once("load", resolve);
+    map.once("error", (event) => reject(event.error || new Error("MapLibre load failed")));
+  });
+  const initMs = performance.now() - initStart;
+
+  const objects = makeRichObjects(points);
+  const loadStart = performance.now();
+
+  if (useGeoJsonCluster) {
+    const fc = makeRichFeatureCollection(objects);
+    map.addSource("rich", {
+      type: "geojson",
+      data: fc,
+      promoteId: "id",
+      cluster: true,
+      clusterMaxZoom: 14,
+      clusterRadius: 50
+    });
+    map.addLayer({
+      id: "rich-clusters",
+      type: "circle",
+      source: "rich",
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": "#0f766e",
+        "circle-radius": ["step", ["get", "point_count"], 16, 10, 20, 100, 26],
+        "circle-opacity": 0.85
+      }
+    });
+    map.addLayer({
+      id: "rich-cluster-count",
+      type: "symbol",
+      source: "rich",
+      filter: ["has", "point_count"],
+      layout: { "text-field": ["to-string", ["get", "point_count"]], "text-size": 12 },
+      paint: { "text-color": "#083b38" }
+    });
+    map.addLayer({
+      id: "rich-unclustered",
+      type: "circle",
+      source: "rich",
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-radius": 4,
+        "circle-color": RICH_CIRCLE_COLOR,
+        "circle-opacity": 0.88
+      }
+    });
+    await waitFrames(4);
+    const loadMs = performance.now() - loadStart;
+
+    // Thin GeoJSON driver for small clustered sets (caps still verified).
+    const features = fc.features;
+    let selectedId = null;
+    let hoveredId = null;
+    let popupOpen = false;
+    const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: "240px", offset: 8 });
+    const driver = {
+      applyFilter(mode) {
+        const filtered =
+          mode === "all"
+            ? features
+            : features.filter((feature) =>
+                mode === "alert" ? feature.properties.alert === 1 : feature.properties.category === mode
+              );
+        map.getSource("rich")?.setData({ type: "FeatureCollection", features: filtered });
+        return filtered.length;
+      },
+      countVisible() {
+        try {
+          return map.querySourceFeatures("rich").length;
+        } catch {
+          return features.length;
+        }
+      },
+      setView(lat, lng, zoom) {
+        map.jumpTo({ center: [lng, lat], zoom });
+      },
+      applyLive(updates) {
+        for (const object of updates) {
+          const feature = features[object.id];
+          if (!feature) continue;
+          feature.geometry.coordinates = [object.coordinates[1], object.coordinates[0]];
+        }
+        map.getSource("rich")?.setData({ type: "FeatureCollection", features });
+      },
+      selectAndPopup(id) {
+        if (selectedId != null) {
+          try {
+            map.removeFeatureState({ source: "rich", id: selectedId }, "selected");
+          } catch { /* */ }
+        }
+        selectedId = id;
+        try {
+          map.setFeatureState({ source: "rich", id }, { selected: true });
+        } catch { /* */ }
+        const object = objects[id];
+        if (!object) return;
+        popup
+          .setLngLat([object.coordinates[1], object.coordinates[0]])
+          .setHTML(`<strong>#${id}</strong><br>category · ${object.properties?.category || "—"}`)
+          .addTo(map);
+        popupOpen = true;
+      },
+      hover(id) {
+        if (hoveredId != null) {
+          try {
+            map.removeFeatureState({ source: "rich", id: hoveredId }, "hover");
+          } catch { /* */ }
+        }
+        hoveredId = id;
+        if (id != null) {
+          try {
+            map.setFeatureState({ source: "rich", id }, { hover: true });
+          } catch { /* */ }
+        }
+      },
+      getSelectedId() {
+        return selectedId;
+      },
+      getHoveredId() {
+        return hoveredId;
+      },
+      isPopupOpen() {
+        return popupOpen && popup.isOpen();
+      },
+      reset() {
+        popup.remove();
+        popupOpen = false;
+        this.hover(null);
+        if (selectedId != null) {
+          try {
+            map.removeFeatureState({ source: "rich", id: selectedId }, "selected");
+          } catch { /* */ }
+        }
+        selectedId = null;
+        map.getSource("rich")?.setData({ type: "FeatureCollection", features });
+      }
+    };
+
+    const pan = await stressRich(driver, objects);
+    await waitFrames(2);
+    const heap = readHeap();
+    active = { destroy: () => map.remove() };
+    return {
+      name: "MapLibre GeoJSON rich+cluster",
+      initMs,
+      loadMs,
+      ...pan,
+      markers: driver.countVisible(),
+      heap
+    };
+  }
+
+  // Scalable path: custom WebGL rich layer (works at 1M; no GeoJSON alloc).
+  const richSize = points.length >= 250_000 ? 6.5 : points.length >= 50_000 ? 5 : 4.5;
+  const rich = createMapLibreRichPoints(map, objects, { pointSize: richSize });
+  const driver = createMapLibreRichDriver(map, rich, objects);
+  active = {
+    destroy() {
+      try {
+        driver.dispose?.();
+      } catch {
+        /* */
+      }
+      try {
+        rich.remove();
+      } catch {
+        /* */
+      }
+      try {
+        map.remove();
+      } catch {
+        /* */
+      }
+    }
+  };
+  map.jumpTo({ center: [CENTER[1], CENTER[0]], zoom: Math.min(ZOOM, 4.5) });
+  await waitFrames(6);
+  const loadMs = performance.now() - loadStart;
+  // Dwell at home BEFORE stress so 1M is actually visible (not only during wild pans).
+  setHud("MapLibre", `Preview ${points.length.toLocaleString("en-US")} GPU points…`);
+  await sleep(points.length >= 250_000 ? 2200 : 900);
+  let pan;
+  try {
+    pan = await stressRich(driver, objects);
+  } catch (error) {
+    throw error;
+  }
+  // Park on a readable home view and leave the map mounted (final clearStage skipped).
+  map.jumpTo({ center: [CENTER[1], CENTER[0]], zoom: Math.min(ZOOM, 4.5) });
+  rich.setFilter("all");
+  await waitFrames(10);
+  await sleep(points.length >= 250_000 ? 1200 : 500);
+  const heap = readHeap();
+  return {
+    name: `MapLibre GPU rich${wantCluster ? " (cluster skipped >50k)" : ""}`,
+    initMs,
+    loadMs,
+    ...pan,
+    markers: rich.drawn,
+    heap
+  };
+}
+
+const richUnsupported = (label) =>
+  isolinesUnsupported(
+    label,
+    "No built-in ObjectManager-equivalent stack in this bench (use Orihon / MapLibre for Rich)."
+  );
+
 const ENGINE_RUNNERS = {
   points: {
     orihon: pointsOrihon,
@@ -2868,6 +3508,12 @@ const ENGINE_RUNNERS = {
     ol: filterOpenLayers,
     maplibre: filterMapLibre
   },
+  rich: {
+    orihon: richOrihon,
+    leaflet: richUnsupported("Leaflet"),
+    ol: richUnsupported("OpenLayers"),
+    maplibre: richMapLibre
+  },
   popup: {
     orihon: popupOrihon,
     leaflet: popupLeaflet,
@@ -2889,6 +3535,9 @@ function syncScenarioUi() {
     els.countLabel.textContent =
       scenario === "popup" || scenario === "markers" ? "Markers" : "Points";
   }
+  if (els.richClusterWrap) {
+    els.richClusterWrap.hidden = scenario !== "rich";
+  }
   const cols = COLUMNS[scenario] || COLUMNS.points;
   els.resultsHead.innerHTML = `<tr>${cols.map((col) => `<th>${col}</th>`).join("")}</tr>`;
   if (!els.results.querySelector("tr:not(.empty)")) {
@@ -2898,7 +3547,7 @@ function syncScenarioUi() {
 
 function cellFor(scenario, row, key) {
   if (row.unsupported && key !== "name") {
-    return key === "markers" && scenario === "isolines" ? "n/a" : "n/a";
+    return key === "markers" && (scenario === "isolines" || scenario === "rich") ? "n/a" : "n/a";
   }
   if (row.running && (row[key] == null || (key === "heap" && !Number.isFinite(row.heap)))) return "…";
   switch (key) {
@@ -2924,6 +3573,8 @@ function cellFor(scenario, row, key) {
       return formatMs(row.pickP95);
     case "markers":
       return Number.isFinite(row.markers) ? String(Math.round(row.markers)) : "—";
+    case "caps":
+      return formatCaps(row.caps);
     case "heap":
       return formatHeap(row.heap);
     default:
@@ -2938,6 +3589,9 @@ function escapeAttr(value) {
 function rowKeys(scenario) {
   if (scenario === "clusters" || scenario === "filter") {
     return ["name", "initMs", "loadMs", "fps", "p95Ms", "dropPct", "markers", "heap"];
+  }
+  if (scenario === "rich") {
+    return ["name", "initMs", "loadMs", "fps", "p95Ms", "maxMs", "dropPct", "markers", "caps", "heap"];
   }
   if (scenario === "isolines") {
     return ["name", "initMs", "loadMs", "fps", "p95Ms", "maxMs", "dropPct", "markers", "heap"];
@@ -3003,6 +3657,16 @@ function applyPreset(name) {
   els.scenario.value = preset.scenario;
   els.count.value = preset.count;
   els.runs.value = preset.runs;
+  if (typeof preset.cluster === "boolean" && els.richCluster) {
+    els.richCluster.checked = preset.cluster;
+  }
+  if (name === "stress1m" || name === "rich1m" || name === "rich1mnc") {
+    if (els.checks.leaflet) els.checks.leaflet.checked = false;
+    if (els.checks.ol) els.checks.ol.checked = false;
+    if (els.checks.orihon) els.checks.orihon.checked = true;
+    // Rich compares Orihon + MapLibre; bare 1M points keeps MapLibre too.
+    if (els.checks.maplibre) els.checks.maplibre.checked = true;
+  }
   syncScenarioUi();
 }
 
@@ -3038,6 +3702,20 @@ async function runBenchmark() {
 
   if (scenario === "clusters" && count > 100000) {
     setHud("Warning", "Clusters above 100k may freeze Leaflet — consider 50k.");
+  }
+  if (scenario === "points" && count >= 1000000) {
+    setHud(
+      "Stress 1M",
+      "Bare WebGL points — no clusters. Prefer Orihon + MapLibre only; Leaflet/OL canvas at 1M can freeze the tab."
+    );
+    await sleep(700);
+  }
+  if (scenario === "rich" && count >= 250000) {
+    setHud(
+      "Rich OM",
+      `Orihon + MapLibre · styles/filter/popup/hover/live${richClusterEnabled() ? " · clusters ON" : " · clusters OFF"}. Leaflet/OL n/a. Heavier than bare points.`
+    );
+    await sleep(700);
   }
   if (scenario === "geojson" && count > 25000) {
     setHud("Warning", "GeoJSON lines above 25k can hitch — prefer 5k preset.");
@@ -3146,7 +3824,8 @@ async function runBenchmark() {
     renderResults(scenario, rows);
   }
 
-  await clearStage();
+  // Keep the last engine's map on stage so the cloud stays visible after the run.
+  // The next Run still tears it down via runOne → clearStage.
   lastExport = {
     when: new Date().toISOString(),
     scenario,
@@ -3156,7 +3835,10 @@ async function runBenchmark() {
     results: rows
   };
   els.exportBtn.disabled = false;
-  setHud("Complete", `Compared ${rows.length} engines · ${scenario} · ${pointCount.toLocaleString("en-US")} points.`);
+  setHud(
+    "Complete",
+    `Compared ${rows.length} engines · ${scenario} · ${pointCount.toLocaleString("en-US")} points. Map left on stage.`
+  );
   busy = false;
   els.run.disabled = false;
   refreshBundleSizes();

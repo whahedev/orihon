@@ -115,17 +115,19 @@ function setStatus(text, tone = "ok") {
 }
 
 async function loadOrihon() {
-  const vendorHref = new URL("./vendor/orihon.esm.js", import.meta.url).href;
-  const vendorCss = new URL("./vendor/orihon.css", import.meta.url).href;
+  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.esm.js";
+  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.css";
+  const link = document.getElementById("orihon-css");
+  els.bench.href = location.pathname.includes("/examples/showcase")
+    ? "/examples/bench-compare/"
+    : "../bench/";
   try {
-    const mod = await import(vendorHref);
-    const link = document.getElementById("orihon-css");
-    if (link) link.href = vendorCss;
-    els.bench.href = "../bench/";
+    const mod = await import("/dist/orihon.esm.js");
+    if (link) link.href = "/dist/orihon.css";
     return mod;
   } catch {
-    els.bench.href = "/examples/bench-compare/";
-    return import("/dist/orihon.esm.js");
+    if (link) link.href = ORIHON_CDN_CSS;
+    return import(ORIHON_CDN);
   }
 }
 

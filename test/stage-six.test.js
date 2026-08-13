@@ -43,6 +43,8 @@ test("locales are immutable presets with per-instance overrides", () => {
   assert.equal(Object.isFrozen(ruLocale), true);
   assert.deepEqual(Object.keys(locales).sort(), ["ar", "da", "de", "en", "fr", "hi", "ru", "tr", "zh"]);
   assert.equal(resolveLocale("en").mapLabel, "Interactive map");
+  assert.equal(resolveLocale("ru").language, "ru");
+  assert.equal("fullscreen" in resolveLocale("en"), false);
   assert.equal(resolveLocale("ar").zoomIn, "تكبير");
   assert.equal(resolveLocale("tr").zoomOut, "Uzaklaştır");
   assert.equal(resolveLocale("zh").layers, "图层");
@@ -62,4 +64,3 @@ test("custom controls expose content and position lifecycle", () => {
   assert.equal(control.getContent(), "Ready");
   assert.equal(control.getPosition(), "top-left");
 });
-

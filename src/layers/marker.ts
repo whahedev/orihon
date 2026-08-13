@@ -1,6 +1,6 @@
-import { createEl, listen, setTransform } from "../dom.js";
-import { LatLng, latLng, type LatLngLike } from "../geo.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { createEl, listen, listenTap, setTransform } from "../dom.js";
+import { LatLng, latLng, type LatLngLike, type Point } from "../geo.js";
+import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { MarkerIcon } from "./icon.js";
 
@@ -16,6 +16,8 @@ export interface MarkerOptions extends LayerOptions {
   opacity?: number;
   zIndexOffset?: number;
   keyboard?: boolean;
+  rotation?: number;
+  rotationOrigin?: string;
 }
 
 type ResolvedMarkerOptions = Required<Omit<MarkerOptions, "pane" | "attribution" | "content" | "icon">> &
@@ -30,6 +32,7 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
   iconElement: HTMLElement | null = null;
   shadowElement: HTMLElement | null = null;
   readonly _unsub: Array<() => void> = [];
+  readonly _dragUnsub: Array<() => void> = [];
 
   constructor(position: LatLngLike, options: MarkerOptions = {}) {
     super({
@@ -45,6 +48,8 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
       opacity: 1,
       zIndexOffset: 0,
       keyboard: true,
+      rotation: 0,
+      rotationOrigin: "center bottom",
       ...options
     } as ResolvedMarkerOptions);
     this.position = latLng(position);
@@ -63,7 +68,7 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     this.el.tabIndex = this.options.keyboard ? 0 : -1;
     this.el.style.opacity = String(this.options.opacity);
     this.#setContent();
-    this._unsub.push(listen(this.el, "click", (event) => {
+    this._unsub.push(listenTap(this.el, (event) => {
       event.stopPropagation();
       this.emit("click", { originalEvent: event, latlng: this.getLatLng() });
     }));
@@ -78,6 +83,7 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
   }
 
   override onRemove(): void {
+    this.#disableDrag();
     for (const unsubscribe of this._unsub.splice(0)) unsubscribe();
     this.el?.remove();
     this.el = null;
@@ -92,6 +98,34 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
 
   getLatLng(): LatLng {
     return this.position.clone();
+  }
+
+  /** Enables or disables pointer dragging without recreating the marker. */
+  setDraggable(draggable: boolean): this {
+    this.options.draggable = Boolean(draggable);
+    if (!this.el) return this;
+    if (this.options.draggable) this.#enableDrag();
+    else this.#disableDrag();
+    return this;
+  }
+
+  isDraggable(): boolean {
+    return this.options.draggable;
+  }
+
+  queryHit(target: Point, options: ResolvedQueryOptions): QueryHit | null {
+    if (!this.map || !this.el) return null;
+    const center = this.map.latLngToContainerPoint(this.position);
+    const anchor = this.options.icon?.getAnchor() ?? { x: this.options.anchor[0], y: this.options.anchor[1] };
+    const size = this.options.icon?.getSize() ?? {
+      x: this.el.offsetWidth || Number.parseFloat(this.el.style.width) || 24,
+      y: this.el.offsetHeight || Number.parseFloat(this.el.style.height) || 36
+    };
+    const left = center.x - anchor.x - options.tolerance;
+    const top = center.y - anchor.y - options.tolerance;
+    if (target.x < left || target.x > left + size.x + options.tolerance * 2
+      || target.y < top || target.y > top + size.y + options.tolerance * 2) return null;
+    return { layer: this, latlng: this.getLatLng(), source: "dom" };
   }
 
   setIcon(value: MarkerIcon | null): this {
@@ -123,6 +157,12 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     const anchor = this.options.icon?.getAnchor() ?? { x: this.options.anchor[0], y: this.options.anchor[1] };
     this.el.style.zIndex = String(Math.round(projected.y) + this.options.zIndexOffset);
     setTransform(this.el, projected.x - anchor.x, projected.y - anchor.y);
+    if (this.options.rotation) {
+      this.el.style.transform += ` rotate(${Number(this.options.rotation)}deg)`;
+      this.el.style.transformOrigin = this.options.rotationOrigin;
+    } else {
+      this.el.style.transformOrigin = "";
+    }
   }
 
   #setContent(): void {
@@ -156,7 +196,7 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
   }
 
   #enableDrag(): void {
-    if (!this.el) return;
+    if (!this.el || this._dragUnsub.length) return;
     let active = false;
     const move = (event: PointerEvent): void => {
       if (!active || !this.map) return;
@@ -171,16 +211,22 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
       this.el?.classList.remove("oh-marker-dragging");
       this.emit("dragend", { latlng: this.getLatLng() });
     };
-    this._unsub.push(listen(this.el, "pointerdown", (event) => {
+    this._dragUnsub.push(listen(this.el, "pointerdown", (event) => {
       event.stopPropagation();
       active = true;
       this.el?.setPointerCapture(event.pointerId);
       this.el?.classList.add("oh-marker-dragging");
       this.emit("dragstart", { latlng: this.getLatLng() });
     }));
-    this._unsub.push(listen(this.el, "pointermove", move));
-    this._unsub.push(listen(this.el, "pointerup", up));
-    this._unsub.push(listen(this.el, "pointercancel", up));
+    this._dragUnsub.push(listen(this.el, "pointermove", move));
+    this._dragUnsub.push(listen(this.el, "pointerup", up));
+    this._dragUnsub.push(listen(this.el, "pointercancel", up));
+    this.el.classList.add("oh-marker-draggable");
+  }
+
+  #disableDrag(): void {
+    for (const unsubscribe of this._dragUnsub.splice(0)) unsubscribe();
+    this.el?.classList.remove("oh-marker-draggable", "oh-marker-dragging");
   }
 }
 

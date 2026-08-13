@@ -12,3 +12,11 @@ test-results/
 .env
 .env.*
 _legacy_root/
+_local/
+# Local-only CDN HTML sketches — not published; keep showcase + bench in git.
+examples/common.css
+examples/index.html
+examples/quick-start/
+examples/vectors/
+examples/scale/
+examples/controls/

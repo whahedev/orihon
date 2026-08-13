@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Orihon exportPng composition test</title>
+  <link rel="stylesheet" href="/dist/orihon.css">
+  <style>
+    html, body { margin: 0; background: white; }
+    #map { width: 64px; height: 64px; min-height: 64px; background: black; }
+    #result { white-space: pre-wrap; }
+  </style>
+</head>
+<body data-state="running">
+  <div id="map"></div>
+  <pre id="result">running</pre>
+  <script type="module">
+    import { CRS, Orihon } from "/dist/standard.js";
+
+    const expected = {
+      canvas: [255, 0, 0, 255],
+      svg: [0, 255, 0, 255],
+      image: [0, 0, 255, 255],
+      control: [255, 255, 0, 255]
+    };
+
+    function solidCanvas(color, width, height) {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px`;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      context.fillStyle = color;
+      context.fillRect(0, 0, width, height);
+      return canvas;
+    }
+
+    async function pixels(blob) {
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return context;
+    }
+
+    function sample(context, x, y) {
+      return Array.from(context.getImageData(x, y, 1, 1).data);
+    }
+
+    function assertPixel(actual, wanted, label) {
+      const matches = actual.every((value, index) => Math.abs(value - wanted[index]) <= 2);
+      if (!matches) throw new Error(`${label}: expected ${wanted.join(",")}, got ${actual.join(",")}`);
+    }
+
+    async function run() {
+      const map = new Orihon(document.querySelector("#map"), {
+        controls: false,
+        crs: CRS.Simple,
+        center: [0, 0],
+        zoom: 0
+      });
+
+      map.panes.tile.appendChild(solidCanvas("rgb(255, 0, 0)", 64, 64));
+
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "64");
+      svg.setAttribute("height", "64");
+      svg.setAttribute("viewBox", "0 0 64 64");
+      svg.style.cssText = "position:absolute;left:0;top:0;width:64px;height:64px";
+      const green = document.createElementNS(svg.namespaceURI, "rect");
+      green.setAttribute("x", "16");
+      green.setAttribute("y", "16");
+      green.setAttribute("width", "32");
+      green.setAttribute("height", "32");
+      green.setAttribute("fill", "rgb(0, 255, 0)");
+      const foreign = document.createElementNS(svg.namespaceURI, "foreignObject");
+      foreign.setAttribute("x", "24");
+      foreign.setAttribute("y", "24");
+      foreign.setAttribute("width", "8");
+      foreign.setAttribute("height", "8");
+      const unsafe = document.createElement("div");
+      unsafe.style.cssText = "width:8px;height:8px;background:rgb(255,0,255)";
+      foreign.appendChild(unsafe);
+      svg.append(green, foreign);
+      map.panes.overlay.appendChild(svg);
+
+      const imageSource = solidCanvas("rgb(0, 0, 255)", 10, 10);
+      const image = document.createElement("img");
+      image.style.cssText = "position:absolute;left:48px;top:48px;width:10px;height:10px";
+      image.src = imageSource.toDataURL("image/png");
+      await image.decode();
+      map.panes.marker.appendChild(image);
+
+      const divIcon = document.createElement("div");
+      divIcon.className = "oh-marker";
+      divIcon.style.cssText = "position:absolute;left:0;top:48px;width:10px;height:10px;background:rgb(255,0,255)";
+      map.panes.marker.appendChild(divIcon);
+
+      const control = document.createElement("div");
+      control.className = "oh-control";
+      control.style.cssText = "position:absolute;left:0;top:0;width:10px;height:10px;background:rgb(255,255,0)";
+      map.panes.control.appendChild(control);
+
+      const withoutControls = await pixels(await map.exportPng());
+      assertPixel(sample(withoutControls, 5, 5), expected.canvas, "canvas base");
+      assertPixel(sample(withoutControls, 20, 20), expected.svg, "SVG overlays canvas");
+      assertPixel(sample(withoutControls, 26, 26), expected.svg, "foreignObject omitted");
+      assertPixel(sample(withoutControls, 52, 52), expected.image, "image marker overlays SVG/canvas");
+      assertPixel(sample(withoutControls, 5, 52), expected.canvas, "DivIcon omitted");
+
+      const withControls = await pixels(await map.exportPng({ includeControls: true }));
+      assertPixel(sample(withControls, 5, 5), expected.control, "includeControls background");
+      map.destroy();
+      return { width: withControls.canvas.width, height: withControls.canvas.height, checks: 6 };
+    }
+
+    try {
+      const value = await run();
+      document.body.dataset.state = "passed";
+      document.querySelector("#result").textContent = JSON.stringify(value);
+    } catch (error) {
+      document.body.dataset.state = "failed";
+      document.querySelector("#result").textContent = error?.stack || String(error);
+    }
+  </script>
+</body>
+</html>

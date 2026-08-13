@@ -54,7 +54,8 @@ export class GridLayer<TOptions extends ResolvedGridLayerOptions = ResolvedGridL
   }
 
   setOpacity(opacity: number): this {
-    this.options.opacity = Math.max(0, Math.min(1, Number(opacity)));
+    const next = Number(opacity);
+    this.options.opacity = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : 1;
     if (this.container) this.container.style.opacity = String(this.options.opacity);
     return this;
   }

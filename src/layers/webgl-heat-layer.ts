@@ -1,7 +1,10 @@
 import { createEl } from "../dom.js";
-import { MAX_LAT, TILE_SIZE, latLng, type LatLngLike } from "../geo.js";
+import { TILE_SIZE, latLng, projectMercator01, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
+import { assertMercator } from "../crs.js";
+import { heatRadiusScale } from "../services/heat-isolines.js";
+import { compileShader, linkProgram } from "../webgl-utils.js";
 
 export type WebGLHeatInput = LatLngLike | [number, number, number?];
 
@@ -176,7 +179,7 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
       for (let i = 0; i < points.length; i++) {
         const next = normalizeHeat(points[i]);
         if (!next) continue;
-        const m = latLngToMercator(next.lat, next.lng);
+        const m = projectMercator01(next.lat, next.lng);
         buf[write++] = m.x;
         buf[write++] = m.y;
         buf[write++] = next.weight;
@@ -188,7 +191,7 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
       for (const item of points) {
         const next = normalizeHeat(item);
         if (!next) continue;
-        const m = latLngToMercator(next.lat, next.lng);
+        const m = projectMercator01(next.lat, next.lng);
         values.push(m.x, m.y, next.weight);
       }
       this._dataBuf = new Float32Array(values);
@@ -213,6 +216,7 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
   }
 
   override onAdd(map: Orihon): void {
+    assertMercator(map.crs);
     this._disposed = false;
     super.onAdd(map);
     const pane = this.getPane();
@@ -833,61 +837,8 @@ function normalizeHeat(value: WebGLHeatInput): { lat: number; lng: number; weigh
   return { lat: point.lat, lng: point.lng, weight: 1 };
 }
 
-function latLngToMercator(lat: number, lng: number): { x: number; y: number } {
-  let clampedLat = lat;
-  if (clampedLat > MAX_LAT) clampedLat = MAX_LAT;
-  else if (clampedLat < -MAX_LAT) clampedLat = -MAX_LAT;
-  const wrappedLng = ((((lng + 180) % 360) + 360) % 360) - 180;
-  const sin = Math.sin((clampedLat * Math.PI) / 180);
-  return {
-    x: (wrappedLng + 180) / 360,
-    y: 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)
-  };
-}
-
-/** Screen kernel scale: shrink when zoomed out; flat when zooming in (geographic size shrinks). */
-function heatRadiusScale(zoom: number, scaleZoom: number): number {
-  const dz = zoom - scaleZoom;
-  if (dz >= 0) return 1;
-  const geo = Math.pow(2, dz);
-  return Math.max(0.22, geo * 0.55 + 0.45 * Math.pow(geo, 0.35));
-}
-
-/**
- * Intensity scale: ease down when zooming in so dense packs don't saturate to solid red.
- * Stays ~1 at/below scaleZoom (radius shrink handles overview).
- */
 function heatIntensityScale(zoom: number, scaleZoom: number): number {
   const dz = zoom - scaleZoom;
   if (dz <= 0) return 1;
   return 1 / Math.pow(2, Math.min(dz, 6) * 0.45);
-}
-
-function compileShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
-}
-
-function linkProgram(
-  gl: WebGLRenderingContext,
-  vertex: WebGLShader,
-  fragment: WebGLShader
-): WebGLProgram | null {
-  const program = gl.createProgram();
-  if (!program) return null;
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    gl.deleteProgram(program);
-    return null;
-  }
-  return program;
 }

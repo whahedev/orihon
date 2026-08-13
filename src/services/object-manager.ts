@@ -1,8 +1,10 @@
 import { Evented, type OrihonEvent, type EventHandler } from "../events.js";
+import { CRSCompatibilityError } from "../crs.js";
 import { rafThrottle } from "../dom.js";
 import { ClusterCanvasLayer, clusterCanvasLayer } from "../layers/cluster-canvas-layer.js";
 import { DivIcon, type MarkerIcon } from "../layers/icon.js";
 import { Marker, type MarkerOptions } from "../layers/marker.js";
+import { Polyline, polyline } from "../layers/vector.js";
 import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js";
 import {
   LatLng,
@@ -31,6 +33,7 @@ import {
 } from "./cluster-layout.js";
 import { GeometryWorkerPool, geometryWorkerPool } from "./geometry-worker.js";
 import { SpatialGridIndex, type SpatialRecord } from "./spatial-grid-index.js";
+import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 
 let objectId = 0;
 
@@ -46,10 +49,22 @@ export interface ManagedObject {
 
 export type ClusterRenderer = "dom" | "webgl" | "auto";
 
+/** Fixed category / interaction palette for WebGL singles (RGBA 0..1). */
+export const OBJECT_MANAGER_PALETTE = {
+  alpha: [15 / 255, 118 / 255, 110 / 255, 0.88] as const,
+  beta: [37 / 255, 99 / 255, 235 / 255, 0.88] as const,
+  gamma: [202 / 255, 138 / 255, 4 / 255, 0.88] as const,
+  alert: [220 / 255, 38 / 255, 38 / 255, 0.92] as const,
+  selected: [124 / 255, 58 / 255, 237 / 255, 0.95] as const,
+  hover: [245 / 255, 158 / 255, 11 / 255, 0.95] as const
+};
+
 export interface ObjectManagerOptions {
   minZoom?: number;
   marker?: MarkerOptions;
   clusterize?: boolean;
+  /** When true (default), WebGL singles use category/alert/selected/hover palette colors. */
+  styleByCategory?: boolean;
   /**
    * Cluster radius in CSS/world pixels at the clustered zoom (Leaflet-style).
    * Kept name `clusterGridSize` for compatibility; was formerly a grid cell size.
@@ -59,6 +74,9 @@ export interface ObjectManagerOptions {
   clusterMinPoints?: number;
   clusterMaxZoom?: number;
   clusterZoomOnClick?: boolean;
+  spiderfyOnMaxZoom?: boolean;
+  spiderfyDistanceMultiplier?: number;
+  zoomToBoundsOnClick?: boolean;
   indexCellSize?: number;
   /**
    * Custom cluster badge. Default: count label with size/color tiers
@@ -85,6 +103,8 @@ export interface ObjectManagerOptions {
   layoutWorker?: boolean | "auto";
   /** Default 5000. */
   layoutWorkerThreshold?: number;
+  /** Stop `add()` once this many objects are stored. `0` / unset = unlimited. */
+  maxObjects?: number;
 }
 
 export type ClusterIconFactory = (count: number, ids: ObjectId[]) => MarkerIcon;
@@ -134,6 +154,8 @@ interface ObjectManagerMap extends Evented {
   latLngToLayerPoint(value: LatLngLike): Point;
   containerPointToLatLng(value: PointLike): LatLng;
   setView(center: LatLngLike, zoom: number): unknown;
+  fitBounds(bounds: LatLngBoundsLike, options?: { padding?: number }): unknown;
+  crs?: { code: "EPSG:3857" | "Simple" };
 }
 
 interface ClusterSpec {
@@ -175,7 +197,20 @@ export class ObjectManager extends Evented {
   private _layoutDirty = true;
   private _webglLayer: WebGLPointLayer | null = null;
   private _webglMeta: WebGLMeta[] = [];
+  /** GPU slot index for each object id currently drawn in `_webglMeta`. */
+  private _webglIdToIndex = new Map<ObjectId, number>();
+  /** Full (unfiltered) GPU pack — filter/live compact without re-encoding mercator. */
+  private _webglPack: {
+    latlng: Float32Array;
+    merc64: Float64Array;
+    colors: Float32Array | null;
+    meta: WebGLMeta[];
+    idToIndex: Map<ObjectId, number>;
+    singles: Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>;
+  } | null = null;
   private _webglSyncedZoom: number | null = null;
+  private _selectedId: ObjectId | null = null;
+  private _hoveredId: ObjectId | null = null;
   private _clusterCanvas: ClusterCanvasLayer | null = null;
   private _canvasClusterCount = 0;
   private _activeRenderer: "dom" | "webgl" = "dom";
@@ -194,6 +229,14 @@ export class ObjectManager extends Evented {
   private _greedyRaf = 0;
   /** Above this size, never run sync greedy on every zoomend (stale+coalesce instead). */
   private _greedyZoomInlineLimit = 2500;
+  private _layoutIds: ObjectId[] = [];
+  private _layoutCoords = new Float64Array(0);
+  private _layoutPacked = 0;
+  private _layoutPackDirty = true;
+  private _spiderMarkers: Marker[] = [];
+  private _spiderLegs: Polyline[] = [];
+  private _spiderClusterId: string | null = null;
+  private readonly _unspiderfyOnMapClick = (): void => { this.unspiderfy(); };
 
   constructor(options: ObjectManagerOptions = {}) {
     super();
@@ -205,6 +248,9 @@ export class ObjectManager extends Evented {
       clusterMinPoints: 2,
       clusterMaxZoom: 16,
       clusterZoomOnClick: true,
+      spiderfyOnMaxZoom: true,
+      spiderfyDistanceMultiplier: 1,
+      zoomToBoundsOnClick: true,
       indexCellSize: 1,
       clusterIcon: null,
       clusterClassName: "oh-cluster-marker",
@@ -214,12 +260,16 @@ export class ObjectManager extends Evented {
       webglThreshold: 2000,
       layoutWorker: "auto",
       layoutWorkerThreshold: 5000,
+      styleByCategory: true,
+      maxObjects: 0,
       ...options
     };
     this.options.clusterGridSize = Math.max(20, Number(this.options.clusterGridSize));
     this.options.clusterMinPoints = Math.max(2, Math.floor(this.options.clusterMinPoints));
     this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
     this.options.layoutWorkerThreshold = Math.max(1, Math.floor(this.options.layoutWorkerThreshold));
+    this.options.maxObjects = Math.max(0, Math.floor(Number(this.options.maxObjects) || 0));
+    this.options.spiderfyDistanceMultiplier = Math.max(0.25, Number(this.options.spiderfyDistanceMultiplier) || 1);
     this.index = new SpatialGridIndex<ManagedObject, ObjectId>(this.options.indexCellSize);
     this._render = () => this.render();
     this._scheduleRender = rafThrottle(() => this.render());
@@ -229,10 +279,14 @@ export class ObjectManager extends Evented {
   addTo(map: ObjectManagerMap): this {
     if (this.map === map) return this;
     this.remove();
+    if (this.options.clusterRenderer === "webgl" && map.crs?.code === "Simple") {
+      throw new CRSCompatibilityError();
+    }
     this.map = map;
     map.on("moveend", this._scheduleRender);
     map.on("zoomend", this._scheduleRender);
     map.on("resize", this._scheduleRender);
+    map.on("click", this._unspiderfyOnMapClick);
     this.render();
     return this;
   }
@@ -245,6 +299,8 @@ export class ObjectManager extends Evented {
     this.map.off("moveend", this._scheduleRender);
     this.map.off("zoomend", this._scheduleRender);
     this.map.off("resize", this._scheduleRender);
+    this.map.off("click", this._unspiderfyOnMapClick);
+    this.unspiderfy();
     this.#clearRendered();
     this.closePopup();
     this.map = null;
@@ -263,7 +319,9 @@ export class ObjectManager extends Evented {
 
   add(features: ManagedObject | ManagedObject[]): this {
     const list = Array.isArray(features) ? features : [features];
+    const cap = this.options.maxObjects;
     for (const item of list) {
+      if (cap > 0 && this.items.size >= cap && (item.id == null || !this.items.has(item.id))) break;
       const id = item.id ?? globalThis.crypto?.randomUUID?.() ?? `oh-object-${++objectId}`;
       this.#dropRenderedObject(id);
       this.items.set(id, item);
@@ -276,7 +334,49 @@ export class ObjectManager extends Evented {
     return this;
   }
 
+  /**
+   * In-place update of existing objects (coordinates / properties).
+   * On the WebGL non-cluster path this patches GPU buffers instead of a full layout rebuild —
+   * critical for realtime stress at 100k–1M.
+   */
+  update(features: ManagedObject | ManagedObject[]): this {
+    const list = Array.isArray(features) ? features : [features];
+    if (this.#canPatchWebgl()) {
+      const touched: ObjectId[] = [];
+      for (const item of list) {
+        const id = item.id;
+        if (id == null) continue;
+        this.items.set(id, item);
+        const position = this.#objectPosition(item);
+        if (!position) continue;
+        this.index.set(id, position, item);
+        const slot = this._webglIdToIndex.get(id);
+        if (slot == null) continue;
+        const ll = latLng(position);
+        this._webglLayer!.patchPoint(slot, ll.lat, ll.lng);
+        const record = this.index.records.get(id);
+        if (record && this._layout) this._layout.singles.set(id, record);
+        const packSlot = this._webglPack?.idToIndex.get(id);
+        if (this._webglPack && packSlot != null && record) {
+          this._webglPack.latlng[packSlot * 2] = ll.lat;
+          this._webglPack.latlng[packSlot * 2 + 1] = ll.lng;
+          const clamped = Math.max(-85.05112878, Math.min(85.05112878, ll.lat));
+          const sin = Math.sin((clamped * Math.PI) / 180);
+          this._webglPack.merc64[packSlot * 2] = (ll.lng + 180) / 360;
+          this._webglPack.merc64[packSlot * 2 + 1] = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+          this._webglPack.singles.set(id, record);
+        }
+        touched.push(id);
+      }
+      if (this.options.styleByCategory && touched.length) this.#patchWebglColors(touched);
+      this._webglLayer!.render();
+      return this;
+    }
+    return this.add(list);
+  }
+
   removeObjects(ids: ObjectId | ObjectId[]): this {
+    this.unspiderfy();
     this.closePopup();
     const list = Array.isArray(ids) ? ids : [ids];
     for (const id of list) {
@@ -294,9 +394,66 @@ export class ObjectManager extends Evented {
   getObjects(): ManagedObject[] { return [...this.items.values()]; }
 
   setFilter(filter: ObjectFilter | null): this {
+    this.unspiderfy();
     this.filter = filter;
+    // WebGL + no clusters: rebuild the GPU list from the spatial index without greedy layout.
+    if (this.map && this.#shouldUseWebgl() && !this.options.clusterize) {
+      this.#fastWebglFilterSync();
+      return this;
+    }
     this.#invalidateLayout();
     this._scheduleRender();
+    return this;
+  }
+
+  getSelectedId(): ObjectId | null {
+    return this._selectedId;
+  }
+
+  setSelected(id: ObjectId | null): this {
+    const next = id == null ? null : id;
+    if (this._selectedId === next) return this;
+    const prev = this._selectedId;
+    this._selectedId = next;
+    if (this.#canPatchWebgl() && this.options.styleByCategory) {
+      const touched: ObjectId[] = [];
+      if (prev != null) touched.push(prev);
+      if (next != null) touched.push(next);
+      this.#patchWebglColors(touched);
+      this._webglLayer!.render();
+    } else {
+      this.#refreshWebglColors();
+      this._scheduleRender();
+    }
+    for (const [markerId, marker] of this.markers) {
+      const object = this.items.get(markerId);
+      if (object) this.#paintDomMarker(marker, markerId, object);
+    }
+    return this;
+  }
+
+  getHoveredId(): ObjectId | null {
+    return this._hoveredId;
+  }
+
+  setHovered(id: ObjectId | null): this {
+    const next = id == null ? null : id;
+    if (this._hoveredId === next) return this;
+    const prev = this._hoveredId;
+    this._hoveredId = next;
+    if (this.#canPatchWebgl() && this.options.styleByCategory) {
+      const touched: ObjectId[] = [];
+      if (prev != null) touched.push(prev);
+      if (next != null) touched.push(next);
+      this.#patchWebglColors(touched);
+      this._webglLayer!.render();
+    } else {
+      this.#refreshWebglColors();
+    }
+    for (const [markerId, marker] of this.markers) {
+      const object = this.items.get(markerId);
+      if (object) this.#paintDomMarker(marker, markerId, object);
+    }
     return this;
   }
 
@@ -337,9 +494,14 @@ export class ObjectManager extends Evented {
     return this;
   }
 
+  hasOpenPopup(): boolean {
+    return Boolean(this._activePopup);
+  }
+
   setClusterize(enabled: boolean): this {
     if (this.options.clusterize === Boolean(enabled)) return this;
     this.options.clusterize = Boolean(enabled);
+    this.unspiderfy();
     this.#invalidateLayout();
     this.#clearRendered();
     this._scheduleRender();
@@ -351,6 +513,7 @@ export class ObjectManager extends Evented {
     if (!Number.isFinite(next)) throw new TypeError("clusterGridSize must be a finite number");
     if (this.options.clusterGridSize === next) return this;
     this.options.clusterGridSize = next;
+    this.unspiderfy();
     this.#invalidateLayout();
     this.#clearRendered();
     this._scheduleRender();
@@ -360,12 +523,14 @@ export class ObjectManager extends Evented {
   setClusterRenderer(renderer: ClusterRenderer): this {
     if (this.options.clusterRenderer === renderer) return this;
     this.options.clusterRenderer = renderer;
+    this.unspiderfy();
     this.#clearRendered();
     this._scheduleRender();
     return this;
   }
 
   clear(): this {
+    this.unspiderfy();
     this.closePopup();
     this.#clearRendered();
     this.items.clear();
@@ -389,6 +554,97 @@ export class ObjectManager extends Evented {
       renderer: this._activeRenderer,
       layoutZoom: this._layout?.zoomBucket ?? null
     };
+  }
+
+  queryHit(point: Point, options: ResolvedQueryOptions): QueryHit | QueryHit[] | null {
+    const hits: QueryHit[] = [];
+    const clusterHit = this._clusterCanvas?.queryHit(point, options);
+    if (clusterHit) {
+      const clusterId = String(clusterHit.id);
+      hits.push({ ...clusterHit, source: "cluster", feature: this.#clusterMemberIds(clusterId) });
+    }
+    const webglHit = this._webglLayer?.queryHit(point, options);
+    if (webglHit && webglHit.index != null) {
+      const meta = this._webglMeta[webglHit.index];
+      if (meta?.kind === "object") hits.push({
+        ...webglHit,
+        source: "object",
+        id: meta.id,
+        feature: this.items.get(meta.id)
+      });
+    }
+    for (const [id, marker] of [...this.markers].reverse()) {
+      const hit = marker.queryHit(point, options);
+      if (hit) hits.push({ ...hit, source: "object", id, feature: this.items.get(id) });
+    }
+    for (const [id, marker] of [...this.clusters].reverse()) {
+      const hit = marker.queryHit(point, options);
+      if (hit) hits.push({ ...hit, source: "cluster", id, feature: this.#clusterMemberIds(id) });
+    }
+    if (!hits.length) return null;
+    return options.limit === 1 ? hits[0] : hits.slice(0, options.limit);
+  }
+
+  spiderfyCluster(clusterId: string): this {
+    if (!this.map || !this.options.spiderfyOnMaxZoom) return this;
+    const ids = [...this.#clusterMemberIds(clusterId)];
+    const spec = this._layout?.clusters.get(clusterId);
+    const marker = this.clusters.get(clusterId);
+    const center = spec?.position ?? marker?.getLatLng();
+    if (!center || ids.length < 2) return this;
+    this.unspiderfy();
+    this._spiderClusterId = clusterId;
+    const centerPoint = this.map.latLngToLayerPoint(center);
+    const multiplier = this.options.spiderfyDistanceMultiplier;
+    const count = ids.length;
+    ids.forEach((id, index) => {
+      const object = this.items.get(id);
+      if (!object) return;
+      let angle: number;
+      let radius: number;
+      if (count <= 8) {
+        angle = index * Math.PI * 2 / count - Math.PI / 2;
+        radius = 38 * multiplier;
+      } else {
+        angle = index * 0.65 - Math.PI / 2;
+        radius = (26 + index * 5) * multiplier;
+      }
+      const position = this.map!.containerPointToLatLng([
+        centerPoint.x + Math.cos(angle) * radius,
+        centerPoint.y + Math.sin(angle) * radius
+      ]);
+      const leg = polyline([center, position], {
+        pane: "overlay",
+        stroke: "#64748b",
+        strokeWidth: 1.5,
+        strokeOpacity: 0.75,
+        interactive: false
+      });
+      leg.addTo(this.map as Orihon);
+      this._spiderLegs.push(leg);
+      const spider = new Marker(position, {
+        ...this.options.marker,
+        title: object.properties?.title || "",
+        className: `${this.options.marker.className ?? ""} oh-spider-marker`.trim()
+      });
+      spider.on("click", (event) => this.#objectClickAt(id, spider, event));
+      spider.addTo(this.map as Orihon);
+      this._spiderMarkers.push(spider);
+    });
+    this.emit("spiderfy", { clusterId, objectIds: ids });
+    return this;
+  }
+
+  unspiderfy(): this {
+    if (!this._spiderClusterId && !this._spiderMarkers.length && !this._spiderLegs.length) return this;
+    const clusterId = this._spiderClusterId;
+    for (const marker of this._spiderMarkers) marker.remove();
+    for (const leg of this._spiderLegs) leg.remove();
+    this._spiderMarkers = [];
+    this._spiderLegs = [];
+    this._spiderClusterId = null;
+    this.emit("unspiderfy", { clusterId });
+    return this;
   }
 
   render(): void {
@@ -423,7 +679,8 @@ export class ObjectManager extends Evented {
           this.#syncClusters(clusterSpecs, layout);
         }
       } else {
-        this._visibleObjects = this.#countVisibleFromLayout(layout, bounds, new Map());
+        // Non-cluster WebGL: every drawn single is "visible" for stats — skip O(N) bounds walk.
+        this._visibleObjects = layout.singles.size;
         this.#clearClusterCanvas();
         this.#clearDomClusters();
         this.#syncWebgl(layout);
@@ -433,7 +690,7 @@ export class ObjectManager extends Evented {
     }
 
     const visibleIds = new Set(
-      this.index.search(bounds, (record) => !this.filter || this.filter(record.value, record.id)).map((record) => record.id)
+      this.index.searchIds(bounds, (id, value) => !this.filter || this.filter(value, id))
     );
     this._visibleObjects = visibleIds.size;
     const clusterSpecs = this.#pickClusterSpecs(layout, bounds, visibleIds);
@@ -451,6 +708,7 @@ export class ObjectManager extends Evented {
   }
 
   #shouldUseWebgl(): boolean {
+    if (this.map?.crs?.code === "Simple") return false;
     const mode = this.options.clusterRenderer;
     if (mode === "webgl") return true;
     if (mode === "dom") return false;
@@ -481,6 +739,16 @@ export class ObjectManager extends Evented {
    * in the background (worker when enabled). Zoom changes use the index once it is ready.
    */
   async prepareLayout(zoom?: number): Promise<this> {
+    // Flat WebGL mass markers: skip greedy singles allocation (huge win at 1M).
+    if (this.#shouldUseWebgl() && !this.options.clusterize) {
+      const zoomBucket = Math.floor(zoom ?? this.map?.zoom ?? 0);
+      this.#buildFlatLayout(zoomBucket);
+      if (this.map) {
+        this.render();
+      }
+      return this;
+    }
+
     const zoomBucket = Math.floor(zoom ?? this.map?.zoom ?? 0);
     const generation = ++this._layoutGeneration;
     const request = this.#collectLayoutRequest(zoomBucket);
@@ -532,6 +800,7 @@ export class ObjectManager extends Evented {
       minPoints: number;
       clusterize: boolean;
       clusterMaxZoom: number;
+      simple?: boolean;
     },
     generation: number,
     zoomBucket: number
@@ -566,6 +835,7 @@ export class ObjectManager extends Evented {
   }
 
   #shouldUseLayoutWorker(): boolean {
+    if (this.map?.crs?.code === "Simple") return false;
     const mode = this.options.layoutWorker;
     if (mode === true) return true;
     if (mode === false) return false;
@@ -573,22 +843,36 @@ export class ObjectManager extends Evented {
   }
 
   #collectLayoutRequest(zoomBucket: number) {
-    const ids: ObjectId[] = [];
-    const values: number[] = [];
-    for (const record of this.index.records.values()) {
-      if (this.filter && !this.filter(record.value, record.id)) continue;
-      ids.push(record.id);
-      values.push(record.position.lat, record.position.lng);
-    }
+    this.#syncLayoutPack();
     return {
-      ids,
-      coords: new Float64Array(values),
+      ids: this._layoutIds,
+      coords: this._layoutCoords.subarray(0, this._layoutPacked * 2),
       zoomBucket,
       gridSize: this.options.clusterGridSize,
       minPoints: this.options.clusterMinPoints,
       clusterize: this.options.clusterize,
-      clusterMaxZoom: this.options.clusterMaxZoom
+      clusterMaxZoom: this.options.clusterMaxZoom,
+      simple: this.map?.crs?.code === "Simple"
     };
+  }
+
+  #syncLayoutPack(): void {
+    if (!this._layoutPackDirty) return;
+    const filter = this.filter;
+    const need = this.index.size;
+    if (this._layoutCoords.length < need * 2) this._layoutCoords = new Float64Array(Math.max(need * 2, 16));
+    if (this._layoutIds.length < need) this._layoutIds.length = need;
+    let packed = 0;
+    for (const record of this.index.records.values()) {
+      if (filter && !filter(record.value, record.id)) continue;
+      this._layoutIds[packed] = record.id;
+      this._layoutCoords[packed * 2] = record.position.lat;
+      this._layoutCoords[packed * 2 + 1] = record.position.lng;
+      packed++;
+    }
+    this._layoutIds.length = packed;
+    this._layoutPacked = packed;
+    this._layoutPackDirty = false;
   }
 
   #applyLayoutResult(zoomBucket: number, result: ClusterLayoutResult): void {
@@ -625,12 +909,14 @@ export class ObjectManager extends Evented {
     this._clusterIndex = null;
     this._layoutDirty = true;
     this._webglSyncedZoom = null;
+    this._webglPack = null;
     this._clusterSyncZoom = null;
     this._clusterSyncGeneration = -1;
     this._layoutGeneration++;
     this._layoutPromise = null;
     this._greedyCache.clear();
     this._pendingGreedyZoom = null;
+    this._layoutPackDirty = true;
     if (this._greedyRaf && typeof cancelAnimationFrame === "function") {
       cancelAnimationFrame(this._greedyRaf);
       this._greedyRaf = 0;
@@ -698,6 +984,15 @@ export class ObjectManager extends Evented {
 
   #ensureLayout(map: ObjectManagerMap): LayoutCache {
     const zoomBucket = Math.floor(map.zoom);
+
+    // Non-cluster WebGL: flat layout from the spatial index (reuse records, no greedy alloc).
+    if (this.#shouldUseWebgl() && !this.options.clusterize) {
+      if (this._layoutDirty || !this._layout || this._layout.zoomBucket !== zoomBucket) {
+        this.#buildFlatLayout(zoomBucket);
+      }
+      return this._layout!;
+    }
+
     if (
       !this._layoutDirty &&
       this._layout &&
@@ -775,11 +1070,14 @@ export class ObjectManager extends Evented {
       const current = this.markers.get(id);
       if (current) {
         current.setLatLng(record.position);
+        this.#paintDomMarker(current, id, record.value);
         continue;
       }
       const title = record.value.properties?.title || "";
       const created = new Marker(record.position, { ...this.options.marker, title });
+      this.#paintDomMarker(created, id, record.value);
       created.on("click", (event) => {
+        this.setSelected(id);
         const payload = {
           ...event,
           objectId: id,
@@ -790,9 +1088,31 @@ export class ObjectManager extends Evented {
         const object = this.items.get(id);
         if (object && this._popupBinding) this.#openObjectPopup(id, object, created.getLatLng(), payload);
       });
+      created.on("mouseover", () => {
+        this.setHovered(id);
+        this.emit("hover", { objectId: id, object: this.items.get(id) });
+      });
+      created.on("mouseout", () => {
+        if (this._hoveredId === id) {
+          this.setHovered(null);
+          this.emit("hover", { objectId: null, object: null });
+        }
+      });
       created.addTo(this.map as Orihon);
       this.markers.set(id, created);
     }
+  }
+
+  #paintDomMarker(marker: Marker, id: ObjectId, object: ManagedObject): void {
+    const el = marker.el;
+    if (!el) return;
+    const cat = String(object.properties?.category || "alpha");
+    el.classList.toggle("oh-om-alpha", cat === "alpha");
+    el.classList.toggle("oh-om-beta", cat === "beta");
+    el.classList.toggle("oh-om-gamma", cat === "gamma");
+    el.classList.toggle("oh-om-alert", Boolean(object.properties?.alert));
+    el.classList.toggle("oh-om-selected", this._selectedId === id);
+    el.classList.toggle("oh-om-hover", this._hoveredId === id);
   }
 
   #syncClusters(specs: Map<string, ClusterSpec>, layout: LayoutCache): void {
@@ -931,6 +1251,7 @@ export class ObjectManager extends Evented {
   }
 
   #clusterCanvasClick(event: Record<string, unknown>): void {
+    (event.originalEvent as Event | undefined)?.stopPropagation();
     const key = String(event.clusterKey ?? "");
     if (!key) return;
     const latlng = (event.latlng as LatLngLike) || this._layout?.clusters.get(key)?.position;
@@ -940,34 +1261,269 @@ export class ObjectManager extends Evented {
 
   #syncWebgl(layout: LayoutCache): void {
     if (!this.map) return;
-    if (this._webglLayer && this._webglSyncedZoom === layout.zoomBucket && !this._layoutDirty) {
+    const zoomUnchanged = this._webglLayer && this._webglSyncedZoom === layout.zoomBucket && !this._layoutDirty;
+    if (zoomUnchanged) {
       return;
     }
 
     const points: LatLngLike[] = [];
     const meta: WebGLMeta[] = [];
+    const idToIndex = new Map<ObjectId, number>();
     // Clusters use canvas/DOM badges; only unclustered objects go to the GPU layer.
     for (const [id, record] of layout.singles) {
+      idToIndex.set(id, points.length);
       points.push(record.position);
       meta.push({ kind: "object", id });
     }
 
     this._webglMeta = meta;
+    this._webglIdToIndex = idToIndex;
+    const colors = this.#buildWebglColors(meta);
+    const interactive = points.length <= 40_000;
     if (!this._webglLayer) {
-      this._webglLayer = webglPointLayer(points, {
+      this._webglLayer = webglPointLayer([], {
         pointSize: 10,
         color: "#0f766e",
         opacity: 0.88,
         maxDpr: 1.5,
-        interactive: true,
+        interactive,
         hitTolerance: 10
       });
       this._webglLayer.on("click", (event) => this.#webglClick(event));
+      this._webglLayer.on("hover", (event) => this.#webglHover(event));
       this._webglLayer.addTo(this.map as Orihon);
     } else {
-      this._webglLayer.setData(points);
+      this._webglLayer.setInteractive(interactive);
     }
+    this._webglLayer.setData(points, { colors });
     this._webglSyncedZoom = layout.zoomBucket;
+    if (!this.options.clusterize && !this.filter) {
+      this.#snapshotWebglPack(
+        layout.singles,
+        meta,
+        idToIndex,
+        colors
+      );
+    }
+  }
+
+  #buildFlatLayout(zoomBucket: number): void {
+    const singles = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
+    for (const record of this.index.records.values()) {
+      if (this.filter && !this.filter(record.value, record.id)) continue;
+      singles.set(record.id, record);
+    }
+    this._layout = { zoomBucket, singles, clusters: new Map() };
+    this._layoutDirty = false;
+    this._clusterIndex = null;
+    this._webglSyncedZoom = null;
+  }
+
+  #canPatchWebgl(): boolean {
+    return Boolean(
+      this._webglLayer &&
+        !this.options.clusterize &&
+        this.#shouldUseWebgl() &&
+        this._webglIdToIndex.size > 0
+    );
+  }
+
+  /** Filter / resync without greedy cluster layout (WebGL, no clusters). */
+  #fastWebglFilterSync(): void {
+    if (!this.map) return;
+    const zoomBucket = Math.floor(this.map.zoom);
+
+    // Restore or compact from the full pack — avoids re-running latLng→mercator for 1M points.
+    if (this._webglPack && this._webglLayer) {
+      if (!this.filter) {
+        this.#applyWebglPack(this._webglPack, zoomBucket, true);
+        return;
+      }
+      const pack = this._webglPack;
+      let w = 0;
+      const meta: WebGLMeta[] = [];
+      const idToIndex = new Map<ObjectId, number>();
+      const singles = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
+      const latlng = new Float32Array(pack.latlng.length);
+      const merc64 = new Float64Array(pack.merc64.length);
+      const colors = pack.colors ? new Float32Array(pack.colors.length) : null;
+      for (let i = 0; i < pack.meta.length; i++) {
+        const entry = pack.meta[i];
+        const object = this.items.get(entry.id);
+        if (!object || (this.filter && !this.filter(object, entry.id))) continue;
+        const record = pack.singles.get(entry.id) || this.index.records.get(entry.id);
+        if (!record) continue;
+        latlng[w * 2] = pack.latlng[i * 2];
+        latlng[w * 2 + 1] = pack.latlng[i * 2 + 1];
+        merc64[w * 2] = pack.merc64[i * 2];
+        merc64[w * 2 + 1] = pack.merc64[i * 2 + 1];
+        if (colors && pack.colors) {
+          const s = i * 4;
+          const d = w * 4;
+          colors[d] = pack.colors[s];
+          colors[d + 1] = pack.colors[s + 1];
+          colors[d + 2] = pack.colors[s + 2];
+          colors[d + 3] = pack.colors[s + 3];
+        }
+        idToIndex.set(entry.id, w);
+        meta.push(entry);
+        singles.set(entry.id, record);
+        w += 1;
+      }
+      // Recompute colors when selection/hover active — pack stores base category colors.
+      const liveColors =
+        this.options.styleByCategory && (this._selectedId != null || this._hoveredId != null)
+          ? this.#buildWebglColors(meta)
+          : colors
+            ? colors.subarray(0, w * 4)
+            : this.#buildWebglColors(meta);
+      this._webglLayer.setPackedData(latlng.subarray(0, w * 2), merc64.subarray(0, w * 2), {
+        colors: liveColors
+      });
+      this._layout = { zoomBucket, singles, clusters: new Map() };
+      this._layoutDirty = false;
+      this._webglMeta = meta;
+      this._webglIdToIndex = idToIndex;
+      this._visibleObjects = w;
+      this._webglSyncedZoom = zoomBucket;
+      this._activeRenderer = "webgl";
+      this._webglLayer.setInteractive(w <= 40_000);
+      this.emit("render", { stats: this.getStats() });
+      return;
+    }
+
+    const singles = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
+    const points: LatLngLike[] = [];
+    const meta: WebGLMeta[] = [];
+    const idToIndex = new Map<ObjectId, number>();
+
+    for (const record of this.index.records.values()) {
+      if (this.filter && !this.filter(record.value, record.id)) continue;
+      singles.set(record.id, record);
+      idToIndex.set(record.id, points.length);
+      points.push(record.position);
+      meta.push({ kind: "object", id: record.id });
+    }
+
+    this._layout = { zoomBucket, singles, clusters: new Map() };
+    this._layoutDirty = false;
+    this._clusterIndex = null;
+    this._webglMeta = meta;
+    this._webglIdToIndex = idToIndex;
+    this._visibleObjects = meta.length;
+    this._activeRenderer = "webgl";
+    this.#clearObjectMarkers();
+    this.#clearClusterCanvas();
+    this.#clearDomClusters();
+
+    const colors = this.#buildWebglColors(meta);
+    const interactive = points.length <= 40_000;
+    if (!this._webglLayer) {
+      this._webglLayer = webglPointLayer([], {
+        pointSize: 10,
+        color: "#0f766e",
+        opacity: 0.88,
+        maxDpr: 1.5,
+        interactive,
+        hitTolerance: 10
+      });
+      this._webglLayer.on("click", (event) => this.#webglClick(event));
+      this._webglLayer.on("hover", (event) => this.#webglHover(event));
+      this._webglLayer.addTo(this.map as Orihon);
+    } else {
+      this._webglLayer.setInteractive(interactive);
+    }
+    this._webglLayer.setData(points, { colors });
+    this._webglSyncedZoom = zoomBucket;
+
+    // Snapshot the unfiltered pack once so later filters are O(visible) copies.
+    if (!this.filter) {
+      this.#snapshotWebglPack(singles, meta, idToIndex, colors);
+    }
+
+    this.emit("render", { stats: this.getStats() });
+  }
+
+  #applyWebglPack(
+    pack: NonNullable<ObjectManager["_webglPack"]>,
+    zoomBucket: number,
+    rebuildColors: boolean
+  ): void {
+    if (!this._webglLayer) return;
+    const colors =
+      rebuildColors && this.options.styleByCategory
+        ? this.#buildWebglColors(pack.meta)
+        : pack.colors;
+    this._webglLayer.setPackedData(pack.latlng, pack.merc64, { colors });
+    this._layout = { zoomBucket, singles: pack.singles, clusters: new Map() };
+    this._layoutDirty = false;
+    this._webglMeta = pack.meta;
+    this._webglIdToIndex = pack.idToIndex;
+    this._visibleObjects = pack.meta.length;
+    this._webglSyncedZoom = zoomBucket;
+    this._activeRenderer = "webgl";
+    this._webglLayer.setInteractive(pack.meta.length <= 40_000);
+    this.emit("render", { stats: this.getStats() });
+  }
+
+  #snapshotWebglPack(
+    singles: Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>,
+    meta: WebGLMeta[],
+    idToIndex: Map<ObjectId, number>,
+    colors: Float32Array | null
+  ): void {
+    if (!this._webglLayer) return;
+    const latlng = this._webglLayer.getLatLngBuf().slice();
+    const merc64 = this._webglLayer.getMercator64().slice();
+    this._webglPack = {
+      latlng,
+      merc64,
+      colors: colors ? colors.slice() : null,
+      meta: meta.slice(),
+      idToIndex: new Map(idToIndex),
+      singles
+    };
+  }
+
+  #buildWebglColors(meta: WebGLMeta[]): Float32Array | null {
+    if (!this.options.styleByCategory) return null;
+    const colors = new Float32Array(meta.length * 4);
+    for (let i = 0; i < meta.length; i++) {
+      const entry = meta[i];
+      const object = entry.kind === "object" ? this.items.get(entry.id) : undefined;
+      const rgba = this.#rgbaForObject(object, entry.kind === "object" ? entry.id : null);
+      const o = i * 4;
+      colors[o] = rgba[0];
+      colors[o + 1] = rgba[1];
+      colors[o + 2] = rgba[2];
+      colors[o + 3] = rgba[3];
+    }
+    return colors;
+  }
+
+  #rgbaForObject(object: ManagedObject | undefined, id: ObjectId | null): readonly [number, number, number, number] {
+    if (id != null && this._selectedId != null && id === this._selectedId) return OBJECT_MANAGER_PALETTE.selected;
+    if (id != null && this._hoveredId != null && id === this._hoveredId) return OBJECT_MANAGER_PALETTE.hover;
+    if (object?.properties?.alert) return OBJECT_MANAGER_PALETTE.alert;
+    const category = String(object?.properties?.category || "alpha");
+    if (category === "beta") return OBJECT_MANAGER_PALETTE.beta;
+    if (category === "gamma") return OBJECT_MANAGER_PALETTE.gamma;
+    return OBJECT_MANAGER_PALETTE.alpha;
+  }
+
+  #refreshWebglColors(): void {
+    if (!this._webglLayer || !this._webglMeta.length || !this.options.styleByCategory) return;
+    this._webglLayer.setColors(this.#buildWebglColors(this._webglMeta));
+  }
+
+  #patchWebglColors(ids: ObjectId[]): void {
+    if (!this._webglLayer || !this.options.styleByCategory) return;
+    for (const id of ids) {
+      const slot = this._webglIdToIndex.get(id);
+      if (slot == null) continue;
+      const object = this.items.get(id);
+      this._webglLayer.patchColor(slot, this.#rgbaForObject(object, id));
+    }
   }
 
   #webglClick(event: Record<string, unknown>): void {
@@ -975,6 +1531,7 @@ export class ObjectManager extends Evented {
     const entry = this._webglMeta[index];
     if (!entry || entry.kind !== "object") return;
     const object = this.items.get(entry.id);
+    this.setSelected(entry.id);
     const payload = {
       ...event,
       objectId: entry.id,
@@ -984,6 +1541,30 @@ export class ObjectManager extends Evented {
     if (object && this._popupBinding) {
       this.#openObjectPopup(entry.id, object, (event.latlng as LatLngLike) || this.#objectPosition(object)!, payload);
     }
+  }
+
+  #webglHover(event: Record<string, unknown>): void {
+    const index = Number(event.index);
+    if (!Number.isFinite(index) || index < 0) {
+      if (this._hoveredId != null) {
+        this.setHovered(null);
+        this.emit("hover", { objectId: null, object: null, ...event });
+      }
+      return;
+    }
+    const entry = this._webglMeta[index];
+    if (!entry || entry.kind !== "object") {
+      this.setHovered(null);
+      this.emit("hover", { objectId: null, object: null, ...event });
+      return;
+    }
+    if (this._hoveredId === entry.id) return;
+    this.setHovered(entry.id);
+    this.emit("hover", {
+      ...event,
+      objectId: entry.id,
+      object: this.items.get(entry.id)
+    });
   }
 
   #clusterMemberIds(key: string): ObjectId[] {
@@ -1019,8 +1600,34 @@ export class ObjectManager extends Evented {
     };
     this.emit("clusterclick", payload);
     if (this._clusterPopupBinding) this.#openClusterPopup(key, ids, position, payload);
-    if (!this.map || !this.options.clusterZoomOnClick) return;
-    this.map.setView(position, Math.min(this.options.clusterMaxZoom + 1, this.map.zoom + 2));
+    if (!this.map) return;
+    if (this.map.zoom >= this.options.clusterMaxZoom) {
+      this.spiderfyCluster(key);
+      return;
+    }
+    if (!this.options.clusterZoomOnClick) return;
+    this.unspiderfy();
+    if (this.options.zoomToBoundsOnClick) {
+      const bounds = latLngBounds();
+      for (const id of ids) {
+        const object = this.items.get(id);
+        const objectPosition = object ? this.#objectPosition(object) : null;
+        if (objectPosition) bounds.extend(objectPosition);
+      }
+      if (bounds.isValid()) {
+        this.map.fitBounds(bounds, { padding: 40 });
+        return;
+      }
+    }
+    this.map.setView(position, Math.min(this.options.clusterMaxZoom, this.map.zoom + 2));
+  }
+
+  #objectClickAt(id: ObjectId, marker: Marker, event: Record<string, unknown>): void {
+    const object = this.items.get(id);
+    this.setSelected(id);
+    const payload = { ...event, objectId: id, object, layer: marker };
+    this.emit("click", payload);
+    if (object && this._popupBinding) this.#openObjectPopup(id, object, marker.getLatLng(), payload);
   }
 
   #openObjectPopup(
@@ -1125,6 +1732,8 @@ export class ObjectManager extends Evented {
       this._webglLayer = null;
     }
     this._webglMeta = [];
+    this._webglIdToIndex.clear();
+    this._webglPack = null;
     this._webglSyncedZoom = null;
   }
 
@@ -1138,6 +1747,7 @@ export class ObjectManager extends Evented {
   }
 
   #clearRendered(): void {
+    this.unspiderfy();
     this.#clearDomMarkers();
     this.#clearWebgl();
     this.#clearClusterCanvas();

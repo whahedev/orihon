@@ -1,5 +1,4 @@
 import { createEl, listen } from "../dom.js";
-import { distance } from "../geo.js";
 import type { Layer } from "../layer.js";
 import type { Orihon, ControlPosition } from "../map.js";
 import { resolveLocale, type OrihonLocale, type LocaleInput } from "./locale.js";
@@ -161,7 +160,7 @@ export class ScaleControl extends Control<ScaleControlOptions> {
     const a = this.map.containerPointToLatLng({ x: 0, y: this.map.size.height });
     const maxWidth = Math.max(40, Number(this.options.maxWidth ?? 100));
     const b = this.map.containerPointToLatLng({ x: maxWidth, y: this.map.size.height });
-    const meters = distance(a, b);
+    const meters = this.map.distance(a, b);
     const units = this.options.units ?? "metric";
     const metric = formatMetricScale(meters, this.locale);
     const imperial = formatImperialScale(meters, this.locale);

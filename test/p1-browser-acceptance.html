@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Orihon P1 browser acceptance</title>
+  <link rel="stylesheet" href="/dist/orihon.css">
+  <style>
+    html, body { margin: 0; background: white; }
+    #map { width: 480px; height: 320px; min-height: 320px; }
+    #result { white-space: pre-wrap; }
+  </style>
+</head>
+<body data-state="running">
+  <div id="map"></div>
+  <pre id="result">running</pre>
+  <script type="module">
+    import {
+      createMap,
+      createWMTSFromCapabilities,
+      geoJSON,
+      marker,
+      polygon,
+      textLayer,
+      wmtsTileLayer
+    } from "/dist/standard.js";
+    import { objectManager } from "/dist/index.js";
+
+    const assert = (condition, message) => {
+      if (!condition) throw new Error(message);
+    };
+    const waitFor = async (predicate, message) => {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const value = predicate();
+        if (value) return value;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error(message);
+    };
+
+    async function run() {
+      const map = createMap("map", { controls: false, center: [0, 0], zoom: 18, maxZoom: 18 });
+
+      const svg = polygon([[[-0.00035, -0.00035], [-0.00035, 0.00035], [0.00035, 0.00035], [0.00035, -0.00035]]], {
+        fill: "#22c55e",
+        fillOpacity: 0.2,
+        interactive: true
+      }).addTo(map);
+      const canvasGroup = geoJSON({
+        type: "Feature",
+        properties: { name: "canvas" },
+        geometry: { type: "Polygon", coordinates: [[[-0.0003, -0.0003], [0.0003, -0.0003], [0.0003, 0.0003], [-0.0003, 0.0003], [-0.0003, -0.0003]]] }
+      }, { renderer: "canvas", interactive: true }).addTo(map);
+      const canvas = canvasGroup.getLayers()[0];
+      const pin = marker([0, 0], { title: "top marker" }).addTo(map);
+      const hits = map.query(map.latLngToContainerPoint([0, 0]), { limit: Infinity });
+      assert(hits.length >= 3, `mixed query returned ${hits.length} hits`);
+      assert(hits[0]?.layer === pin, "marker pane is not the topmost query result");
+      assert(hits.some((hit) => hit.layer === svg), "SVG hit missing");
+      assert(hits.some((hit) => hit.layer === canvas), "canvas hit missing");
+
+      const labels = textLayer([
+        { type: "Feature", properties: { name: "الأولوية", priority: 10 }, geometry: { type: "Point", coordinates: [0, 0] } },
+        { type: "Feature", properties: { name: "تصادم", priority: 1 }, geometry: { type: "Point", coordinates: [0, 0] } }
+      ], {
+        text: (feature) => String(feature.properties?.name ?? ""),
+        priority: (feature) => Number(feature.properties?.priority ?? 0),
+        offset: [70, 0]
+      }).addTo(map);
+      map.setLocale("ar");
+      labels.rebuild();
+      const labelCanvas = document.querySelector(".oh-text-layer");
+      const labelContext = labelCanvas.getContext("2d");
+      assert(map.locale.rtl === true, "Arabic locale did not enable RTL");
+      assert(labelContext.direction === "rtl" && labelContext.textAlign === "right", "text canvas is not RTL aligned");
+      assert(labels.getVisibleLabels().length === 1, "label collision did not keep only the priority label");
+
+      const manager = objectManager({
+        clusterize: true,
+        clusterMaxZoom: 18,
+        clusterGridSize: 80,
+        clusterRenderer: "dom",
+        clusterZoomOnClick: false,
+        spiderfyOnMaxZoom: true
+      }).addTo(map);
+      manager.add(Array.from({ length: 12 }, (_, index) => ({
+        type: "Feature",
+        id: `browser-spider-${index}`,
+        properties: { title: `Spider ${index}` },
+        geometry: { type: "Point", coordinates: [0.0007 + (index % 3) * 0.000001, (index / 3 | 0) * 0.000001] }
+      })));
+      const cluster = await waitFor(() => [...manager.clusters.values()][0], "cluster was not rendered");
+      let spiderCount = 0;
+      manager.on("spiderfy", (event) => { spiderCount = event.objectIds.length; });
+      cluster.el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      assert(spiderCount === 12, `spiderfy event contains ${spiderCount} objects`);
+      assert(document.querySelectorAll(".oh-spider-marker").length === 12, "12 spider markers were not mounted");
+      cluster.el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      assert(document.querySelectorAll(".oh-spider-marker").length === 12, "second click accumulated spider markers");
+
+      const capabilities = await fetch("/demo/wmts/capabilities.xml");
+      assert(capabilities.ok, `WMTS capabilities returned HTTP ${capabilities.status}`);
+      const config = createWMTSFromCapabilities(await capabilities.text());
+      const wmts = wmtsTileLayer(config.template, { ...config.options, opacity: 0.5 }).addTo(map);
+      const tile = await waitFor(
+        () => [...map.panes.tile.querySelectorAll("img")].find((image) => image.src.includes("/demo/wmts/") && image.complete && image.naturalWidth),
+        "live WMTS tile was not loaded"
+      );
+      assert(wmts.wmtsOptions.layer === "lab-grid", "WMTS capabilities layer mismatch");
+
+      const result = {
+        mixedQueryHits: hits.length,
+        topHit: "marker",
+        spiderMarkers: document.querySelectorAll(".oh-spider-marker").length,
+        rtl: labelContext.direction,
+        visibleLabels: labels.getVisibleLabels().length,
+        wmtsTile: new URL(tile.src).pathname
+      };
+      map.destroy();
+      return result;
+    }
+
+    try {
+      const value = await run();
+      document.body.dataset.state = "passed";
+      document.querySelector("#result").textContent = JSON.stringify(value);
+    } catch (error) {
+      document.body.dataset.state = "failed";
+      document.querySelector("#result").textContent = error?.stack || String(error);
+    }
+  </script>
+</body>
+</html>

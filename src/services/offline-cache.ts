@@ -7,6 +7,8 @@ export interface OfflineTileCacheOptions {
   cacheName?: string;
   fetcher?: typeof fetch;
   maxTiles?: number;
+  /** Same allowlist as the Service Worker. Empty = app-owned explicit URLs, still rejects javascript/data/blob/file. */
+  urlPrefixes?: string[];
 }
 
 export interface OfflineTileCacheStats {
@@ -37,6 +39,7 @@ export class OfflineTileCache {
   readonly cacheName: string;
   readonly fetcher: typeof fetch;
   readonly maxTiles: number;
+  readonly urlPrefixes: string[];
   queued = 0;
   cached = 0;
   failed = 0;
@@ -45,6 +48,7 @@ export class OfflineTileCache {
     this.cacheName = options.cacheName ?? "Orihon-tiles-v1";
     this.fetcher = options.fetcher ?? fetch;
     this.maxTiles = Math.max(1, Math.floor(options.maxTiles ?? DEFAULT_MAX_TILES));
+    this.urlPrefixes = (options.urlPrefixes ?? []).map(String);
   }
 
   get supported(): boolean {
@@ -62,7 +66,11 @@ export class OfflineTileCache {
   }
 
   async prefetch(urls: Iterable<string>): Promise<OfflineTileCacheStats> {
-    const unique = [...new Set(urls)];
+    const unique = [...new Set(urls)].filter((url) => {
+      if (prefetchUrlAllowed(url, this.urlPrefixes)) return true;
+      this.failed++;
+      return false;
+    });
     if (unique.length > this.maxTiles) {
       throw new RangeError(`OfflineTileCache prefetch exceeds maxTiles (${unique.length} > ${this.maxTiles})`);
     }
@@ -130,7 +138,7 @@ export class OfflineTileCache {
 
   createServiceWorkerScript(options: OfflineServiceWorkerOptions = {}): string {
     const cacheName = JSON.stringify(options.cacheName ?? this.cacheName);
-    const prefixes = JSON.stringify(options.urlPrefixes ?? []);
+    const prefixes = JSON.stringify(options.urlPrefixes ?? this.urlPrefixes);
     return `
 const ORIHON_CACHE = ${cacheName};
 const ORIHON_URL_PREFIXES = ${prefixes};
@@ -179,6 +187,14 @@ self.addEventListener("fetch", (event) => {
 
 export function offlineTileCache(options?: OfflineTileCacheOptions): OfflineTileCache {
   return new OfflineTileCache(options);
+}
+
+const BLOCKED_PREFETCH = /^(?:javascript|data|vbscript|blob|file):/i;
+
+export function prefetchUrlAllowed(url: string, prefixes: readonly string[] = []): boolean {
+  if (BLOCKED_PREFETCH.test(url)) return false;
+  if (!prefixes.length) return true;
+  return prefixes.some((prefix) => url.startsWith(prefix));
 }
 
 export function tileRangeForBounds(

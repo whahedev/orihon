@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Evented } from "../dist/events.js";
+import { clusterLayoutWorkerSource } from "../dist/services/cluster-layout.js";
 import {
   OfflineTileCache,
   PerformanceInspector,
@@ -27,6 +28,7 @@ import {
   webglHeatLayer,
   webglPointLayer
 } from "../dist/index.js";
+import { prefetchUrlAllowed } from "../dist/services/offline-cache.js";
 
 class FakeClassList {
   values = new Set();
@@ -359,6 +361,21 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   const large = markerCollection(largePts, { renderer: "auto", webglThreshold: 50 });
   large.addTo(map);
   assert.equal(large.renderer, "webgl");
+
+  // Icon LOD: high zoom forces DOM markers even above the WebGL threshold.
+  const lod = markerCollection(largePts, {
+    renderer: "auto",
+    webglThreshold: 50,
+    iconMinZoom: 14,
+    marker: { className: "oh-lod-icon" }
+  });
+  map.zoom = 10;
+  lod.addTo(map);
+  assert.equal(lod.renderer, "webgl");
+  map.zoom = 15;
+  lod.redraw();
+  assert.equal(lod.renderer, "dom");
+  lod.remove();
   large.remove();
 });
 
@@ -371,7 +388,7 @@ test("WebGLPointLayer stores large point batches compactly", () => {
 
   assert.ok(layer instanceof WebGLPointLayer);
   assert.equal(layer.getStats().points, 2);
-  assert.equal(layer.getStats().bufferBytes, 32);
+  assert.equal(layer.getStats().bufferBytes, 64);
   layer.addData([{ latlng: [52.54, 13.42] }]);
   assert.equal(layer.getStats().points, 3);
   assert.equal(layer.mercator.length, 6);
@@ -393,6 +410,78 @@ test("WebGLPointLayer reuses CPU buffers on repeated setData", () => {
   assert.equal(layer.mercator.buffer, firstMerc);
   layer.setData([[9, 10], [11, 12], [13, 14]]);
   assert.equal(layer.getStats().points, 3);
+});
+
+test("WebGLPointLayer accepts per-point RGBA colors", () => {
+  const layer = webglPointLayer(
+    [
+      [52.5, 13.4],
+      [52.51, 13.41],
+      [52.52, 13.42]
+    ],
+    { pointSize: 4, fallbackCanvas: true }
+  );
+  const colors = new Float32Array([
+    1, 0, 0, 1,
+    0, 1, 0, 1,
+    0, 0, 1, 1
+  ]);
+  layer.setData(
+    [
+      [52.5, 13.4],
+      [52.51, 13.41],
+      [52.52, 13.42]
+    ],
+    { colors }
+  );
+  const stats = layer.getStats();
+  assert.equal(stats.points, 3);
+  assert.equal(stats.vertexColors, true);
+  assert.equal(layer.colors.length, 12);
+  layer.setColors(null);
+  assert.equal(layer.getStats().vertexColors, false);
+});
+
+test("WebGLPointLayer keeps distinct screen positions at high zoom", () => {
+  class FakeMap extends Evented {
+    zoom = 19;
+    size = { width: 800, height: 600 };
+    // Rough pixel origin for Berlin @ z19.
+    pixelOrigin = { x: 72106240, y: 44017120 };
+    panes = { overlay: { children: [], appendChild() {}, removeChild() {} } };
+    layers = new Set();
+    container = { getBoundingClientRect() { return { left: 0, top: 0 }; } };
+    getZoom() { return this.zoom; }
+    getSize() { return this.size; }
+    getPane() { return this.panes.overlay; }
+    addLayer(layer) {
+      this.layers.add(layer);
+      layer.onAdd(this);
+      return this;
+    }
+    removeLayer(layer) {
+      this.layers.delete(layer);
+      layer.onRemove();
+      return this;
+    }
+    addAttribution() { return this; }
+    removeAttribution() { return this; }
+  }
+
+  const map = new FakeMap();
+  const points = [];
+  for (let i = 0; i < 40; i++) {
+    points.push([52.52 + i * 0.00002, 13.405 + i * 0.00003]);
+  }
+  const layer = webglPointLayer(points, { pointSize: 4, fallbackCanvas: true });
+  layer.addTo(map);
+  // Force canvas path projection (float64) — screen X values must not collapse.
+  layer.renderer = "canvas";
+  layer.render();
+  const stats = layer.getStats();
+  assert.equal(stats.points, 40);
+  assert.ok(stats.rendered >= 2, `expected multiple rendered points, got ${stats.rendered}`);
+  layer.remove();
 });
 
 test("GeometryWorkerPool prepares typed point batches with fallback", async () => {
@@ -422,6 +511,12 @@ test("GeometryWorkerPool.clusterLayout matches sync buildClusterLayout", async (
   assert.equal(result.clusters.length, 1);
   assert.equal(result.singles.length, 1);
   pool.destroy();
+});
+
+test("cluster worker source is valid JavaScript", () => {
+  const source = clusterLayoutWorkerSource();
+  assert.match(source, /buildClusterIndex/);
+  assert.equal(typeof new Function(source), "function");
 });
 
 test("GeometryWorkerPool.clusterIndex matches sync buildClusterIndex", async () => {
@@ -473,6 +568,28 @@ test("OfflineTileCache exposes unsupported fallback stats without Cache API", as
   assert.match(cache.createServiceWorkerScript(), /response\.type !== "opaque"/);
 });
 
+test("prefetch rejects blocked schemes and honors urlPrefixes", async () => {
+  assert.equal(prefetchUrlAllowed("javascript:alert(1)"), false);
+  assert.equal(prefetchUrlAllowed("data:text/plain,x"), false);
+  assert.equal(prefetchUrlAllowed("blob:https://example/1"), false);
+  assert.equal(prefetchUrlAllowed("https://tiles.example/1.png"), true);
+  assert.equal(prefetchUrlAllowed("https://evil.example/1.png", ["https://tiles.example/"]), false);
+  assert.equal(prefetchUrlAllowed("https://tiles.example/1.png", ["https://tiles.example/"]), true);
+
+  const cache = offlineTileCache({
+    cacheName: "prefix-cache",
+    fetcher: undefined,
+    urlPrefixes: ["https://tiles.example/"]
+  });
+  const stats = await cache.prefetch([
+    "https://tiles.example/a.png",
+    "https://evil.example/b.png",
+    "javascript:alert(1)"
+  ]);
+  assert.equal(stats.queued, 1);
+  assert.equal(stats.failed, 2);
+});
+
 test("prefetchTileLayer requires bounds and respects maxTiles", async () => {
   const cache = offlineTileCache({ cacheName: "bounded-cache", fetcher: undefined, maxTiles: 8 });
   const layer = {
@@ -517,6 +634,12 @@ test("decodeMVT converts a minimal point tile to GeoJSON", () => {
   assert.equal(features[0].geometry.type, "Point");
   assert.ok(Math.abs(features[0].geometry.coordinates[0]) < 1e-9);
   assert.ok(Math.abs(features[0].geometry.coordinates[1]) < 1e-9);
+});
+
+test("decodeMVT honors maxBytes and maxFeatures", () => {
+  const bytes = makeMinimalMVT();
+  assert.equal(decodeMVT(bytes, { x: 0, y: 0, z: 0 }, { maxBytes: 1 }).length, 0);
+  assert.equal(decodeMVT(bytes, { x: 0, y: 0, z: 0 }, { layer: "places", maxFeatures: 0 }).length, 0);
 });
 
 test("Framework adapter creates, updates and destroys a map", () => {

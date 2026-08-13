@@ -115,7 +115,7 @@ export class DivIcon {
     element.style.width = `${this.options.iconSize.x}px`;
     element.style.height = `${this.options.iconSize.y}px`;
     if (typeof Node !== "undefined" && this.options.content instanceof Node) {
-      element.replaceChildren(this.options.content);
+      element.replaceChildren(this.options.content.cloneNode(true));
     } else {
       element.textContent = String(this.options.content);
     }

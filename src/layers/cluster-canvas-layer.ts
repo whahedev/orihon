@@ -1,8 +1,9 @@
 import { createEl } from "../dom.js";
 import { Layer, type LayerOptions } from "../layer.js";
-import type { LatLng, LatLngLike } from "../geo.js";
+import { latLng, type LatLng, type LatLngLike, type Point } from "../geo.js";
 import type { Orihon } from "../map.js";
 import type { PointLike } from "../geo.js";
+import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 
 export type ClusterCanvasItem = {
   key: string;
@@ -55,17 +56,11 @@ export class ClusterCanvasLayer extends Layer {
     this.canvas.style.pointerEvents = "auto";
     this.ctx = this.canvas.getContext("2d");
     this.canvas.addEventListener("click", this._onClick);
-    map.on("move", this._onViewChange);
-    map.on("zoom", this._onViewChange);
-    map.on("resize", this._onViewChange);
     this._resize();
     this._draw();
   }
 
   override onRemove(): void {
-    this.map?.off("move", this._onViewChange);
-    this.map?.off("zoom", this._onViewChange);
-    this.map?.off("resize", this._onViewChange);
     this.canvas?.removeEventListener("click", this._onClick);
     this.canvas?.remove();
     this.canvas = null;
@@ -107,14 +102,20 @@ export class ClusterCanvasLayer extends Layer {
     return best ? { key: best.key, lat: best.lat, lng: best.lng, count: best.count } : null;
   }
 
+  queryHit(point: Point, options: ResolvedQueryOptions): QueryHit | null {
+    const hit = this.queryAt(point, options.tolerance);
+    return hit ? {
+      layer: this,
+      latlng: latLng([hit.lat, hit.lng]),
+      source: "cluster",
+      id: hit.key,
+      feature: hit
+    } : null;
+  }
+
   override render(): void {
     this._draw();
   }
-
-  private _onViewChange = (): void => {
-    this._resize();
-    this._draw();
-  };
 
   private _onClick = (ev: MouseEvent): void => {
     const map = this.map;
@@ -139,8 +140,10 @@ export class ClusterCanvasLayer extends Layer {
     this.dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
     const w = Math.max(1, Math.round(size.x));
     const h = Math.max(1, Math.round(size.y));
-    canvas.width = Math.round(w * this.dpr);
-    canvas.height = Math.round(h * this.dpr);
+    const bw = Math.round(w * this.dpr);
+    const bh = Math.round(h * this.dpr);
+    if (canvas.width !== bw) canvas.width = bw;
+    if (canvas.height !== bh) canvas.height = bh;
     canvas.style.width = `${w}px`;
     canvas.style.height = `${h}px`;
     const ctx = this.ctx;

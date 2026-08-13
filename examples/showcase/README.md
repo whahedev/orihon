@@ -2,7 +2,7 @@
 
 Full-bleed product demo: **Core → Standard → Advanced**, then stress scenarios Leaflet tends to dislike (100k vehicles, 250k IoT, live fleet, 50k clusters, aircraft, incident heat).
 
-Loads Orihon from local `/dist` when you serve the repo; otherwise from jsDelivr `orihon@1.0.2` (GitHub Pages).
+Loads Orihon from local `/dist` when you serve the repo; otherwise from jsDelivr `orihon@1.0.3` (GitHub Pages).
 
 ## Run locally
 

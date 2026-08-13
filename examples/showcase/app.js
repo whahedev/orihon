@@ -115,8 +115,8 @@ function setStatus(text, tone = "ok") {
 }
 
 async function loadOrihon() {
-  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.esm.js";
-  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.2/dist/orihon.css";
+  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.esm.js";
+  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.css";
   const link = document.getElementById("orihon-css");
   els.bench.href = location.pathname.includes("/examples/showcase")
     ? "/examples/bench-compare/"

@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/dist/orihon.css" id="orihon-css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css" id="orihon-css" />
     <style>
       :root {
         --ink: #172026;
@@ -541,8 +541,8 @@ function setStatus(text, tone = "ok") {
 }
 
 async function loadOrihon() {
-  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.esm.js";
-  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.css";
+  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.esm.js";
+  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css";
   const link =
     document.getElementById("orihon-css") ||
     document.querySelector("link[data-orihon-css]");

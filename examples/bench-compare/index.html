@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" data-orihon-css href="/dist/orihon.css" />
+    <link rel="stylesheet" data-orihon-css href="https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
@@ -1207,8 +1207,8 @@ function createMapLibreRichPoints(map, objects, options = {}) {
 }
 
 async function loadOrihon() {
-  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.esm.js";
-  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.css";
+  const ORIHON_CDN = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.esm.js";
+  const ORIHON_CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css";
   const link =
     document.getElementById("orihon-css") ||
     document.querySelector("link[data-orihon-css]");

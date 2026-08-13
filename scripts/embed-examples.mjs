@@ -9,9 +9,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const CDN_JS = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.esm.js";
-const CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.css";
-const CDN_GLOBAL = "https://cdn.jsdelivr.net/npm/orihon@1.0.3/dist/orihon.global.js";
+const CDN_JS = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.esm.js";
+const CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css";
+const CDN_GLOBAL = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.global.js";
 
 function patchLoadOrihon(source, { withBenchLink = false } = {}) {
   const benchLink = withBenchLink

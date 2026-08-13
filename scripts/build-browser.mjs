@@ -36,7 +36,7 @@ for (const artifact of artifacts) {
     globalName: artifact.globalName,
     minify: true,
     sourcemap: true,
-    target: ["es2020"],
+    target: ["es2022"],
     legalComments: "none",
     banner: { js: banner },
     footer: artifact.format === "iife"
@@ -57,13 +57,11 @@ for (const artifact of artifacts) {
       module: true,
       compress: { passes: 8, booleans_as_integers: true, keep_fargs: false },
       mangle: {
-        properties: {
-          // Underscore-prefixed properties are implementation details throughout
-          // the codebase. Quoted keys remain untouched so feature/user payloads
-          // with an underscore name retain their original shape.
-          regex: /^_/,
-          keep_quoted: true
-        }
+        // Do not mangle underscore properties: esbuild's class-field helper
+        // (when used) keeps quoted names like "_unsub", while Terser would
+        // rename bare `this._unsub` — breaking createMap in the CDN bundle.
+        // Size win is small vs. a hard runtime crash.
+        properties: false
       },
       format: { comments: /^!/ },
       sourceMap: {

@@ -61,7 +61,6 @@
     "pretest": "npm run build",
     "test": "node scripts/run-unit-tests.mjs",
     "test:browser": "node test/browser-smoke.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs",
-    "test:studio-browser": "node test/studio-placement-browser.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",
     "test:leaks": "node --expose-gc --test test/lifecycle-leak.test.js",

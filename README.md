@@ -398,7 +398,6 @@ Raw minified sizes are larger; production cost is the gzip figure. Prefer modula
 - [Pricing](docs/PRICING.md)
 - [License FAQ](docs/LICENSE-FAQ.md)
 - [Commercial License Agreement](docs/COMMERCIAL-LICENSE.md)
-- [Library comparison](docs/COMPARE.md)
 - [Recipes](docs/RECIPES.md)
 - [Plugin development](docs/PLUGINS.md)
 - [Scale showcase](examples/showcase) (`npm run demo:showcase` · [live](https://whahedev.github.io/orihon/showcase/))

@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const studioIndex = path.join(root, "_local", "studio", "index.html");
+try {
+  await access(studioIndex);
+} catch {
+  console.log("Studio placement browser test skipped (_local/studio not present)");
+  process.exit(0);
+}
+
 const mime = new Map([
   [".css", "text/css; charset=utf-8"],
   [".html", "text/html; charset=utf-8"],
@@ -46,7 +54,7 @@ try {
   await page.goto(`http://127.0.0.1:${address.port}/_local/studio/`);
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
-  await page.waitForTimeout(300);
+  await page.waitForSelector("#map", { timeout: 15_000 });
 
   const sceneMarkers = () => page.locator("button.scene-node").evaluateAll((nodes) => (
     nodes.filter((node) => /\bMarker\b/i.test(node.innerText)).length

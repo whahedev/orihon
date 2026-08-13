@@ -62,9 +62,10 @@ test("vector screen geometry matches the visual regression contract", async ({ p
 test("tiles and overlays stay viewport-local at maximum zoom", async ({ page }) => {
   await loadVisualMap(page);
   await page.evaluate(() => {
+    // Force DOM tiles — Advanced `tileLayer()` may pick WebGL, which has no `.oh-tile-loaded`.
     window.__orihonHighZoomTiles = Orihon.tileLayer(
       "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-      { maxZoom: 19, buffer: 1 }
+      { maxZoom: 19, buffer: 1, renderer: "dom" }
     ).addTo(window.__orihonVisual.map);
     window.__orihonVisual.map.setView([52.52, 13.405], 19);
   });

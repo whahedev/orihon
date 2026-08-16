@@ -25,7 +25,7 @@
 - Faster live tiles: incremental coverage (`tile-grid`), velocity-biased fetch, WebGL2 texture-array draws, W-TinyLFU GPU cache admission.
 - Raster fill continues after the first `maxNewPerFrame` batch until the viewport is complete.
 - Advanced `createMVTProvider` / `decodePackedMVT` sniff Orihon MLT and decode MVT geometry with WASM; `tileLayer({ renderer: "auto" })` prefers WebGPU when `navigator.gpu` exists.
-- Optional entries: `orihon/mlt`, `orihon/mvt-wasm`, `orihon/webgpu`. Advanced gzip budget is **100 KiB**.
+- Optional entries: `orihon/mlt`, `orihon/mvt-wasm`, `orihon/webgpu`. Advanced gzip budget is **102 KiB**.
 
 ### Demos
 - `examples/object-manager-live`, `examples/object-manager-scene`, `examples/aircraft-radar-proxy` (`npm run demo:aircraft`), `examples/rzd-train-122-tracker` (`npm run demo:rzd`, port 8788).

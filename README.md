@@ -80,7 +80,7 @@ import { fullscreenControl, measureControl, miniMap, graticuleLayer } from "orih
 import { bufferPoint } from "orihon/geo";
 ```
 
-Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 35 KiB, full (Advanced + WebGL/WebGPU) ≤ 100 KiB. Prefer the smallest entry that covers the feature set.
+Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 35 KiB, full (Advanced + WebGL/WebGPU) ≤ 102 KiB. Prefer the smallest entry that covers the feature set.
 
 **ObjectManager** is the Advanced-tier answer to heavy datasets: render and manage 100,000+ map objects without keeping 100,000 DOM markers alive.
 

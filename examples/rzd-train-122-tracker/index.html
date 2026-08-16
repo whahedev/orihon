@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
   <title>РЖД — поезд 121В/122В Санкт-Петербург → Новороссийск</title>
 
@@ -541,49 +541,237 @@
       color: #fff7ed;
     }
 
-    @media (max-width: 900px) {
-      .timeline {
-        top: auto;
-        right: 10px;
-        bottom: 10px;
-        width: min(350px, calc(100vw - 20px));
-        max-height: 36vh;
+    .mobile-status {
+      display: none;
+    }
+
+    .panel-more,
+    .timeline-drawer {
+      margin: 0;
+      border: 0;
+      padding: 0;
+    }
+
+    .panel-more > summary,
+    .timeline-drawer > summary {
+      list-style: none;
+    }
+
+    .panel-more > summary::-webkit-details-marker,
+    .timeline-drawer > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .panel-more-summary {
+      display: none;
+    }
+
+    .mobile-fab {
+      display: none;
+    }
+
+    @media (min-width: 901px) {
+      .panel-more-summary {
+        display: none !important;
       }
 
-      .top-panel {
-        top: 10px;
-        left: 10px;
-        width: calc(100vw - 20px);
+      .timeline-drawer > summary.timeline-head {
+        cursor: default;
       }
 
-      .legend {
+      .timeline-drawer > summary.timeline-head::after {
         display: none;
       }
     }
 
-    @media (max-width: 560px) {
+    @media (max-width: 900px) {
+      .legend {
+        display: none;
+      }
+
+      .top-panel {
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: min(34vh, 280px);
+        overflow: auto;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+        border-radius: 18px 18px 0 0;
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+      }
+
+      .top-panel h1 {
+        font-size: 14px;
+      }
+
+      .route-subtitle,
+      .rail-vector-status,
+      .badge,
       .stats {
-        grid-template-columns: repeat(2, 1fr);
+        display: none;
+      }
+
+      .mobile-status {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+        color: #94a3b8;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .mobile-status span {
+        padding: 4px 8px;
+        border: 1px solid rgba(148, 163, 184, .14);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, .46);
+        color: #e2e8f0;
+      }
+
+      .progress {
+        margin-top: 8px;
+      }
+
+      .position-line {
+        margin-top: 7px;
+        font-size: 12px;
+      }
+
+      .next-line {
+        font-size: 10px;
+      }
+
+      .button-row {
+        margin-top: 8px;
+      }
+
+      .panel-more {
+        margin-top: 8px;
+        border-top: 1px solid rgba(148, 163, 184, .12);
+        padding-top: 8px;
+      }
+
+      .panel-more-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        cursor: pointer;
+        color: #cbd5e1;
+        font-size: 11px;
+        font-weight: 680;
+        user-select: none;
+      }
+
+      .panel-more-summary::after {
+        content: "▾";
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      .panel-more[open] > .panel-more-summary::after {
+        content: "▴";
+      }
+
+      .panel-more-body {
+        margin-top: 8px;
+      }
+
+      .timeline {
+        top: calc(10px + env(safe-area-inset-top, 0px));
+        right: 10px;
+        bottom: auto;
+        left: auto;
+        width: min(280px, calc(100vw - 20px));
+        max-height: none;
+        overflow: visible;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+
+      .timeline-drawer {
+        border: 1px solid rgba(148, 163, 184, .18);
+        border-radius: 14px;
+        background: rgba(6, 15, 22, .94);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, .35);
+        backdrop-filter: blur(14px);
+        overflow: hidden;
+      }
+
+      .timeline-drawer > summary.timeline-head {
+        cursor: pointer;
+        padding: 10px 12px;
+      }
+
+      .timeline-drawer > summary.timeline-head::after {
+        content: "▾";
+        float: right;
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      .timeline-drawer[open] > summary.timeline-head::after {
+        content: "▴";
+      }
+
+      .timeline-drawer:not([open]) .timeline-subtitle {
+        display: none;
+      }
+
+      .timeline-drawer[open] {
+        max-height: min(38vh, 320px);
+        overflow: auto;
+      }
+
+      .timeline-subtitle {
+        clear: both;
+      }
+
+      #map .oh-bottom-right,
+      #map .oh-bottom-left {
+        bottom: calc(min(34vh, 280px) + 10px);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .top-panel {
+        max-height: min(32vh, 260px);
       }
 
       .controls {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .controls > button {
-        grid-column: 1 / -1;
-      }
-
-      .actual-grid {
         grid-template-columns: 1fr;
       }
 
+      .controls > button {
+        width: 100%;
+      }
+
+      .button-row button {
+        flex: 1 1 calc(50% - 4px);
+        height: 34px;
+      }
+
+      .actual-grid,
       .delay-row {
         grid-template-columns: 1fr;
       }
 
       .timeline {
-        max-height: 30vh;
+        width: auto;
+        max-width: calc(100vw - 20px);
+        right: 10px;
+        left: auto;
+      }
+
+      #map .oh-bottom-right,
+      #map .oh-bottom-left {
+        bottom: calc(min(32vh, 260px) + 10px);
       }
     }
   </style>
@@ -594,7 +782,7 @@
     <strong>Страница открыта через file://.</strong>
     Для стабильной работы Orihon откройте её через локальный сервер:
     запустите <code>start.cmd</code> и перейдите на
-    <code>http://127.0.0.1:8787</code>.
+    <code>http://127.0.0.1:8788</code>.
   </div>
 
   <div id="app">
@@ -603,7 +791,7 @@
     <section class="top-panel">
       <div class="head">
         <div>
-          <h1>Поезд 121В/122В · Санкт-Петербург → Новороссийск</h1>
+          <h1>Поезд 121В/122В · СПб → Новороссийск</h1>
           <div class="route-subtitle">
             Оценочное положение по расписанию РЖД/ФПК · текущее время берётся из системных часов · МСК (UTC+3)
           </div>
@@ -636,6 +824,12 @@
         </div>
       </div>
 
+      <div class="mobile-status">
+        <span id="mobileProgressText">0%</span>
+        <span id="mobileRemainingText">—</span>
+        <span id="mobileDelayText">0 мин</span>
+      </div>
+
       <div class="progress">
         <div id="progressBar"></div>
       </div>
@@ -645,91 +839,101 @@
       </div>
       <div class="next-line" id="nextLine"></div>
 
-      <div class="controls">
-        <div class="field">
-          <label>Системное время, МСК</label>
-          <div id="systemTimeBox" style="
-            height:36px;
-            display:flex;
-            align-items:center;
-            padding:0 9px;
-            border:1px solid rgba(148,163,184,.18);
-            border-radius:10px;
-            background:#0d1a25;
-            color:#eaf1f7;
-            font-variant-numeric:tabular-nums;
-          ">—</div>
-        </div>
-
-        <div class="field">
-          <label>Расчётный рейс</label>
-          <div id="serviceDateBox" style="
-            height:36px;
-            display:flex;
-            align-items:center;
-            padding:0 9px;
-            border:1px solid rgba(148,163,184,.18);
-            border-radius:10px;
-            background:#0d1a25;
-            color:#eaf1f7;
-            font-variant-numeric:tabular-nums;
-          ">—</div>
-        </div>
-
-        <button id="fitButton" type="button">Весь маршрут</button>
-      </div>
-
       <div class="button-row">
         <button id="liveButton" class="active" type="button">LIVE</button>
-        <button id="x60Button" type="button">Демо ×60</button>
-        <button id="x600Button" type="button">Демо ×600</button>
         <button id="trainButton" type="button">К поезду</button>
-        <button id="railwayButton" type="button">ЖД пути: ВЫКЛ</button>
-        <button id="rebuildRailButton" type="button">Перестроить OSM-маршрут</button>
+        <button id="x60Button" type="button">×60</button>
+        <button id="x600Button" type="button">×600</button>
       </div>
 
-      <details>
-        <summary>Фактическая корректировка по данным РЖД</summary>
+      <details class="panel-more" open>
+        <summary class="panel-more-summary">Управление и корректировка</summary>
+        <div class="panel-more-body">
+          <div class="controls">
+            <div class="field">
+              <label>Системное время, МСК</label>
+              <div id="systemTimeBox" style="
+                height:36px;
+                display:flex;
+                align-items:center;
+                padding:0 9px;
+                border:1px solid rgba(148,163,184,.18);
+                border-radius:10px;
+                background:#0d1a25;
+                color:#eaf1f7;
+                font-variant-numeric:tabular-nums;
+              ">—</div>
+            </div>
 
-        <div class="actual-grid">
-          <div class="field">
-            <label for="actualStation">Контрольная станция</label>
-            <select id="actualStation"></select>
+            <div class="field">
+              <label>Расчётный рейс</label>
+              <div id="serviceDateBox" style="
+                height:36px;
+                display:flex;
+                align-items:center;
+                padding:0 9px;
+                border:1px solid rgba(148,163,184,.18);
+                border-radius:10px;
+                background:#0d1a25;
+                color:#eaf1f7;
+                font-variant-numeric:tabular-nums;
+              ">—</div>
+            </div>
+
+            <button id="fitButton" type="button">Весь маршрут</button>
           </div>
 
-          <div class="field">
-            <label for="actualTime">Фактическое прибытие</label>
-            <input id="actualTime" type="datetime-local" />
+          <div class="button-row">
+            <button id="railwayButton" type="button">ЖД пути: ВЫКЛ</button>
+            <button id="rebuildRailButton" type="button">Перестроить OSM-маршрут</button>
           </div>
 
-          <button id="applyActualButton" type="button">Применить</button>
-        </div>
+          <details>
+            <summary>Фактическая корректировка по данным РЖД</summary>
 
-        <div class="delay-row">
-          <div class="field">
-            <label for="manualDelay">Или задержка вручную, минут</label>
-            <input id="manualDelay" type="number" step="1" value="0" />
-          </div>
-          <button id="applyDelayButton" type="button">Задать задержку</button>
-        </div>
+            <div class="actual-grid">
+              <div class="field">
+                <label for="actualStation">Контрольная станция</label>
+                <select id="actualStation"></select>
+              </div>
 
-        <div class="mode-note">
-          Это не GPS/ГЛОНАСС. Текущее время берётся через Date.now() из системных часов браузера. Прототип оценивает положение между соседними
-          станциями по расписанию. Если ввести фактическое время проследования
-          станции из сервиса «Фактическое движение поездов» РЖД, расчёт
-          сдвигается на реальную задержку.
+              <div class="field">
+                <label for="actualTime">Фактическое прибытие</label>
+                <input id="actualTime" type="datetime-local" />
+              </div>
+
+              <button id="applyActualButton" type="button">Применить</button>
+            </div>
+
+            <div class="delay-row">
+              <div class="field">
+                <label for="manualDelay">Или задержка вручную, минут</label>
+                <input id="manualDelay" type="number" step="1" value="0" />
+              </div>
+              <button id="applyDelayButton" type="button">Задать задержку</button>
+            </div>
+
+            <div class="mode-note">
+              Это не GPS/ГЛОНАСС. Текущее время берётся через Date.now() из системных часов браузера. Прототип оценивает положение между соседними
+              станциями по расписанию. Если ввести фактическое время проследования
+              станции из сервиса «Фактическое движение поездов» РЖД, расчёт
+              сдвигается на реальную задержку.
+            </div>
+          </details>
         </div>
       </details>
     </section>
 
     <aside class="timeline">
-      <div class="timeline-head">
-        <div class="timeline-title">Остановки · 121В/122В · <span id="stopCountLabel"></span></div>
-        <div class="timeline-subtitle">
-          Прибытие · отправление · стоянка · клик — перейти на карту
-        </div>
-      </div>
-      <div id="timelineList"></div>
+      <details class="timeline-drawer" open>
+        <summary class="timeline-head">
+          <div class="timeline-title">Остановки · <span id="stopCountLabel"></span></div>
+          <div class="timeline-subtitle">
+            Прибытие · отправление · стоянка · клик — на карту
+          </div>
+        </summary>
+        <div id="timelineList"></div>
+      </details>
     </aside>
 
     <div class="legend">
@@ -1693,15 +1897,46 @@
         const remaining =
           state.arrivalMs - nowMs;
 
-        remainingText.textContent =
+        const remainingLabel =
           state.phase === "arrived"
             ? "0 мин"
             : formatDuration(remaining);
+
+        remainingText.textContent =
+          remainingLabel;
 
         delayText.textContent =
           delayMinutes === 0
             ? "0 мин"
             : `${delayMinutes > 0 ? "+" : ""}${delayMinutes} мин`;
+
+        const mobileProgress =
+          document.getElementById(
+            "mobileProgressText"
+          );
+        const mobileRemaining =
+          document.getElementById(
+            "mobileRemainingText"
+          );
+        const mobileDelay =
+          document.getElementById(
+            "mobileDelayText"
+          );
+
+        if (mobileProgress) {
+          mobileProgress.textContent =
+            `${pct.toFixed(0)}%`;
+        }
+
+        if (mobileRemaining) {
+          mobileRemaining.textContent =
+            remainingLabel;
+        }
+
+        if (mobileDelay) {
+          mobileDelay.textContent =
+            delayText.textContent;
+        }
 
         positionLine.innerHTML =
           positionText(state, nowMs);
@@ -2310,6 +2545,20 @@
           item.addEventListener(
             "click",
             () => {
+              const drawer =
+                document.querySelector(
+                  ".timeline-drawer"
+                );
+
+              if (
+                drawer &&
+                window.matchMedia(
+                  "(max-width: 900px)"
+                ).matches
+              ) {
+                drawer.open = false;
+              }
+
               map.flyTo(
                 [stop.lat, stop.lon],
                 9
@@ -2553,7 +2802,41 @@
         }
       }
 
+      function syncMobileLayout() {
+        const mobile =
+          window.matchMedia(
+            "(max-width: 900px)"
+          ).matches;
+
+        const panelMore =
+          document.querySelector(
+            ".panel-more"
+          );
+
+        const timelineDrawer =
+          document.querySelector(
+            ".timeline-drawer"
+          );
+
+        if (panelMore) {
+          panelMore.open = !mobile;
+        }
+
+        if (timelineDrawer) {
+          timelineDrawer.open = !mobile;
+        }
+      }
+
       function bindControls() {
+        syncMobileLayout();
+
+        window
+          .matchMedia("(max-width: 900px)")
+          .addEventListener(
+            "change",
+            syncMobileLayout
+          );
+
         fitButton.addEventListener(
           "click",
           () => {

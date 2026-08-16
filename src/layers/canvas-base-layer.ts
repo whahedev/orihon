@@ -92,28 +92,28 @@ export class CanvasBaseLayer extends Layer<ResolvedCanvasOptions> {
 
   #drawTileGrid(context: CanvasRenderingContext2D, width: number, height: number): void {
     if (!this.map) return;
-    const zoom = Math.round(this.map.zoom);
-    const northWest = this.map.crs.project(this.map.containerPointToLatLng({ x: 0, y: 0 }), zoom);
-    const southEast = this.map.crs.project(this.map.containerPointToLatLng({ x: width, y: height }), zoom);
-    const startX = Math.floor(northWest.x / TILE_SIZE) * TILE_SIZE;
-    const startY = Math.floor(northWest.y / TILE_SIZE) * TILE_SIZE;
-    const displayScale = 2 ** (this.map.zoom - zoom);
+    // Use the live fractional camera — same space as markers / latLngToLayerPoint.
+    const northWest = this.map.crs.project(this.map.containerPointToLatLng({ x: 0, y: 0 }), this.map.zoom);
+    const southEast = this.map.crs.project(this.map.containerPointToLatLng({ x: width, y: height }), this.map.zoom);
+    const tileSpan = TILE_SIZE * 2 ** (this.map.zoom - Math.round(this.map.zoom));
+    const startX = Math.floor(northWest.x / tileSpan) * tileSpan;
+    const startY = Math.floor(northWest.y / tileSpan) * tileSpan;
 
     context.save();
     context.lineWidth = 1;
     context.font = "12px system-ui, sans-serif";
     context.textBaseline = "top";
-    for (let x = startX; x <= southEast.x + TILE_SIZE; x += TILE_SIZE) {
-      const screenX = (x - northWest.x) * displayScale;
-      context.strokeStyle = x % (TILE_SIZE * 4) === 0 ? this.options.majorGrid : this.options.grid;
+    for (let x = startX; x <= southEast.x + tileSpan; x += tileSpan) {
+      const screenX = x - northWest.x;
+      context.strokeStyle = Math.round(x / tileSpan) % 4 === 0 ? this.options.majorGrid : this.options.grid;
       context.beginPath();
       context.moveTo(screenX, 0);
       context.lineTo(screenX, height);
       context.stroke();
     }
-    for (let y = startY; y <= southEast.y + TILE_SIZE; y += TILE_SIZE) {
-      const screenY = (y - northWest.y) * displayScale;
-      context.strokeStyle = y % (TILE_SIZE * 4) === 0 ? this.options.majorGrid : this.options.grid;
+    for (let y = startY; y <= southEast.y + tileSpan; y += tileSpan) {
+      const screenY = y - northWest.y;
+      context.strokeStyle = Math.round(y / tileSpan) % 4 === 0 ? this.options.majorGrid : this.options.grid;
       context.beginPath();
       context.moveTo(0, screenY);
       context.lineTo(width, screenY);

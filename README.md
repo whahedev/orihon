@@ -4,10 +4,14 @@
 [![downloads](https://img.shields.io/npm/dm/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
 [![CI](https://github.com/whahedev/orihon/actions/workflows/ci.yml/badge.svg)](https://github.com/whahedev/orihon/actions/workflows/ci.yml)
 [![full size](https://img.shields.io/badge/full-≤75_KiB_gzip-0f766e)](https://github.com/whahedev/orihon#tiers)
-[![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial-555)](./LICENSE)
+[![license](https://img.shields.io/badge/license-Apache%202.0-0f766e)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-ready-3178c6)](./tsconfig.json)
 
 ## Unfold the world.
+
+Orihon is a free, open-source browser map engine. Apache 2.0. Use it anywhere.
+
+Want to build visually? Try Orihon Studio.
 
 Orihon is a lightweight, high-performance mapping library built around a simple idea:
 
@@ -40,8 +44,6 @@ Use the tiny core for simple maps. Add everyday GIS in Standard (still **no WebG
 npm install orihon
 ```
 
-Orihon is licensed under the PolyForm Noncommercial License 1.0.0. Non-commercial use is free; commercial use requires a separate license. See [License](#license).
-
 ## Tiers
 
 Orihon is built as three intentional surfaces. Start narrow; grow only when the product needs it.
@@ -52,9 +54,9 @@ Orihon is built as three intentional surfaces. Start narrow; grow only when the 
 | **Standard** | `orihon/standard` | Core + markers, SVG/canvas vectors, GeoJSON (`svg`/`canvas`), popups, controls, overlays, locales — **no WebGL** |
 | **Advanced** | `orihon` | Standard + WebGL (points, heat, path batch, raster tiles), MVT, ObjectManager, routing, traffic, offline, workers, adapters |
 
-Optional entries keep product-specific integrations outside those tier budgets: `orihon/draw`, `orihon/react`, `orihon/pmtiles`, `orihon/controls`, `orihon/geo` and `orihon/popup-content`.
+Optional entries keep product-specific integrations outside those tier budgets: `orihon/draw`, `orihon/react`, `orihon/pmtiles`, `orihon/mlt` (MLT **encoder**), `orihon/mvt-wasm` / `orihon/webgpu` (Standard-only opt-in), `orihon/controls`, `orihon/geo` and `orihon/popup-content`.
 
-**WebGL policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `webglHeatLayer`, `tileLayer({ renderer: "webgl"|"auto" })` / `webglTileLayer`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets).
+**WebGL policy:** Core/Standard stay CPU/DOM. Advanced opts into GPU only where dataset size or continuous camera stress pays for it (`webglPointLayer`, `webglHeatLayer`, `tileLayer({ renderer: "webgl"|"webgpu"|"auto" })` / `webglTileLayer`, `geoJSON({ renderer: "webgl" })` / `auto` on large path sets). `tileLayer({ renderer: "auto" })` uses WebGPU when `navigator.gpu` exists, else WebGL, else DOM. `createMVTProvider` / `decodePackedMVT` / `decodeMVT` accept Mapbox MVT and Orihon MLT, and decode MVT geometry with WASM when available.
 
 ```js
 // Core — basemap only
@@ -64,17 +66,21 @@ import { createMap, tileLayer } from "orihon/core";
 import { createMap, tileLayer, marker, geoJSON, zoomControl } from "orihon/standard";
 
 // Advanced — GPU when volume / camera stress needs it
-import { createMap, objectManager, webglPointLayer, geoJSON } from "orihon";
+import { createMap, objectManager, webglPointLayer, geoJSON, createMVTProvider, tileLayer } from "orihon";
+
+tileLayer(url); // auto: WebGPU → WebGL → DOM
+createMVTProvider("/tiles/{z}/{x}/{y}.pbf"); // MVT, MLT, WASM — same call
 
 // Product integrations stay separate
 import { drawControl } from "orihon/draw";
 import { Map, TileLayer, Marker, Popup } from "orihon/react";
 import { createPMTilesProvider } from "orihon/pmtiles";
+import { encodePackedMLT } from "orihon/mlt"; // encoder only
 import { fullscreenControl, measureControl, miniMap, graticuleLayer } from "orihon/controls";
 import { bufferPoint } from "orihon/geo";
 ```
 
-Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 35 KiB, full (Advanced + WebGL) ≤ 75 KiB. Prefer the smallest entry that covers the feature set.
+Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 35 KiB, full (Advanced + WebGL/WebGPU) ≤ 100 KiB. Prefer the smallest entry that covers the feature set.
 
 **ObjectManager** is the Advanced-tier answer to heavy datasets: render and manage 100,000+ map objects without keeping 100,000 DOM markers alive.
 
@@ -195,6 +201,118 @@ manager.add(
   }))
 );
 ```
+
+### Object state and data-driven styling
+
+`ManagedObject.properties` stores durable object data. Runtime UI/application flags live separately in `ObjectState` (selected, hovered, alarms, etc.) and are never written back into `properties`.
+
+```js
+const manager = objectManager({
+  clusterRenderer: "auto",
+  style: (object, state, context) => ({
+    color:
+      context.selected
+        ? "#7c3aed"
+        : context.hovered
+          ? "#f59e0b"
+          : state.alarm === true
+            ? "#dc2626"
+            : object.properties?.status === "offline"
+              ? "#64748b"
+              : "#16a34a",
+    opacity: state.disabled === true ? 0.3 : 0.9,
+    size: context.zoom >= 14 ? 13 : 7
+  })
+});
+
+manager.setObjectState("truck-42", { alarm: true });
+manager.setSelected("truck-42");
+```
+
+Style priority: base defaults → legacy category/alert/selected/hover (`styleByCategory`) → custom `style` → normalization. Custom resolvers are not auto-wrapped with purple/orange selection colors — use `context.selected` / `context.hovered` explicitly. `setObjectState` shallow-merges scalars (`undefined` deletes a key; `null` is kept). Batch updates use `setObjectStates`. Changing state patches only touched WebGL color/size slots when the GPU buffer topology is unchanged. `clear()` clears object data and states but keeps the configured style resolver.
+
+### Managed geometries, icons, labels, and scene modes
+
+Legacy points (`coordinates: [lat, lng]`) keep working. GeoJSON-style `geometry` also accepts `Point` (`[lng, lat]`), `LineString`, and `Polygon` in one manager.
+
+```js
+const manager = objectManager({
+  clusterize: true,
+  visualization: "auto",
+  visualizationByZoom: { heatmapUntil: 7, clustersUntil: 12 },
+  declutter: true,
+  search: { fields: ["properties.name", "properties.vehicleNumber"] },
+  time: {
+    value: (object) =>
+      typeof object.properties?.timestamp === "number"
+        ? object.properties.timestamp
+        : null
+  },
+  clusterProperties: {
+    alarms: {
+      operation: "count",
+      filter: (object) => object.properties?.alarm === true
+    },
+    totalCargo: {
+      operation: "sum",
+      value: (object) => Number(object.properties?.cargo ?? 0)
+    }
+  },
+  style: (object, state, context) => ({
+    color: state.selected ? "#7c3aed" : state.alarm ? "#dc2626" : "#2563eb",
+    size: context.zoom >= 14 ? 18 : 12,
+    icon: object.properties?.type === "truck" ? "truck" : null,
+    rotation: Number(object.properties?.heading ?? 0),
+    label:
+      context.zoom >= 13
+        ? {
+            text: String(object.properties?.name ?? ""),
+            fontSize: 12,
+            haloColor: "#ffffff",
+            haloWidth: 2,
+            offset: [0, -20],
+            priority: state.selected ? 1000 : 0
+          }
+        : null,
+    trail:
+      object.properties?.type === "truck"
+        ? { enabled: true, maxPoints: 40, color: "#2563eb", width: 2, opacity: 0.5 }
+        : null,
+    line: object.geometry?.type === "LineString"
+      ? { color: "#2563eb", width: 3, dashArray: [8, 4] }
+      : undefined,
+    polygon: object.geometry?.type === "Polygon"
+      ? { fill: "#0f766e", fillOpacity: 0.2, stroke: "#0f766e", strokeWidth: 1.5 }
+      : undefined
+  })
+});
+
+manager.registerIcon("truck", truckImage);
+manager.add([
+  {
+    id: "truck-42",
+    geometry: { type: "Point", coordinates: [37.618423, 55.751244] },
+    properties: { type: "truck", name: "Truck 42", heading: 90, timestamp: Date.now() }
+  }
+]);
+manager.updateObject("truck-42", { coordinates: [55.76, 37.63] }, { animate: true, duration: 800 });
+manager.search("truck 42", { limit: 10 });
+manager.setTimeRange(Date.now() - 3600_000, Date.now());
+```
+
+**Icons:** GPU sprite atlas rebuilt only on `registerIcon` / `removeIcon` / `clearIcons` — not on object moves. Missing icons fall back to a default symbol. Tint uses `iconTint` when set, otherwise `color`.
+
+**Rotation:** degrees (`0` up, `90` right). Per-instance GPU attribute on symbol quads (`rotationAlignment: "screen"` in v1).
+
+**Labels / declutter:** `style.label` plus optional `declutter: true`. Higher `priority` wins; `collisionMode: "always"` bypasses declutter (selected/hovered default to always).
+
+**Visualization:** `"objects" | "clusters" | "heatmap" | "auto"`. Switching modes keeps `ObjectState`, search, and temporal indexes.
+
+**Search / time:** opt-in local token index and temporal range filter. Coordinate/state updates do not rebuild search; time filtering applies before clustering/heatmap.
+
+**Motion / trails:** `updateObject(..., { animate: true })` / `moveObject`. Spatial index uses target coordinates; symbol rendering can interpolate. Trails append on logical moves and batch-render with styled paths.
+
+**Lines / polygons:** managed geometries route to path/polygon batches. Dash + gradient are supported on the styled path pipeline (canvas-backed with distance-along-line data; WebGL shaders are the next hardening step). Style-only updates avoid retriangulation when geometry is unchanged.
 
 ## GeoJSON And WMS
 
@@ -413,9 +531,7 @@ Raw minified sizes are larger; production cost is the gzip figure. Prefer modula
 
 - [API reference](docs/API.md)
 - [Security model](docs/SECURITY.md)
-- [Pricing](docs/PRICING.md)
 - [License FAQ](docs/LICENSE-FAQ.md)
-- [Commercial License Agreement](docs/COMMERCIAL-LICENSE.md)
 - [Enhancement roadmap](docs/ROADMAP.md)
 - [Recipes](docs/RECIPES.md)
 - [Plugin development](docs/PLUGINS.md)
@@ -432,34 +548,10 @@ Raw minified sizes are larger; production cost is the gzip figure. Prefer modula
 
 ## License
 
-Orihon is source-available software licensed under the **PolyForm Noncommercial License 1.0.0**.
+Orihon is a free, open-source browser map engine licensed under the **Apache License 2.0**. Use it anywhere — personal projects, education, and commercial products included. No separate paid engine license.
 
-### Community — free
+Want to build visually? Try Orihon Studio (`npm run demo:studio`).
 
-Non-commercial use is free under PolyForm Noncommercial, including personal projects, education, research, evaluation, proofs of concept and development before commercial launch. Install from npm and build without talking to sales.
+Copyright 2026 whahe.
 
-### Commercial — yearly license per legal entity
-
-**Commercial production requires a commercial license.** Pricing is by organization revenue band, not by seat or map view:
-
-| Plan | Price |
-| --- | --- |
-| Indie | $149 / year (own products · ≤ $100k revenue) |
-| Startup | $499 / year (own products · ≤ $1M) · most popular |
-| Business | $1,499 / year (own products · ≤ $20M) |
-| Agency | $799 / year (**required** for client / third-party work) |
-| Enterprise | from $5,000 / year |
-
-Paid plans: **unlimited developers, applications, domains and map views.** Same npm package for everyone — no feature gating, no runtime license keys. Annual renewal buys updates and new-project rights; Eligible Versions already in production keep perpetual run rights (see [Commercial License Agreement](docs/COMMERCIAL-LICENSE.md)).
-
-Full detail: [Pricing](docs/PRICING.md), [License FAQ](docs/LICENSE-FAQ.md) and the [Commercial License Agreement](docs/COMMERCIAL-LICENSE.md) (v1.0).
-
-### In short
-
-**Free for personal, educational and non-commercial use (including evaluation). Commercial production needs a company license — not per-seat, not per-view.**
-
-Orihon is source-available, but it is not OSI-approved open-source software because commercial use is restricted.
-
-Copyright © 2026 whahe.
-
-See [LICENSE](./LICENSE) and [LICENSE-NOTICE.md](./LICENSE-NOTICE.md).
+See [LICENSE](./LICENSE), [LICENSE-NOTICE.md](./LICENSE-NOTICE.md) and the [License FAQ](docs/LICENSE-FAQ.md).

@@ -2,6 +2,7 @@ import { createEl } from "../dom.js";
 import { latLng, type LatLngLike } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
+import { heatKernelAtZoom } from "../services/heat-scale.js";
 
 export type HeatPoint = LatLngLike | [number, number, number?];
 
@@ -15,6 +16,9 @@ export interface HeatLayerOptions extends LayerOptions {
   minRadius?: number;
   /** Cap for screen radius when zoomed in (px). Defaults to ~14% of the shorter map side. */
   maxRadius?: number;
+  /**
+   * @deprecated Density uses `scaleZoom` + area compensation. Kept for API compatibility.
+   */
   maxZoom?: number;
   max?: number;
   minOpacity?: number;
@@ -47,7 +51,8 @@ const DEFAULT_GRADIENT: Record<number, string> = {
 
 /**
  * Canvas heatmap (Leaflet.heat / simpleheat family).
- * Redraws on moveend/zoomend/resize — not on every pan frame (matches Leaflet.heat).
+ * Color tracks geographic density via `heatKernelAtZoom`.
+ * KDE rebuilds on moveend/zoomend/resize; camera frames CSS-warp the last paint.
  */
 export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
   private latlngs: NormalizedHeatPoint[] = [];
@@ -59,6 +64,10 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
   private grad: HTMLCanvasElement | null = null;
   private scaleZoom: number | undefined;
   private palette: Uint8ClampedArray | undefined;
+  private _hasPainted = false;
+  private _paintedZoom = Number.NaN;
+  private _paintedOriginX = 0;
+  private _paintedOriginY = 0;
   private readonly redrawSoonBound = (): void => this.redrawSoon();
 
   constructor(latlngs: HeatPoint[] = [], options: HeatLayerOptions = {}) {
@@ -97,6 +106,8 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
     this.canvas.style.left = "0";
     this.canvas.style.top = "0";
     this.canvas.style.pointerEvents = "none";
+    this.canvas.style.willChange = "transform";
+    this.canvas.style.transformOrigin = "0 0";
     // willReadFrequently: colorize reads back the intensity buffer each redraw.
     this.ctx = this.canvas.getContext("2d", { willReadFrequently: true, alpha: true });
     this.grad = this.createGradient();
@@ -125,6 +136,8 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
     this.brushRadius = 0;
     this.grad = null;
     this.palette = undefined;
+    this._hasPainted = false;
+    this._paintedZoom = Number.NaN;
     // Keep `latlngs` so remove→add toggles still draw; use `clear()` to wipe points.
     super.onRemove();
   }
@@ -134,13 +147,22 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
     return this;
   }
 
-  /** Map calls this every view frame — do not full-repaint heat here. */
+  /** Camera frames CSS-warp the last paint; KDE rebuilds on moveend/zoomend. */
   override wantsFrameRender(): boolean {
-    return false;
+    return this._hasPainted;
   }
 
   override render(): void {
-    /* intentional no-op: heat is moveend-driven like Leaflet.heat */
+    const map = this.map;
+    const canvas = this.canvas;
+    const origin = map?.pixelOrigin;
+    if (!map || !canvas || !origin || !this._hasPainted || !Number.isFinite(this._paintedZoom)) return;
+    const s = 2 ** (map.zoom - this._paintedZoom);
+    const tx = this._paintedOriginX * s - origin.x;
+    const ty = this._paintedOriginY * s - origin.y;
+    if (s === 1 && tx * tx + ty * ty < 1e-4) return;
+    canvas.style.transformOrigin = "0 0";
+    canvas.style.transform = `translate3d(${tx}px,${ty}px,0) scale(${s})`;
   }
 
   private redrawSoon = (): void => {
@@ -174,21 +196,20 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
     }
     canvas.style.left = "0px";
     canvas.style.top = "0px";
+    canvas.style.transform = "none";
 
     const zoom = map.getZoom();
     const scaleZoom = this.scaleZoom ?? zoom;
-    const zoomScale = heatZoomScale(zoom, scaleZoom);
     const baseRadius = this.options.radius;
     const baseBlur = this.options.blur;
     const minR = this.options.minRadius;
     const maxR = this.options.maxRadius ?? Math.max(baseRadius * 1.2, Math.min(size.x, size.y) * 0.14);
-    const screenR = clamp(baseRadius * zoomScale, minR, maxR);
-    const screenBlur = Math.max(screenR * 0.55, Math.min(baseBlur * zoomScale, screenR * 0.9));
+    const kernel = heatKernelAtZoom(zoom, scaleZoom, baseRadius, { minRadiusCss: minR, maxRadiusCss: maxR });
+    const screenR = kernel.radiusCss;
+    const screenBlur = Math.max(screenR * 0.55, Math.min(baseBlur * kernel.radiusScale, screenR * 0.9));
     const r = Math.max(1, Math.round((screenR + screenBlur * 0.35) * dpr));
     const max = this.options.max;
-    const maxZoom = this.options.maxZoom;
-    // Leaflet.heat intensity scale by zoom — keeps low-z stamps from blowing out.
-    const intensityScale = 1 / Math.pow(2, Math.max(0, Math.min(maxZoom - zoom, 12)));
+    const intensityScale = kernel.intensityScale;
 
     // Screen-space cells (Leaflet.heat): ~r/2 in CSS px, mapped to buffer px.
     const cell = Math.max(1, (r / 2) | 0);
@@ -255,6 +276,10 @@ export class HeatLayer extends Layer<ResolvedHeatLayerOptions> {
       data[i + 3] = Math.min(255, (a * 230) | 0);
     }
     ctx.putImageData(img, 0, 0);
+    this._paintedZoom = zoom;
+    this._paintedOriginX = map.pixelOrigin?.x ?? 0;
+    this._paintedOriginY = map.pixelOrigin?.y ?? 0;
+    this._hasPainted = true;
   }
 
   private ensureBrush(radius: number): HTMLCanvasElement {
@@ -309,21 +334,6 @@ function normalizePoints(latlngs: HeatPoint[]): NormalizedHeatPoint[] {
     const ll = latLng(p);
     return { lat: ll.lat, lng: ll.lng, alt: 1 };
   });
-}
-
-function heatZoomScale(zoom: number, scaleZoom: number): number {
-  const dz = zoom - scaleZoom;
-  if (dz === 0) return 1;
-  if (dz < 0) {
-    const geo = Math.pow(2, dz);
-    return Math.max(0.18, geo * 0.55 + 0.45 * Math.pow(geo, 0.35));
-  }
-  const maxIn = 1.55;
-  return 1 + (maxIn - 1) * (1 - Math.exp(-dz * 0.42));
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
 }
 
 export function heatLayer(latlngs?: HeatPoint[], options?: HeatLayerOptions): HeatLayer {

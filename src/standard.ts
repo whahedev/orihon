@@ -3,7 +3,7 @@ export { LayerGroup, FeatureGroup, featureGroup } from "./layer-group.js";
 export { Renderer } from "./renderer.js";
 export { WMSTileLayer, wmsTileLayer } from "./layers/wms-tile-layer.js";
 export { WMTSTileLayer, wmtsTileLayer, createWMTSFromCapabilities } from "./layers/wmts-tile-layer.js";
-export { Marker, marker } from "./layers/marker.js";
+export { Marker, marker, markerShapeMetrics } from "./layers/marker.js";
 export { Icon, DivIcon, icon, divIcon } from "./layers/icon.js";
 export { CanvasBaseLayer, canvasBaseLayer } from "./layers/canvas-base-layer.js";
 export { TextLayer, textLayer } from "./layers/text-layer.js";
@@ -43,6 +43,12 @@ export {
 } from "./ui/control.js";
 export {
   enLocale,
+  locales,
+  resolveLocale,
+  ensureLocalePacks,
+  registerLocalePacks
+} from "./ui/locale.js";
+export {
   ruLocale,
   arLocale,
   trLocale,
@@ -51,14 +57,16 @@ export {
   frLocale,
   daLocale,
   hiLocale,
-  locales,
-  resolveLocale
-} from "./ui/locale.js";
+  localePacks
+} from "./ui/locale-packs.js";
+import { registerLocalePacks } from "./ui/locale.js";
+import { localePacks } from "./ui/locale-packs.js";
+registerLocalePacks(localePacks);
 
 export type { RendererOptions } from "./renderer.js";
 export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-layer.js";
 export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts-tile-layer.js";
-export type { MarkerOptions } from "./layers/marker.js";
+export type { MarkerOptions, MarkerAppearance, MarkerShape } from "./layers/marker.js";
 export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
 export type { CanvasBaseLayerOptions } from "./layers/canvas-base-layer.js";
 export type { TextLayerOptions } from "./layers/text-layer.js";

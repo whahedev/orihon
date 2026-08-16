@@ -1215,11 +1215,17 @@ async function loadOrihon() {
   const http = location.protocol === "http:" || location.protocol === "https:";
   if (http) {
     try {
-      const mod = await import("/dist/orihon.esm.js");
+      const mod = await import("/dist/index.js");
       if (link) link.href = "/dist/orihon.css";
       return mod;
     } catch {
-      /* fall through to CDN */
+      try {
+        const mod = await import("/dist/orihon.esm.js");
+        if (link) link.href = "/dist/orihon.css";
+        return mod;
+      } catch {
+        /* fall through to CDN */
+      }
     }
   }
   if (link) link.href = ORIHON_CDN_CSS;
@@ -1345,7 +1351,7 @@ const SCENARIO_NOTES = {
   points:
     "WebGL points (Orihon + MapLibre raw buffer), Leaflet canvas, OL vector. Orihon basemap = webglTileLayer (CSS-warp while moving, same idea as MapLibre). Camera zigzag+zoom ~3s — prefer p95 / drop% over raw FPS.",
   clusters:
-    "Orihon ObjectManager (hierarchical greedy radius clusters + WebGL + worker index), Leaflet.markercluster, OL Cluster, MapLibre GeoJSON cluster. Camera = discrete view steps; Orihon does not rebuild clusters on pan-only moves.",
+    "Orihon ObjectManager (hierarchical greedy radius clusters + WebGL + worker index), Leaflet.markercluster, OL Cluster, MapLibre GeoJSON cluster. Camera = discrete view steps; Orihon does not rebuild clusters on pan-only moves. 1M uses the mass-point path (`sceneFeatures: false`) so Load is ingest + one greedy zoom, not a full hierarchy clone.",
   live:
     "Each frame moves ~20% of points for ~3s. Measures update FPS / p95 / drop%. Shows realtime fleet-style cost.",
   pick:
@@ -1784,11 +1790,15 @@ function blankHost() {
   return host;
 }
 
+function objectIsActive(object) {
+  return object.properties?.active !== false;
+}
+
 function makeObjects(points) {
   return points.map((coordinates, index) => ({
     id: index,
     coordinates,
-    properties: { title: `P${index}`, active: index % 3 !== 0 }
+    properties: { active: index % 3 !== 0 }
   }));
 }
 
@@ -1798,7 +1808,6 @@ function makeRichObjects(points) {
     id: index,
     coordinates,
     properties: {
-      title: `R${index}`,
       category: categories[index % 3],
       alert: index % 17 === 0,
       active: index % 3 !== 0
@@ -2399,11 +2408,16 @@ async function clustersOrihon(points) {
     clusterMaxZoom: 14,
     clusterRenderer: "webgl",
     layoutWorker: "auto",
+    sceneFeatures: false,
+    styleByCategory: false,
+    visualization: "clusters",
     marker: { interactive: false }
   });
 
   const loadStart = performance.now();
+  manager.beginBulk();
   manager.add(makeObjects(points));
+  manager.endBulk({ render: false });
   await manager.prepareLayout(ZOOM);
   manager.addTo(map);
   await waitFrames(4);
@@ -3733,11 +3747,16 @@ async function filterOrihon(points) {
     clusterMaxZoom: 14,
     clusterRenderer: "webgl",
     layoutWorker: "auto",
+    sceneFeatures: false,
+    styleByCategory: false,
+    visualization: "clusters",
     marker: { interactive: false }
   });
 
   const loadStart = performance.now();
+  manager.beginBulk();
   manager.add(makeObjects(points));
+  manager.endBulk({ render: false });
   await manager.prepareLayout(ZOOM);
   manager.addTo(map);
   await waitFrames(4);
@@ -3747,7 +3766,7 @@ async function filterOrihon(points) {
   const pan = await stressFilterCamera(
     (lat, lng, zoom) => map.setView([lat, lng], zoom),
     (activeOnly) => {
-      manager.setFilter(activeOnly ? (obj) => obj.properties?.active !== false : null);
+      manager.setFilter(activeOnly ? objectIsActive : null);
     }
   );
   await waitFrames(2);
@@ -4389,11 +4408,15 @@ async function richOrihon(points) {
     layoutWorker: "auto",
     layoutWorkerThreshold: 5000,
     styleByCategory: true,
+    sceneFeatures: false,
+    visualization: clusterize ? "clusters" : "objects",
     marker: { className: "oh-rich-marker", interactive: true }
   });
 
   const loadStart = performance.now();
+  manager.beginBulk();
   manager.add(objects);
+  manager.endBulk({ render: false });
   await manager.prepareLayout(ZOOM);
   manager.addTo(map);
 

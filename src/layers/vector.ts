@@ -76,7 +76,7 @@ export class SvgLayer<TOptions extends RendererOptions = RendererOptions> extend
 }
 
 export class PathLayer extends SvgLayer<ResolvedPathOptions> {
-  path: SVGPathElement | null = null;
+  path: SVGPathElement | SVGCircleElement | null = null;
   readonly _pathUnsub: Array<() => void> = [];
   protected supportsArrows = false;
   private arrowMarker: SVGMarkerElement | null = null;
@@ -105,10 +105,14 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
     } as ResolvedPathOptions);
   }
 
+  protected createPathElement(): SVGPathElement | SVGCircleElement {
+    return document.createElementNS(SVG_NS, "path");
+  }
+
   override onAdd(map: Orihon): void {
     super.onAdd(map);
     if (!this.group) return;
-    this.path = document.createElementNS(SVG_NS, "path");
+    this.path = this.createPathElement();
     this.group.appendChild(this.path);
     this.#style();
     this.#syncInteraction();
@@ -301,11 +305,18 @@ export function projectedBounds(points: PointLikeXY[]): ProjectedBounds {
 }
 
 export function projectedBoundsIntersectsViewport(map: Orihon, bounds: ProjectedBounds, padding = 64): boolean {
-  if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY)) return false;
+  if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY)
+    || !Number.isFinite(bounds.maxX) || !Number.isFinite(bounds.maxY)) return false;
   return bounds.maxX >= -padding
     && bounds.minX <= map.size.width + padding
     && bounds.maxY >= -padding
     && bounds.minY <= map.size.height + padding;
+}
+
+function projectedCirclePath(center: PointLikeXY, radius: number): string {
+  const r = Math.max(1, Number(radius));
+  if (!Number.isFinite(center.x) || !Number.isFinite(center.y) || !Number.isFinite(r)) return "";
+  return `M${center.x - r},${center.y}a${r},${r} 0 1,0 ${r * 2},0a${r},${r} 0 1,0 ${-r * 2},0`;
 }
 
 function perpendicularDistance(point: PointLikeXY, start: PointLikeXY, end: PointLikeXY): number {
@@ -623,10 +634,7 @@ export class Circle extends PathLayer {
       this.path.setAttribute("d", "");
       return;
     }
-    this.path.setAttribute(
-      "d",
-      `M${(center.x - radius).toFixed(1)} ${center.y.toFixed(1)}a${radius.toFixed(1)} ${radius.toFixed(1)} 0 1 0 ${(radius * 2).toFixed(1)} 0a${radius.toFixed(1)} ${radius.toFixed(1)} 0 1 0 ${(-radius * 2).toFixed(1)} 0`
-    );
+    this.path.setAttribute("d", projectedCirclePath(center, radius));
   }
 
   #geodesicRing(vertexCount: number): LatLng[] {
@@ -654,6 +662,10 @@ export class CircleMarker extends PathLayer {
     super({ fill: options.fill ?? "#2563eb", ...options });
     this.center = latLng(center);
     this.radiusPixels = Math.max(1, Number(options.radius ?? 10));
+  }
+
+  protected override createPathElement(): SVGCircleElement {
+    return document.createElementNS(SVG_NS, "circle");
   }
 
   protected override interactionPointerEvents(): "all" {
@@ -696,19 +708,22 @@ export class CircleMarker extends PathLayer {
     if (!this.map || !this.path) return;
     const center = this.map.latLngToLayerPoint(this.center);
     const radius = this.radiusPixels;
-    if (!this.options.noClip && !projectedBoundsIntersectsViewport(this.map, {
-      minX: center.x - radius,
-      minY: center.y - radius,
-      maxX: center.x + radius,
-      maxY: center.y + radius
-    }, this.options.clipPadding)) {
-      this.path.setAttribute("d", "");
+    const onScreen = Number.isFinite(center.x) && Number.isFinite(center.y) && (
+      this.options.noClip
+      || projectedBoundsIntersectsViewport(this.map, {
+        minX: center.x - radius,
+        minY: center.y - radius,
+        maxX: center.x + radius,
+        maxY: center.y + radius
+      }, this.options.clipPadding)
+    );
+    if (!onScreen) {
+      this.path.setAttribute("r", "0");
       return;
     }
-    this.path.setAttribute(
-      "d",
-      `M${(center.x - radius).toFixed(1)} ${center.y.toFixed(1)}a${radius} ${radius} 0 1 0 ${radius * 2} 0a${radius} ${radius} 0 1 0 ${-radius * 2} 0`
-    );
+    this.path.setAttribute("cx", String(center.x));
+    this.path.setAttribute("cy", String(center.y));
+    this.path.setAttribute("r", String(radius));
   }
 }
 

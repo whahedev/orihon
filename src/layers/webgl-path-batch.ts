@@ -120,8 +120,12 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
       if (ring.length < 2) continue;
       const lat = keepCanvas ? new Float64Array(ring.length) : null;
       const lng = keepCanvas ? new Float64Array(ring.length) : null;
-      const mercX = new Float64Array(ring.length);
-      const mercY = new Float64Array(ring.length);
+      const segments = ring.length - 1;
+      this.#ensureCapacity((this._segmentCount + segments) * 4);
+      let write = this._segmentCount * 4;
+      const buf = this._segBuf;
+      let prevX = 0;
+      let prevY = 0;
       for (let i = 0; i < ring.length; i++) {
         const p = latLng(ring[i]);
         if (lat && lng) {
@@ -129,25 +133,20 @@ export class WebGLPathBatch extends Layer<ResolvedOptions> {
           lng[i] = p.lng;
         }
         const m = projectMercator01(p.lat, p.lng);
-        mercX[i] = m.x;
-        mercY[i] = m.y;
         if (p.lat < this._minLat) this._minLat = p.lat;
         if (p.lat > this._maxLat) this._maxLat = p.lat;
         if (p.lng < this._minLng) this._minLng = p.lng;
         if (p.lng > this._maxLng) this._maxLng = p.lng;
+        if (i > 0) {
+          buf[write++] = prevX;
+          buf[write++] = prevY;
+          buf[write++] = m.x;
+          buf[write++] = m.y;
+        }
+        prevX = m.x;
+        prevY = m.y;
       }
       if (lat && lng) this._canvasRings.push({ lat, lng });
-
-      const segments = ring.length - 1;
-      this.#ensureCapacity((this._segmentCount + segments) * 4);
-      let write = this._segmentCount * 4;
-      const buf = this._segBuf;
-      for (let i = 0; i < segments; i++) {
-        buf[write++] = mercX[i];
-        buf[write++] = mercY[i];
-        buf[write++] = mercX[i + 1];
-        buf[write++] = mercY[i + 1];
-      }
       this._segmentCount = write / 4;
     }
     this._bufferDirty = true;

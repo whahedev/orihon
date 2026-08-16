@@ -1,0 +1,1727 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Orihon — Europe Air + Sea Radar</title>
+
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css"
+  />
+
+  <style>
+    :root {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #eaf2ff;
+      background: #061019;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body, #app {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body { background: #061019; }
+
+    #app {
+      position: relative;
+      isolation: isolate;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      background: #091723;
+      z-index: 1;
+    }
+
+    #trafficCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 420;
+      pointer-events: none;
+    }
+
+    .panel {
+      position: absolute;
+      z-index: 1000;
+      top: 14px;
+      left: 14px;
+      width: min(560px, calc(100vw - 28px));
+      padding: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 16px;
+      background: rgba(5, 14, 23, 0.91);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.30);
+      backdrop-filter: blur(14px);
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+      font-weight: 780;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: #94a3b8;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .live {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      flex: 0 0 auto;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: #99f6e4;
+      background: rgba(13, 148, 136, 0.16);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .live::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #2dd4bf;
+      box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.10);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 7px;
+      margin-bottom: 10px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 9px 8px;
+      border: 1px solid rgba(148, 163, 184, 0.11);
+      border-radius: 11px;
+      background: rgba(15, 23, 42, 0.52);
+    }
+
+    .stat-label {
+      overflow: hidden;
+      color: #94a3b8;
+      font-size: 9px;
+      line-height: 1.2;
+      letter-spacing: 0.07em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .stat-value {
+      margin-top: 4px;
+      overflow: hidden;
+      font-size: 17px;
+      font-weight: 760;
+      font-variant-numeric: tabular-nums;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .progress {
+      height: 5px;
+      overflow: hidden;
+      margin: 2px 0 10px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.12);
+    }
+
+    .progress > div {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: #38bdf8;
+      transition: width 250ms ease;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 7px;
+    }
+
+    button {
+      min-width: 0;
+      height: 36px;
+      padding: 0 9px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 10px;
+      color: #eaf2ff;
+      background: #0e1c29;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    button:hover { background: #162838; }
+    button:disabled { opacity: 0.55; cursor: progress; }
+
+    .status {
+      min-height: 34px;
+      margin-top: 10px;
+      color: #9aa9bc;
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+
+    .status.error { color: #fca5a5; }
+
+    .traffic-card {
+      position: absolute;
+      z-index: 1200;
+      display: none;
+      width: 260px;
+      max-width: calc(100vw - 24px);
+      padding: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 13px;
+      color: #eaf2ff;
+      background: rgba(4, 13, 21, 0.96);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.36);
+      backdrop-filter: blur(14px);
+      pointer-events: auto;
+    }
+
+    .traffic-card.visible { display: block; }
+
+    .card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .card-subtitle {
+      margin-top: 2px;
+      color: #94a3b8;
+      font-size: 10px;
+    }
+
+    .close {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 10px;
+      font-size: 11px;
+    }
+
+    .card-grid .label { color: #94a3b8; }
+    .card-grid .value { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .legend {
+      position: absolute;
+      z-index: 800;
+      right: 12px;
+      bottom: 12px;
+      padding: 7px 9px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 9px;
+      color: #9aa9bc;
+      background: rgba(4, 13, 21, 0.76);
+      font-size: 9.5px;
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+
+
+    .layer-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 9px;
+    }
+
+    .layer-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      border-radius: 10px;
+      color: #cbd5e1;
+      background: rgba(15, 23, 42, 0.46);
+      font-size: 10.5px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .layer-toggle input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: #38bdf8;
+    }
+
+    .source-status {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 3px 8px;
+      margin-top: 9px;
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    .source-status strong {
+      color: #cbd5e1;
+      font-weight: 650;
+    }
+
+    @media (max-width: 620px) {
+      .panel {
+        top: 8px;
+        left: 8px;
+        width: calc(100vw - 16px);
+        padding: 11px;
+      }
+
+      .subtitle, .legend { display: none; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .controls { grid-template-columns: repeat(2, 1fr); }
+      #locateButton { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="map" aria-label="Карта движения самолётов и судов"></div>
+    <canvas id="trafficCanvas" aria-hidden="true"></canvas>
+
+    <section class="panel">
+      <div class="header">
+        <div>
+          <h1>Europe Air + Sea Radar</h1>
+          <div class="subtitle">
+            Orihon · ADS-B + AIS · плавное локальное прогнозирование
+          </div>
+        </div>
+        <div class="live">live</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">Самолёты</div>
+          <div class="stat-value" id="aircraftCount">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Суда</div>
+          <div class="stat-value" id="vesselCount">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Покрытие</div>
+          <div class="stat-value" id="coverageCount">0/0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">ADS-B age</div>
+          <div class="stat-value" id="oldestAge">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">AIS</div>
+          <div class="stat-value" id="aisState">—</div>
+        </div>
+      </div>
+
+      <div class="progress" aria-label="Заполнение области">
+        <div id="coverageProgress"></div>
+      </div>
+
+      <div class="controls">
+        <button id="europeButton" type="button">Вся Европа</button>
+        <button id="refreshButton" type="button">Обновить</button>
+        <button id="locateButton" type="button">Моя позиция</button>
+      </div>
+
+      <div class="layer-row">
+        <label class="layer-toggle">
+          <input id="showAircraft" type="checkbox" checked />
+          ✈ Самолёты
+        </label>
+        <label class="layer-toggle">
+          <input id="showVessels" type="checkbox" checked />
+          ◈ Суда
+        </label>
+        <label class="layer-toggle">
+          <input id="showLabels" type="checkbox" />
+          Названия
+        </label>
+      </div>
+
+      <div class="source-status">
+        <strong>Самолёты</strong>
+        <span id="aircraftSourceStatus">ожидание ADS-B</span>
+        <strong>Суда</strong>
+        <span id="marineSourceStatus">подключение AIS</span>
+      </div>
+
+      <div class="status" id="status">Инициализация…</div>
+    </section>
+
+    <aside class="traffic-card" id="trafficCard">
+      <div class="card-head">
+        <div>
+          <div class="card-title" id="cardTitle">—</div>
+          <div class="card-subtitle" id="cardSubtitle">—</div>
+        </div>
+        <button class="close" id="closeCard" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <div class="card-grid" id="cardGrid"></div>
+    </aside>
+
+    <div class="legend">
+      ✈ самолёты · ◈ суда · движение прогнозируется локально ~30 FPS · клик — детали
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.global.js"></script>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const API_URL = "/api/aircraft";
+      const REFRESH_DELAY_MS = 6_000;
+      const MOVE_REFRESH_DELAY_MS = 650;
+      const CORRECTION_MS = 1_500;
+      const MAX_EXTRAPOLATION_SEC = 45;
+      const REMOVE_AFTER_MISSING_MS = 20_000;
+      const FRAME_INTERVAL_MS = 1000 / 30;
+
+      const mapEl = document.getElementById("map");
+      const canvas = document.getElementById("trafficCanvas");
+      const ctx = canvas.getContext("2d", { alpha: true });
+
+      const aircraftCountEl = document.getElementById("aircraftCount");
+      const vesselCountEl = document.getElementById("vesselCount");
+      const aisStateEl = document.getElementById("aisState");
+      const coverageCountEl = document.getElementById("coverageCount");
+      const oldestAgeEl = document.getElementById("oldestAge");
+      const coverageProgressEl = document.getElementById("coverageProgress");
+      const statusEl = document.getElementById("status");
+      const refreshButton = document.getElementById("refreshButton");
+      const europeButton = document.getElementById("europeButton");
+      const locateButton = document.getElementById("locateButton");
+
+      const trafficCard = document.getElementById("trafficCard");
+      const cardTitle = document.getElementById("cardTitle");
+      const cardSubtitle = document.getElementById("cardSubtitle");
+      const cardGrid = document.getElementById("cardGrid");
+      const closeCardButton = document.getElementById("closeCard");
+      const showAircraftEl = document.getElementById("showAircraft");
+      const showVesselsEl = document.getElementById("showVessels");
+      const showLabelsEl = document.getElementById("showLabels");
+      const aircraftSourceStatusEl = document.getElementById("aircraftSourceStatus");
+      const marineSourceStatusEl = document.getElementById("marineSourceStatus");
+
+      let map = null;
+      let loading = false;
+      let refreshTimer = null;
+      let moveTimer = null;
+      let requestSerial = 0;
+      let canvasWidth = 0;
+      let canvasHeight = 0;
+      let lastFrameAt = 0;
+      let selectedObject = null;
+      let lastCoverage = null;
+      let vesselEventSource = null;
+      let vesselStreamTimer = null;
+      let marineStatus = null;
+
+      const aircraft = new Map();
+      const vessels = new Map();
+      let screenObjects = [];
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function normalizeLongitude(value) {
+        let lon = value;
+        while (lon > 180) lon -= 360;
+        while (lon < -180) lon += 360;
+        return lon;
+      }
+
+      function shortestLongitudeDelta(from, to) {
+        let delta = to - from;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        return delta;
+      }
+
+      function angleDelta(from, to) {
+        let delta = (to - from) % 360;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        return delta;
+      }
+
+      function smoothstep(t) {
+        const x = clamp(t, 0, 1);
+        return x * x * (3 - 2 * x);
+      }
+
+      function formatNumber(value, digits = 0) {
+        if (!Number.isFinite(Number(value))) return "—";
+        return new Intl.NumberFormat("ru-RU", {
+          maximumFractionDigits: digits
+        }).format(Number(value));
+      }
+
+      function formatAltitude(value) {
+        if (value === "ground") return "земля";
+        if (!Number.isFinite(Number(value))) return "—";
+        return `${formatNumber(value)} ft`;
+      }
+
+      function formatSpeed(value) {
+        return Number.isFinite(Number(value)) ? `${formatNumber(value)} kt` : "—";
+      }
+
+      function setStatus(text, error = false) {
+        statusEl.textContent = text;
+        statusEl.classList.toggle("error", error);
+      }
+
+      function normalizeAircraft(ac) {
+        if (
+          !ac ||
+          typeof ac.hex !== "string" ||
+          !Number.isFinite(Number(ac.lat)) ||
+          !Number.isFinite(Number(ac.lon))
+        ) {
+          return null;
+        }
+
+        const altitude = ac.alt_baro === "ground"
+          ? "ground"
+          : Number.isFinite(Number(ac.alt_baro))
+            ? Number(ac.alt_baro)
+            : null;
+
+        return {
+          kind: "aircraft",
+          id: ac.hex.toLowerCase(),
+          callsign: typeof ac.flight === "string" && ac.flight.trim() ? ac.flight.trim() : null,
+          registration: typeof ac.r === "string" && ac.r.trim() ? ac.r.trim() : null,
+          type: typeof ac.t === "string" && ac.t.trim() ? ac.t.trim() : null,
+          description: typeof ac.desc === "string" && ac.desc.trim() ? ac.desc.trim() : null,
+          lat: Number(ac.lat),
+          lon: Number(ac.lon),
+          altitude,
+          speed: Number.isFinite(Number(ac.gs)) ? Number(ac.gs) : null,
+          heading: Number.isFinite(Number(ac.track)) ? Number(ac.track) : 0,
+          trackRate: Number.isFinite(Number(ac.track_rate)) ? Number(ac.track_rate) : 0,
+          verticalRate: Number.isFinite(Number(ac.baro_rate)) ? Number(ac.baro_rate) : null,
+          squawk: typeof ac.squawk === "string" ? ac.squawk : null,
+          emergency: typeof ac.emergency === "string" ? ac.emergency : null,
+          category: typeof ac.category === "string" ? ac.category : null,
+          seen: Number.isFinite(Number(ac.seen_pos)) ? Number(ac.seen_pos) : 0,
+          onGround: altitude === "ground",
+          provider: typeof ac._provider === "string" ? ac._provider : null
+        };
+      }
+
+
+      function normalizeVessel(v) {
+        if (
+          !v ||
+          typeof v.mmsi !== "string" ||
+          !Number.isFinite(Number(v.lat)) ||
+          !Number.isFinite(Number(v.lon))
+        ) {
+          return null;
+        }
+
+        const course = Number.isFinite(Number(v.course))
+          ? Number(v.course)
+          : 0;
+
+        const heading = Number.isFinite(Number(v.heading))
+          ? Number(v.heading)
+          : course;
+
+        return {
+          kind: "vessel",
+          id: v.mmsi,
+          mmsi: v.mmsi,
+          lat: Number(v.lat),
+          lon: Number(v.lon),
+          speed: Number.isFinite(Number(v.speed)) ? Number(v.speed) : 0,
+          heading,
+          trackRate: 0,
+          name: typeof v.name === "string" && v.name.trim() ? v.name.trim() : null,
+          callSign: typeof v.callSign === "string" && v.callSign.trim() ? v.callSign.trim() : null,
+          imo: Number.isFinite(Number(v.imo)) && Number(v.imo) > 0 ? Number(v.imo) : null,
+          shipType: Number.isFinite(Number(v.shipType)) ? Number(v.shipType) : null,
+          destination: typeof v.destination === "string" && v.destination.trim() ? v.destination.trim() : null,
+          draught: Number.isFinite(Number(v.draught)) ? Number(v.draught) : null,
+          length: Number.isFinite(Number(v.length)) ? Number(v.length) : null,
+          width: Number.isFinite(Number(v.width)) ? Number(v.width) : null,
+          navStatus: Number.isFinite(Number(v.navStatus)) ? Number(v.navStatus) : null,
+          rateOfTurn: Number.isFinite(Number(v.rateOfTurn)) ? Number(v.rateOfTurn) : null,
+          eta: v.eta ?? null,
+          sources: Array.isArray(v.sources) ? v.sources : [],
+          positionUpdatedAt: Number.isFinite(Number(v.positionUpdatedAt))
+            ? Number(v.positionUpdatedAt)
+            : Date.now()
+        };
+      }
+
+      function shipTypeLabel(type) {
+        if (!Number.isFinite(Number(type))) return "Судно";
+
+        const t = Number(type);
+
+        if (t === 30) return "Рыболовное";
+        if (t === 31 || t === 32) return "Буксир";
+        if (t === 35) return "Военное";
+        if (t === 50) return "Лоцман";
+        if (t === 51) return "Поисково-спасательное";
+        if (t === 52) return "Буксир";
+        if (t >= 60 && t <= 69) return "Пассажирское";
+        if (t >= 70 && t <= 79) return "Грузовое";
+        if (t >= 80 && t <= 89) return "Танкер";
+        return `Судно AIS ${t}`;
+      }
+
+      function navStatusLabel(status) {
+        const labels = {
+          0: "в пути, двигатель",
+          1: "на якоре",
+          2: "не управляется",
+          3: "ограничена манёвренность",
+          4: "ограничена осадкой",
+          5: "пришвартовано",
+          6: "на мели",
+          7: "рыболовство",
+          8: "под парусом",
+          14: "AIS-SART"
+        };
+
+        return labels[status] || "—";
+      }
+
+      function destination(lat, lon, headingDeg, distanceNm) {
+        if (!Number.isFinite(distanceNm) || distanceNm === 0) {
+          return { lat, lon };
+        }
+
+        const earthRadiusNm = 3440.065;
+        const delta = distanceNm / earthRadiusNm;
+        const theta = headingDeg * Math.PI / 180;
+        const phi1 = lat * Math.PI / 180;
+        const lambda1 = lon * Math.PI / 180;
+
+        const sinPhi2 =
+          Math.sin(phi1) * Math.cos(delta) +
+          Math.cos(phi1) * Math.sin(delta) * Math.cos(theta);
+
+        const phi2 = Math.asin(clamp(sinPhi2, -1, 1));
+
+        const y = Math.sin(theta) * Math.sin(delta) * Math.cos(phi1);
+        const x = Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2);
+        const lambda2 = lambda1 + Math.atan2(y, x);
+
+        return {
+          lat: phi2 * 180 / Math.PI,
+          lon: normalizeLongitude(lambda2 * 180 / Math.PI)
+        };
+      }
+
+      function predictedFromAnchor(state, nowMs) {
+        const maxExtrapolation =
+          state.kind === "vessel"
+            ? 180
+            : MAX_EXTRAPOLATION_SEC;
+
+        const elapsedSec = clamp(
+          (nowMs - state.anchorTimeMs) / 1000,
+          0,
+          maxExtrapolation
+        );
+
+        const stationaryThreshold =
+          state.kind === "vessel" ? 0.2 : 1;
+
+        if (state.onGround || !Number.isFinite(state.speed) || state.speed < stationaryThreshold) {
+          return {
+            lat: state.anchorLat,
+            lon: state.anchorLon,
+            heading: state.heading,
+            altitude: state.altitude
+          };
+        }
+
+        const trackRate = clamp(state.trackRate || 0, -4, 4);
+        const midHeading = state.heading + trackRate * elapsedSec * 0.5;
+        const displayHeading = state.heading + trackRate * elapsedSec;
+        const distanceNm = state.speed * elapsedSec / 3600;
+        const point = destination(state.anchorLat, state.anchorLon, midHeading, distanceNm);
+
+        let altitude = state.altitude;
+        if (
+          Number.isFinite(Number(altitude)) &&
+          Number.isFinite(state.verticalRate)
+        ) {
+          altitude = Number(altitude) + state.verticalRate * elapsedSec / 60;
+        }
+
+        return {
+          lat: point.lat,
+          lon: point.lon,
+          heading: (displayHeading + 3600) % 360,
+          altitude
+        };
+      }
+
+      function displayState(state, nowMs) {
+        const target = predictedFromAnchor(state, nowMs);
+
+        if (!state.correction || nowMs >= state.correction.endMs) {
+          return target;
+        }
+
+        const t = smoothstep(
+          (nowMs - state.correction.startMs) /
+          (state.correction.endMs - state.correction.startMs)
+        );
+
+        return {
+          lat: state.correction.lat + (target.lat - state.correction.lat) * t,
+          lon: normalizeLongitude(
+            state.correction.lon + shortestLongitudeDelta(state.correction.lon, target.lon) * t
+          ),
+          heading: (
+            state.correction.heading +
+            angleDelta(state.correction.heading, target.heading) * t +
+            3600
+          ) % 360,
+          altitude: target.altitude
+        };
+      }
+
+      function ingestAircraftRecords(records) {
+        const nowMs = Date.now();
+        const present = new Set();
+
+        for (const record of records) {
+          present.add(record.id);
+          const existing = aircraft.get(record.id);
+
+          if (!existing) {
+            aircraft.set(record.id, {
+              ...record,
+              anchorLat: record.lat,
+              anchorLon: record.lon,
+              anchorTimeMs: nowMs - record.seen * 1000,
+              lastPresentMs: nowMs,
+              correction: null
+            });
+            continue;
+          }
+
+          const current = displayState(existing, nowMs);
+
+          Object.assign(existing, record, {
+            anchorLat: record.lat,
+            anchorLon: record.lon,
+            anchorTimeMs: nowMs - record.seen * 1000,
+            lastPresentMs: nowMs,
+            correction: {
+              lat: current.lat,
+              lon: current.lon,
+              heading: current.heading,
+              startMs: nowMs,
+              endMs: nowMs + CORRECTION_MS
+            }
+          });
+        }
+
+        for (const [id, state] of aircraft) {
+          if (!present.has(id) && nowMs - state.lastPresentMs > REMOVE_AFTER_MISSING_MS) {
+            aircraft.delete(id);
+
+            if (
+              selectedObject?.kind === "aircraft" &&
+              selectedObject?.id === id
+            ) {
+              hideTrafficCard();
+            }
+          }
+        }
+      }
+
+      function ingestVessel(record) {
+        const normalized = normalizeVessel(record);
+        if (!normalized) return;
+
+        const nowMs = Date.now();
+        const existing = vessels.get(normalized.id);
+
+        if (!existing) {
+          vessels.set(normalized.id, {
+            ...normalized,
+            anchorLat: normalized.lat,
+            anchorLon: normalized.lon,
+            anchorTimeMs: normalized.positionUpdatedAt,
+            lastPresentMs: nowMs,
+            correction: null
+          });
+          return;
+        }
+
+        const incomingPositionTime = normalized.positionUpdatedAt || nowMs;
+        const hasNewPosition = incomingPositionTime >= (existing.positionUpdatedAt || 0);
+
+        if (hasNewPosition) {
+          const current = displayState(existing, nowMs);
+
+          Object.assign(existing, normalized, {
+            anchorLat: normalized.lat,
+            anchorLon: normalized.lon,
+            anchorTimeMs: incomingPositionTime,
+            lastPresentMs: nowMs,
+            correction: {
+              lat: current.lat,
+              lon: current.lon,
+              heading: current.heading,
+              startMs: nowMs,
+              endMs: nowMs + 1800
+            }
+          });
+        } else {
+          Object.assign(existing, {
+            name: normalized.name || existing.name,
+            callSign: normalized.callSign || existing.callSign,
+            imo: normalized.imo || existing.imo,
+            shipType: normalized.shipType ?? existing.shipType,
+            destination: normalized.destination || existing.destination,
+            draught: normalized.draught ?? existing.draught,
+            length: normalized.length ?? existing.length,
+            width: normalized.width ?? existing.width,
+            sources: normalized.sources.length ? normalized.sources : existing.sources,
+            lastPresentMs: nowMs
+          });
+        }
+      }
+
+      function ingestVesselSnapshot(records) {
+        const nowMs = Date.now();
+
+        for (const record of records) {
+          ingestVessel(record);
+        }
+
+        for (const [id, state] of vessels) {
+          if (nowMs - state.lastPresentMs > 35 * 60 * 1000) {
+            vessels.delete(id);
+
+            if (
+              selectedObject?.kind === "vessel" &&
+              selectedObject?.id === id
+            ) {
+              hideTrafficCard();
+            }
+          }
+        }
+      }
+
+      function mercatorWorld(lat, lon, zoom) {
+        const safeLat = clamp(lat, -85.05112878, 85.05112878);
+        const scale = 256 * Math.pow(2, zoom);
+        const sinLat = Math.sin(safeLat * Math.PI / 180);
+
+        return {
+          x: (lon + 180) / 360 * scale,
+          y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+          scale
+        };
+      }
+
+      function inverseMercatorWorld(x, y, zoom) {
+        const scale = 256 * Math.pow(2, zoom);
+        const lon = x / scale * 360 - 180;
+        const n = Math.PI - 2 * Math.PI * y / scale;
+        const lat = 180 / Math.PI * Math.atan(Math.sinh(n));
+        return { lat, lon };
+      }
+
+      function worldToScreen(lat, lon) {
+        const zoom = map.getZoom();
+        const center = map.getCenter();
+        const size = map.getSize();
+        const world = mercatorWorld(lat, lon, zoom);
+        const centerWorld = mercatorWorld(center.lat, center.lng, zoom);
+
+        let dx = world.x - centerWorld.x;
+        const halfWorld = world.scale / 2;
+        if (dx > halfWorld) dx -= world.scale;
+        if (dx < -halfWorld) dx += world.scale;
+
+        return {
+          x: size.x / 2 + dx,
+          y: size.y / 2 + world.y - centerWorld.y
+        };
+      }
+
+      function viewportBounds() {
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const size = map.getSize();
+        const centerWorld = mercatorWorld(center.lat, center.lng, zoom);
+
+        const nw = inverseMercatorWorld(
+          centerWorld.x - size.x / 2,
+          centerWorld.y - size.y / 2,
+          zoom
+        );
+
+        const se = inverseMercatorWorld(
+          centerWorld.x + size.x / 2,
+          centerWorld.y + size.y / 2,
+          zoom
+        );
+
+        return {
+          west: clamp(nw.lon, -180, 180),
+          south: clamp(se.lat, -85, 85),
+          east: clamp(se.lon, -180, 180),
+          north: clamp(nw.lat, -85, 85)
+        };
+      }
+
+      function resizeCanvas() {
+        const rect = mapEl.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const width = Math.max(1, Math.round(rect.width));
+        const height = Math.max(1, Math.round(rect.height));
+
+        if (width === canvasWidth && height === canvasHeight && canvas.width === Math.round(width * dpr)) {
+          return;
+        }
+
+        canvasWidth = width;
+        canvasHeight = height;
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function drawPlane(x, y, heading, onGround, selected, zoom) {
+        const size = zoom >= 7 ? 1.15 : zoom >= 5 ? 0.95 : 0.75;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(heading * Math.PI / 180);
+        ctx.scale(size, size);
+
+        if (selected) {
+          ctx.beginPath();
+          ctx.arc(0, 0, 11, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(56,189,248,0.95)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(0, -9);
+        ctx.lineTo(2, -3);
+        ctx.lineTo(8, 1);
+        ctx.lineTo(8, 3);
+        ctx.lineTo(2, 2.2);
+        ctx.lineTo(1.3, 7.5);
+        ctx.lineTo(3.5, 9);
+        ctx.lineTo(3.5, 10);
+        ctx.lineTo(0, 9);
+        ctx.lineTo(-3.5, 10);
+        ctx.lineTo(-3.5, 9);
+        ctx.lineTo(-1.3, 7.5);
+        ctx.lineTo(-2, 2.2);
+        ctx.lineTo(-8, 3);
+        ctx.lineTo(-8, 1);
+        ctx.lineTo(-2, -3);
+        ctx.closePath();
+
+        ctx.fillStyle = onGround ? "#fbbf24" : "#f8fafc";
+        ctx.shadowColor = "rgba(0,0,0,0.75)";
+        ctx.shadowBlur = 4;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function vesselColor(shipType) {
+        if (!Number.isFinite(Number(shipType))) return "#67e8f9";
+
+        const t = Number(shipType);
+
+        if (t === 30) return "#86efac";
+        if (t === 31 || t === 32 || t === 52) return "#c4b5fd";
+        if (t >= 60 && t <= 69) return "#f9a8d4";
+        if (t >= 70 && t <= 79) return "#5eead4";
+        if (t >= 80 && t <= 89) return "#fdba74";
+
+        return "#67e8f9";
+      }
+
+      function drawShip(x, y, heading, shipType, selected, zoom) {
+        const size = zoom >= 8 ? 1.2 : zoom >= 6 ? 1 : 0.78;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(heading * Math.PI / 180);
+        ctx.scale(size, size);
+
+        if (selected) {
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(34,211,238,0.95)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(0, -9);
+        ctx.lineTo(5.2, -3);
+        ctx.lineTo(4.2, 7);
+        ctx.lineTo(0, 9);
+        ctx.lineTo(-4.2, 7);
+        ctx.lineTo(-5.2, -3);
+        ctx.closePath();
+
+        ctx.fillStyle = vesselColor(shipType);
+        ctx.strokeStyle = "rgba(2,6,23,0.92)";
+        ctx.lineWidth = 1;
+        ctx.shadowColor = "rgba(0,0,0,0.72)";
+        ctx.shadowBlur = 4;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(-2.3, 1.5);
+        ctx.lineTo(2.3, 1.5);
+        ctx.strokeStyle = "rgba(2,6,23,0.75)";
+        ctx.lineWidth = 1.1;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+
+      function drawFrame(nowPerf) {
+        requestAnimationFrame(drawFrame);
+
+        if (!map || nowPerf - lastFrameAt < FRAME_INTERVAL_MS) return;
+        lastFrameAt = nowPerf;
+
+        resizeCanvas();
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+        const nowMs = Date.now();
+        const zoom = map.getZoom();
+        const nextScreen = [];
+        let visibleAircraft = 0;
+        let visibleVessels = 0;
+
+        if (showAircraftEl.checked) {
+          for (const state of aircraft.values()) {
+            const display = displayState(state, nowMs);
+            const p = worldToScreen(display.lat, display.lon);
+
+            if (
+              p.x < -25 ||
+              p.y < -25 ||
+              p.x > canvasWidth + 25 ||
+              p.y > canvasHeight + 25
+            ) {
+              continue;
+            }
+
+            visibleAircraft += 1;
+
+            const selected =
+              selectedObject?.kind === "aircraft" &&
+              selectedObject?.id === state.id;
+
+            drawPlane(
+              p.x,
+              p.y,
+              display.heading,
+              state.onGround,
+              selected,
+              zoom
+            );
+
+            if (
+              (showLabelsEl.checked || zoom >= 8) &&
+              state.callsign
+            ) {
+              ctx.save();
+              ctx.font = "10px Inter, system-ui, sans-serif";
+              ctx.textBaseline = "middle";
+              ctx.fillStyle = "rgba(240,249,255,0.92)";
+              ctx.shadowColor = "rgba(0,0,0,0.9)";
+              ctx.shadowBlur = 3;
+              ctx.fillText(
+                state.callsign,
+                p.x + 11,
+                p.y + 1
+              );
+              ctx.restore();
+            }
+
+            nextScreen.push({
+              kind: "aircraft",
+              id: state.id,
+              x: p.x,
+              y: p.y,
+              display
+            });
+          }
+        }
+
+        if (showVesselsEl.checked) {
+          for (const state of vessels.values()) {
+            const display = displayState(state, nowMs);
+            const p = worldToScreen(display.lat, display.lon);
+
+            if (
+              p.x < -25 ||
+              p.y < -25 ||
+              p.x > canvasWidth + 25 ||
+              p.y > canvasHeight + 25
+            ) {
+              continue;
+            }
+
+            visibleVessels += 1;
+
+            const selected =
+              selectedObject?.kind === "vessel" &&
+              selectedObject?.id === state.id;
+
+            drawShip(
+              p.x,
+              p.y,
+              display.heading,
+              state.shipType,
+              selected,
+              zoom
+            );
+
+            if (
+              (showLabelsEl.checked || zoom >= 9) &&
+              state.name
+            ) {
+              ctx.save();
+              ctx.font = "10px Inter, system-ui, sans-serif";
+              ctx.textBaseline = "middle";
+              ctx.fillStyle = "rgba(207,250,254,0.94)";
+              ctx.shadowColor = "rgba(0,0,0,0.9)";
+              ctx.shadowBlur = 3;
+              ctx.fillText(
+                state.name,
+                p.x + 10,
+                p.y + 1
+              );
+              ctx.restore();
+            }
+
+            nextScreen.push({
+              kind: "vessel",
+              id: state.id,
+              x: p.x,
+              y: p.y,
+              display
+            });
+          }
+        }
+
+        screenObjects = nextScreen;
+        aircraftCountEl.textContent = String(visibleAircraft);
+        vesselCountEl.textContent = String(visibleVessels);
+
+        if (selectedObject) {
+          updateSelectedCardPosition();
+        }
+      }
+
+      function nearestObject(x, y) {
+        let best = null;
+        let bestDistance2 = 16 * 16;
+
+        for (const point of screenObjects) {
+          const dx = point.x - x;
+          const dy = point.y - y;
+          const distance2 = dx * dx + dy * dy;
+
+          if (distance2 < bestDistance2) {
+            bestDistance2 = distance2;
+            best = point;
+          }
+        }
+
+        return best;
+      }
+
+      function fillCard(state, display) {
+        cardGrid.replaceChildren();
+
+        let rows;
+
+        if (state.kind === "vessel") {
+          cardTitle.textContent =
+            state.name ||
+            state.callSign ||
+            state.mmsi;
+
+          cardSubtitle.textContent = [
+            shipTypeLabel(state.shipType),
+            state.callSign,
+            state.imo ? `IMO ${state.imo}` : null
+          ].filter(Boolean).join(" · ");
+
+          rows = [
+            ["MMSI", state.mmsi],
+            ["Скорость", formatSpeed(state.speed)],
+            ["Курс", `${Math.round(display.heading)}°`],
+            ["Статус", navStatusLabel(state.navStatus)],
+            ["Назначение", state.destination || "—"],
+            ["Осадка", Number.isFinite(state.draught) ? `${formatNumber(state.draught, 1)} м` : "—"],
+            ["Размер", Number.isFinite(state.length) || Number.isFinite(state.width)
+              ? `${formatNumber(state.length)} × ${formatNumber(state.width)} м`
+              : "—"],
+            ["Позиция", `${display.lat.toFixed(4)}, ${display.lon.toFixed(4)}`],
+            ["Источник", state.sources?.join(", ") || "AIS"]
+          ];
+        } else {
+          cardTitle.textContent =
+            state.callsign ||
+            state.registration ||
+            state.id.toUpperCase();
+
+          cardSubtitle.textContent = [
+            state.registration,
+            state.type,
+            state.description
+          ].filter(Boolean).join(" · ") ||
+            state.id.toUpperCase();
+
+          rows = [
+            ["ICAO", state.id.toUpperCase()],
+            ["Высота", formatAltitude(display.altitude)],
+            ["Скорость", formatSpeed(state.speed)],
+            ["Курс", `${Math.round(display.heading)}°`],
+            ["Вертикальная", Number.isFinite(state.verticalRate)
+              ? `${formatNumber(state.verticalRate)} ft/min`
+              : "—"],
+            ["Squawk", state.squawk || "—"],
+            ["Позиция", `${display.lat.toFixed(4)}, ${display.lon.toFixed(4)}`],
+            ["Источник", state.provider || "ADS-B"]
+          ];
+        }
+
+        for (const [label, value] of rows) {
+          const l = document.createElement("div");
+          l.className = "label";
+          l.textContent = label;
+
+          const v = document.createElement("div");
+          v.className = "value";
+          v.textContent = value;
+
+          cardGrid.append(l, v);
+        }
+      }
+
+      function selectedState() {
+        if (!selectedObject) return null;
+
+        return selectedObject.kind === "vessel"
+          ? vessels.get(selectedObject.id)
+          : aircraft.get(selectedObject.id);
+      }
+
+      function updateSelectedCardPosition() {
+        const state = selectedState();
+
+        if (!state) {
+          hideTrafficCard();
+          return;
+        }
+
+        const display = displayState(state, Date.now());
+        const p = worldToScreen(display.lat, display.lon);
+
+        fillCard(state, display);
+
+        const cardWidth = trafficCard.offsetWidth || 280;
+        const cardHeight = trafficCard.offsetHeight || 240;
+
+        let left = p.x + 16;
+        let top = p.y - 20;
+
+        if (left + cardWidth > canvasWidth - 8) {
+          left = p.x - cardWidth - 16;
+        }
+
+        if (top + cardHeight > canvasHeight - 8) {
+          top = canvasHeight - cardHeight - 8;
+        }
+
+        if (top < 8) top = 8;
+        if (left < 8) left = 8;
+
+        trafficCard.style.left = `${left}px`;
+        trafficCard.style.top = `${top}px`;
+      }
+
+      function showTrafficCard(kind, id) {
+        selectedObject = { kind, id };
+        trafficCard.classList.add("visible");
+        updateSelectedCardPosition();
+      }
+
+      function hideTrafficCard() {
+        selectedObject = null;
+        trafficCard.classList.remove("visible");
+      }
+
+      async function fetchAircraft() {
+        const bounds = viewportBounds();
+
+        const params = new URLSearchParams({
+          west: bounds.west.toFixed(5),
+          south: bounds.south.toFixed(5),
+          east: bounds.east.toFixed(5),
+          north: bounds.north.toFixed(5)
+        });
+
+        const response = await fetch(`${API_URL}?${params}`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" }
+        });
+
+        if (!response.ok) {
+          let details = "";
+          try {
+            const payload = await response.json();
+            details = payload.details || payload.error || "";
+          } catch {}
+
+          throw new Error(`HTTP ${response.status}${details ? ` · ${details}` : ""}`);
+        }
+
+        const payload = await response.json();
+
+        if (!payload || !Array.isArray(payload.ac)) {
+          throw new Error("Backend вернул неожиданный JSON");
+        }
+
+        return {
+          records: payload.ac.map(normalizeAircraft).filter(Boolean),
+          coverage: payload.coverage || null
+        };
+      }
+
+      function updateCoverageUi(coverage) {
+        lastCoverage = coverage;
+
+        if (!coverage) {
+          coverageCountEl.textContent = "—";
+          oldestAgeEl.textContent = "—";
+          coverageProgressEl.style.width = "0%";
+          return;
+        }
+
+        coverageCountEl.textContent = `${coverage.availableCells}/${coverage.totalCells}`;
+        oldestAgeEl.textContent = `${coverage.oldestTileAgeSec}s`;
+
+        const percent = coverage.totalCells > 0
+          ? coverage.availableCells / coverage.totalCells * 100
+          : 0;
+
+        coverageProgressEl.style.width = `${clamp(percent, 0, 100)}%`;
+      }
+
+      async function refreshAircraft(reason = "timer") {
+        if (!map || loading) return;
+
+        loading = true;
+        refreshButton.disabled = true;
+        const serial = ++requestSerial;
+
+        try {
+          setStatus("Обновляю ADS-B ячейки видимой области…");
+          const result = await fetchAircraft();
+
+          if (serial !== requestSerial) return;
+
+          ingestAircraftRecords(result.records);
+          updateCoverageUi(result.coverage);
+
+          const coverage = result.coverage;
+          const providers = coverage?.providers
+            ? Object.entries(coverage.providers)
+                .map(([name, count]) => `${name}: ${count}`)
+                .join(", ")
+            : "ADS-B";
+
+          const fill = coverage
+            ? `${coverage.availableCells}/${coverage.totalCells} ячеек`
+            : "область";
+
+          aircraftSourceStatusEl.textContent =
+            `${result.records.length} бортов · ${fill} · ${providers}`;
+
+          setStatus(
+            `ADS-B обновлён. Самолёты и суда между реальными позициями ` +
+            `двигаются локально по скорости и курсу.`
+          );
+        } catch (error) {
+          console.error("Aircraft refresh failed:", error);
+          aircraftSourceStatusEl.textContent = `ошибка: ${error.message}`;
+          setStatus(`Ошибка ADS-B: ${error.message}`, true);
+        } finally {
+          if (serial === requestSerial) {
+            loading = false;
+            refreshButton.disabled = false;
+            scheduleRefresh();
+          }
+        }
+      }
+
+
+      function marineSourceSummary(status) {
+        if (!status) return "подключение…";
+
+        const parts = [];
+
+        if (status.aisstream?.configured) {
+          parts.push(
+            status.aisstream.connected
+              ? "AISStream live"
+              : "AISStream offline"
+          );
+        } else {
+          parts.push(
+            "AISStream без ключа"
+          );
+        }
+
+        parts.push(
+          status.digitraffic?.connected
+            ? "Digitraffic live"
+            : "Digitraffic reconnect"
+        );
+
+        if (status.barentswatch?.configured) {
+          parts.push(
+            status.barentswatch.connected
+              ? "BarentsWatch live"
+              : "BarentsWatch reconnect"
+          );
+        }
+
+        return parts.join(" · ");
+      }
+
+      function updateMarineStatus(status) {
+        marineStatus = status;
+
+        marineSourceStatusEl.textContent =
+          marineSourceSummary(status);
+
+        if (status?.aisstream?.connected) {
+          aisStateEl.textContent = "LIVE";
+        } else if (status?.digitraffic?.connected) {
+          aisStateEl.textContent = "Baltic";
+        } else {
+          aisStateEl.textContent = "—";
+        }
+      }
+
+      function vesselStreamUrl() {
+        const bounds = viewportBounds();
+
+        const params = new URLSearchParams({
+          west: bounds.west.toFixed(5),
+          south: bounds.south.toFixed(5),
+          east: bounds.east.toFixed(5),
+          north: bounds.north.toFixed(5)
+        });
+
+        return `/api/vessels-stream?${params}`;
+      }
+
+      function connectVesselStream() {
+        if (!map) return;
+
+        if (vesselEventSource) {
+          vesselEventSource.close();
+          vesselEventSource = null;
+        }
+
+        const source =
+          new EventSource(vesselStreamUrl());
+
+        vesselEventSource = source;
+
+        marineSourceStatusEl.textContent =
+          "подключение AIS stream…";
+
+        source.onopen = () => {
+          if (source !== vesselEventSource) return;
+
+          marineSourceStatusEl.textContent =
+            marineStatus
+              ? marineSourceSummary(marineStatus)
+              : "AIS stream подключён";
+        };
+
+        source.onmessage = (event) => {
+          if (source !== vesselEventSource) return;
+
+          let message;
+
+          try {
+            message = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+
+          if (message.type === "hello") {
+            if (message.marine?.status) {
+              updateMarineStatus(
+                message.marine.status
+              );
+            }
+
+            return;
+          }
+
+          if (message.type === "marine_status") {
+            updateMarineStatus(
+              message.status
+            );
+
+            return;
+          }
+
+          if (
+            message.type === "vessels_snapshot" &&
+            Array.isArray(message.records)
+          ) {
+            ingestVesselSnapshot(
+              message.records
+            );
+
+            return;
+          }
+
+          if (
+            message.type === "vessel_update" &&
+            message.record
+          ) {
+            ingestVessel(
+              message.record
+            );
+          }
+        };
+
+        source.onerror = () => {
+          if (source !== vesselEventSource) return;
+
+          marineSourceStatusEl.textContent =
+            "AIS stream reconnect…";
+        };
+      }
+
+      function scheduleVesselStreamReconnect() {
+        clearTimeout(vesselStreamTimer);
+
+        vesselStreamTimer = setTimeout(
+          connectVesselStream,
+          700
+        );
+      }
+
+
+      function scheduleRefresh() {
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => refreshAircraft("timer"), REFRESH_DELAY_MS);
+      }
+
+      function scheduleMoveRefresh() {
+        if (moveTimer) clearTimeout(moveTimer);
+
+        moveTimer = setTimeout(() => {
+          refreshAircraft("move");
+          scheduleVesselStreamReconnect();
+        }, MOVE_REFRESH_DELAY_MS);
+      }
+
+      function fitEurope() {
+        if (typeof map.fitBounds === "function") {
+          map.fitBounds([[34, -15], [72, 40]]);
+        } else {
+          map.setView([53, 12], 4.5);
+        }
+        scheduleMoveRefresh();
+      }
+
+      function locateUser() {
+        if (!navigator.geolocation) {
+          setStatus("Геолокация не поддерживается браузером.", true);
+          return;
+        }
+
+        locateButton.disabled = true;
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            map.setView([position.coords.latitude, position.coords.longitude], 7);
+            locateButton.disabled = false;
+            scheduleMoveRefresh();
+          },
+          (error) => {
+            locateButton.disabled = false;
+            setStatus(`Геолокация: ${error.message}`, true);
+          },
+          {
+            timeout: 10_000,
+            maximumAge: 300_000,
+            enableHighAccuracy: false
+          }
+        );
+      }
+
+      function init() {
+        if (!window.Orihon) {
+          setStatus("Orihon не загрузился с CDN.", true);
+          return;
+        }
+
+        map = Orihon.createMap("map", {
+          center: [52, 10],
+          zoom: 5,
+          locale: "ru",
+          ariaLabel: "Карта движения самолётов и судов Европы"
+        });
+
+        Orihon.tileLayer(
+          "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+          {
+            attribution: "© OpenStreetMap contributors",
+            maxZoom: 19
+          }
+        ).addTo(map);
+
+        if (typeof Orihon.zoomControl === "function") {
+          Orihon.zoomControl({ position: "bottom-right" }).addTo(map);
+        }
+
+        if (typeof Orihon.scaleControl === "function") {
+          Orihon.scaleControl({ position: "bottom-left", units: "metric" }).addTo(map);
+        }
+
+        map.on("moveend", scheduleMoveRefresh);
+        map.on("zoomend", scheduleMoveRefresh);
+        map.on("resize", resizeCanvas);
+
+        map.on("click", (event) => {
+          const p = event.containerPoint;
+          if (!p) return;
+
+          const hit = nearestObject(p.x, p.y);
+
+          if (hit) {
+            showTrafficCard(
+              hit.kind,
+              hit.id
+            );
+          } else {
+            hideTrafficCard();
+          }
+        });
+
+        refreshButton.addEventListener("click", () => refreshAircraft("manual"));
+        europeButton.addEventListener("click", fitEurope);
+        locateButton.addEventListener("click", locateUser);
+        closeCardButton.addEventListener("click", hideTrafficCard);
+
+        showAircraftEl.addEventListener("change", () => {
+          if (
+            !showAircraftEl.checked &&
+            selectedObject?.kind === "aircraft"
+          ) {
+            hideTrafficCard();
+          }
+        });
+
+        showVesselsEl.addEventListener("change", () => {
+          if (
+            !showVesselsEl.checked &&
+            selectedObject?.kind === "vessel"
+          ) {
+            hideTrafficCard();
+          }
+        });
+
+        window.addEventListener("resize", resizeCanvas);
+
+        resizeCanvas();
+        requestAnimationFrame(drawFrame);
+        connectVesselStream();
+        refreshAircraft("initial");
+      }
+
+      window.addEventListener("load", init);
+    })();
+  </script>
+</body>
+</html>

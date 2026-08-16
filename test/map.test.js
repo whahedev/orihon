@@ -107,6 +107,26 @@ test("programmatic zoom emits one complete view lifecycle", () => {
   map.destroy();
 });
 
+test("setView settle:false pans without moveend until settled", () => {
+  const map = new Orihon(new FakeElement(), { center: [0, 0], zoom: 2, controls: false });
+  const events = [];
+  for (const type of ["movestart", "move", "moveend"]) {
+    map.on(type, () => events.push(type));
+  }
+
+  map.setView([1, 1], 2, { settle: false });
+  assert.deepEqual(events, ["movestart", "move"]);
+
+  events.length = 0;
+  map.setView([2, 2], 2, { settle: false });
+  assert.deepEqual(events, ["move"]);
+
+  events.length = 0;
+  map.setView(map.getCenter(), map.getZoom());
+  assert.deepEqual(events, ["moveend"]);
+  map.destroy();
+});
+
 test("layer coordinates remain viewport-local after panBy", () => {
   const map = new Orihon(new FakeElement(), { center: [52.52, 13.405], zoom: 10, controls: false });
   const before = map.latLngToLayerPoint(map.getCenter());

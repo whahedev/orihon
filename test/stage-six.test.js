@@ -22,6 +22,32 @@ test("Marker exposes opacity and z-index controls", () => {
   assert.equal(layer.options.zIndexOffset, 90);
 });
 
+test("Marker built-in appearance supports shape color and size", () => {
+  const layer = marker([0, 0], {
+    shape: "circle",
+    color: "#0f766e",
+    strokeColor: "#ecfeff",
+    size: 18,
+    strokeWidth: 3
+  });
+  assert.equal(layer.options.shape, "circle");
+  assert.equal(layer.options.color, "#0f766e");
+  assert.equal(layer.options.strokeColor, "#ecfeff");
+  assert.equal(layer.options.size, 18);
+  assert.equal(layer.options.strokeWidth, 3);
+  assert.deepEqual(layer.options.anchor, [12, 12]);
+  layer.setAppearance({ shape: "square", size: 24, color: "#2563eb" });
+  assert.equal(layer.options.shape, "square");
+  assert.equal(layer.options.size, 24);
+  assert.equal(layer.options.color, "#2563eb");
+  assert.deepEqual(layer.options.anchor, [15, 15]);
+  layer.setAppearance({ shape: "pin", size: 22, strokeWidth: 2 });
+  assert.deepEqual(layer.options.anchor, [12, 36]);
+  layer.setAppearance({ shape: "diamond", size: 22 });
+  assert.equal(layer.options.shape, "diamond");
+  assert.deepEqual(layer.options.anchor, [12, 36]);
+});
+
 test("Popup defaults to auto-pan and accepts keep-in-view options", () => {
   const overlay = new Popup("Details", {
     autoPanPadding: [24, 32],

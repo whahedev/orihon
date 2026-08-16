@@ -18,6 +18,10 @@ const artifacts = [
   "standard.d.ts"
 ];
 
+const manifest = JSON.parse(await readFile(join(dist, "release-manifest.json"), "utf8"));
+const chunks = Array.isArray(manifest.chunks) ? manifest.chunks : [];
+for (const chunk of chunks) artifacts.push(chunk);
+
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
 
@@ -37,7 +41,7 @@ Prebuilt browser/CDN artifacts from the \`orihon\` package root.
 | File | Use |
 | --- | --- |
 | \`orihon.global.js\` | \`<script>\` → \`Orihon\` / \`OrihonReady\` |
-| \`orihon.esm.js\` | Single-file ESM import |
+| \`orihon.esm.js\` | Advanced ESM entry (loads \`orihon-*.js\` chunks on demand) |
 | \`orihon.standard.esm.js\` | Standard tier ESM bundle |
 | \`orihon.core.esm.js\` | Core tier ESM bundle |
 | \`orihon.css\` | Stylesheet |
@@ -61,8 +65,8 @@ import { createMap, tileLayer } from "./orihon.esm.js";
 
 ## License
 
-PolyForm Noncommercial License 1.0.0 — see \`LICENSE\` and \`LICENSE-NOTICE.md\`.
-Copyright © 2026 whahe.
+Apache License 2.0 — see \`LICENSE\` and \`LICENSE-NOTICE.md\`.
+Copyright 2026 whahe.
 `;
 
 await writeFile(join(out, "README.md"), readme);
@@ -75,13 +79,14 @@ await writeFile(join(out, "package.json"), JSON.stringify({
   main: "./orihon.global.js",
   module: "./orihon.esm.js",
   types: "./index.d.ts",
-  license: "PolyForm-Noncommercial-1.0.0",
+  license: "Apache-2.0",
   files: [
     "orihon.css",
     "orihon.core.esm.js",
     "orihon.standard.esm.js",
     "orihon.esm.js",
     "orihon.global.js",
+    "orihon-*.js",
     "index.d.ts",
     "core.d.ts",
     "standard.d.ts",

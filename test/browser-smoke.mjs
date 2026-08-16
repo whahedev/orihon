@@ -16,9 +16,18 @@ assert.equal(mod.leaflet, undefined);
 assert.doesNotMatch(globalLoader, /import\s*\(/);
 assert.match(coreLoader, /import\(["']\.\/services\/map-export\.js["']\)/);
 assert.match(standardLoader, /import\(["']\.\/services\/map-export\.js["']\)/);
+assert.match(coreLoader, /import\(["']\.\/ui\/locale-packs\.js["']\)/);
+assert.doesNotMatch(coreLoader, /\\u0418\\u043D\\u0442\\u0435\\u0440\\u0430\\u043A\\u0442\\u0438\\u0432\\u043D\\u0430\\u044F/);
 assert.doesNotMatch(coreLoader, /PNG export failed/);
 assert.doesNotMatch(standardLoader, /PNG export failed/);
 assert.doesNotMatch(globalLoader, /OrihonL/);
+const advancedLoader = await readFile(new URL("../dist/orihon.esm.js", import.meta.url), "utf8");
+assert.match(advancedLoader, /import\(/);
+if (Array.isArray(manifest.chunks)) {
+  for (const chunk of manifest.chunks) {
+    assert.equal(typeof manifest.sizes?.[chunk]?.gzipBytes, "number", `missing size for ${chunk}`);
+  }
+}
 const context = { Promise };
 context.globalThis = context;
 vm.runInNewContext(globalLoader, context);

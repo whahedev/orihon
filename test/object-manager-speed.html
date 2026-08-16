@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orihon — ObjectManager speed</title>
+    <link rel="stylesheet" href="/dist/orihon.css" />
+    <style>
+      :root { --ink: #e8eef4; --muted: #93a4b5; --panel: rgba(10, 18, 28, 0.92); --line: rgba(232, 238, 244, 0.12); --accent: #2dd4bf; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; color: var(--ink); font: 14px/1.4 system-ui, sans-serif; background: #071018; }
+      #map { position: absolute; inset: 0; }
+      .panel {
+        position: absolute; z-index: 1000; top: 12px; left: 12px; width: min(380px, calc(100vw - 24px));
+        max-height: calc(100vh - 24px); overflow: auto; padding: 14px;
+        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+      }
+      h1 { margin: 0; font-size: 1.1rem; }
+      .muted { color: var(--muted); margin: 6px 0 10px; font-size: 12px; }
+      .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+      button {
+        appearance: none; border: 1px solid var(--line); background: #122033; color: var(--ink);
+        border-radius: 8px; padding: 7px 10px; font: inherit; cursor: pointer;
+      }
+      button:hover { border-color: var(--accent); }
+      button.active { background: color-mix(in srgb, var(--accent) 22%, #122033); border-color: var(--accent); }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      .stats {
+        margin-top: 10px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.04);
+        font-family: ui-monospace, Consolas, monospace; font-size: 11px; white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body data-state="idle">
+    <div id="map"></div>
+    <aside class="panel">
+      <h1>ObjectManager speed</h1>
+      <p class="muted">
+        Mass path: <code>sceneFeatures:false</code>, clusters off, packed WebGL.
+        Анимируется только подмножество точек — остальной миллион стоит.
+      </p>
+      <div class="row" id="count-buttons">
+        <button type="button" data-count="25000">25k</button>
+        <button type="button" data-count="100000">100k</button>
+        <button type="button" data-count="250000">250k</button>
+        <button type="button" data-count="1000000">1M</button>
+      </div>
+      <div class="row" id="moving-buttons">
+        <button type="button" data-moving="200">move 200</button>
+        <button type="button" data-moving="500" class="active">move 500</button>
+        <button type="button" data-moving="2000">move 2k</button>
+        <button type="button" data-moving="5000">move 5k</button>
+      </div>
+      <p class="muted" id="moving-hint">Подмножество для Animate: <strong>500</strong> точек</p>
+      <div class="row">
+        <button type="button" id="run">Load</button>
+        <button type="button" id="animate">Animate subset</button>
+        <button type="button" id="pan">Pan 8×</button>
+        <button type="button" id="stop">Stop</button>
+      </div>
+      <div class="stats" id="stats">idle</div>
+    </aside>
+    <script type="module">
+      import {
+        createMap,
+        canvasBaseLayer,
+        objectManager
+      } from "/dist/orihon.esm.js";
+
+      const params = new URLSearchParams(location.search);
+      let count = Math.max(1000, Number(params.get("count")) || 25_000);
+      let moving = Math.max(10, Number(params.get("moving")) || 500);
+      const ticksWanted = Math.max(4, Number(params.get("ticks")) || 10);
+      const autorun = params.get("autorun") === "1";
+
+      const statsEl = document.getElementById("stats");
+      const map = createMap("map", {
+        center: [55.75, 37.62],
+        zoom: 6,
+        zoomControl: true,
+        inertia: false
+      });
+      canvasBaseLayer({ background: "#0b1220" }).addTo(map);
+
+      const manager = objectManager({
+        clusterize: false,
+        clusterRenderer: "webgl",
+        webglThreshold: 1,
+        sceneFeatures: false,
+        styleByCategory: false,
+        declutter: false,
+        visualization: "objects"
+      }).addTo(map);
+
+      let busy = false;
+      let animTimer = 0;
+      let lastResult = null;
+
+      function heapMb() {
+        const mem = performance.memory;
+        return mem?.usedJSHeapSize != null ? mem.usedJSHeapSize / (1024 * 1024) : null;
+      }
+
+      function yieldToMain() {
+        return new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      function waitFrames(n = 2) {
+        return new Promise((resolve) => {
+          let left = n;
+          const step = () => {
+            left -= 1;
+            if (left <= 0) resolve();
+            else requestAnimationFrame(step);
+          };
+          requestAnimationFrame(step);
+        });
+      }
+
+      function syncButtons() {
+        for (const btn of document.querySelectorAll("#count-buttons button")) {
+          btn.classList.toggle("active", Number(btn.dataset.count) === count);
+        }
+        for (const btn of document.querySelectorAll("#moving-buttons button")) {
+          btn.classList.toggle("active", Number(btn.dataset.moving) === moving);
+        }
+        const hint = document.getElementById("moving-hint");
+        if (hint) {
+          hint.innerHTML = `Подмножество для Animate: <strong>${moving.toLocaleString("en-US")}</strong> точек`;
+        }
+      }
+
+      /** Degrees per tick — large enough to see at overview zoom. */
+      function animateStepDegrees() {
+        const z = map.zoom;
+        // ~8–40 CSS px of motion depending on zoom
+        return Math.max(0.08, 12 / Math.max(2 ** (z - 2), 1));
+      }
+
+      function setStats(text) {
+        statsEl.textContent = text;
+      }
+
+      function stopAnimate() {
+        if (animTimer) {
+          clearInterval(animTimer);
+          animTimer = 0;
+        }
+        document.getElementById("animate").classList.remove("active");
+      }
+
+      function report(extra = {}) {
+        const s = manager.getStats();
+        const heap = heapMb();
+        lastResult = {
+          objects: s.objects,
+          renderer: s.renderer,
+          visible: s.visibleObjects,
+          count,
+          moving: Math.min(moving, s.objects),
+          heapMb: heap,
+          ...extra
+        };
+        window.__omSpeed = lastResult;
+        const lines = [
+          `objects ${s.objects.toLocaleString("en-US")} · renderer ${s.renderer}`,
+          extra.ingestMs != null ? `ingest ${extra.ingestMs.toFixed(0)}ms` : null,
+          extra.layoutMs != null ? `layout ${extra.layoutMs.toFixed(0)}ms` : null,
+          extra.animateAvgMs != null
+            ? `animate ${extra.moving} · avg ${extra.animateAvgMs.toFixed(1)}ms · max ${extra.animateMaxMs.toFixed(1)}ms`
+            : null,
+          extra.panAvgMs != null ? `pan ${extra.panAvgMs.toFixed(1)}ms avg` : null,
+          extra.fps != null ? `rAF ~${extra.fps.toFixed(0)} fps while animating` : null,
+          heap != null ? `heap ${heap.toFixed(0)} MB` : null
+        ].filter(Boolean);
+        setStats(lines.join("\n"));
+        return lastResult;
+      }
+
+      async function loadPoints(nextCount = count) {
+        if (busy) return lastResult;
+        busy = true;
+        stopAnimate();
+        count = nextCount;
+        syncButtons();
+        document.body.dataset.state = "running";
+        manager.clear();
+        const chunk = count >= 1_000_000 ? 50_000 : 20_000;
+        const t0 = performance.now();
+        let added = 0;
+        setStats(`ingest 0 / ${count.toLocaleString("en-US")}`);
+        try {
+          manager.beginBulk();
+          while (added < count) {
+            const n = Math.min(chunk, count - added);
+            const batch = new Array(n);
+            for (let i = 0; i < n; i++) {
+              const id = added + i;
+              const u = ((id * 2654435761) >>> 0) / 4294967296;
+              const v = ((id * 1597334677) >>> 0) / 4294967296;
+              batch[i] = {
+                id,
+                coordinates: [35 + u * 28, -15 + v * 55],
+                properties: { moving: id < moving }
+              };
+            }
+            manager.add(batch);
+            added += n;
+            if (added % (chunk * 2) === 0 || added === count) {
+              setStats(`ingest ${added.toLocaleString("en-US")} / ${count.toLocaleString("en-US")}`);
+              await yieldToMain();
+            }
+          }
+          manager.endBulk({ render: false });
+          const ingestMs = performance.now() - t0;
+          map.setView([55.75, 37.62], 6);
+          const l0 = performance.now();
+          await manager.prepareLayout(6);
+          await waitFrames(3);
+          const layoutMs = performance.now() - l0;
+          const result = report({ ingestMs, layoutMs, ticks: 0 });
+          document.body.dataset.state = "loaded";
+          return result;
+        } catch (err) {
+          document.body.dataset.state = "failed";
+          window.__omSpeed = { error: String(err?.message || err), count, moving };
+          setStats(`FAILED\n${String(err?.message || err)}`);
+          throw err;
+        } finally {
+          busy = false;
+        }
+      }
+
+      async function animateSubset(options = {}) {
+        const total = manager.getStats().objects;
+        if (total < 10) {
+          setStats("load points first");
+          return lastResult;
+        }
+        const n = Math.min(moving, total);
+        const duration = 220;
+        const samples = [];
+        let frames = 0;
+        let fpsRaf = 0;
+        const fpsLoop = () => {
+          frames += 1;
+          fpsRaf = requestAnimationFrame(fpsLoop);
+        };
+        fpsRaf = requestAnimationFrame(fpsLoop);
+        const fpsT0 = performance.now();
+
+        const runTick = () => {
+          const t0 = performance.now();
+          const updates = new Array(n);
+          const phase = performance.now() / 400;
+          const step = animateStepDegrees();
+          for (let i = 0; i < n; i++) {
+            const obj = manager.getObject(i);
+            if (!obj?.coordinates) continue;
+            const heading = (i * 17 + phase * 40) % 360;
+            const rad = (heading * Math.PI) / 180;
+            updates[i] = {
+              id: i,
+              coordinates: [
+                obj.coordinates[0] + Math.cos(rad) * step,
+                obj.coordinates[1] + Math.sin(rad) * step
+              ],
+              properties: obj.properties
+            };
+          }
+          manager.updateObjects(updates.filter(Boolean), { animate: true, duration });
+          samples.push(performance.now() - t0);
+          if (!options.once) {
+            setStats(
+              `animating ${n.toLocaleString("en-US")} / ${total.toLocaleString("en-US")} · ` +
+                `last ${samples[samples.length - 1].toFixed(1)}ms · step ${step.toFixed(3)}°`
+            );
+          }
+        };
+
+        const ticks = Math.max(1, Number(options.ticks) || ticksWanted);
+        if (options.once) {
+          for (let i = 0; i < ticks; i++) {
+            runTick();
+            await waitFrames(1);
+          }
+          cancelAnimationFrame(fpsRaf);
+          const elapsed = (performance.now() - fpsT0) / 1000;
+          return report({
+            ...(lastResult || {}),
+            moving: n,
+            ticks: samples.length,
+            animateAvgMs: samples.reduce((a, b) => a + b, 0) / samples.length,
+            animateMaxMs: Math.max(...samples),
+            fps: elapsed > 0 ? frames / elapsed : 0
+          });
+        }
+
+        stopAnimate();
+        document.getElementById("animate").classList.add("active");
+        runTick();
+        animTimer = setInterval(runTick, duration);
+        return lastResult;
+      }
+
+      async function panStress() {
+        const samples = [];
+        const views = [
+          [55.75, 37.62, 6],
+          [48.2, 16.4, 7],
+          [52.5, 13.4, 6],
+          [41.0, 29.0, 5],
+          [55.75, 37.62, 8],
+          [50.1, 14.4, 6],
+          [59.3, 18.1, 6],
+          [55.75, 37.62, 6]
+        ];
+        for (const [lat, lng, zoom] of views) {
+          const t0 = performance.now();
+          map.setView([lat, lng], zoom);
+          await waitFrames(2);
+          samples.push(performance.now() - t0);
+        }
+        return report({
+          ...(lastResult || {}),
+          panAvgMs: samples.reduce((a, b) => a + b, 0) / samples.length,
+          panMaxMs: Math.max(...samples)
+        });
+      }
+
+      for (const btn of document.querySelectorAll("#count-buttons button")) {
+        btn.addEventListener("click", () => {
+          count = Number(btn.dataset.count);
+          syncButtons();
+        });
+      }
+      for (const btn of document.querySelectorAll("#moving-buttons button")) {
+        btn.addEventListener("click", () => {
+          moving = Number(btn.dataset.moving);
+          syncButtons();
+          setStats(`moving subset = ${moving.toLocaleString("en-US")} (нажмите Animate subset)`);
+          if (animTimer) {
+            stopAnimate();
+            void animateSubset({ once: false });
+          }
+        });
+      }
+      document.getElementById("run").addEventListener("click", () => {
+        void loadPoints(count);
+      });
+      document.getElementById("animate").addEventListener("click", () => {
+        if (animTimer) {
+          stopAnimate();
+          return;
+        }
+        void animateSubset({ once: false });
+      });
+      document.getElementById("pan").addEventListener("click", () => {
+        void panStress();
+      });
+      document.getElementById("stop").addEventListener("click", () => {
+        stopAnimate();
+      });
+
+      window.__omSpeedRun = async (opts = {}) => {
+        if (opts.count) count = Number(opts.count);
+        if (opts.moving) moving = Number(opts.moving);
+        syncButtons();
+        await loadPoints(count);
+        const animated = await animateSubset({ once: true, ticks: opts.ticks || ticksWanted });
+        document.body.dataset.state = animated?.error ? "failed" : "passed";
+        return animated;
+      };
+
+      syncButtons();
+      if (autorun) {
+        void window.__omSpeedRun({ count, moving, ticks: ticksWanted }).catch((err) => {
+          document.body.dataset.state = "failed";
+          window.__omSpeed = { error: String(err?.message || err) };
+        });
+      } else {
+        setStats("choose count → Load → Animate subset");
+      }
+    </script>
+  </body>
+</html>

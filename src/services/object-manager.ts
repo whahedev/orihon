@@ -9,8 +9,10 @@ import { WebGLPointLayer, webglPointLayer } from "../layers/webgl-point-layer.js
 import {
   LatLng,
   Point,
+  clampLat,
   latLng,
   latLngBounds,
+  wrapLng,
   type LatLngBoundsLike,
   type LatLngLike,
   type PointLike
@@ -34,15 +36,80 @@ import {
 import { GeometryWorkerPool, geometryWorkerPool } from "./geometry-worker.js";
 import { SpatialGridIndex, type SpatialRecord } from "./spatial-grid-index.js";
 import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
+import { parseCssColor } from "../webgl-utils.js";
+import {
+  DEFAULT_MAX_VERTICES_PER_GEOMETRY,
+  tryNormalizeManagedGeometry,
+  readManagedPoint,
+  type ManagedGeometry,
+  type ManagedLineStringGeometry,
+  type ManagedPointGeometry,
+  type ManagedPolygonGeometry,
+  type NormalizedGeometry
+} from "./object-geometry.js";
+import type { LabelCandidate } from "./object-label-layout.js";
+import { ObjectSceneController } from "./object-scene.js";
+import { normalizeLabel, styleTint } from "./object-style-helpers.js";
+import type { ObjectVisualizationByZoom, ObjectVisualizationMode } from "./object-scene.js";
+import type { ManagedIconOptions, ManagedIconSource } from "./object-icon-atlas.js";
+import type { ObjectSearchOptions, ObjectSearchResult } from "./object-search-index.js";
+import type { ClusterPropertiesConfig } from "./object-cluster-aggregates.js";
+import {
+  ObjectDirtyFlags,
+  type ObjectCollisionMode,
+  type ObjectGradientStop,
+  type ObjectId,
+  type ObjectLabelStyle,
+  type ObjectLineStyle,
+  type ObjectPolygonStyle,
+  type ObjectState,
+  type ObjectStateValue,
+  type ObjectStyle,
+  type ObjectStyleContext,
+  type ObjectStyleResolver,
+  type ObjectTrailStyle
+} from "./object-types.js";
+
+export type { ObjectId } from "./object-types.js";
+export type {
+  ManagedGeometry,
+  ManagedLineStringGeometry,
+  ManagedPointGeometry,
+  ManagedPolygonGeometry
+} from "./object-geometry.js";
+export type {
+  ObjectCollisionMode,
+  ObjectGradientStop,
+  ObjectLabelStyle,
+  ObjectLineStyle,
+  ObjectPolygonStyle,
+  ObjectState,
+  ObjectStateValue,
+  ObjectStyle,
+  ObjectStyleContext,
+  ObjectStyleResolver,
+  ObjectTrailStyle
+} from "./object-types.js";
+export type { ObjectSearchOptions, ObjectSearchResult } from "./object-search-index.js";
+export type { ClusterPropertiesConfig, ClusterPropertyDefinition } from "./object-cluster-aggregates.js";
+export type { ObjectVisualizationByZoom, ObjectVisualizationMode } from "./object-scene.js";
+export type { ManagedIconOptions, ManagedIconSource } from "./object-icon-atlas.js";
 
 let objectId = 0;
 
-export type ObjectId = string | number;
+function deferClusterHierarchy(fn: () => void): void {
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => setTimeout(fn, 0));
+    return;
+  }
+  setTimeout(fn, 0);
+}
 
 export interface ManagedObject {
   id?: ObjectId;
+  /** Legacy point position [lat, lng] or {lat,lng}. Prefer `geometry`. */
   coordinates?: LatLngLike;
-  geometry?: { coordinates?: number[] };
+  geometry?: ManagedGeometry | { coordinates?: number[]; type?: string };
   properties?: { title?: string; [key: string]: unknown };
   [key: string]: unknown;
 }
@@ -59,12 +126,49 @@ export const OBJECT_MANAGER_PALETTE = {
   hover: [245 / 255, 158 / 255, 11 / 255, 0.95] as const
 };
 
+interface ResolvedObjectStyle {
+  color: string;
+  rgba: readonly [number, number, number, number];
+  opacity: number;
+  size: number;
+  icon: string | null;
+  iconTint: string | null;
+  rotation: number;
+  visible: boolean;
+  label: ObjectLabelStyle | null;
+  collisionMode: ObjectCollisionMode;
+  trail: ObjectTrailStyle | null;
+  line: ObjectLineStyle | null;
+  polygon: ObjectPolygonStyle | null;
+}
+
+const EMPTY_OBJECT_STATE: Readonly<ObjectState> = Object.freeze({});
+const DEFAULT_OBJECT_COLOR = "#0f766e";
+const DEFAULT_OBJECT_SIZE = 10;
+const DEFAULT_OBJECT_OPACITY = 0.88;
+const MAX_OBJECT_SIZE = 256;
+
+const PALETTE_HEX = {
+  alpha: "#0f766e",
+  beta: "#2563eb",
+  gamma: "#ca8a04",
+  alert: "#dc2626",
+  selected: "#7c3aed",
+  hover: "#f59e0b"
+} as const;
+
 export interface ObjectManagerOptions {
   minZoom?: number;
   marker?: MarkerOptions;
   clusterize?: boolean;
   /** When true (default), WebGL singles use category/alert/selected/hover palette colors. */
   styleByCategory?: boolean;
+  /**
+   * Data-driven style resolver. When set, overrides legacy palette colors for returned
+   * properties. Unspecified properties fall back to base → legacy category → defaults.
+   * Priority: base defaults → legacy category/alert/selected/hover → custom `style` → normalize.
+   */
+  style?: ObjectStyleResolver | null;
   /**
    * Cluster radius in CSS/world pixels at the clustered zoom (Leaflet-style).
    * Kept name `clusterGridSize` for compatibility; was formerly a grid cell size.
@@ -96,7 +200,7 @@ export interface ObjectManagerOptions {
   /** Object count at which `auto` switches to WebGL. Default 2000. */
   webglThreshold?: number;
   /**
-   * Offload first/zoom cluster layout to a Web Worker.
+   * Offload first/zoom cluster layout to a Worker.
    * - `true` / `false` — force
    * - `auto` — worker when indexed objects ≥ `layoutWorkerThreshold`
    */
@@ -105,6 +209,39 @@ export interface ObjectManagerOptions {
   layoutWorkerThreshold?: number;
   /** Stop `add()` once this many objects are stored. `0` / unset = unlimited. */
   maxObjects?: number;
+  /** Enable label/icon declutter in the viewport. */
+  declutter?: boolean;
+  /** Active visualization strategy. Default "objects". */
+  visualization?: ObjectVisualizationMode;
+  visualizationByZoom?: ObjectVisualizationByZoom;
+  /** Local search index fields (e.g. `properties.name`). */
+  search?: { fields: string[]; normalize?: boolean } | null;
+  /** Temporal filter extractors (Unix ms). */
+  time?: {
+    value?: (object: ManagedObject) => number | null;
+    from?: (object: ManagedObject) => number | null;
+    to?: (object: ManagedObject) => number | null;
+  } | null;
+  /** Cluster aggregate reducers. */
+  clusterProperties?: ClusterPropertiesConfig;
+  /** Optional heatmap value/weight for visualization:"heatmap"|"auto". */
+  heatmapWeight?: ((object: ManagedObject, id?: ObjectId) => number) | null;
+  /** Cluster badge styling using aggregate properties. */
+  clusterStyle?: ((
+    cluster: { id: string; count: number; properties: Record<string, number>; containsSelected: boolean },
+    context: Readonly<ObjectStyleContext>
+  ) => ObjectStyle | null | undefined) | null;
+  /**
+   * Icon/label/trail/path/polygon scene layers + per-object scene geometries.
+   * Set `false` for mass WebGL points (100k–1M) — skips the O(n) scene sync that
+   * otherwise runs on every render after Phase-2 scene work.
+   * Default `true`.
+   */
+  sceneFeatures?: boolean;
+  /**
+   * Cap LineString/Polygon vertex count on ingest. Default 65536. `0` = unlimited.
+   */
+  maxVerticesPerGeometry?: number;
 }
 
 export type ClusterIconFactory = (count: number, ids: ObjectId[]) => MarkerIcon;
@@ -150,8 +287,11 @@ export interface ObjectManagerStats {
 
 interface ObjectManagerMap extends Evented {
   zoom: number;
+  size?: { width: number; height: number };
   getBounds(): LatLngBoundsLike;
+  getPane?(name: string): HTMLElement | null | undefined;
   latLngToLayerPoint(value: LatLngLike): Point;
+  latLngToContainerPoint?(value: LatLngLike): Point;
   containerPointToLatLng(value: PointLike): LatLng;
   setView(center: LatLngLike, zoom: number): unknown;
   fitBounds(bounds: LatLngBoundsLike, options?: { padding?: number }): unknown;
@@ -188,6 +328,7 @@ export class ObjectManager extends Evented {
   filter: ObjectFilter | null = null;
   readonly _render: EventHandler;
   readonly _scheduleRender: () => void;
+  readonly _scheduleLabelRedraw: () => void;
   private _visibleObjects = 0;
   private _popupBinding: { content: ObjectPopupContent; options?: PopupOptions } | null = null;
   private _clusterPopupBinding: { content: ClusterPopupContent; options?: PopupOptions } | null = null;
@@ -204,13 +345,29 @@ export class ObjectManager extends Evented {
     latlng: Float32Array;
     merc64: Float64Array;
     colors: Float32Array | null;
+    sizes: Float32Array | null;
     meta: WebGLMeta[];
     idToIndex: Map<ObjectId, number>;
     singles: Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>;
   } | null = null;
+  /** GPU draw list is a sparse subset of `_webglPack` (alarms-only etc). */
+  private _gpuSubset = false;
+  private _heatWeightBuf = new Float32Array(0);
+  private _heatRefreshTimer = 0;
+  private _heatRefreshPending = false;
   private _webglSyncedZoom: number | null = null;
+  private _webglDataEpoch = 0;
+  private _webglSyncedEpoch = -1;
+  /** Time-range + filter fingerprint so pan does not rebuild a compacted GPU view. */
+  private _webglViewKey = "";
   private _selectedId: ObjectId | null = null;
   private _hoveredId: ObjectId | null = null;
+  private readonly objectStates = new Map<ObjectId, ObjectState>();
+  private _styleResolver: ObjectStyleResolver | null = null;
+  private _styleZoom: number | null = null;
+  /** Nested beginBulk()/endBulk() depth — suppress per-chunk invalidate+render. */
+  private _bulkDepth = 0;
+  private readonly scene = new ObjectSceneController();
   private _clusterCanvas: ClusterCanvasLayer | null = null;
   private _canvasClusterCount = 0;
   private _activeRenderer: "dom" | "webgl" = "dom";
@@ -233,6 +390,9 @@ export class ObjectManager extends Evented {
   private _layoutCoords = new Float64Array(0);
   private _layoutPacked = 0;
   private _layoutPackDirty = true;
+  private _leafMask: Uint8Array | null = null;
+  private _leafMaskFilter: ObjectFilter | null | undefined = undefined;
+  private _leafMaskIndex: ClusterIndex | null = null;
   private _spiderMarkers: Marker[] = [];
   private _spiderLegs: Polyline[] = [];
   private _spiderClusterId: string | null = null;
@@ -261,7 +421,18 @@ export class ObjectManager extends Evented {
       layoutWorker: "auto",
       layoutWorkerThreshold: 5000,
       styleByCategory: true,
+      style: null,
       maxObjects: 0,
+      declutter: false,
+      visualization: "objects",
+      visualizationByZoom: { heatmapUntil: 7, clustersUntil: 12 },
+      search: null,
+      time: null,
+      clusterProperties: {},
+      heatmapWeight: null,
+      clusterStyle: null,
+      sceneFeatures: true,
+      maxVerticesPerGeometry: DEFAULT_MAX_VERTICES_PER_GEOMETRY,
       ...options
     };
     this.options.clusterGridSize = Math.max(20, Number(this.options.clusterGridSize));
@@ -269,10 +440,25 @@ export class ObjectManager extends Evented {
     this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
     this.options.layoutWorkerThreshold = Math.max(1, Math.floor(this.options.layoutWorkerThreshold));
     this.options.maxObjects = Math.max(0, Math.floor(Number(this.options.maxObjects) || 0));
+    this.options.maxVerticesPerGeometry = Math.max(
+      0,
+      Math.floor(Number(this.options.maxVerticesPerGeometry) || 0)
+    );
     this.options.spiderfyDistanceMultiplier = Math.max(0.25, Number(this.options.spiderfyDistanceMultiplier) || 1);
+    this._styleResolver = this.options.style ?? null;
+    this.scene.configure({
+      declutter: this.options.declutter,
+      visualization: this.options.visualization,
+      visualizationByZoom: this.options.visualizationByZoom,
+      search: this.options.search,
+      time: this.options.time,
+      clusterProperties: this.options.clusterProperties,
+      heatmapWeight: this.options.heatmapWeight
+    });
     this.index = new SpatialGridIndex<ManagedObject, ObjectId>(this.options.indexCellSize);
     this._render = () => this.render();
     this._scheduleRender = rafThrottle(() => this.render());
+    this._scheduleLabelRedraw = rafThrottle(() => this.#redrawLabelsDuringMove());
     this._workerPool = geometryWorkerPool();
   }
 
@@ -283,6 +469,9 @@ export class ObjectManager extends Evented {
       throw new CRSCompatibilityError();
     }
     this.map = map;
+    this.scene.attach(map as Orihon);
+    map.on("move", this._scheduleLabelRedraw);
+    map.on("zoom", this._scheduleLabelRedraw);
     map.on("moveend", this._scheduleRender);
     map.on("zoomend", this._scheduleRender);
     map.on("resize", this._scheduleRender);
@@ -296,13 +485,21 @@ export class ObjectManager extends Evented {
   remove(ids?: ObjectId | ObjectId[]): this {
     if (ids !== undefined) return this.removeObjects(ids);
     if (!this.map) return this;
+    this.map.off("move", this._scheduleLabelRedraw);
+    this.map.off("zoom", this._scheduleLabelRedraw);
     this.map.off("moveend", this._scheduleRender);
     this.map.off("zoomend", this._scheduleRender);
     this.map.off("resize", this._scheduleRender);
     this.map.off("click", this._unspiderfyOnMapClick);
     this.unspiderfy();
+    if (this._heatRefreshTimer) {
+      clearTimeout(this._heatRefreshTimer);
+      this._heatRefreshTimer = 0;
+      this._heatRefreshPending = false;
+    }
     this.#clearRendered();
     this.closePopup();
+    this.scene.detach();
     this.map = null;
     return this;
   }
@@ -320,14 +517,192 @@ export class ObjectManager extends Evented {
   add(features: ManagedObject | ManagedObject[]): this {
     const list = Array.isArray(features) ? features : [features];
     const cap = this.options.maxObjects;
+    const skipDrop = this.markers.size === 0;
+    const massPoints = !this.options.sceneFeatures;
     for (const item of list) {
       if (cap > 0 && this.items.size >= cap && (item.id == null || !this.items.has(item.id))) break;
       const id = item.id ?? globalThis.crypto?.randomUUID?.() ?? `oh-object-${++objectId}`;
-      this.#dropRenderedObject(id);
+      if (!skipDrop) this.#dropRenderedObject(id);
       this.items.set(id, item);
+      if (massPoints) {
+        const point = readManagedPoint(item);
+        if (point) {
+          this.index.setLatLng(id, point.lat, point.lng, item);
+          this.scene.searchIndex?.upsert(id, item);
+          this.scene.timeIndex?.upsert(id, item);
+          continue;
+        }
+      }
+      const normalized = this.#ingestObject(id, item);
+      if (normalized?.kind === "Point") this.index.setLatLng(id, normalized.lat, normalized.lng, item);
+      else if (normalized) this.index.set(id, [normalized.bbox[0], normalized.bbox[1]], item);
+      else this.index.delete(id);
+    }
+    if (this._bulkDepth === 0) {
+      this.#invalidateLayout();
+      this._scheduleRender();
+    }
+    return this;
+  }
+
+  /**
+   * Suspend layout invalidation + scheduled renders across many `add`/`update` calls.
+   * Pair with `endBulk()` — required for chunked 100k–1M ingest while the manager is on the map.
+   */
+  beginBulk(): this {
+    this._bulkDepth++;
+    return this;
+  }
+
+  /** Flush one layout invalidate (+ optional render) after `beginBulk()`. */
+  endBulk(options?: { render?: boolean }): this {
+    if (this._bulkDepth > 0) this._bulkDepth--;
+    if (this._bulkDepth === 0) {
+      this.#invalidateLayout();
+      if (options?.render !== false) this._scheduleRender();
+    }
+    return this;
+  }
+
+  /**
+   * Toggle icon/label/trail/path/polygon scene work. `false` is the mass-point fast path.
+   * Re-enabling rebuilds scene geometries from stored objects.
+   */
+  setSceneFeatures(enabled: boolean): this {
+    const next = Boolean(enabled);
+    if (this.options.sceneFeatures === next) return this;
+    this.options.sceneFeatures = next;
+    if (next) {
+      for (const [id, item] of this.items) {
+        const normalized = tryNormalizeManagedGeometry(item, {
+          maxVertices: this.options.maxVerticesPerGeometry
+        });
+        if (normalized) this.scene.setGeometry(id, normalized);
+        else this.scene.removeGeometry(id);
+      }
+    } else {
+      this.scene.geometries.clear();
+      this.scene.resetGeometryStats();
+      this.scene.dirty.clear();
+      this.scene.clearNonHeatLayers();
+    }
+    if (this._bulkDepth === 0) this._scheduleRender();
+    return this;
+  }
+
+  /**
+   * In-place update of existing objects (coordinates / properties / geometry).
+   * On the WebGL non-cluster path this patches GPU buffers instead of a full layout rebuild —
+   * critical for realtime stress at 100k–1M.
+   */
+  update(features: ManagedObject | ManagedObject[], options?: { animate?: boolean; duration?: number }): this {
+    return this.updateObjects(Array.isArray(features) ? features : [features], options);
+  }
+
+  updateObjects(
+    features: Iterable<ManagedObject>,
+    options?: { animate?: boolean; duration?: number }
+  ): this {
+    const list = [...features];
+    const animate = Boolean(options?.animate);
+    const duration = Math.max(0, Number(options?.duration) || 800);
+
+    // Animated point moves must not rebuild cluster layout every tick.
+    if (animate && this.#applyAnimatedPointUpdates(list, duration)) {
+      return this;
+    }
+
+    // Property/style-only updates: keep spatial layout, refresh styles/scene.
+    if (this.#applyPropertyOnlyUpdates(list)) {
+      return this;
+    }
+
+    if (this.#canPatchWebgl()) {
+      const touched: ObjectId[] = [];
+      for (const item of list) {
+        const id = item.id;
+        if (id == null) continue;
+        const prev = this.#storedPoint(id);
+        const prevLat = prev?.lat ?? null;
+        const prevLng = prev?.lng ?? null;
+        const prevObject = this.items.get(id);
+        const propertiesChanged = !prevObject || prevObject.properties !== item.properties;
+        this.items.set(id, item);
+        const normalized = this.#ingestObject(id, item, { skipSearch: !propertiesChanged });
+        this.scene.markDirty(
+          id,
+          propertiesChanged
+            ? ObjectDirtyFlags.Style | ObjectDirtyFlags.SearchIndex | ObjectDirtyFlags.TimeIndex
+            : ObjectDirtyFlags.Position
+        );
+        if (!normalized || normalized.kind !== "Point") {
+          this.index.delete(id);
+          this.#invalidateLayout();
+          this._scheduleRender();
+          return this;
+        }
+        this.index.set(id, [normalized.lat, normalized.lng], item);
+        if (
+          this.options.sceneFeatures &&
+          prevLat != null &&
+          prevLng != null &&
+          (prevLat !== normalized.lat || prevLng !== normalized.lng)
+        ) {
+          this.scene.trails.append(id, prevLat, prevLng);
+        }
+        const slot = this._webglIdToIndex.get(id);
+        if (slot == null) continue;
+        this._webglLayer!.patchPoint(slot, normalized.lat, normalized.lng);
+        const record = this.index.records.get(id);
+        if (record && this._layout) this._layout.singles.set(id, record);
+        const packSlot = this._webglPack?.idToIndex.get(id);
+        if (this._webglPack && packSlot != null && record) {
+          this._webglPack.latlng[packSlot * 2] = normalized.lat;
+          this._webglPack.latlng[packSlot * 2 + 1] = normalized.lng;
+          const clamped = Math.max(-85.05112878, Math.min(85.05112878, normalized.lat));
+          const sin = Math.sin((clamped * Math.PI) / 180);
+          this._webglPack.merc64[packSlot * 2] = (normalized.lng + 180) / 360;
+          this._webglPack.merc64[packSlot * 2 + 1] = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+          this._webglPack.singles.set(id, record);
+        }
+        touched.push(id);
+      }
+      if (touched.length && this.#usesStyledWebgl()) this.#patchWebglStyles(touched);
+      this._webglLayer!.render();
+      if (this.options.sceneFeatures) this.#syncSceneLayers();
+      return this;
+    }
+
+    for (const item of list) {
+      const id = item.id;
+      if (id == null) continue;
+      const prev = this.#storedPoint(id);
+      const prevLat = prev?.lat ?? null;
+      const prevLng = prev?.lng ?? null;
+      const prevObject = this.items.get(id);
+      const propertiesChanged = !prevObject || prevObject.properties !== item.properties;
+      this.items.set(id, item);
+      const normalized = this.#ingestObject(id, item, { skipSearch: !propertiesChanged });
       this.index.delete(id);
-      const position = this.#objectPosition(item);
-      if (position) this.index.set(id, position, item);
+      if (normalized?.kind === "Point") {
+        this.index.set(id, [normalized.lat, normalized.lng], item);
+        if (
+          this.options.sceneFeatures &&
+          prevLat != null &&
+          prevLng != null &&
+          (prevLat !== normalized.lat || prevLng !== normalized.lng)
+        ) {
+          this.scene.trails.append(id, prevLat, prevLng);
+        }
+      } else if (normalized) {
+        this.index.set(id, [normalized.bbox[0], normalized.bbox[1]], item);
+      }
+      this.scene.markDirty(
+        id,
+        propertiesChanged
+          ? ObjectDirtyFlags.Style | ObjectDirtyFlags.SearchIndex | ObjectDirtyFlags.TimeIndex | ObjectDirtyFlags.Geometry
+          : ObjectDirtyFlags.Position
+      );
     }
     this.#invalidateLayout();
     this._scheduleRender();
@@ -335,44 +710,108 @@ export class ObjectManager extends Evented {
   }
 
   /**
-   * In-place update of existing objects (coordinates / properties).
-   * On the WebGL non-cluster path this patches GPU buffers instead of a full layout rebuild —
-   * critical for realtime stress at 100k–1M.
+   * Fast path when geometry is unchanged and only properties/style inputs changed.
    */
-  update(features: ManagedObject | ManagedObject[]): this {
-    const list = Array.isArray(features) ? features : [features];
-    if (this.#canPatchWebgl()) {
-      const touched: ObjectId[] = [];
-      for (const item of list) {
-        const id = item.id;
-        if (id == null) continue;
-        this.items.set(id, item);
-        const position = this.#objectPosition(item);
-        if (!position) continue;
-        this.index.set(id, position, item);
-        const slot = this._webglIdToIndex.get(id);
-        if (slot == null) continue;
-        const ll = latLng(position);
-        this._webglLayer!.patchPoint(slot, ll.lat, ll.lng);
-        const record = this.index.records.get(id);
-        if (record && this._layout) this._layout.singles.set(id, record);
-        const packSlot = this._webglPack?.idToIndex.get(id);
-        if (this._webglPack && packSlot != null && record) {
-          this._webglPack.latlng[packSlot * 2] = ll.lat;
-          this._webglPack.latlng[packSlot * 2 + 1] = ll.lng;
-          const clamped = Math.max(-85.05112878, Math.min(85.05112878, ll.lat));
-          const sin = Math.sin((clamped * Math.PI) / 180);
-          this._webglPack.merc64[packSlot * 2] = (ll.lng + 180) / 360;
-          this._webglPack.merc64[packSlot * 2 + 1] = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
-          this._webglPack.singles.set(id, record);
+  #applyPropertyOnlyUpdates(list: ManagedObject[]): boolean {
+    if (!list.length) return false;
+    const touched: ObjectId[] = [];
+    for (const item of list) {
+      const id = item.id;
+      if (id == null) return false;
+      const prev = this.items.get(id);
+      if (!prev) return false;
+      const nextGeom = tryNormalizeManagedGeometry(item, {
+        maxVertices: this.options.maxVerticesPerGeometry
+      });
+      if (!nextGeom) return false;
+      if (nextGeom.kind === "Point") {
+        const stored = this.#storedPoint(id);
+        if (!stored || stored.lat !== nextGeom.lat || stored.lng !== nextGeom.lng) return false;
+      } else {
+        const prevGeom = this.scene.geometries.get(id);
+        if (!prevGeom || prevGeom.kind === "Point" || prevGeom.kind !== nextGeom.kind) return false;
+        if (
+          prevGeom.bbox[0] !== nextGeom.bbox[0] ||
+          prevGeom.bbox[1] !== nextGeom.bbox[1] ||
+          prevGeom.bbox[2] !== nextGeom.bbox[2] ||
+          prevGeom.bbox[3] !== nextGeom.bbox[3]
+        ) {
+          return false;
         }
-        touched.push(id);
       }
-      if (this.options.styleByCategory && touched.length) this.#patchWebglColors(touched);
-      this._webglLayer!.render();
-      return this;
+      this.items.set(id, item);
+      this.#ingestObject(id, item, { skipSearch: false });
+      this.scene.markDirty(id, ObjectDirtyFlags.Style | ObjectDirtyFlags.SearchIndex | ObjectDirtyFlags.TimeIndex);
+      touched.push(id);
     }
-    return this.add(list);
+    if (this.#canPatchWebgl() && this.#usesStyledWebgl()) {
+      this.#patchWebglStyles(touched);
+      this._webglLayer!.render();
+    }
+    if (this.options.sceneFeatures) this.#syncSceneLayers();
+    // Heat weights often come from properties — refresh the field without waiting for moveend.
+    this.#refreshHeatmapIfActive();
+    if (!this.#canPatchWebgl()) this._scheduleRender();
+    return true;
+  }
+
+  /**
+   * Fast path for animated point moves: update indexes + GPU motion attrs,
+   * never rebuild cluster hierarchy mid-flight.
+   */
+  #applyAnimatedPointUpdates(list: ManagedObject[], duration: number): boolean {
+    if (!this.map || !list.length) return false;
+    let applied = 0;
+    const headingPatches: Array<{ id: ObjectId; rotation: number }> = [];
+    for (const item of list) {
+      const id = item.id;
+      if (id == null) continue;
+      const stored = this.#storedPoint(id);
+      if (!stored) return false;
+      const prevObject = this.items.get(id);
+      const propertiesChanged = !prevObject || prevObject.properties !== item.properties;
+      const prevLat = stored.lat;
+      const prevLng = stored.lng;
+      this.items.set(id, item);
+      const normalized = this.#ingestObject(id, item, { skipSearch: !propertiesChanged });
+      if (!normalized || normalized.kind !== "Point") return false;
+      this.index.set(id, [normalized.lat, normalized.lng], item);
+      const record = this.index.records.get(id);
+      if (record && this._layout?.singles.has(id)) this._layout.singles.set(id, record);
+      if (this.options.sceneFeatures) {
+        this.scene.startMotion(id, prevLat, prevLng, normalized.lat, normalized.lng, duration);
+        this.scene.trails.append(id, prevLat, prevLng);
+      }
+
+      const slot = this._webglIdToIndex.get(id);
+      if (slot != null && this._webglLayer) {
+        this._webglLayer.patchPoint(slot, normalized.lat, normalized.lng);
+      }
+      if (typeof item.properties?.heading === "number") {
+        headingPatches.push({ id, rotation: Number(item.properties.heading) });
+      }
+      applied += 1;
+    }
+    if (!applied) return false;
+    if (this.options.sceneFeatures) {
+      this.scene.patchSymbolMotions(headingPatches);
+      if (this.scene.symbolLayer) this.scene.symbolLayer.render();
+      else this.#syncSceneLayers();
+    }
+    // Mass path (sceneFeatures:false): patchPoint uploads GPU buffers but does not draw.
+    // Without an explicit render the map stays frozen until the next camera frame.
+    if (this._webglLayer) this._webglLayer.render();
+    return true;
+  }
+
+  moveObject(
+    id: ObjectId,
+    coordinates: LatLngLike,
+    options?: { animate?: boolean; duration?: number }
+  ): this {
+    const object = this.items.get(id);
+    if (!object) throw new RangeError(`ObjectManager: object "${String(id)}" does not exist`);
+    return this.updateObjects([{ ...object, id, coordinates }], options);
   }
 
   removeObjects(ids: ObjectId | ObjectId[]): this {
@@ -382,6 +821,10 @@ export class ObjectManager extends Evented {
     for (const id of list) {
       this.items.delete(id);
       this.index.delete(id);
+      this.objectStates.delete(id);
+      this.scene.removeObject(id);
+      if (this._selectedId === id) this._selectedId = null;
+      if (this._hoveredId === id) this._hoveredId = null;
       this.#dropRenderedObject(id);
     }
     this.#invalidateLayout();
@@ -396,13 +839,54 @@ export class ObjectManager extends Evented {
   setFilter(filter: ObjectFilter | null): this {
     this.unspiderfy();
     this.filter = filter;
+    this._gpuSubset = false;
+    this._leafMask = null;
+    this._leafMaskFilter = undefined;
+    this._leafMaskIndex = null;
     // WebGL + no clusters: rebuild the GPU list from the spatial index without greedy layout.
     if (this.map && this.#shouldUseWebgl() && !this.options.clusterize) {
       this.#fastWebglFilterSync();
       return this;
     }
+    // Keep the zoom hierarchy. Filter is a query over the same tree — dropping the
+    // index here restarts a 100k–1M recluster on every setFilter (bench FPS collapse).
+    if (this._clusterIndex) {
+      this._layoutDirty = true;
+      this._scheduleRender();
+      return this;
+    }
+    this._layoutDirty = true;
+    this._layoutPackDirty = true;
+    this._greedyCache.clear();
+    if (this._layout && this.index.size >= this._greedyZoomInlineLimit) {
+      this._scheduleRender();
+      return this;
+    }
     this.#invalidateLayout();
     this._scheduleRender();
+    return this;
+  }
+
+  /**
+   * Restrict the WebGL draw list to these ids (O(k) from the packed buffer).
+   * Pass `null` to restore every packed point. No layout rebuild.
+   */
+  setVisibleIds(ids: Iterable<ObjectId> | null): this {
+    if (!this.map || !this.#shouldUseWebgl() || this.options.clusterize) {
+      return this;
+    }
+    if (ids == null) {
+      this._gpuSubset = false;
+      if (this._webglPack && this._webglLayer) {
+        this.#applyWebglPack(this._webglPack, Math.floor(this.map.zoom), true);
+      } else {
+        this.#fastWebglFilterSync();
+      }
+      this._webglLayer?.setHidden(false);
+      return this;
+    }
+    this._gpuSubset = true;
+    this.#applyWebglIdSubset(ids);
     return this;
   }
 
@@ -412,23 +896,22 @@ export class ObjectManager extends Evented {
 
   setSelected(id: ObjectId | null): this {
     const next = id == null ? null : id;
+    if (next != null && !this.items.has(next)) {
+      throw new RangeError(`ObjectManager: object "${String(next)}" does not exist`);
+    }
     if (this._selectedId === next) return this;
     const prev = this._selectedId;
+    const touched: ObjectId[] = [];
+    if (prev != null) {
+      this.#writeStateFlag(prev, "selected", false);
+      touched.push(prev);
+    }
     this._selectedId = next;
-    if (this.#canPatchWebgl() && this.options.styleByCategory) {
-      const touched: ObjectId[] = [];
-      if (prev != null) touched.push(prev);
-      if (next != null) touched.push(next);
-      this.#patchWebglColors(touched);
-      this._webglLayer!.render();
-    } else {
-      this.#refreshWebglColors();
-      this._scheduleRender();
+    if (next != null) {
+      this.#writeStateFlag(next, "selected", true);
+      touched.push(next);
     }
-    for (const [markerId, marker] of this.markers) {
-      const object = this.items.get(markerId);
-      if (object) this.#paintDomMarker(marker, markerId, object);
-    }
+    this.#afterVisualStateChange(touched);
     return this;
   }
 
@@ -438,22 +921,193 @@ export class ObjectManager extends Evented {
 
   setHovered(id: ObjectId | null): this {
     const next = id == null ? null : id;
+    if (next != null && !this.items.has(next)) {
+      throw new RangeError(`ObjectManager: object "${String(next)}" does not exist`);
+    }
     if (this._hoveredId === next) return this;
     const prev = this._hoveredId;
+    const touched: ObjectId[] = [];
+    if (prev != null) {
+      this.#writeStateFlag(prev, "hovered", false);
+      touched.push(prev);
+    }
     this._hoveredId = next;
-    if (this.#canPatchWebgl() && this.options.styleByCategory) {
-      const touched: ObjectId[] = [];
-      if (prev != null) touched.push(prev);
-      if (next != null) touched.push(next);
-      this.#patchWebglColors(touched);
+    if (next != null) {
+      this.#writeStateFlag(next, "hovered", true);
+      touched.push(next);
+    }
+    this.#afterVisualStateChange(touched);
+    return this;
+  }
+
+  getObjectState(id: ObjectId): Readonly<ObjectState> {
+    const state = this.objectStates.get(id);
+    return state ? { ...state } : {};
+  }
+
+  setObjectState(id: ObjectId, state: Partial<ObjectState>): this {
+    this.#assertObjectExists(id);
+    const { changedKeys, sideTouched } = this.#mergeObjectState(id, state);
+    if (!changedKeys.length) return this;
+    this.emit("objectstatechange", {
+      id,
+      state: this.getObjectState(id),
+      changedKeys
+    });
+    this.#afterVisualStateChange([id, ...sideTouched]);
+    return this;
+  }
+
+  setObjectStates(updates: Iterable<{ id: ObjectId; state: Partial<ObjectState> }>): this {
+    const touched = new Set<ObjectId>();
+    for (const update of updates) {
+      this.#assertObjectExists(update.id);
+      const { changedKeys, sideTouched } = this.#mergeObjectState(update.id, update.state);
+      if (!changedKeys.length) continue;
+      touched.add(update.id);
+      for (const id of sideTouched) touched.add(id);
+      this.emit("objectstatechange", {
+        id: update.id,
+        state: this.getObjectState(update.id),
+        changedKeys
+      });
+    }
+    if (touched.size) this.#afterVisualStateChange([...touched]);
+    return this;
+  }
+
+  removeObjectState(id: ObjectId, keys?: keyof ObjectState | Array<keyof ObjectState>): this {
+    this.#assertObjectExists(id);
+    const current = this.objectStates.get(id);
+    if (!current) return this;
+    const changedKeys: string[] = [];
+    if (keys == null) {
+      changedKeys.push(...Object.keys(current));
+      this.objectStates.delete(id);
+      if (this._selectedId === id) this._selectedId = null;
+      if (this._hoveredId === id) this._hoveredId = null;
+    } else {
+      const list = Array.isArray(keys) ? keys : [keys];
+      for (const key of list) {
+        const name = String(key);
+        if (!(name in current)) continue;
+        delete current[name];
+        changedKeys.push(name);
+        if (name === "selected" && this._selectedId === id) this._selectedId = null;
+        if (name === "hovered" && this._hoveredId === id) this._hoveredId = null;
+      }
+      if (!Object.keys(current).length) this.objectStates.delete(id);
+    }
+    if (!changedKeys.length) return this;
+    this.emit("objectstatechange", {
+      id,
+      state: this.getObjectState(id),
+      changedKeys
+    });
+    this.#afterVisualStateChange([id]);
+    return this;
+  }
+
+  clearObjectStates(): this {
+    if (!this.objectStates.size && this._selectedId == null && this._hoveredId == null) return this;
+    const touched = [...this.objectStates.keys()];
+    if (this._selectedId != null && !touched.includes(this._selectedId)) touched.push(this._selectedId);
+    if (this._hoveredId != null && !touched.includes(this._hoveredId)) touched.push(this._hoveredId);
+    this.objectStates.clear();
+    this._selectedId = null;
+    this._hoveredId = null;
+    for (const id of touched) {
+      this.emit("objectstatechange", {
+        id,
+        state: {},
+        changedKeys: ["*"]
+      });
+    }
+    this.#afterVisualStateChange(touched);
+    return this;
+  }
+
+  setStyle(style: ObjectStyleResolver | null): this {
+    const next = style ?? null;
+    if (this._styleResolver === next) return this;
+    this._styleResolver = next;
+    this.options.style = next;
+    this.emit("stylechange", { style: next });
+    this._styleZoom = null;
+    if (this.#canPatchWebgl() && this.#usesStyledWebgl()) {
+      this.#refreshWebglStyles();
       this._webglLayer!.render();
     } else {
-      this.#refreshWebglColors();
+      this.#refreshWebglStyles();
+      this._scheduleRender();
     }
     for (const [markerId, marker] of this.markers) {
       const object = this.items.get(markerId);
       if (object) this.#paintDomMarker(marker, markerId, object);
     }
+    return this;
+  }
+
+  registerIcon(name: string, source: ManagedIconSource, options?: ManagedIconOptions): this {
+    this.scene.registerIcon(name, source, options);
+    this.emit("iconregister", { name });
+    this._scheduleRender();
+    return this;
+  }
+
+  removeIcon(name: string): this {
+    this.scene.removeIcon(name);
+    this.emit("iconremove", { name });
+    this._scheduleRender();
+    return this;
+  }
+
+  hasIcon(name: string): boolean {
+    return this.scene.hasIcon(name);
+  }
+
+  clearIcons(): this {
+    this.scene.clearIcons();
+    this._scheduleRender();
+    return this;
+  }
+
+  search(query: string, options?: ObjectSearchOptions): ObjectSearchResult[] {
+    return this.scene.search(query, this.items, options);
+  }
+
+  setTime(timestamp: number | null): this {
+    return this.setTimeRange(timestamp, timestamp);
+  }
+
+  setTimeRange(from: number | null, to: number | null): this {
+    this.scene.setTimeRange(from, to);
+    this.emit("timerangechange", { from, to });
+    if (this.map && this.#shouldUseWebgl() && !this.options.clusterize) {
+      this.#fastWebglFilterSync();
+      if (this.options.sceneFeatures) this.#syncSceneLayers();
+      return this;
+    }
+    this._scheduleRender();
+    return this;
+  }
+
+  setVisualization(mode: ObjectVisualizationMode): this {
+    if (this.options.visualization === mode) return this;
+    this.options.visualization = mode;
+    this.scene.visualization = mode;
+    this.emit("visualizationchange", { visualization: mode });
+    this._scheduleRender();
+    return this;
+  }
+
+  focusObject(id: ObjectId, options?: { zoom?: number; animate?: boolean }): this {
+    const object = this.items.get(id);
+    const position = object ? this.#objectPosition(object) : null;
+    if (!object || !position || !this.map) return this;
+    const zoom = options?.zoom ?? Math.max(this.map.zoom, 14);
+    this.map.setView(position, zoom);
+    this.setSelected(id);
     return this;
   }
 
@@ -502,8 +1156,18 @@ export class ObjectManager extends Evented {
     if (this.options.clusterize === Boolean(enabled)) return this;
     this.options.clusterize = Boolean(enabled);
     this.unspiderfy();
-    this.#invalidateLayout();
-    this.#clearRendered();
+    this._gpuSubset = false;
+    this.#invalidateLayout(false);
+    this.#clearDomClusters();
+    this.#clearClusterCanvas();
+    if (!enabled) {
+      this._webglLayer?.setHidden(false);
+      if (this._webglPack && this._webglLayer && this.map) {
+        this.#applyWebglPack(this._webglPack, Math.floor(this.map.zoom), true);
+        this.scene.clearHeat();
+        return this;
+      }
+    }
     this._scheduleRender();
     return this;
   }
@@ -535,6 +1199,11 @@ export class ObjectManager extends Evented {
     this.#clearRendered();
     this.items.clear();
     this.index.clear();
+    this.objectStates.clear();
+    this.scene.clear();
+    this._selectedId = null;
+    this._hoveredId = null;
+    this._styleZoom = null;
     this._visibleObjects = 0;
     this.#invalidateLayout();
     return this;
@@ -562,6 +1231,33 @@ export class ObjectManager extends Evented {
     if (clusterHit) {
       const clusterId = String(clusterHit.id);
       hits.push({ ...clusterHit, source: "cluster", feature: this.#clusterMemberIds(clusterId) });
+    }
+    const symbolHit = this.scene.symbolLayer?.queryHit(point, options);
+    if (symbolHit) {
+      hits.push({
+        ...symbolHit,
+        source: "object",
+        id: symbolHit.id,
+        feature: symbolHit.id != null ? this.items.get(symbolHit.id) : symbolHit.feature
+      });
+    }
+    const polygonHit = this.scene.polygonBatch?.queryHit(point, options);
+    if (polygonHit) {
+      hits.push({
+        ...polygonHit,
+        source: "object",
+        id: polygonHit.id,
+        feature: polygonHit.id != null ? this.items.get(polygonHit.id) : undefined
+      });
+    }
+    const pathHit = this.scene.pathBatch?.queryHit?.(point, options);
+    if (pathHit) {
+      hits.push({
+        ...pathHit,
+        source: "object",
+        id: pathHit.id,
+        feature: pathHit.id != null ? this.items.get(pathHit.id) : undefined
+      });
     }
     const webglHit = this._webglLayer?.queryHit(point, options);
     if (webglHit && webglHit.index != null) {
@@ -657,18 +1353,49 @@ export class ObjectManager extends Evented {
       return;
     }
 
+    const visualization = this.scene.resolveVisualization(map.zoom);
+    const changedViz = this.scene.setActiveVisualization(visualization);
+    if (changedViz) this.emit("visualizationchange", { visualization });
+
+    if (visualization === "heatmap") {
+      this.#clearObjectMarkers();
+      this.#clearDomClusters();
+      this.#clearClusterCanvas();
+      this.scene.clearNonHeatLayers();
+      this.#syncHeatmap();
+      // Optional points under the field (≤80k). Honor setVisibleIds([]) so demos
+      // can keep heat/isolines without the marker cloud.
+      if (this.#shouldUseWebgl() && this.items.size <= 80_000) {
+        const layout = this.#ensureLayout(map);
+        this.#syncWebgl(layout);
+        const hidePoints = this._gpuSubset && this._webglIdToIndex.size === 0;
+        this._webglLayer?.setHidden(hidePoints);
+      } else {
+        this._webglLayer?.setHidden(true);
+      }
+      this.emit("render", { stats: this.getStats() });
+      return;
+    }
+
+    // Leaving heatmap must drop the heat layer so it does not stack on clusters/objects.
+    this.scene.clearHeat();
+    this._webglLayer?.setHidden(false);
+
     const layout = this.#ensureLayout(map);
-    const useWebgl = this.#shouldUseWebgl();
+    const useClusters =
+      visualization === "clusters" || (visualization === "objects" && this.options.clusterize);
+    const useWebgl = this.#shouldUseWebgl() && (visualization === "objects" || visualization === "clusters");
     const useCanvasClusters = this.#useCanvasClusters();
     this._activeRenderer = useWebgl ? "webgl" : "dom";
 
     const bounds = latLngBounds(map.getBounds()).pad(0.15);
+    const timeActive = this.scene.activeTimeIds();
 
     if (useWebgl) {
-      // GPU points for singles; optional canvas/DOM cluster badges when clusterize is on.
       this.#clearObjectMarkers();
-      if (this.options.clusterize) {
+      if (useClusters) {
         const clusterSpecs = this.#pickClusterSpecs(layout, bounds);
+        this.#filterClusterSpecsByTime(clusterSpecs, timeActive);
         this._visibleObjects = this.#countVisibleFromLayout(layout, bounds, clusterSpecs);
         this.#syncWebgl(layout);
         if (useCanvasClusters) {
@@ -679,21 +1406,25 @@ export class ObjectManager extends Evented {
           this.#syncClusters(clusterSpecs, layout);
         }
       } else {
-        // Non-cluster WebGL: every drawn single is "visible" for stats — skip O(N) bounds walk.
-        this._visibleObjects = layout.singles.size;
         this.#clearClusterCanvas();
         this.#clearDomClusters();
         this.#syncWebgl(layout);
+        this._visibleObjects = this._webglIdToIndex.size || layout.singles.size;
       }
+      this.#syncSceneLayers();
       this.emit("render", { stats: this.getStats() });
       return;
     }
 
     const visibleIds = new Set(
-      this.index.searchIds(bounds, (id, value) => !this.filter || this.filter(value, id))
+      this.index.searchIds(bounds, (id, value) => {
+        if (timeActive && !timeActive.has(id)) return false;
+        return !this.filter || this.filter(value, id);
+      })
     );
     this._visibleObjects = visibleIds.size;
     const clusterSpecs = this.#pickClusterSpecs(layout, bounds, visibleIds);
+    this.#filterClusterSpecsByTime(clusterSpecs, timeActive);
 
     const markerRecords = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
     for (const [id, record] of layout.singles) {
@@ -702,8 +1433,22 @@ export class ObjectManager extends Evented {
 
     this.#clearWebgl();
     this.#clearClusterCanvas();
+    this.scene.heatLayer?.remove();
+    this.scene.heatLayer = null;
+    if (this.options.sceneFeatures && (this.scene.atlas.size > 0 || this.scene.hasNonPointGeometries())) {
+      for (const [id, record] of [...markerRecords]) {
+        const geometry = this.scene.geometries.get(id);
+        if (geometry && geometry.kind !== "Point") {
+          markerRecords.delete(id);
+          continue;
+        }
+        const resolved = this.#resolveObjectStyle(id, record.value, "dom");
+        if (resolved.icon) markerRecords.delete(id);
+      }
+    }
     this.#syncObjectMarkers(markerRecords);
     this.#syncClusters(clusterSpecs, layout);
+    this.#syncSceneLayers();
     this.emit("render", { stats: this.getStats() });
   }
 
@@ -771,19 +1516,16 @@ export class ObjectManager extends Evented {
       if (generation !== this._layoutGeneration) return this;
       this._clusterIndex = index;
       this._greedyCache.clear();
-      this.#applyLayoutResult(
-        zoomBucket,
-        queryClusterLayout(index, zoomBucket, this.options.clusterMinPoints, { expandLeaves: false })
-      );
+      this.#applyLayoutResult(zoomBucket, this.#queryClusterIndex(index, zoomBucket));
       if (this.map) this.render();
       return this;
     }
 
     // Defer hierarchy so Worker blob compile / heavy sync build never blocks first paint.
     const task = new Promise<void>((resolve, reject) => {
-      setTimeout(() => {
+      deferClusterHierarchy(() => {
         this.#buildHierarchy(request, generation, zoomBucket).then(resolve, reject);
-      }, 0);
+      });
     });
     this._layoutPromise = task.finally(() => {
       if (this._layoutPromise === task) this._layoutPromise = null;
@@ -819,18 +1561,12 @@ export class ObjectManager extends Evented {
       requestAnimationFrame(() => {
         if (generation !== this._layoutGeneration || this._clusterIndex !== index) return;
         const liveZoom = Math.floor(this.map?.zoom ?? z);
-        this.#applyLayoutResult(
-          liveZoom,
-          queryClusterLayout(index, liveZoom, this.options.clusterMinPoints, { expandLeaves: false })
-        );
+        this.#applyLayoutResult(liveZoom, this.#queryClusterIndex(index, liveZoom));
         this._scheduleRender();
       });
       return;
     }
-    this.#applyLayoutResult(
-      z,
-      queryClusterLayout(index, z, this.options.clusterMinPoints, { expandLeaves: false })
-    );
+    this.#applyLayoutResult(z, this.#queryClusterIndex(index, z));
     if (this.map) this.render();
   }
 
@@ -858,13 +1594,11 @@ export class ObjectManager extends Evented {
 
   #syncLayoutPack(): void {
     if (!this._layoutPackDirty) return;
-    const filter = this.filter;
     const need = this.index.size;
     if (this._layoutCoords.length < need * 2) this._layoutCoords = new Float64Array(Math.max(need * 2, 16));
     if (this._layoutIds.length < need) this._layoutIds.length = need;
     let packed = 0;
     for (const record of this.index.records.values()) {
-      if (filter && !filter(record.value, record.id)) continue;
       this._layoutIds[packed] = record.id;
       this._layoutCoords[packed * 2] = record.position.lat;
       this._layoutCoords[packed * 2 + 1] = record.position.lng;
@@ -873,6 +1607,32 @@ export class ObjectManager extends Evented {
     this._layoutIds.length = packed;
     this._layoutPacked = packed;
     this._layoutPackDirty = false;
+  }
+
+  #queryClusterIndex(index: ClusterIndex, zoomBucket: number): ClusterLayoutResult {
+    return queryClusterLayout(index, zoomBucket, this.options.clusterMinPoints, {
+      expandLeaves: false,
+      leafMask: this.#clusterLeafMask(index)
+    });
+  }
+
+  #clusterLeafMask(index: ClusterIndex): Uint8Array | null {
+    if (!this.filter) return null;
+    if (this._leafMask && this._leafMaskFilter === this.filter && this._leafMaskIndex === index) {
+      return this._leafMask;
+    }
+    const mask = new Uint8Array(index.leafCount);
+    const filter = this.filter;
+    const ids = index.ids;
+    for (let i = 0; i < index.leafCount; i++) {
+      const id = ids[i];
+      const object = this.items.get(id);
+      if (object && filter(object, id)) mask[i] = 1;
+    }
+    this._leafMask = mask;
+    this._leafMaskFilter = filter;
+    this._leafMaskIndex = index;
+    return mask;
   }
 
   #applyLayoutResult(zoomBucket: number, result: ClusterLayoutResult): void {
@@ -905,11 +1665,15 @@ export class ObjectManager extends Evented {
     this.clusterMembers.clear();
   }
 
-  #invalidateLayout(): void {
+  #invalidateLayout(dropPack = true): void {
     this._clusterIndex = null;
     this._layoutDirty = true;
     this._webglSyncedZoom = null;
-    this._webglPack = null;
+    if (dropPack) {
+      this._webglPack = null;
+      this._gpuSubset = false;
+    }
+    this._webglDataEpoch++;
     this._clusterSyncZoom = null;
     this._clusterSyncGeneration = -1;
     this._layoutGeneration++;
@@ -917,6 +1681,9 @@ export class ObjectManager extends Evented {
     this._greedyCache.clear();
     this._pendingGreedyZoom = null;
     this._layoutPackDirty = true;
+    this._leafMask = null;
+    this._leafMaskFilter = undefined;
+    this._leafMaskIndex = null;
     if (this._greedyRaf && typeof cancelAnimationFrame === "function") {
       cancelAnimationFrame(this._greedyRaf);
       this._greedyRaf = 0;
@@ -1001,26 +1768,28 @@ export class ObjectManager extends Evented {
       return this._layout;
     }
 
-    // Zoom-only: reuse hierarchical index (no rebuild).
-    if (!this._layoutDirty && this._clusterIndex) {
-      this.#applyLayoutResult(
-        zoomBucket,
-        queryClusterLayout(this._clusterIndex, zoomBucket, this.options.clusterMinPoints, { expandLeaves: false })
-      );
+    if (this._clusterIndex) {
+      this.#applyLayoutResult(zoomBucket, this.#queryClusterIndex(this._clusterIndex, zoomBucket));
       return this._layout!;
     }
 
-    // Pre-hierarchy zoom changes: never stall the frame with another full O(n) greedy pass
+    // Pre-hierarchy zoom/filter: never stall the frame with another full O(n) greedy pass
     // on large datasets. Show the last layout (or a cache hit) and coalesce a rebuild.
-    if (!this._layoutDirty && this._layout && !this._clusterIndex) {
+    if (this._layout && this.index.size >= this._greedyZoomInlineLimit) {
+      const cached = this._greedyCache.get(zoomBucket);
+      if (cached && !this._layoutDirty) {
+        this.#applyLayoutResult(zoomBucket, cached);
+        return this._layout!;
+      }
+      if (!this._layoutDirty) this.#scheduleGreedyForZoom(zoomBucket);
+      return this._layout;
+    }
+
+    if (!this._layoutDirty && this._layout) {
       const cached = this._greedyCache.get(zoomBucket);
       if (cached) {
         this.#applyLayoutResult(zoomBucket, cached);
         return this._layout!;
-      }
-      if (this.index.size >= this._greedyZoomInlineLimit) {
-        this.#scheduleGreedyForZoom(zoomBucket);
-        return this._layout;
       }
       const request = this.#collectLayoutRequest(zoomBucket);
       const result = buildGreedyClusterLayout(request);
@@ -1040,16 +1809,13 @@ export class ObjectManager extends Evented {
         const index = buildClusterIndex(request);
         this._clusterIndex = index;
         this._greedyCache.clear();
-        this.#applyLayoutResult(
-          zoomBucket,
-          queryClusterLayout(index, zoomBucket, this.options.clusterMinPoints, { expandLeaves: false })
-        );
+        this.#applyLayoutResult(zoomBucket, this.#queryClusterIndex(index, zoomBucket));
       } else {
         const generation = this._layoutGeneration;
         const task = new Promise<void>((resolve, reject) => {
-          setTimeout(() => {
+          deferClusterHierarchy(() => {
             this.#buildHierarchy(request, generation, zoomBucket).then(resolve, reject);
-          }, 0);
+          });
         });
         this._layoutPromise = task.finally(() => {
           if (this._layoutPromise === task) this._layoutPromise = null;
@@ -1107,12 +1873,24 @@ export class ObjectManager extends Evented {
     const el = marker.el;
     if (!el) return;
     const cat = String(object.properties?.category || "alpha");
+    const selected = this._selectedId === id;
+    const hovered = this._hoveredId === id;
     el.classList.toggle("oh-om-alpha", cat === "alpha");
     el.classList.toggle("oh-om-beta", cat === "beta");
     el.classList.toggle("oh-om-gamma", cat === "gamma");
     el.classList.toggle("oh-om-alert", Boolean(object.properties?.alert));
-    el.classList.toggle("oh-om-selected", this._selectedId === id);
-    el.classList.toggle("oh-om-hover", this._hoveredId === id);
+    el.classList.toggle("oh-om-selected", selected);
+    el.classList.toggle("oh-om-hover", hovered);
+    if (!this._styleResolver) return;
+    const resolved = this.#resolveObjectStyle(id, object, "dom");
+    el.style.setProperty("--oh-om-color", resolved.color);
+    el.style.setProperty("--oh-marker-fill", resolved.color);
+    el.style.opacity = String(resolved.opacity);
+    const pin = el.querySelector(".oh-marker-pin") as HTMLElement | null;
+    if (pin) {
+      pin.style.setProperty("--oh-marker-fill", resolved.color);
+      pin.style.setProperty("--oh-marker-size", `${resolved.size}px`);
+    }
   }
 
   #syncClusters(specs: Map<string, ClusterSpec>, layout: LayoutCache): void {
@@ -1261,31 +2039,74 @@ export class ObjectManager extends Evented {
 
   #syncWebgl(layout: LayoutCache): void {
     if (!this.map) return;
-    const zoomUnchanged = this._webglLayer && this._webglSyncedZoom === layout.zoomBucket && !this._layoutDirty;
-    if (zoomUnchanged) {
+    if (this._gpuSubset && this._webglLayer) return;
+    const zoomBucket = layout.zoomBucket;
+    const topologyMatches = this.#webglTopologyMatches(layout);
+    const viewKey = this.#flatViewKey();
+    if (
+      this._webglLayer &&
+      topologyMatches &&
+      !this._layoutDirty &&
+      this._webglSyncedEpoch === this._webglDataEpoch &&
+      this._webglViewKey === viewKey
+    ) {
+      const zoomChanged = this._webglSyncedZoom !== zoomBucket;
+      this._webglSyncedZoom = zoomBucket;
+      // Mass flat WebGL: skip walking 250k–1M style callbacks on every integer zoom.
+      if (zoomChanged && this._styleResolver && (this.options.clusterize || this.index.size < 250_000)) {
+        this.#refreshWebglStyles();
+        this._styleZoom = zoomBucket;
+      }
       return;
     }
 
-    const points: LatLngLike[] = [];
-    const meta: WebGLMeta[] = [];
+    const timeActive = this.scene.activeTimeIds();
+    const count = layout.singles.size;
+    const meta: WebGLMeta[] = new Array(count);
     const idToIndex = new Map<ObjectId, number>();
-    // Clusters use canvas/DOM badges; only unclustered objects go to the GPU layer.
+    const latlng = new Float32Array(count * 2);
+    const merc64 = new Float64Array(count * 2);
+    let i = 0;
     for (const [id, record] of layout.singles) {
-      idToIndex.set(id, points.length);
-      points.push(record.position);
-      meta.push({ kind: "object", id });
+      if (!this.#keepFlatWebglId(id, record.value, timeActive)) continue;
+      idToIndex.set(id, i);
+      meta[i] = { kind: "object", id };
+      const lat = record.position.lat;
+      const lng = record.position.lng;
+      const o = i * 2;
+      latlng[o] = lat;
+      latlng[o + 1] = lng;
+      const sin = Math.sin((clampLat(lat) * Math.PI) / 180);
+      merc64[o] = (wrapLng(lng) + 180) / 360;
+      merc64[o + 1] = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+      i++;
     }
 
-    this._webglMeta = meta;
+    this._webglMeta = meta.slice(0, i);
     this._webglIdToIndex = idToIndex;
-    const colors = this.#buildWebglColors(meta);
-    const interactive = points.length <= 40_000;
+    this._webglSyncedZoom = zoomBucket;
+    this._webglSyncedEpoch = this._webglDataEpoch;
+    this._webglViewKey = viewKey;
+    this._styleZoom = zoomBucket;
+    if (i === 0) {
+      if (this._webglLayer) {
+        this._webglLayer.off();
+        this._webglLayer.remove();
+        this._webglLayer = null;
+      }
+      this._gpuSubset = false;
+      this._webglPack = null;
+      return;
+    }
+    const { colors, sizes } = this.#buildWebglStyles(this._webglMeta);
+    const interactive = i <= 40_000;
+    const maxDpr = i >= 250_000 ? 1 : 1.5;
     if (!this._webglLayer) {
       this._webglLayer = webglPointLayer([], {
-        pointSize: 10,
-        color: "#0f766e",
-        opacity: 0.88,
-        maxDpr: 1.5,
+        pointSize: DEFAULT_OBJECT_SIZE,
+        color: DEFAULT_OBJECT_COLOR,
+        opacity: DEFAULT_OBJECT_OPACITY,
+        maxDpr,
         interactive,
         hitTolerance: 10
       });
@@ -1293,27 +2114,41 @@ export class ObjectManager extends Evented {
       this._webglLayer.on("hover", (event) => this.#webglHover(event));
       this._webglLayer.addTo(this.map as Orihon);
     } else {
+      this._webglLayer.options.maxDpr = maxDpr;
       this._webglLayer.setInteractive(interactive);
     }
-    this._webglLayer.setData(points, { colors });
-    this._webglSyncedZoom = layout.zoomBucket;
-    if (!this.options.clusterize && !this.filter) {
-      this.#snapshotWebglPack(
-        layout.singles,
-        meta,
-        idToIndex,
-        colors
-      );
+    const packedLat = i === count ? latlng : latlng.subarray(0, i * 2);
+    const packedMerc = i === count ? merc64 : merc64.subarray(0, i * 2);
+    this._webglLayer.setPackedData(packedLat, packedMerc, { colors, sizes, adopt: i === count });
+    if (!this.options.clusterize && !this.filter && !timeActive) {
+      this._webglPack = {
+        latlng: packedLat instanceof Float32Array ? packedLat : new Float32Array(packedLat),
+        merc64: packedMerc instanceof Float64Array ? packedMerc : new Float64Array(packedMerc),
+        colors: colors ? colors.slice() : null,
+        sizes: sizes ? sizes.slice() : null,
+        meta: this._webglMeta.slice(),
+        idToIndex: new Map(idToIndex),
+        singles: layout.singles
+      };
     }
   }
 
   #buildFlatLayout(zoomBucket: number): void {
-    const singles = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
-    for (const record of this.index.records.values()) {
-      if (this.filter && !this.filter(record.value, record.id)) continue;
-      singles.set(record.id, record);
+    // No filter: reuse spatial index Map (avoid copying 1M entries).
+    if (!this.filter) {
+      this._layout = {
+        zoomBucket,
+        singles: this.index.records as Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>,
+        clusters: new Map()
+      };
+    } else {
+      const singles = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
+      for (const record of this.index.records.values()) {
+        if (!this.filter(record.value, record.id)) continue;
+        singles.set(record.id, record);
+      }
+      this._layout = { zoomBucket, singles, clusters: new Map() };
     }
-    this._layout = { zoomBucket, singles, clusters: new Map() };
     this._layoutDirty = false;
     this._clusterIndex = null;
     this._webglSyncedZoom = null;
@@ -1335,7 +2170,7 @@ export class ObjectManager extends Evented {
 
     // Restore or compact from the full pack — avoids re-running latLng→mercator for 1M points.
     if (this._webglPack && this._webglLayer) {
-      if (!this.filter) {
+      if (!this.filter && !this.scene.activeTimeIds()) {
         this.#applyWebglPack(this._webglPack, zoomBucket, true);
         return;
       }
@@ -1347,10 +2182,11 @@ export class ObjectManager extends Evented {
       const latlng = new Float32Array(pack.latlng.length);
       const merc64 = new Float64Array(pack.merc64.length);
       const colors = pack.colors ? new Float32Array(pack.colors.length) : null;
+      const sizes = pack.sizes ? new Float32Array(pack.sizes.length) : null;
       for (let i = 0; i < pack.meta.length; i++) {
         const entry = pack.meta[i];
         const object = this.items.get(entry.id);
-        if (!object || (this.filter && !this.filter(object, entry.id))) continue;
+        if (!this.#keepFlatWebglId(entry.id, object, this.scene.activeTimeIds())) continue;
         const record = pack.singles.get(entry.id) || this.index.records.get(entry.id);
         if (!record) continue;
         latlng[w * 2] = pack.latlng[i * 2];
@@ -1365,20 +2201,28 @@ export class ObjectManager extends Evented {
           colors[d + 2] = pack.colors[s + 2];
           colors[d + 3] = pack.colors[s + 3];
         }
+        if (sizes && pack.sizes) {
+          sizes[w] = pack.sizes[i];
+        }
         idToIndex.set(entry.id, w);
         meta.push(entry);
         singles.set(entry.id, record);
         w += 1;
       }
-      // Recompute colors when selection/hover active — pack stores base category colors.
-      const liveColors =
-        this.options.styleByCategory && (this._selectedId != null || this._hoveredId != null)
-          ? this.#buildWebglColors(meta)
-          : colors
-            ? colors.subarray(0, w * 4)
-            : this.#buildWebglColors(meta);
-      this._webglLayer.setPackedData(latlng.subarray(0, w * 2), merc64.subarray(0, w * 2), {
-        colors: liveColors
+      // Recompute styles when selection/hover/custom style active — pack may store base colors.
+      let liveColors: Float32Array | null = colors ? colors.subarray(0, w * 4) : null;
+      let liveSizes: Float32Array | null = sizes ? sizes.subarray(0, w) : null;
+      if (this.#usesStyledWebgl() && (this._styleResolver || this._selectedId != null || this._hoveredId != null || !liveColors)) {
+        const live = this.#buildWebglStyles(meta);
+        liveColors = live.colors;
+        liveSizes = live.sizes;
+      }
+      const compactLat = latlng.slice(0, w * 2);
+      const compactMerc = merc64.slice(0, w * 2);
+      this._webglLayer.setPackedData(compactLat, compactMerc, {
+        colors: liveColors,
+        sizes: liveSizes,
+        adopt: true
       });
       this._layout = { zoomBucket, singles, clusters: new Map() };
       this._layoutDirty = false;
@@ -1386,6 +2230,9 @@ export class ObjectManager extends Evented {
       this._webglIdToIndex = idToIndex;
       this._visibleObjects = w;
       this._webglSyncedZoom = zoomBucket;
+      this._webglSyncedEpoch = this._webglDataEpoch;
+      this._webglViewKey = this.#flatViewKey();
+      this._styleZoom = zoomBucket;
       this._activeRenderer = "webgl";
       this._webglLayer.setInteractive(w <= 40_000);
       this.emit("render", { stats: this.getStats() });
@@ -1398,7 +2245,7 @@ export class ObjectManager extends Evented {
     const idToIndex = new Map<ObjectId, number>();
 
     for (const record of this.index.records.values()) {
-      if (this.filter && !this.filter(record.value, record.id)) continue;
+      if (!this.#keepFlatWebglId(record.id, record.value, this.scene.activeTimeIds())) continue;
       singles.set(record.id, record);
       idToIndex.set(record.id, points.length);
       points.push(record.position);
@@ -1416,14 +2263,15 @@ export class ObjectManager extends Evented {
     this.#clearClusterCanvas();
     this.#clearDomClusters();
 
-    const colors = this.#buildWebglColors(meta);
+    const { colors, sizes } = this.#buildWebglStyles(meta);
     const interactive = points.length <= 40_000;
+    const maxDpr = points.length >= 250_000 ? 1 : 1.5;
     if (!this._webglLayer) {
       this._webglLayer = webglPointLayer([], {
-        pointSize: 10,
-        color: "#0f766e",
-        opacity: 0.88,
-        maxDpr: 1.5,
+        pointSize: DEFAULT_OBJECT_SIZE,
+        color: DEFAULT_OBJECT_COLOR,
+        opacity: DEFAULT_OBJECT_OPACITY,
+        maxDpr,
         interactive,
         hitTolerance: 10
       });
@@ -1431,16 +2279,92 @@ export class ObjectManager extends Evented {
       this._webglLayer.on("hover", (event) => this.#webglHover(event));
       this._webglLayer.addTo(this.map as Orihon);
     } else {
+      this._webglLayer.options.maxDpr = maxDpr;
       this._webglLayer.setInteractive(interactive);
     }
-    this._webglLayer.setData(points, { colors });
+    this._webglLayer.setData(points, { colors, sizes });
     this._webglSyncedZoom = zoomBucket;
+    this._webglSyncedEpoch = this._webglDataEpoch;
+    this._webglViewKey = this.#flatViewKey();
+    this._styleZoom = zoomBucket;
 
     // Snapshot the unfiltered pack once so later filters are O(visible) copies.
-    if (!this.filter) {
-      this.#snapshotWebglPack(singles, meta, idToIndex, colors);
+    if (!this.filter && !this.scene.activeTimeIds()) {
+      this.#snapshotWebglPack(singles, meta, idToIndex, colors, sizes);
     }
 
+    this.emit("render", { stats: this.getStats() });
+  }
+
+  #applyWebglIdSubset(ids: Iterable<ObjectId>): void {
+    if (!this.map || !this._webglLayer) return;
+    const pack = this._webglPack;
+    const zoomBucket = Math.floor(this.map.zoom);
+    const list = Array.isArray(ids) ? ids : [...ids];
+    if (!pack) {
+      const allow = new Set(list);
+      const prev = this.filter;
+      this.filter = (_object, id) => allow.has(id);
+      this.#fastWebglFilterSync();
+      this.filter = prev;
+      return;
+    }
+    const n = list.length;
+    const latlng = new Float32Array(n * 2);
+    const merc64 = new Float64Array(n * 2);
+    const colors = pack.colors ? new Float32Array(n * 4) : null;
+    const sizes = pack.sizes ? new Float32Array(n) : null;
+    const meta: WebGLMeta[] = [];
+    const idToIndex = new Map<ObjectId, number>();
+    const singles = new Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>();
+    let w = 0;
+    for (const id of list) {
+      const i = pack.idToIndex.get(id);
+      if (i == null) continue;
+      const record = pack.singles.get(id) || this.index.records.get(id);
+      if (!record) continue;
+      latlng[w * 2] = pack.latlng[i * 2];
+      latlng[w * 2 + 1] = pack.latlng[i * 2 + 1];
+      merc64[w * 2] = pack.merc64[i * 2];
+      merc64[w * 2 + 1] = pack.merc64[i * 2 + 1];
+      if (colors && pack.colors) {
+        const s = i * 4;
+        const d = w * 4;
+        colors[d] = pack.colors[s];
+        colors[d + 1] = pack.colors[s + 1];
+        colors[d + 2] = pack.colors[s + 2];
+        colors[d + 3] = pack.colors[s + 3];
+      }
+      if (sizes && pack.sizes) sizes[w] = pack.sizes[i];
+      idToIndex.set(id, w);
+      meta.push(pack.meta[i]);
+      singles.set(id, record);
+      w += 1;
+    }
+    let liveColors: Float32Array | null = colors ? colors.subarray(0, w * 4) : null;
+    let liveSizes: Float32Array | null = sizes ? sizes.subarray(0, w) : null;
+    if (this.#usesStyledWebgl()) {
+      const live = this.#buildWebglStyles(meta);
+      liveColors = live.colors;
+      liveSizes = live.sizes;
+    }
+    this._webglLayer.setPackedData(
+      w === n ? latlng : latlng.subarray(0, w * 2),
+      w === n ? merc64 : merc64.subarray(0, w * 2),
+      { colors: liveColors, sizes: liveSizes, adopt: true }
+    );
+    this._layout = { zoomBucket, singles, clusters: new Map() };
+    this._layoutDirty = false;
+    this._webglMeta = meta;
+    this._webglIdToIndex = idToIndex;
+    this._visibleObjects = w;
+    this._webglSyncedZoom = zoomBucket;
+    this._webglSyncedEpoch = this._webglDataEpoch;
+    this._webglViewKey = this.#flatViewKey();
+    this._styleZoom = zoomBucket;
+    this._activeRenderer = "webgl";
+    this._webglLayer.setHidden(false);
+    this._webglLayer.setInteractive(w <= 40_000);
     this.emit("render", { stats: this.getStats() });
   }
 
@@ -1450,17 +2374,24 @@ export class ObjectManager extends Evented {
     rebuildColors: boolean
   ): void {
     if (!this._webglLayer) return;
-    const colors =
-      rebuildColors && this.options.styleByCategory
-        ? this.#buildWebglColors(pack.meta)
-        : pack.colors;
-    this._webglLayer.setPackedData(pack.latlng, pack.merc64, { colors });
+    const styles =
+      rebuildColors && this.#usesStyledWebgl()
+        ? this.#buildWebglStyles(pack.meta)
+        : { colors: pack.colors, sizes: pack.sizes };
+    this._webglLayer.setPackedData(pack.latlng, pack.merc64, {
+      colors: styles.colors,
+      sizes: styles.sizes,
+      adopt: false
+    });
     this._layout = { zoomBucket, singles: pack.singles, clusters: new Map() };
     this._layoutDirty = false;
     this._webglMeta = pack.meta;
     this._webglIdToIndex = pack.idToIndex;
     this._visibleObjects = pack.meta.length;
     this._webglSyncedZoom = zoomBucket;
+    this._webglSyncedEpoch = this._webglDataEpoch;
+    this._webglViewKey = this.#flatViewKey();
+    this._styleZoom = zoomBucket;
     this._activeRenderer = "webgl";
     this._webglLayer.setInteractive(pack.meta.length <= 40_000);
     this.emit("render", { stats: this.getStats() });
@@ -1470,7 +2401,8 @@ export class ObjectManager extends Evented {
     singles: Map<ObjectId, SpatialRecord<ManagedObject, ObjectId>>,
     meta: WebGLMeta[],
     idToIndex: Map<ObjectId, number>,
-    colors: Float32Array | null
+    colors: Float32Array | null,
+    sizes: Float32Array | null
   ): void {
     if (!this._webglLayer) return;
     const latlng = this._webglLayer.getLatLngBuf().slice();
@@ -1479,29 +2411,57 @@ export class ObjectManager extends Evented {
       latlng,
       merc64,
       colors: colors ? colors.slice() : null,
+      sizes: sizes ? sizes.slice() : null,
       meta: meta.slice(),
       idToIndex: new Map(idToIndex),
       singles
     };
   }
 
-  #buildWebglColors(meta: WebGLMeta[]): Float32Array | null {
-    if (!this.options.styleByCategory) return null;
-    const colors = new Float32Array(meta.length * 4);
-    for (let i = 0; i < meta.length; i++) {
-      const entry = meta[i];
-      const object = entry.kind === "object" ? this.items.get(entry.id) : undefined;
-      const rgba = this.#rgbaForObject(object, entry.kind === "object" ? entry.id : null);
-      const o = i * 4;
-      colors[o] = rgba[0];
-      colors[o + 1] = rgba[1];
-      colors[o + 2] = rgba[2];
-      colors[o + 3] = rgba[3];
-    }
-    return colors;
+  #usesStyledWebgl(): boolean {
+    return Boolean(this._styleResolver) || this.options.styleByCategory;
   }
 
-  #rgbaForObject(object: ManagedObject | undefined, id: ObjectId | null): readonly [number, number, number, number] {
+  #webglTopologyMatches(layout: LayoutCache): boolean {
+    if (this._webglIdToIndex.size === 0) return false;
+    // Flat mass path: membership is gated by data epoch + view key (time/filter).
+    if (!this.options.clusterize) return true;
+    if (this._webglIdToIndex.size !== layout.singles.size) return false;
+    for (const id of layout.singles.keys()) {
+      if (!this._webglIdToIndex.has(id)) return false;
+    }
+    return true;
+  }
+
+  #buildWebglStyles(meta: WebGLMeta[]): { colors: Float32Array | null; sizes: Float32Array | null } {
+    if (!this.#usesStyledWebgl()) return { colors: null, sizes: null };
+    const colors = new Float32Array(meta.length * 4);
+    const useCustom = Boolean(this._styleResolver);
+    const sizes = useCustom ? new Float32Array(meta.length) : null;
+    for (let i = 0; i < meta.length; i++) {
+      const entry = meta[i];
+      const id = entry.kind === "object" ? entry.id : "";
+      const object = entry.kind === "object" ? this.items.get(entry.id) : undefined;
+      const o = i * 4;
+      if (!useCustom) {
+        const rgba = this.#legacyRgba(object, id === "" ? null : id);
+        colors[o] = rgba[0];
+        colors[o + 1] = rgba[1];
+        colors[o + 2] = rgba[2];
+        colors[o + 3] = rgba[3];
+        continue;
+      }
+      const resolved = this.#resolveObjectStyle(id, object ?? {}, "webgl");
+      colors[o] = resolved.rgba[0];
+      colors[o + 1] = resolved.rgba[1];
+      colors[o + 2] = resolved.rgba[2];
+      colors[o + 3] = resolved.rgba[3];
+      sizes![i] = resolved.size;
+    }
+    return { colors, sizes };
+  }
+
+  #legacyRgba(object: ManagedObject | undefined, id: ObjectId | null): readonly [number, number, number, number] {
     if (id != null && this._selectedId != null && id === this._selectedId) return OBJECT_MANAGER_PALETTE.selected;
     if (id != null && this._hoveredId != null && id === this._hoveredId) return OBJECT_MANAGER_PALETTE.hover;
     if (object?.properties?.alert) return OBJECT_MANAGER_PALETTE.alert;
@@ -1511,19 +2471,551 @@ export class ObjectManager extends Evented {
     return OBJECT_MANAGER_PALETTE.alpha;
   }
 
-  #refreshWebglColors(): void {
-    if (!this._webglLayer || !this._webglMeta.length || !this.options.styleByCategory) return;
-    this._webglLayer.setColors(this.#buildWebglColors(this._webglMeta));
+  #refreshWebglStyles(): void {
+    if (!this._webglLayer || !this._webglMeta.length || !this.#usesStyledWebgl()) return;
+    const { colors, sizes } = this.#buildWebglStyles(this._webglMeta);
+    this._webglLayer.setColors(colors);
+    if (sizes) this._webglLayer.setSizes(sizes);
+    else this._webglLayer.setSizes(null);
+    if (this._webglPack) {
+      this._webglPack.colors = colors ? colors.slice() : null;
+      this._webglPack.sizes = sizes ? sizes.slice() : null;
+    }
   }
 
-  #patchWebglColors(ids: ObjectId[]): void {
-    if (!this._webglLayer || !this.options.styleByCategory) return;
+  #patchWebglStyles(ids: ObjectId[]): void {
+    if (!this._webglLayer || !this.#usesStyledWebgl()) return;
+    const useCustom = Boolean(this._styleResolver);
     for (const id of ids) {
       const slot = this._webglIdToIndex.get(id);
       if (slot == null) continue;
       const object = this.items.get(id);
-      this._webglLayer.patchColor(slot, this.#rgbaForObject(object, id));
+      if (!object) continue;
+      if (!useCustom) {
+        const rgba = this.#legacyRgba(object, id);
+        this._webglLayer.patchColor(slot, rgba);
+        const packSlot = this._webglPack?.idToIndex.get(id);
+        if (this._webglPack?.colors && packSlot != null) {
+          const o = packSlot * 4;
+          this._webglPack.colors[o] = rgba[0];
+          this._webglPack.colors[o + 1] = rgba[1];
+          this._webglPack.colors[o + 2] = rgba[2];
+          this._webglPack.colors[o + 3] = rgba[3];
+        }
+        continue;
+      }
+      const resolved = this.#resolveObjectStyle(id, object, "webgl");
+      this._webglLayer.patchColor(slot, resolved.rgba);
+      this._webglLayer.patchSize(slot, resolved.size);
+      const packSlot = this._webglPack?.idToIndex.get(id);
+      if (this._webglPack?.colors && packSlot != null) {
+        const o = packSlot * 4;
+        this._webglPack.colors[o] = resolved.rgba[0];
+        this._webglPack.colors[o + 1] = resolved.rgba[1];
+        this._webglPack.colors[o + 2] = resolved.rgba[2];
+        this._webglPack.colors[o + 3] = resolved.rgba[3];
+      }
+      if (this._webglPack?.sizes && packSlot != null) this._webglPack.sizes[packSlot] = resolved.size;
     }
+  }
+
+  #resolveObjectStyle(
+    id: ObjectId,
+    object: ManagedObject,
+    renderer: "dom" | "webgl"
+  ): ResolvedObjectStyle {
+    const state = this.objectStates.get(id) ?? EMPTY_OBJECT_STATE;
+    const selected = this._selectedId === id;
+    const hovered = this._hoveredId === id;
+    const context: ObjectStyleContext = {
+      id,
+      zoom: this.map?.zoom ?? 0,
+      renderer,
+      selected,
+      hovered,
+      visualization: this.scene.getActiveVisualization()
+    };
+
+    const legacy = legacyObjectStyle(object, state, context, this.options.styleByCategory);
+    let merged: ObjectStyle = {
+      color: legacy.color ?? DEFAULT_OBJECT_COLOR,
+      opacity: legacy.opacity ?? DEFAULT_OBJECT_OPACITY,
+      size: legacy.size ?? DEFAULT_OBJECT_SIZE,
+      icon: null,
+      rotation: 0,
+      visible: true,
+      label: null,
+      collisionMode: selected || hovered ? "always" : "auto",
+      trail: null,
+      line: undefined,
+      polygon: undefined
+    };
+
+    if (this._styleResolver) {
+      const custom = this._styleResolver(object, state, context);
+      if (custom) {
+        if (custom.color !== undefined) merged.color = custom.color;
+        if (custom.opacity !== undefined) merged.opacity = custom.opacity;
+        if (custom.size !== undefined) merged.size = custom.size;
+        if (custom.icon !== undefined) merged.icon = custom.icon;
+        if (custom.iconTint !== undefined) merged.iconTint = custom.iconTint;
+        if (custom.rotation !== undefined) merged.rotation = custom.rotation;
+        if (custom.visible !== undefined) merged.visible = custom.visible;
+        if (custom.label !== undefined) merged.label = custom.label;
+        if (custom.collisionMode !== undefined) merged.collisionMode = custom.collisionMode;
+        if (custom.trail !== undefined) merged.trail = custom.trail;
+        if (custom.line !== undefined) merged.line = custom.line;
+        if (custom.polygon !== undefined) merged.polygon = custom.polygon;
+      }
+    }
+
+    return normalizeResolvedStyle(merged);
+  }
+
+  #storedPoint(id: ObjectId): { lat: number; lng: number } | null {
+    const geom = this.scene.geometries.get(id);
+    if (geom?.kind === "Point") return { lat: geom.lat, lng: geom.lng };
+    const record = this.index.records.get(id);
+    return record ? { lat: record.position.lat, lng: record.position.lng } : null;
+  }
+
+  #flatViewKey(): string {
+    const range = this.scene.timeIndex?.range;
+    const from = range?.from ?? "";
+    const to = range?.to ?? "";
+    return `${from}:${to}:${this.filter ? 1 : 0}`;
+  }
+
+  #keepFlatWebglId(
+    id: ObjectId,
+    object: ManagedObject | undefined,
+    timeActive: Set<ObjectId> | null
+  ): boolean {
+    if (!object) return false;
+    if (this.filter && !this.filter(object, id)) return false;
+    if (timeActive && !timeActive.has(id)) return false;
+    if (this.options.sceneFeatures) {
+      const geometry = this.scene.geometries.get(id);
+      if (geometry && geometry.kind !== "Point") return false;
+    }
+    return true;
+  }
+
+  #ingestObject(
+    id: ObjectId,
+    item: ManagedObject,
+    options: { skipSearch?: boolean } = {}
+  ): NormalizedGeometry | null {
+    const normalized = tryNormalizeManagedGeometry(item, {
+      maxVertices: this.options.maxVerticesPerGeometry
+    });
+    if (!normalized) {
+      this.scene.removeGeometry(id);
+      return null;
+    }
+    // Mass-point mode: keep coords in the spatial index only — scene Maps double heap at 1M.
+    if (this.options.sceneFeatures) {
+      this.scene.setGeometry(id, normalized);
+    }
+    if (!options.skipSearch) {
+      this.scene.searchIndex?.upsert(id, item);
+      this.scene.timeIndex?.upsert(id, item);
+    }
+    return normalized;
+  }
+
+  #filterClusterSpecsByTime(
+    specs: Map<string, ClusterSpec>,
+    timeActive: Set<ObjectId> | null
+  ): void {
+    if (!timeActive) return;
+    for (const [key, spec] of specs) {
+      const ids = spec.ids.length ? spec.ids.filter((id) => timeActive.has(id)) : spec.ids;
+      if (!ids.length && spec.count) {
+        // lazy clusters without expanded ids — keep unless we can prove empty
+        continue;
+      }
+      if (spec.ids.length && !ids.length) {
+        specs.delete(key);
+        continue;
+      }
+      if (ids.length) {
+        spec.ids = ids;
+        spec.count = ids.length;
+      }
+    }
+  }
+
+  #syncHeatmap(): void {
+    if (!this.map) return;
+    const pack = this._webglPack;
+    if (pack && !this.filter && !this.scene.activeTimeIds()) {
+      this.scene.syncHeatPacked(pack.merc64, pack.meta.length, this.map as Orihon, this.#heatWeightsForPack(pack));
+      return;
+    }
+    const timeActive = this.scene.activeTimeIds();
+    const points: Array<[number, number, number?]> = [];
+    if (this.options.sceneFeatures) {
+      for (const [id, object] of this.items) {
+        if (timeActive && !timeActive.has(id)) continue;
+        if (this.filter && !this.filter(object, id)) continue;
+        const geometry = this.scene.geometries.get(id);
+        if (!geometry || geometry.kind !== "Point") continue;
+        const weight = this.scene.heatmapWeight?.(object, id) ?? 1;
+        points.push([geometry.lat, geometry.lng, weight]);
+      }
+    } else {
+      for (const record of this.index.records.values()) {
+        const id = record.id;
+        if (timeActive && !timeActive.has(id)) continue;
+        if (this.filter && !this.filter(record.value, id)) continue;
+        const weight = this.scene.heatmapWeight?.(record.value, id) ?? 1;
+        points.push([record.position.lat, record.position.lng, weight]);
+      }
+    }
+    this.scene.syncHeat(points, this.map as Orihon);
+  }
+
+  #heatWeightsForPack(
+    pack: NonNullable<ObjectManager["_webglPack"]>
+  ): Float32Array | null {
+    const fn = this.scene.heatmapWeight;
+    if (!fn) return null;
+    const n = pack.meta.length;
+    if (this._heatWeightBuf.length < n) this._heatWeightBuf = new Float32Array(Math.max(n, 8));
+    const out = this._heatWeightBuf;
+    for (let i = 0; i < n; i++) {
+      const id = pack.meta[i].id;
+      const object = pack.singles.get(id)?.value ?? this.items.get(id);
+      const raw = object ? Number(fn(object, id)) : 0;
+      out[i] = Number.isFinite(raw) && raw > 0 ? raw : 0;
+    }
+    return out.subarray(0, n);
+  }
+
+  #redrawLabelsDuringMove(): void {
+    if (!this.map || typeof document === "undefined") return;
+    if (!this.options.sceneFeatures) return;
+    this.scene.redrawLabels(this.map as Orihon, { declutter: false });
+  }
+
+  /**
+   * True when icons / lines / polygons / labels / non-object viz may need the O(n) scene walk.
+   * Plain mass points with only category colors skip it even if `sceneFeatures` stayed true.
+   */
+  #sceneDecorationsActive(): boolean {
+    if (this.options.declutter) return true;
+    if (this.scene.atlas.size > 0) return true;
+    if (this._styleResolver || this.options.style) return true;
+    if (this.scene.visualization !== "objects") return true;
+    if (this.scene.hasNonPointGeometries()) return true;
+    return false;
+  }
+
+  #syncSceneLayers(): void {
+    if (!this.map) return;
+    // Mass WebGL points: never walk 1M objects resolving styles for icons/labels/trails.
+    if (!this.options.sceneFeatures || !this.#sceneDecorationsActive()) {
+      this.scene.clearNonHeatLayers();
+      return;
+    }
+    const timeActive = this.scene.activeTimeIds();
+    const symbolInstances = [];
+    const paths = [];
+    const polygons = [];
+    const labelCandidates: LabelCandidate[] = [];
+    const labelAnchors = [];
+    const bounds = latLngBounds(this.map.getBounds()).pad(0.2);
+    const viewportBBox = [bounds.south, bounds.west, bounds.north, bounds.east] as const;
+
+    for (const [id, object] of this.items) {
+      if (timeActive && !timeActive.has(id)) continue;
+      if (this.filter && !this.filter(object, id)) continue;
+      const geometry = this.scene.geometries.get(id);
+      if (!geometry) continue;
+      const resolved = this.#resolveObjectStyle(id, object, this._activeRenderer);
+      if (!resolved.visible) continue;
+      this.scene.trails.configure(id, resolved.trail);
+
+      if (geometry.kind === "Point") {
+        const visual = this.scene.visualPosition(id, geometry.lat, geometry.lng);
+        if (resolved.icon) {
+          const motion = this.scene.motions.get(id);
+          // GPU mixes prev→target; pass authoritative target coords, not CPU-interpolated ones.
+          symbolInstances.push({
+            id,
+            lat: geometry.lat,
+            lng: geometry.lng,
+            icon: resolved.icon,
+            size: resolved.size,
+            rotation: resolved.rotation,
+            opacity: resolved.opacity,
+            tint: styleTint({
+              color: resolved.color,
+              opacity: resolved.opacity,
+              iconTint: resolved.iconTint ?? undefined
+            }),
+            prevLat: motion?.fromLat ?? geometry.lat,
+            prevLng: motion?.fromLng ?? geometry.lng,
+            startTime: motion?.startTime ?? 0,
+            duration: motion?.duration ?? 0
+          });
+          if (this.options.declutter && this.map) {
+            const project =
+              this.map.latLngToContainerPoint?.bind(this.map) ??
+              ((value: LatLngLike) => this.map!.latLngToLayerPoint(value));
+            const screen = project([visual.lat, visual.lng]);
+            labelCandidates.push({
+              id,
+              text: "",
+              x: screen.x - resolved.size / 2,
+              y: screen.y - resolved.size / 2,
+              width: resolved.size,
+              height: resolved.size,
+              priority: Number(resolved.label?.priority) || 0,
+              collisionMode:
+                this._selectedId === id || this._hoveredId === id
+                  ? "always"
+                  : resolved.collisionMode,
+              kind: "icon"
+            });
+          }
+        }
+        if (resolved.label && this.map) {
+          const zoom = this.map.zoom;
+          if (
+            (resolved.label.minZoom != null && zoom < resolved.label.minZoom) ||
+            (resolved.label.maxZoom != null && zoom > resolved.label.maxZoom)
+          ) {
+            continue;
+          }
+          const collisionMode =
+            this._selectedId === id || this._hoveredId === id
+              ? "always"
+              : resolved.collisionMode;
+          const anchor = this.scene.buildLabelAnchor(
+            id,
+            {
+              label: resolved.label,
+              collisionMode,
+              visible: resolved.visible
+            },
+            visual.lat,
+            visual.lng,
+            null
+          );
+          if (anchor) {
+            labelAnchors.push(anchor);
+            // Keep icon collision boxes in screen space for this sync pass.
+            if (this.options.declutter) {
+              const project =
+                this.map.latLngToContainerPoint?.bind(this.map) ??
+                ((value: LatLngLike) => this.map!.latLngToLayerPoint(value));
+              const screen = project([visual.lat, visual.lng]);
+              labelCandidates.push({
+                id,
+                text: anchor.text,
+                x: screen.x + anchor.offsetX,
+                y: screen.y + anchor.offsetY - anchor.height,
+                width: anchor.width,
+                height: anchor.height,
+                priority: anchor.priority,
+                collisionMode: anchor.collisionMode,
+                kind: "label"
+              });
+            }
+          }
+        }
+        continue;
+      }
+
+      if (geometry.kind === "LineString") {
+        if (
+          geometry.bbox[2] < viewportBBox[0] ||
+          geometry.bbox[0] > viewportBBox[2] ||
+          geometry.bbox[3] < viewportBBox[1] ||
+          geometry.bbox[1] > viewportBBox[3]
+        ) continue;
+        const positions: LatLngLike[] = [];
+        for (let i = 0; i < geometry.pointCount; i++) {
+          positions.push([geometry.coords[i * 2], geometry.coords[i * 2 + 1]]);
+        }
+        paths.push({
+          id,
+          positions,
+          distances: geometry.distances,
+          style: {
+            color: resolved.line?.color ?? resolved.color,
+            opacity: resolved.line?.opacity ?? resolved.opacity,
+            width: resolved.line?.width ?? 2,
+            dashArray: resolved.line?.dashArray,
+            dashOffset: resolved.line?.dashOffset,
+            gradient: resolved.line?.gradient
+          }
+        });
+        continue;
+      }
+
+      if (geometry.kind === "Polygon") {
+        if (
+          geometry.bbox[2] < viewportBBox[0] ||
+          geometry.bbox[0] > viewportBBox[2] ||
+          geometry.bbox[3] < viewportBBox[1] ||
+          geometry.bbox[1] > viewportBBox[3]
+        ) continue;
+        polygons.push({
+          id,
+          rings: geometry.rings,
+          style: {
+            fill: resolved.polygon?.fill ?? resolved.color,
+            fillOpacity: resolved.polygon?.fillOpacity ?? 0.25,
+            stroke: resolved.polygon?.stroke ?? resolved.color,
+            strokeOpacity: resolved.polygon?.strokeOpacity ?? resolved.opacity,
+            strokeWidth: resolved.polygon?.strokeWidth ?? 1.5
+          }
+        });
+      }
+    }
+
+    // Trails batch
+    for (const trail of this.scene.trails.list()) {
+      paths.push({
+        positions: trail.points.map((point) => [point.lat, point.lng] as LatLngLike),
+        style: {
+          color: trail.style.color,
+          width: trail.style.width,
+          opacity: trail.style.opacity
+        }
+      });
+    }
+
+    this.scene.syncSymbols(symbolInstances, this.map as Orihon);
+    this.scene.syncPaths(paths, this.map as Orihon);
+    this.scene.syncPolygons(polygons, this.map as Orihon);
+    if (typeof document !== "undefined") {
+      this.scene.setLabelAnchors(labelAnchors);
+      // Full declutter on authoritative sync; move frames use lightweight redraw.
+      this.scene.redrawLabels(this.map as Orihon, { declutter: this.options.declutter });
+      void labelCandidates;
+    }
+  }
+
+  #afterVisualStateChange(ids: ObjectId[]): void {
+    const unique = [...new Set(ids)];
+    if (this.#canPatchWebgl() && this.#usesStyledWebgl()) {
+      this.#patchWebglStyles(unique);
+      this._webglLayer!.render();
+    } else if (this._webglLayer && this.#usesStyledWebgl()) {
+      this.#refreshWebglStyles();
+      this._scheduleRender();
+    } else {
+      this._scheduleRender();
+    }
+    // heatmapWeight may read ObjectState (alarm) or live readings — keep the field in sync.
+    this.#refreshHeatmapIfActive();
+    for (const markerId of unique) {
+      const marker = this.markers.get(markerId);
+      const object = this.items.get(markerId);
+      if (marker && object) this.#paintDomMarker(marker, markerId, object);
+    }
+  }
+
+  #heatVisualizationActive(): boolean {
+    if (!this.map) return false;
+    return this.scene.resolveVisualization(this.map.zoom) === "heatmap";
+  }
+
+  /** Rebuild heat weights when readings/state change while heatmap is the active view. */
+  #refreshHeatmapIfActive(): void {
+    if (!this.#heatVisualizationActive()) return;
+    // Mass value fields re-rasterize hundreds of thousands of stamps — coalesce
+    // object-state patches (temp ticks) so we do not rebuild KDE 8×/s.
+    if (this._heatRefreshPending) return;
+    this._heatRefreshPending = true;
+    const delay = this.items.size > 80_000 ? 320 : this.items.size > 20_000 ? 180 : 90;
+    this._heatRefreshTimer = setTimeout(() => {
+      this._heatRefreshTimer = 0;
+      this._heatRefreshPending = false;
+      if (!this.#heatVisualizationActive()) return;
+      this.#syncHeatmap();
+    }, delay) as unknown as number;
+  }
+
+  #assertObjectExists(id: ObjectId): void {
+    if (!this.items.has(id)) {
+      throw new RangeError(`ObjectManager: object "${String(id)}" does not exist`);
+    }
+  }
+
+  #writeStateFlag(id: ObjectId, key: "selected" | "hovered", value: boolean): void {
+    if (!value) {
+      const current = this.objectStates.get(id);
+      if (!current || !(key in current)) return;
+      delete current[key];
+      if (!Object.keys(current).length) this.objectStates.delete(id);
+      return;
+    }
+    const current = this.objectStates.get(id);
+    if (current) {
+      current[key] = true;
+      return;
+    }
+    this.objectStates.set(id, { [key]: true });
+  }
+
+  #mergeObjectState(id: ObjectId, patch: Partial<ObjectState>): { changedKeys: string[]; sideTouched: ObjectId[] } {
+    const changedKeys: string[] = [];
+    const sideTouched: ObjectId[] = [];
+    const current = this.objectStates.get(id);
+    const next: ObjectState = current ? { ...current } : {};
+
+    for (const [key, rawValue] of Object.entries(patch)) {
+      if (rawValue === undefined) {
+        if (key in next) {
+          delete next[key];
+          changedKeys.push(key);
+        }
+        continue;
+      }
+      assertObjectStateValue(key, rawValue);
+      if (Object.is(next[key], rawValue)) continue;
+      next[key] = rawValue;
+      changedKeys.push(key);
+    }
+
+    if (!changedKeys.length) return { changedKeys, sideTouched };
+
+    if (changedKeys.includes("selected")) {
+      if (next.selected === true) {
+        if (this._selectedId != null && this._selectedId !== id) {
+          this.#writeStateFlag(this._selectedId, "selected", false);
+          sideTouched.push(this._selectedId);
+        }
+        this._selectedId = id;
+        next.selected = true;
+      } else {
+        if (this._selectedId === id) this._selectedId = null;
+        delete next.selected;
+      }
+    }
+
+    if (changedKeys.includes("hovered")) {
+      if (next.hovered === true) {
+        if (this._hoveredId != null && this._hoveredId !== id) {
+          this.#writeStateFlag(this._hoveredId, "hovered", false);
+          sideTouched.push(this._hoveredId);
+        }
+        this._hoveredId = id;
+        next.hovered = true;
+      } else {
+        if (this._hoveredId === id) this._hoveredId = null;
+        delete next.hovered;
+      }
+    }
+
+    if (Object.keys(next).length) this.objectStates.set(id, next);
+    else this.objectStates.delete(id);
+    return { changedKeys, sideTouched };
   }
 
   #webglClick(event: Record<string, unknown>): void {
@@ -1678,9 +3170,17 @@ export class ObjectManager extends Evented {
     event?: Record<string, unknown>
   ): void {
     if (!this.map) return;
+    const context = { source: this, event: event as OrihonEvent | undefined, data };
+    if (this._activePopup?.isOpen()) {
+      this._activePopup.setLatLng(position);
+      this._activePopup.setContentContext(context);
+      this._activePopup.setContent(content);
+      this._activePopup.bringToFront();
+      return;
+    }
     this.closePopup();
     const next = new Popup(content, options);
-    next.setContentContext({ source: this, event: event as OrihonEvent | undefined, data });
+    next.setContentContext(context);
     next.setLatLng(position);
     next.on("close", () => {
       if (this._activePopup === next) this._activePopup = null;
@@ -1692,11 +3192,54 @@ export class ObjectManager extends Evented {
   #clusterIcon(count: number, ids: ObjectId[] = []): MarkerIcon {
     const custom = this.options.clusterIcon?.(count, ids);
     if (custom) return custom;
+    const aggregates = this.scene.aggregateCluster(ids, this.items, this._selectedId);
+    const styled = this.options.clusterStyle?.(
+      {
+        id: ids[0] != null ? `cluster:${String(ids[0])}` : `cluster:${count}`,
+        count: aggregates.count || count,
+        properties: aggregates.properties,
+        containsSelected: aggregates.containsSelected
+      },
+      {
+        id: ids[0] ?? 0,
+        zoom: this.map?.zoom ?? 0,
+        renderer: this._activeRenderer,
+        selected: aggregates.containsSelected,
+        hovered: false,
+        visualization: this.scene.getActiveVisualization()
+      }
+    );
     const tier = count < 10 ? "sm" : count < 100 ? "md" : "lg";
-    const size = tier === "sm" ? 36 : tier === "md" ? 44 : 52;
+    const size = styled?.size
+      ? Math.max(28, Math.min(72, Math.round(Number(styled.size))))
+      : tier === "sm"
+        ? 36
+        : tier === "md"
+          ? 44
+          : 52;
+    const className = [
+      "oh-cluster-icon",
+      `oh-cluster-icon--${tier}`,
+      aggregates.containsSelected ? "oh-cluster-icon--selected" : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+    let content: string | Node = String(count);
+    if (styled?.color && typeof document !== "undefined") {
+      const node = document.createElement("span");
+      node.textContent = String(count);
+      node.style.display = "grid";
+      node.style.placeItems = "center";
+      node.style.width = "100%";
+      node.style.height = "100%";
+      node.style.borderRadius = "50%";
+      node.style.background = styled.color;
+      node.style.color = "#fff";
+      content = node;
+    }
     return new DivIcon({
-      content: String(count),
-      className: `oh-cluster-icon oh-cluster-icon--${tier}`,
+      content,
+      className,
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2]
     });
@@ -1733,6 +3276,7 @@ export class ObjectManager extends Evented {
     }
     this._webglMeta = [];
     this._webglIdToIndex.clear();
+    this._gpuSubset = false;
     this._webglPack = null;
     this._webglSyncedZoom = null;
   }
@@ -1751,23 +3295,96 @@ export class ObjectManager extends Evented {
     this.#clearDomMarkers();
     this.#clearWebgl();
     this.#clearClusterCanvas();
+    this.scene.clearLayers();
     this.clusterMembers.clear();
     this._activeRenderer = "dom";
   }
 
   #objectPosition(item: ManagedObject): LatLngLike | null {
-    const coordinates = item.geometry?.coordinates
-      ? [item.geometry.coordinates[1], item.geometry.coordinates[0]]
-      : item.coordinates;
-    if (!coordinates) return null;
-    const source = Array.isArray(coordinates)
-      ? coordinates
-      : [coordinates.lat, coordinates.lng];
-    if (!Number.isFinite(Number(source[0])) || !Number.isFinite(Number(source[1]))) return null;
-    return [Number(source[0]), Number(source[1])];
+    const geometry = tryNormalizeManagedGeometry(item, {
+      maxVertices: this.options.maxVerticesPerGeometry
+    });
+    if (!geometry) return null;
+    if (geometry.kind === "Point") return [geometry.lat, geometry.lng];
+    return [
+      (geometry.bbox[0] + geometry.bbox[2]) / 2,
+      (geometry.bbox[1] + geometry.bbox[3]) / 2
+    ];
   }
 }
 
 export function objectManager(options?: ObjectManagerOptions): ObjectManager {
   return new ObjectManager(options);
+}
+
+function assertObjectStateValue(key: string, value: unknown): asserts value is ObjectStateValue {
+  const type = typeof value;
+  if (value === null || type === "string" || type === "number" || type === "boolean") {
+    if (type === "number" && !Number.isFinite(value as number)) {
+      throw new TypeError(`ObjectManager: state "${key}" must be a finite scalar`);
+    }
+    return;
+  }
+  throw new TypeError(`ObjectManager: state "${key}" must be a string, number, boolean, or null`);
+}
+
+function legacyObjectStyle(
+  object: ManagedObject,
+  state: Readonly<ObjectState>,
+  context: Readonly<ObjectStyleContext>,
+  styleByCategory: boolean
+): ObjectStyle {
+  if (!styleByCategory) {
+    return {
+      color: DEFAULT_OBJECT_COLOR,
+      opacity: DEFAULT_OBJECT_OPACITY,
+      size: DEFAULT_OBJECT_SIZE
+    };
+  }
+  if (context.selected || state.selected) {
+    return { color: PALETTE_HEX.selected, opacity: OBJECT_MANAGER_PALETTE.selected[3], size: DEFAULT_OBJECT_SIZE };
+  }
+  if (context.hovered || state.hovered) {
+    return { color: PALETTE_HEX.hover, opacity: OBJECT_MANAGER_PALETTE.hover[3], size: DEFAULT_OBJECT_SIZE };
+  }
+  if (object.properties?.alert) {
+    return { color: PALETTE_HEX.alert, opacity: OBJECT_MANAGER_PALETTE.alert[3], size: DEFAULT_OBJECT_SIZE };
+  }
+  const category = String(object.properties?.category || "alpha");
+  if (category === "beta") {
+    return { color: PALETTE_HEX.beta, opacity: OBJECT_MANAGER_PALETTE.beta[3], size: DEFAULT_OBJECT_SIZE };
+  }
+  if (category === "gamma") {
+    return { color: PALETTE_HEX.gamma, opacity: OBJECT_MANAGER_PALETTE.gamma[3], size: DEFAULT_OBJECT_SIZE };
+  }
+  return { color: PALETTE_HEX.alpha, opacity: OBJECT_MANAGER_PALETTE.alpha[3], size: DEFAULT_OBJECT_SIZE };
+}
+
+function normalizeResolvedStyle(style: ObjectStyle): ResolvedObjectStyle {
+  const fallbackRgb = parseCssColor(DEFAULT_OBJECT_COLOR, { r: 15, g: 118, b: 110 });
+  const color = typeof style.color === "string" && style.color.trim() ? style.color : DEFAULT_OBJECT_COLOR;
+  const rgb = parseCssColor(color, fallbackRgb);
+  let opacity = Number(style.opacity);
+  if (!Number.isFinite(opacity)) opacity = DEFAULT_OBJECT_OPACITY;
+  opacity = Math.max(0, Math.min(1, opacity));
+  let size = Number(style.size);
+  if (!Number.isFinite(size)) size = DEFAULT_OBJECT_SIZE;
+  size = Math.max(1, Math.min(MAX_OBJECT_SIZE, size));
+  let rotation = Number(style.rotation) || 0;
+  rotation = ((rotation % 360) + 360) % 360;
+  return {
+    color,
+    rgba: [rgb.r / 255, rgb.g / 255, rgb.b / 255, opacity],
+    opacity,
+    size,
+    icon: style.icon ?? null,
+    iconTint: typeof style.iconTint === "string" && style.iconTint.trim() ? style.iconTint : null,
+    rotation,
+    visible: style.visible !== false,
+    label: normalizeLabel(style.label ?? null),
+    collisionMode: style.collisionMode ?? "auto",
+    trail: style.trail ?? null,
+    line: style.line ?? null,
+    polygon: style.polygon ?? null
+  };
 }

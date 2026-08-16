@@ -84,12 +84,17 @@ export class GeometryWorkerPool {
     const id = ++requestId;
     const coordsCopy = request.coords.slice();
     return new Promise<ClusterIndex>((resolve) => {
-      this.pending.set(id, { type: "clusterIndex", resolve });
+      this.pending.set(id, {
+        type: "clusterIndex",
+        resolve: (index: ClusterIndex) => {
+          index.ids = request.ids;
+          resolve(index);
+        }
+      });
       worker.postMessage(
         {
           id,
           type: "clusterIndex",
-          ids: request.ids,
           coords: coordsCopy,
           gridSize: request.gridSize,
           minPoints: request.minPoints,

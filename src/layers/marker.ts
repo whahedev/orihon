@@ -1,10 +1,26 @@
-import { createEl, listen, listenTap, setTransform } from "../dom.js";
+import { createEl, listen, listenTap } from "../dom.js";
+import { geoTransformCss } from "../camera.js";
 import { LatLng, latLng, type LatLngLike, type Point } from "../geo.js";
 import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { MarkerIcon } from "./icon.js";
 
-export interface MarkerOptions extends LayerOptions {
+/** Built-in marker glyph when no custom `icon` / `content` is set. */
+export type MarkerShape = "pin" | "circle" | "square" | "dot" | "diamond" | "triangle";
+
+export interface MarkerAppearance {
+  shape?: MarkerShape;
+  /** Fill color of the built-in glyph. */
+  color?: string;
+  /** Stroke / border color of the built-in glyph. */
+  strokeColor?: string;
+  /** Glyph size in CSS pixels (pin head / circle / square / dot). */
+  size?: number;
+  /** Border width in CSS pixels. */
+  strokeWidth?: number;
+}
+
+export interface MarkerOptions extends LayerOptions, MarkerAppearance {
   title?: string;
   className?: string;
   draggable?: boolean;
@@ -26,6 +42,60 @@ type ResolvedMarkerOptions = Required<Omit<MarkerOptions, "pane" | "attribution"
     icon: MarkerIcon | null;
   };
 
+const MARKER_SHAPES = new Set<MarkerShape>(["pin", "circle", "square", "dot", "diamond", "triangle"]);
+
+function normalizeShape(value: unknown): MarkerShape {
+  return MARKER_SHAPES.has(value as MarkerShape) ? (value as MarkerShape) : "pin";
+}
+
+function normalizeSize(value: unknown, fallback = 22): number {
+  const size = Number(value);
+  return Number.isFinite(size) ? Math.max(4, size) : fallback;
+}
+
+function normalizeStrokeWidth(value: unknown, fallback = 2): number {
+  const width = Number(value);
+  return Number.isFinite(width) ? Math.max(0, width) : fallback;
+}
+
+/** Layout box + tip/center anchor for a built-in glyph. */
+export function markerShapeMetrics(appearance: MarkerAppearance = {}): {
+  shape: MarkerShape;
+  size: number;
+  strokeWidth: number;
+  width: number;
+  height: number;
+  anchor: [number, number];
+  rotationOrigin: string;
+} {
+  const shape = normalizeShape(appearance.shape);
+  const size = normalizeSize(appearance.size);
+  const strokeWidth = normalizeStrokeWidth(appearance.strokeWidth);
+  if (shape === "pin" || shape === "diamond" || shape === "triangle") {
+    const width = Math.round(size + 2);
+    const height = Math.round(size + 14);
+    return {
+      shape,
+      size,
+      strokeWidth,
+      width,
+      height,
+      anchor: [width / 2, height],
+      rotationOrigin: "center bottom"
+    };
+  }
+  const box = Math.round(size + strokeWidth * 2);
+  return {
+    shape,
+    size,
+    strokeWidth,
+    width: box,
+    height: box,
+    anchor: [box / 2, box / 2],
+    rotationOrigin: "center center"
+  };
+}
+
 export class Marker extends Layer<ResolvedMarkerOptions> {
   position: LatLng;
   el: HTMLButtonElement | null = null;
@@ -35,12 +105,25 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
   readonly _dragUnsub: Array<() => void> = [];
 
   constructor(position: LatLngLike, options: MarkerOptions = {}) {
+    const shape = normalizeShape(options.shape);
+    const size = normalizeSize(options.size);
+    const strokeWidth = normalizeStrokeWidth(options.strokeWidth);
+    const metrics = markerShapeMetrics({ shape, size, strokeWidth });
+    const {
+      shape: _shape,
+      size: _size,
+      strokeWidth: _strokeWidth,
+      color: colorOpt,
+      strokeColor: strokeColorOpt,
+      anchor: anchorOpt,
+      rotationOrigin: rotationOriginOpt,
+      ...rest
+    } = options;
     super({
       pane: "marker",
       title: "",
       className: "",
       draggable: false,
-      anchor: [12, 36],
       content: null,
       html: "",
       ariaLabel: "",
@@ -49,12 +132,21 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
       zIndexOffset: 0,
       keyboard: true,
       rotation: 0,
-      rotationOrigin: "center bottom",
-      ...options
+      ...rest,
+      shape,
+      size,
+      strokeWidth,
+      color: colorOpt ?? "#e11d48",
+      strokeColor: strokeColorOpt ?? "#ffffff",
+      anchor: anchorOpt ?? metrics.anchor,
+      rotationOrigin: rotationOriginOpt ?? metrics.rotationOrigin
     } as ResolvedMarkerOptions);
     this.position = latLng(position);
     this.options.opacity = Math.max(0, Math.min(1, Number(this.options.opacity)));
     this.options.zIndexOffset = Number.isFinite(Number(this.options.zIndexOffset)) ? Number(this.options.zIndexOffset) : 0;
+    this.options.shape = normalizeShape(this.options.shape);
+    this.options.size = normalizeSize(this.options.size);
+    this.options.strokeWidth = normalizeStrokeWidth(this.options.strokeWidth);
   }
 
   override onAdd(map: Orihon): void {
@@ -139,6 +231,23 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     return this.options.icon;
   }
 
+  /** Updates built-in glyph appearance (ignored while a custom `icon` is set). */
+  setAppearance(appearance: MarkerAppearance): this {
+    if (appearance.shape != null) this.options.shape = normalizeShape(appearance.shape);
+    if (appearance.color != null) this.options.color = String(appearance.color);
+    if (appearance.strokeColor != null) this.options.strokeColor = String(appearance.strokeColor);
+    if (appearance.size != null) this.options.size = normalizeSize(appearance.size);
+    if (appearance.strokeWidth != null) this.options.strokeWidth = normalizeStrokeWidth(appearance.strokeWidth);
+    if (!this.options.icon) {
+      const metrics = markerShapeMetrics(this.options);
+      this.options.anchor = metrics.anchor;
+      this.options.rotationOrigin = metrics.rotationOrigin;
+    }
+    this.#setContent();
+    this.render();
+    return this;
+  }
+
   setOpacity(opacity: number): this {
     this.options.opacity = Math.max(0, Math.min(1, Number(opacity)));
     if (this.el) this.el.style.opacity = String(this.options.opacity);
@@ -156,7 +265,7 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     const projected = this.map.latLngToLayerPoint(this.position);
     const anchor = this.options.icon?.getAnchor() ?? { x: this.options.anchor[0], y: this.options.anchor[1] };
     this.el.style.zIndex = String(Math.round(projected.y) + this.options.zIndexOffset);
-    setTransform(this.el, projected.x - anchor.x, projected.y - anchor.y);
+    this.el.style.transform = geoTransformCss(projected.x - anchor.x, projected.y - anchor.y);
     if (this.options.rotation) {
       this.el.style.transform += ` rotate(${Number(this.options.rotation)}deg)`;
       this.el.style.transformOrigin = this.options.rotationOrigin;
@@ -179,20 +288,30 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     }
     this.iconElement = null;
     this.shadowElement = null;
-    this.el.style.width = "";
-    this.el.style.height = "";
     this.el.classList.remove("oh-marker-custom");
     this.el.replaceChildren();
     const content = this.options.content ?? this.options.html;
     if (typeof Node !== "undefined" && content instanceof Node) {
+      this.el.style.width = "";
+      this.el.style.height = "";
       this.el.replaceChildren(content);
       return;
     }
     if (content !== null && content !== undefined && content !== "") {
+      this.el.style.width = "";
+      this.el.style.height = "";
       this.el.textContent = String(content);
       return;
     }
-    createEl("span", "oh-marker-pin", this.el);
+    const metrics = markerShapeMetrics(this.options);
+    this.options.anchor = metrics.anchor;
+    this.el.style.width = `${metrics.width}px`;
+    this.el.style.height = `${metrics.height}px`;
+    const pin = createEl("span", metrics.shape === "pin" ? "oh-marker-pin" : `oh-marker-pin is-${metrics.shape}`, this.el);
+    pin.style.setProperty("--oh-marker-fill", this.options.color);
+    pin.style.setProperty("--oh-marker-stroke", this.options.strokeColor);
+    pin.style.setProperty("--oh-marker-size", `${metrics.size}px`);
+    pin.style.setProperty("--oh-marker-stroke-width", `${metrics.strokeWidth}px`);
   }
 
   #enableDrag(): void {

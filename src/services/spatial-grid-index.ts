@@ -16,13 +16,16 @@ export interface SpatialRecord<TValue, TId extends SpatialId = SpatialId> {
 }
 
 interface StoredRecord<TValue, TId extends SpatialId> extends SpatialRecord<TValue, TId> {
-  cell: string;
+  cell: number;
+  prev: TId | null;
+  next: TId | null;
 }
 
 export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
   readonly cellSize: number;
   readonly records = new Map<TId, StoredRecord<TValue, TId>>();
-  readonly cells = new Map<string, Set<TId>>();
+  /** Packed cell id → linked-list head id. */
+  readonly cells = new Map<number, TId>();
   readonly xCellCount: number;
   readonly yCellCount: number;
 
@@ -40,19 +43,36 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
   get cellCount(): number { return this.cells.size; }
 
   set(id: TId, position: LatLngLike, value: TValue): this {
-    this.delete(id);
-    const normalized = latLng(position);
-    normalized.lat = Math.max(-90, Math.min(90, normalized.lat));
-    normalized.lng = wrapLng(normalized.lng);
-    const cell = this.#cellKey(normalized);
-    const record: StoredRecord<TValue, TId> = { id, position: normalized, value, cell };
-    this.records.set(id, record);
-    let bucket = this.cells.get(cell);
-    if (!bucket) {
-      bucket = new Set<TId>();
-      this.cells.set(cell, bucket);
+    const next = latLng(position);
+    return this.setLatLng(id, next.lat, next.lng, value);
+  }
+
+  /** Skip `latLng()` parsing — used for 100k–1M point ingest. */
+  setLatLng(id: TId, latitude: number, longitude: number, value: TValue): this {
+    const lat = Math.max(-90, Math.min(90, latitude));
+    const lng = wrapLng(longitude);
+    const cell = this.#cellId(lng, lat);
+    const existing = this.records.get(id);
+    if (existing) {
+      existing.value = value;
+      existing.position.lat = lat;
+      existing.position.lng = lng;
+      if (existing.cell === cell) return this;
+      this.#unlink(existing);
+      existing.cell = cell;
+      this.#link(existing);
+      return this;
     }
-    bucket.add(id);
+    const record: StoredRecord<TValue, TId> = {
+      id,
+      position: new LatLng(lat, lng),
+      value,
+      cell,
+      prev: null,
+      next: null
+    };
+    this.records.set(id, record);
+    this.#link(record);
     return this;
   }
 
@@ -66,10 +86,8 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
   delete(id: TId): boolean {
     const record = this.records.get(id);
     if (!record) return false;
+    this.#unlink(record);
     this.records.delete(id);
-    const bucket = this.cells.get(record.cell);
-    bucket?.delete(id);
-    if (!bucket?.size) this.cells.delete(record.cell);
     return true;
   }
 
@@ -154,22 +172,55 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
       const maxX = this.#xFor(east);
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
-          const bucket = this.cells.get(`${x}:${y}`);
-          if (!bucket) continue;
-          for (const id of bucket) {
-            if (yielded.has(id)) continue;
-            const record = this.records.get(id);
-            if (!record) continue;
-            yielded.add(id);
-            yield record;
+          let cursor: TId | null | undefined = this.cells.get(this.#packCell(x, y));
+          while (cursor != null) {
+            const record = this.records.get(cursor);
+            if (!record) break;
+            const next = record.next;
+            if (!yielded.has(cursor)) {
+              yielded.add(cursor);
+              yield record;
+            }
+            cursor = next;
           }
         }
       }
     }
   }
 
-  #cellKey(position: LatLng): string {
-    return `${this.#xFor(position.lng)}:${this.#yFor(position.lat)}`;
+  #link(record: StoredRecord<TValue, TId>): void {
+    const head = this.cells.get(record.cell);
+    record.prev = null;
+    record.next = head ?? null;
+    if (head !== undefined) {
+      const current = this.records.get(head);
+      if (current) current.prev = record.id;
+    }
+    this.cells.set(record.cell, record.id);
+  }
+
+  #unlink(record: StoredRecord<TValue, TId>): void {
+    if (record.prev != null) {
+      const prev = this.records.get(record.prev);
+      if (prev) prev.next = record.next;
+    } else if (this.cells.get(record.cell) === record.id) {
+      if (record.next != null) this.cells.set(record.cell, record.next);
+      else this.cells.delete(record.cell);
+    }
+    if (record.next != null) {
+      const next = this.records.get(record.next);
+      if (next) next.prev = record.prev;
+    }
+    record.prev = null;
+    record.next = null;
+  }
+
+  #cellId(longitude: number, latitude: number): number {
+    return this.#packCell(this.#xFor(longitude), this.#yFor(latitude));
+  }
+
+  #packCell(x: number, y: number): number {
+    return y * this.xCellCount + x;
   }
 
   #xFor(longitude: number): number {

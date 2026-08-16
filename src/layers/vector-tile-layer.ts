@@ -3,6 +3,7 @@ import { GeoJSONLayer, type GeoJSONFeature, type GeoJSONOptions } from "./geojso
 import type { LatLngBoundsLike } from "../geo.js";
 import type { Orihon } from "../map.js";
 import { circleMarker, type PathOptions } from "./vector.js";
+import { forEachTileInRect, forEachTileRectDelta, type TileRect } from "./tile-grid.js";
 
 export interface VectorTileCoordinates {
   x: number;
@@ -44,6 +45,7 @@ export class VectorTileLayer extends LayerGroup {
   readonly options: Required<VectorTileLayerOptions>;
   readonly tiles = new Map<string, TileState>();
   readonly _render = () => this.render();
+  private _rect: TileRect | null = null;
 
   constructor(options: VectorTileLayerOptions) {
     super();
@@ -82,6 +84,7 @@ export class VectorTileLayer extends LayerGroup {
       if (tile.layer) this.removeLayer(tile.layer);
     }
     this.tiles.clear();
+    this._rect = null;
     return this;
   }
 
@@ -95,20 +98,26 @@ export class VectorTileLayer extends LayerGroup {
     }
     const bounds = map.getBounds();
     const range = tileRange(bounds, z, this.options.buffer);
-    const needed = new Set<string>();
-    for (let x = range.minX; x <= range.maxX; x++) {
-      for (let y = range.minY; y <= range.maxY; y++) {
-        const key = `${z}:${x}:${y}`;
-        needed.add(key);
-        if (!this.tiles.has(key)) void this.#loadTile(x, y, z, key);
-      }
-    }
-    for (const [key, tile] of this.tiles) {
-      if (needed.has(key)) continue;
+    const nextRect: TileRect = { z, left: range.minX, top: range.minY, right: range.maxX, bottom: range.maxY };
+    const consider = (x: number, y: number): void => {
+      const key = `${z}:${x}:${y}`;
+      if (!this.tiles.has(key)) void this.#loadTile(x, y, z, key);
+    };
+    const forget = (x: number, y: number): void => {
+      const key = `${z}:${x}:${y}`;
+      const tile = this.tiles.get(key);
+      if (!tile) return;
       tile.controller.abort();
       if (tile.layer) this.removeLayer(tile.layer);
       this.tiles.delete(key);
+    };
+    if (!this._rect || this._rect.z !== nextRect.z) {
+      this.clearTiles();
+      forEachTileInRect(nextRect, consider);
+    } else {
+      forEachTileRectDelta(this._rect, nextRect, consider, forget);
     }
+    this._rect = nextRect;
   }
 
   async #loadTile(x: number, y: number, z: number, key: string): Promise<void> {

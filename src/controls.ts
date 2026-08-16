@@ -315,4 +315,4 @@ export function measureControl(options?: MeasureControlOptions): MeasureControl 
 export function miniMap(layer: Layer, options?: MiniMapControlOptions): MiniMapControl { return new MiniMapControl(layer, options); }
 
 export { GraticuleLayer, graticuleLayer };
-export type { GraticuleLayerOptions } from "./layers/graticule-layer.js";
+export type { GraticuleLayerOptions, GraticuleUnits } from "./layers/graticule-layer.js";

@@ -1,8 +1,10 @@
-import { createEl, setTransform } from "../dom.js";
+import { geoTransformCss, tileCornerLayerTransform, tileLevelWarpCss } from "../camera.js";
+import { createEl } from "../dom.js";
 import { TILE_SIZE, LatLngBounds, latLngBounds, type LatLngBoundsLike } from "../geo.js";
 import type { Layer } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { GridLayer, type GridLayerOptions, type ResolvedGridLayerOptions } from "./grid-layer.js";
+import { forEachTileInRect, forEachTileRectDelta, forEachMissingNeeded, tilePriority, type TileRect } from "./tile-grid.js";
 
 const EMPTY_TILE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
@@ -39,11 +41,11 @@ export interface TileLayerOptions extends GridLayerOptions {
   detectRetina?: boolean;
   bounds?: LatLngBoundsLike | null;
   /**
-   * Raster backend. Core/Standard only have DOM tiles.
-   * Advanced registers WebGL so `"auto"` / `"webgl"` can use the GPU path.
-   * `"webgl"` falls back to DOM when WebGL tiles are unavailable (same idea as GeoJSON).
+   * Advanced `orihon` registers WebGL and WebGPU so `"auto"` / `"webgl"` / `"webgpu"` can use the GPU path.
+   * `"auto"` prefers WebGPU when `navigator.gpu` exists, then WebGL, then DOM.
+   * Standard/Core stay on DOM unless the app also imports `orihon/webgpu`.
    */
-  renderer?: "auto" | "dom" | "webgl";
+  renderer?: "auto" | "dom" | "webgl" | "webgpu";
 }
 
 interface ResolvedTileOptions extends ResolvedGridLayerOptions {
@@ -81,6 +83,7 @@ interface TileRecord {
   settled: boolean;
   fallback: boolean;
   started: boolean;
+  priority: number;
 }
 
 function normalizeBounds(value: unknown): LatLngBounds | null {
@@ -109,6 +112,8 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   _pendingSourceZoom: number | null = null;
   _zoomSwitchTimer: ReturnType<typeof setTimeout> | null = null;
   _fillFrame = 0;
+  _fillPending = false;
+  _rect: TileRect | null = null;
   /** Throttle DOM tile create/release during continuous camera (setView every frame). */
   _lastHeavyMs = 0;
   /** Level-local origin in world pixels at `_tileZoom` (snapped to tile grid). */
@@ -169,6 +174,8 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     this._tileZoom = null;
     this._pendingSourceZoom = null;
     this._needed.clear();
+    this._queue.length = 0;
+    this._rect = null;
     this._loading = 0;
     this._loadCycleActive = false;
     this.level = null;
@@ -223,7 +230,7 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     }
 
     this.container.hidden = false;
-    const nativeLimit = typeof this.options.maxNativeZoom === "number" ? this.options.maxNativeZoom : this.options.maxZoom;
+    const nativeLimit = nativeTileZoom(this.options.maxNativeZoom, this.options.maxZoom);
     const sourceZoom = Math.max(0, Math.min(nativeLimit, displayZoom + (this._retina ? 1 : 0)));
     if (this._tileZoom === null) {
       this.#clearZoomSwitchTimer();
@@ -243,18 +250,26 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     if (activeZoom === null || !this.level) return;
 
     const size = this.options.tileSize;
-    const displayScale = 2 ** (this.map.zoom - activeZoom);
+    const liveZoom = this.map.zoom;
+    const displayScale = 2 ** (liveZoom - activeZoom);
     const origin = this.map.pixelOrigin;
     // Always update the level CSS transform — cheap and keeps tiles glued to the camera.
     const levelOriginX = Math.floor(origin.x / displayScale / size) * size;
     const levelOriginY = Math.floor(origin.y / displayScale / size) * size;
     // During continuous setView stress, skip DOM churn most frames: keep the previous snap
     // origin and only translate/scale. Heavy pass (~every 32ms) refreshes tile coverage.
+    // If the last pass still has uncreated needed tiles, do not skip — otherwise holes stick.
+    // After #switchZoom the level origin is invalid (NaN) until a heavy pass — never CSS-warp with NaN.
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const heavyDue = now - this._lastHeavyMs >= 32;
+    const levelOriginValid = Number.isFinite(this._levelOriginX) && Number.isFinite(this._levelOriginY);
+    const heavyDue = !levelOriginValid || now - this._lastHeavyMs >= 32 || this._fillPending;
     if (!heavyDue) {
-      this.level.style.transform =
-        `translate3d(${this._levelOriginX * displayScale - origin.x}px,${this._levelOriginY * displayScale - origin.y}px,0) scale(${displayScale})`;
+      this.level.style.transform = tileLevelWarpCss(
+        { x: this._levelOriginX, y: this._levelOriginY },
+        activeZoom,
+        origin,
+        liveZoom
+      );
       for (const tile of this.previousTiles.values()) this.#positionRetainedTile(tile);
       this.#scheduleFillFrame();
       return;
@@ -264,8 +279,12 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     const originMoved = levelOriginX !== this._levelOriginX || levelOriginY !== this._levelOriginY;
     this._levelOriginX = levelOriginX;
     this._levelOriginY = levelOriginY;
-    this.level.style.transform =
-      `translate3d(${levelOriginX * displayScale - origin.x}px,${levelOriginY * displayScale - origin.y}px,0) scale(${displayScale})`;
+    this.level.style.transform = tileLevelWarpCss(
+      { x: levelOriginX, y: levelOriginY },
+      activeZoom,
+      origin,
+      liveZoom
+    );
 
     const tileOrigin = { x: origin.x / displayScale, y: origin.y / displayScale };
     const left = Math.floor(tileOrigin.x / size) - this.options.buffer;
@@ -273,42 +292,57 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     const right = Math.floor((tileOrigin.x + this.map.size.width / displayScale) / size) + this.options.buffer;
     const bottom = Math.floor((tileOrigin.y + this.map.size.height / displayScale) / size) + this.options.buffer;
     const worldMax = 2 ** activeZoom - 1;
-    const needed = new Set<string>();
+    const nextRect: TileRect = { z: activeZoom, left, top, right, bottom };
 
     const candidates: Array<{ x: number; y: number; key: string; distance: number }> = [];
     const centerX = tileOrigin.x / size + this.map.size.width / displayScale / size / 2;
     const centerY = tileOrigin.y / size + this.map.size.height / displayScale / size / 2;
-    for (let y = top; y <= bottom; y++) {
-      if (y < 0 || y > worldMax) continue;
-      for (let x = left; x <= right; x++) {
-        if ((this.options.noWrap || this.map.crs.wrapLng === false) && (x < 0 || x > worldMax)) continue;
-        if (!this.#tileIntersectsBounds(x, y, activeZoom)) continue;
-        const key = `${activeZoom}:${x}:${y}`;
-        needed.add(key);
-        if (!this.tiles.has(key)) {
-          candidates.push({ x, y, key, distance: Math.hypot(x + 0.5 - centerX, y + 0.5 - centerY) });
-        }
-      }
+    const vx = this.map.panVelocity.x;
+    const vy = this.map.panVelocity.y;
+    const wrapLocked = this.options.noWrap || this.map.crs.wrapLng === false;
+
+    const consider = (x: number, y: number): void => {
+      if (y < 0 || y > worldMax) return;
+      if (wrapLocked && (x < 0 || x > worldMax)) return;
+      if (!this.#tileIntersectsBounds(x, y, activeZoom)) return;
+      const key = `${activeZoom}:${x}:${y}`;
+      this._needed.add(key);
+    };
+    const forget = (x: number, y: number): void => {
+      const key = `${activeZoom}:${x}:${y}`;
+      this._needed.delete(key);
+      const tile = this.tiles.get(key);
+      if (tile) this.#releaseTile(key, tile);
+    };
+
+    if (!this._rect || this._rect.z !== nextRect.z) {
+      this._needed.clear();
+      forEachTileInRect(nextRect, consider);
+    } else {
+      forEachTileRectDelta(this._rect, nextRect, consider, forget);
     }
+    this._rect = nextRect;
+
+    forEachMissingNeeded(this._needed, (key) => this.tiles.has(key), (x, y, key) => {
+      candidates.push({ x, y, key, distance: tilePriority(x, y, centerX, centerY, vx, vy, size) });
+    });
 
     if (candidates.length > 1) candidates.sort((a, b) => a.distance - b.distance);
-    // Cap new DOM tile creates per frame so fast pan/zoom stress doesn't stall the main thread,
-    // then schedule another pass until the viewport is fully covered.
     const maxNew = 6;
-    for (let i = 0; i < candidates.length && i < maxNew; i++) {
+    const n = Math.min(candidates.length, maxNew);
+    for (let i = n - 1; i >= 0; i--) {
       const candidate = candidates[i];
-      this.#addTile(candidate.x, candidate.y, activeZoom, candidate.key);
+      this.#addTile(candidate.x, candidate.y, activeZoom, candidate.key, candidate.distance);
     }
-    if (candidates.length > maxNew) this.#scheduleFillFrame();
+    this._fillPending = candidates.length > maxNew;
+    if (this._fillPending) this.#scheduleFillFrame();
 
     if (originMoved) {
       for (const tile of this.tiles.values()) this.#placeTileOnLevel(tile);
     }
 
-    for (const [key, tile] of this.tiles) if (!needed.has(key)) this.#releaseTile(key, tile);
-    // Retained tiles from the previous zoom live on the root container (not the scaled level).
+    for (const [key, tile] of this.tiles) if (!this._needed.has(key)) this.#releaseTile(key, tile);
     for (const tile of this.previousTiles.values()) this.#positionRetainedTile(tile);
-    this._needed = needed;
     this.#pumpQueue();
     this.#checkLoadComplete();
     this.#retirePreviousWhenReady();
@@ -375,11 +409,15 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     this.tiles = new Map();
     this._tileZoom = sourceZoom;
     this._generation++;
+    // Invalidate level snap so the next render() must take the heavy path (never warp with NaN).
     this._levelOriginX = Number.NaN;
     this._levelOriginY = Number.NaN;
+    this._lastHeavyMs = 0;
     this._needed = new Set();
     this._loading = 0;
-    this._queue = [];
+    this._queue.length = 0;
+    this._rect = null;
+    this._fillPending = false;
     this._loadCycleActive = false;
   }
 
@@ -393,17 +431,32 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     this._tileZoom = null;
     this._needed.clear();
     this._loading = 0;
-    this._queue = [];
+    this._queue.length = 0;
+    this._rect = null;
+    this._fillPending = false;
     this._loadCycleActive = false;
   }
 
-  #addTile(x: number, y: number, z: number, key: string): void {
-    if (!this.container || !this.level) return;
+  #addTile(x: number, y: number, z: number, key: string, priority = 0): void {
+    if (!this.container || !this.level || this.tiles.has(key)) return;
     const element = this.#takeTile();
     const size = this.options.tileSize;
     const generation = this._generation;
     const url = this.getTileUrl(x, y, z);
-    const tile: TileRecord = { el: element, x, y, z, key, generation, url, loaded: false, settled: false, fallback: false, started: false };
+    const tile: TileRecord = {
+      el: element,
+      x,
+      y,
+      z,
+      key,
+      generation,
+      url,
+      loaded: false,
+      settled: false,
+      fallback: false,
+      started: false,
+      priority
+    };
 
     element.width = size;
     element.height = size;
@@ -459,7 +512,7 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   #pumpQueue(): void {
     const maxRequests = Math.max(1, this.options.maxRequests);
     while (this._loading < maxRequests && this._queue.length) {
-      const tile = this._queue.shift()!;
+      const tile = this._queue.pop()!;
       if (!this.#isCurrent(tile) || tile.started) continue;
       tile.started = true;
       this._loading++;
@@ -471,20 +524,25 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   /** Place tile in level-local pixel space; camera scale/translation is on `.oh-tile-level`. */
   #placeTileOnLevel(tile: TileRecord): void {
     const size = this.options.tileSize;
-    setTransform(tile.el, tile.x * size - this._levelOriginX, tile.y * size - this._levelOriginY, 1);
+    tile.el.style.transform = geoTransformCss(
+      tile.x * size - this._levelOriginX,
+      tile.y * size - this._levelOriginY
+    );
   }
 
   /** Retained tiles sit on the root container and need full world→screen transforms. */
   #positionRetainedTile(tile: TileRecord): void {
     if (!this.map) return;
     const size = this.options.tileSize;
-    const displayScale = 2 ** (this.map.zoom - tile.z);
-    setTransform(
-      tile.el,
-      tile.x * size * displayScale - this.map.pixelOrigin.x,
-      tile.y * size * displayScale - this.map.pixelOrigin.y,
-      displayScale
+    const placed = tileCornerLayerTransform(
+      tile.x,
+      tile.y,
+      size,
+      tile.z,
+      this.map.pixelOrigin,
+      this.map.zoom
     );
+    tile.el.style.transform = placed.css;
   }
 
   #isCurrent(tile: TileRecord): boolean {
@@ -574,10 +632,19 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
   }
 }
 
+export function nativeTileZoom(maxNativeZoom: unknown, maxZoom: number): number {
+  if (maxNativeZoom === "" || maxNativeZoom == null) return maxZoom;
+  const native = Number(maxNativeZoom);
+  return Number.isFinite(native) ? native : maxZoom;
+}
+
 export function tileLayer(template: TileTemplate, options?: TileLayerOptions): TileLayer {
   const requested = options?.renderer ?? "auto";
-  const preferWebgl = requested === "webgl" || requested === "auto";
-  if (preferWebgl && webglTileFactory && webglContextAvailable()) {
+  if (requested === "dom") return new TileLayer(template, options);
+  if ((requested === "webgpu" || requested === "auto") && gpuTileFactory && gpuContextAvailable()) {
+    return gpuTileFactory(template, options) as TileLayer;
+  }
+  if ((requested === "webgl" || requested === "auto") && webglTileFactory && webglContextAvailable()) {
     return webglTileFactory(template, options) as TileLayer;
   }
   return new TileLayer(template, options);
@@ -590,10 +657,20 @@ export function tileLayer(template: TileTemplate, options?: TileLayerOptions): T
 export type WebGLTileFactory = (template: TileTemplate, options?: TileLayerOptions) => Layer;
 
 let webglTileFactory: WebGLTileFactory | null = null;
+let gpuTileFactory: WebGLTileFactory | null = null;
 
 /** Advanced entry calls this so `renderer: "webgl" | "auto"` can use GPU tiles. */
 export function registerWebGLTileFactory(factory: WebGLTileFactory | null): void {
   webglTileFactory = factory;
+}
+
+/** Advanced entry and optional `orihon/webgpu` call this so `renderer: "webgpu" | "auto"` can use WebGPU tiles. */
+export function registerGpuTileFactory(factory: WebGLTileFactory | null): void {
+  gpuTileFactory = factory;
+}
+
+function gpuContextAvailable(): boolean {
+  return typeof navigator !== "undefined" && Boolean((navigator as Navigator & { gpu?: unknown }).gpu);
 }
 
 function webglContextAvailable(): boolean {

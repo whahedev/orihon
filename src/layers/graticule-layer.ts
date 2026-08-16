@@ -1,11 +1,15 @@
+import { EARTH_RADIUS } from "../geo.js";
 import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+const METERS_PER_MILE = 1609.344;
+
+export type GraticuleUnits = "degrees" | "map" | "kilometers" | "miles";
 
 export interface GraticuleLayerOptions extends LayerOptions {
   step?: number | "auto";
-  units?: "degrees" | "map";
+  units?: GraticuleUnits;
   stroke?: string;
   strokeWidth?: number;
   strokeOpacity?: number;
@@ -26,7 +30,7 @@ export class GraticuleLayer extends Layer<Required<GraticuleLayerOptions>> {
       stroke: "#64748b",
       strokeWidth: 1,
       strokeOpacity: 0.55,
-      maxLines: 80,
+      maxLines: 200,
       ...options
     } as Required<GraticuleLayerOptions>);
   }
@@ -62,7 +66,11 @@ export class GraticuleLayer extends Layer<Required<GraticuleLayerOptions>> {
 
   override render(): void {
     if (!this.map || !this.svg || !this.path) return;
-    const incompatible = this.map.crs.code === "Simple" && this.options.units !== "map";
+    const units = this.options.units;
+    const distanceUnits = units === "kilometers" || units === "miles";
+    const incompatible = this.map.crs.code === "Simple"
+      ? units !== "map"
+      : units === "map";
     this.svg.style.display = incompatible ? "none" : "";
     if (incompatible) return;
     const { width, height } = this.map.size;
@@ -73,26 +81,85 @@ export class GraticuleLayer extends Layer<Required<GraticuleLayerOptions>> {
     this.path.setAttribute("stroke-width", String(this.options.strokeWidth));
     this.path.setAttribute("stroke-opacity", String(this.options.strokeOpacity));
     const bounds = this.map.getBounds();
+    const midLat = (bounds.north + bounds.south) / 2;
     const xSpan = Math.abs(bounds.east - bounds.west);
     const ySpan = Math.abs(bounds.north - bounds.south);
-    const step = typeof this.options.step === "number"
-      ? Math.max(Number.EPSILON, Math.abs(this.options.step))
-      : niceStep(Math.max(xSpan, ySpan) / 7, this.options.units === "degrees" ? 90 : Infinity);
     const lines: string[] = [];
     const maxLines = Math.max(2, this.options.maxLines);
-    let count = 0;
-    for (let x = Math.ceil(bounds.west / step) * step; x <= bounds.east && count < maxLines; x += step, count++) {
-      const a = this.map.latLngToLayerPoint([bounds.south, x]);
-      const b = this.map.latLngToLayerPoint([bounds.north, x]);
-      lines.push(`M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}`);
+
+    if (distanceUnits) {
+      const toMeters = units === "miles" ? METERS_PER_MILE : 1000;
+      const xSpanMeters = xSpan * metersPerDegreeLng(midLat);
+      const ySpanMeters = ySpan * metersPerDegreeLat();
+      const stepMeters = typeof this.options.step === "number"
+        ? Math.max(Number.EPSILON, Math.abs(this.options.step) * toMeters)
+        : niceStep(Math.max(xSpanMeters, ySpanMeters) / 7, Infinity);
+      // Keep axes independent and coarsen if denser than maxLines so the grid still spans the view.
+      const lngStep = fitStep(xSpan, stepMeters / Math.max(metersPerDegreeLng(midLat), Number.EPSILON), maxLines);
+      const latStep = fitStep(ySpan, stepMeters / metersPerDegreeLat(), maxLines);
+      appendMeridians(this.map, lines, bounds, lngStep, maxLines);
+      appendParallels(this.map, lines, bounds, latStep, maxLines);
+    } else {
+      const step = typeof this.options.step === "number"
+        ? Math.max(Number.EPSILON, Math.abs(this.options.step))
+        : niceStep(Math.max(xSpan, ySpan) / 7, units === "degrees" ? 90 : Infinity);
+      const lngStep = fitStep(xSpan, step, maxLines);
+      const latStep = fitStep(ySpan, step, maxLines);
+      appendMeridians(this.map, lines, bounds, lngStep, maxLines);
+      appendParallels(this.map, lines, bounds, latStep, maxLines);
     }
-    for (let y = Math.ceil(bounds.south / step) * step; y <= bounds.north && count < maxLines; y += step, count++) {
-      const a = this.map.latLngToLayerPoint([y, bounds.west]);
-      const b = this.map.latLngToLayerPoint([y, bounds.east]);
-      lines.push(`M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}`);
-    }
+
     this.path.setAttribute("d", lines.join(""));
   }
+}
+
+function fitStep(span: number, step: number, maxLines: number): number {
+  const safeStep = Math.max(Number.EPSILON, Math.abs(step));
+  const needed = Math.floor(span / safeStep) + 2;
+  if (needed <= maxLines) return safeStep;
+  return Math.max(safeStep, span / Math.max(1, maxLines - 1));
+}
+
+function appendMeridians(
+  map: Orihon,
+  lines: string[],
+  bounds: { south: number; north: number; west: number; east: number },
+  step: number,
+  maxLines: number
+): void {
+  const start = Math.ceil(bounds.west / step) * step;
+  for (let i = 0; i < maxLines; i++) {
+    const x = start + i * step;
+    if (x > bounds.east) break;
+    const a = map.latLngToLayerPoint([bounds.south, x]);
+    const b = map.latLngToLayerPoint([bounds.north, x]);
+    lines.push(`M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}`);
+  }
+}
+
+function appendParallels(
+  map: Orihon,
+  lines: string[],
+  bounds: { south: number; north: number; west: number; east: number },
+  step: number,
+  maxLines: number
+): void {
+  const start = Math.ceil(bounds.south / step) * step;
+  for (let i = 0; i < maxLines; i++) {
+    const y = start + i * step;
+    if (y > bounds.north) break;
+    const a = map.latLngToLayerPoint([y, bounds.west]);
+    const b = map.latLngToLayerPoint([y, bounds.east]);
+    lines.push(`M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${b.x.toFixed(1)} ${b.y.toFixed(1)}`);
+  }
+}
+
+function metersPerDegreeLat(): number {
+  return (Math.PI / 180) * EARTH_RADIUS;
+}
+
+function metersPerDegreeLng(lat: number): number {
+  return metersPerDegreeLat() * Math.max(0.01, Math.cos((lat * Math.PI) / 180));
 }
 
 function niceStep(value: number, max: number): number {

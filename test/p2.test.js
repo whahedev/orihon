@@ -136,6 +136,36 @@ test("graticule skips Simple CRS unless map units are requested", () => {
   map.destroy();
 });
 
+test("graticule accepts kilometer and mile distance steps", () => {
+  const map = new Orihon(createContainer(), { controls: false, center: [55.75, 37.62], zoom: 10 });
+  const km = controls.graticuleLayer({ units: "kilometers", step: 10 }).addTo(map);
+  assert.equal(km.svg.style.display, "");
+  assert.ok(km.path.getAttribute("d").length > 0);
+  const mi = controls.graticuleLayer({ units: "miles", step: 5 }).addTo(map);
+  assert.equal(mi.svg.style.display, "");
+  assert.ok(mi.path.getAttribute("d").length > 0);
+  map.destroy();
+});
+
+test("fine kilometer graticule draws both axes across the view", () => {
+  const map = new Orihon(createContainer(), { controls: false, center: [55.75, 37.62], zoom: 12 });
+  const layer = controls.graticuleLayer({ units: "kilometers", step: 0.1, maxLines: 80 }).addTo(map);
+  const d = layer.path.getAttribute("d") || "";
+  const segments = d.match(/M[\d.\-]+ [\d.\-]+L[\d.\-]+ [\d.\-]+/g) || [];
+  assert.ok(segments.length > 80, `expected both axes, got ${segments.length} segments`);
+  const vertical = segments.filter((seg) => {
+    const m = seg.match(/M([\d.\-]+) ([\d.\-]+)L([\d.\-]+) ([\d.\-]+)/);
+    return m && Math.abs(Number(m[1]) - Number(m[3])) < 0.6;
+  });
+  const horizontal = segments.filter((seg) => {
+    const m = seg.match(/M([\d.\-]+) ([\d.\-]+)L([\d.\-]+) ([\d.\-]+)/);
+    return m && Math.abs(Number(m[2]) - Number(m[4])) < 0.6;
+  });
+  assert.ok(vertical.length > 10, `expected meridians, got ${vertical.length}`);
+  assert.ok(horizontal.length > 10, `expected parallels, got ${horizontal.length}`);
+  map.destroy();
+});
+
 test("miniMap owns and releases its secondary map", () => {
   const map = new Orihon(createContainer(), { controls: false, center: [52, 13], zoom: 8 });
   const layer = controls.graticuleLayer();

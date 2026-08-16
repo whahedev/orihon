@@ -1,0 +1,1441 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orihon — ObjectManager live</title>
+    <link rel="stylesheet" href="/dist/orihon.css" />
+    <style>
+      :root {
+        --ink: #e8eef4;
+        --muted: #93a4b5;
+        --panel: rgba(8, 16, 26, 0.92);
+        --line: rgba(232, 238, 244, 0.12);
+        --accent: #2dd4bf;
+        --warn: #fbbf24;
+        --bad: #fb7185;
+        --ok: #34d399;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; color: var(--ink); font: 14px/1.4 system-ui, sans-serif; background: #071018; }
+      #map { position: absolute; inset: 0; }
+      .hud {
+        position: absolute; z-index: 1000; top: 12px; left: 12px;
+        width: min(390px, calc(100vw - 24px)); max-height: calc(100vh - 24px);
+        overflow: auto; padding: 14px 14px 16px;
+        border: 1px solid var(--line); border-radius: 14px;
+        background: var(--panel); backdrop-filter: blur(12px);
+      }
+      h1 { margin: 0; font-size: 1.18rem; letter-spacing: -0.03em; }
+      .muted { color: var(--muted); margin: 6px 0 10px; font-size: 12px; }
+      .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+      button, select, input[type="search"], input[type="range"] {
+        appearance: none; border: 1px solid var(--line); background: #122033; color: var(--ink);
+        border-radius: 8px; padding: 7px 10px; font: inherit; cursor: pointer;
+      }
+      input[type="search"] { flex: 1; min-width: 0; cursor: text; }
+      input[type="range"] { width: 100%; padding: 0; }
+      button:hover { border-color: var(--accent); }
+      button.active { background: color-mix(in srgb, var(--accent) 22%, #122033); border-color: var(--accent); }
+      label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+      .kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 8px 0 4px; }
+      .kpi { padding: 8px; border-radius: 8px; background: rgba(255,255,255,0.04); }
+      .kpi b {
+        display: block;
+        font-size: 1.05rem;
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: "tnum";
+        min-height: 1.35em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .kpi span { color: var(--muted); font-size: 11px; }
+      .legend { display: grid; gap: 3px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+      .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+      .stats {
+        margin-top: 10px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.04);
+        font-family: ui-monospace, Consolas, monospace; font-size: 11px; white-space: pre-wrap;
+      }
+      .search-results { max-height: 110px; overflow: auto; }
+      .search-results button { display: block; width: 100%; text-align: left; margin-bottom: 4px; }
+      .pop { min-width: 180px; }
+      .pop h3 { margin: 0 0 4px; font-size: 13px; }
+      .pop p { margin: 0; color: #94a3b8; font-size: 12px; }
+      .pop .tag { display: inline-block; margin-top: 6px; padding: 2px 7px; border-radius: 999px; font-size: 11px; }
+      .tag-ok { background: rgba(52, 211, 153, 0.18); color: var(--ok); }
+      .tag-warn { background: rgba(251, 191, 36, 0.18); color: var(--warn); }
+      .tag-bad { background: rgba(251, 113, 133, 0.2); color: var(--bad); }
+      .tag-air { background: rgba(45, 212, 191, 0.18); color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <aside class="hud">
+      <h1>ObjectManager live</h1>
+      <p class="muted">
+        Два менеджера на одной карте: массовые IoT-точки (WebGL) и живая операционка
+        (самолёты, зоны, коридоры, попапы, поиск, время).
+      </p>
+      <div class="kpis">
+        <div class="kpi"><b id="kpi-iot">—</b><span>IoT датчиков</span></div>
+        <div class="kpi"><b id="kpi-alarm">—</b><span>алармов T&gt;30</span></div>
+        <div class="kpi"><b id="kpi-air">—</b><span>бортов в воздухе</span></div>
+        <div class="kpi"><b id="kpi-patch">—</b><span>тик температуры</span></div>
+        <div class="kpi"><b id="kpi-fps">—</b><span>FPS (rAF)</span></div>
+        <div class="kpi"><b id="kpi-mem">—</b><span>JS heap</span></div>
+      </div>
+
+      <label>Объём IoT</label>
+      <div class="row" id="count-row">
+        <button type="button" data-count="15000">15k</button>
+        <button type="button" data-count="40000" class="active">40k</button>
+        <button type="button" data-count="80000">80k</button>
+        <button type="button" data-count="250000">250k</button>
+        <button type="button" data-count="1000000">1M</button>
+      </div>
+      <p class="muted" style="margin-top:0">
+        Точка = температура (°C). Аларм при T&nbsp;&gt;&nbsp;30. Heatmap строится по температуре.
+        Долю точек с T&nbsp;&gt;&nbsp;30 (30–45°C) задаёт слайдер ниже; остальные 5–30°C.
+        Температура обновляется порциями. <strong>Пауза температуры</strong> — заморозить значения для проверки зума.
+      </p>
+
+      <label>Динамика</label>
+      <div class="row">
+        <button type="button" id="temp-pause">Пауза температуры</button>
+        <button type="button" id="points" class="active">Точки</button>
+        <button type="button" id="alarms-only">Только алармы</button>
+        <button type="button" id="clusters">Кластеры</button>
+        <button type="button" id="heatmap">Heatmap</button>
+        <button type="button" id="isolines">Isolines</button>
+      </div>
+      <label>Доля точек с T&nbsp;&gt;&nbsp;30 · <span id="hot-share-label">10%</span></label>
+      <input id="hot-share" type="range" min="0" max="50" step="1" value="10" />
+      <div class="row">
+        <button type="button" id="follow">Следить за бортом</button>
+        <button type="button" id="popup-tour" class="active">Popup tour</button>
+        <button type="button" id="next-alarm">Попап аларма</button>
+      </div>
+
+      <label>Поиск (датчик / рейс / город)</label>
+      <div class="row">
+        <input id="q" type="search" placeholder="OH-204 / Berlin / temp-BER" />
+        <button type="button" id="search-btn">Find</button>
+      </div>
+      <div class="search-results" id="search-results"></div>
+
+      <label>Время · last-seen окно</label>
+      <input id="time" type="range" min="20" max="100" step="1" value="100" />
+
+      <div class="legend">
+        <div><span class="swatch" style="background:#14b8a6"></span>IoT ≤30°C · <span class="swatch" style="background:#dc2626"></span>аларм T&gt;30</div>
+        <div><span class="swatch" style="background:#22c55e"></span>heatmap T≤30 · <span class="swatch" style="background:#eab308"></span><span class="swatch" style="background:#dc2626"></span>T&gt;30</div>
+        <div><span class="swatch" style="background:#84cc16"></span>isolines по полю T (зелёный→красный)</div>
+        <div><span class="swatch" style="background:#e2e8f0"></span>самолёты + следы · клик — попап</div>
+        <div><span class="swatch" style="background:#22c55e"></span>коридоры · <span class="swatch" style="background:#0f766e"></span>зоны хабов</div>
+      </div>
+      <div class="stats" id="stats">loading…</div>
+    </aside>
+
+    <script type="module">
+      const {
+        createMap,
+        tileLayer,
+        objectManager,
+        geodesicInterpolate,
+        heatIsolineLayer
+      } = await import("/dist/index.js").catch(() => import("/dist/orihon.esm.js"));
+
+      const HUBS = [
+        { id: "SVO", name: "Moscow", lat: 55.973, lng: 37.415 },
+        { id: "LED", name: "Petersburg", lat: 59.8, lng: 30.263 },
+        { id: "BER", name: "Berlin", lat: 52.366, lng: 13.503 },
+        { id: "CDG", name: "Paris", lat: 49.01, lng: 2.55 },
+        { id: "LHR", name: "London", lat: 51.47, lng: -0.454 },
+        { id: "AMS", name: "Amsterdam", lat: 52.31, lng: 4.768 },
+        { id: "FCO", name: "Rome", lat: 41.8, lng: 12.25 },
+        { id: "IST", name: "Istanbul", lat: 40.977, lng: 28.815 },
+        { id: "WAW", name: "Warsaw", lat: 52.166, lng: 20.967 },
+        { id: "HEL", name: "Helsinki", lat: 60.317, lng: 24.963 },
+        { id: "MAD", name: "Madrid", lat: 40.472, lng: -3.561 },
+        { id: "CPH", name: "Copenhagen", lat: 55.618, lng: 12.656 },
+        { id: "FRA", name: "Frankfurt", lat: 50.038, lng: 8.562 },
+        { id: "MUC", name: "Munich", lat: 48.354, lng: 11.786 },
+        { id: "ZRH", name: "Zurich", lat: 47.465, lng: 8.549 },
+        { id: "VIE", name: "Vienna", lat: 48.11, lng: 16.57 },
+        { id: "PRG", name: "Prague", lat: 50.101, lng: 14.26 },
+        { id: "BUD", name: "Budapest", lat: 47.43, lng: 19.261 },
+        { id: "BRU", name: "Brussels", lat: 50.901, lng: 4.484 },
+        { id: "DUB", name: "Dublin", lat: 53.426, lng: -6.25 },
+        { id: "OSL", name: "Oslo", lat: 60.194, lng: 11.1 },
+        { id: "ARN", name: "Stockholm", lat: 59.652, lng: 17.919 },
+        { id: "ATH", name: "Athens", lat: 37.936, lng: 23.944 },
+        { id: "LIS", name: "Lisbon", lat: 38.774, lng: -9.134 }
+      ];
+      const HUB_BY_ID = new Map(HUBS.map((h) => [h.id, h]));
+
+      const NAMED_FLIGHTS = [
+        { id: "OH-204", from: "CDG", to: "SVO", speed: 0.00022 },
+        { id: "OH-118", from: "LHR", to: "IST", speed: 0.00018 },
+        { id: "OH-331", from: "BER", to: "HEL", speed: 0.00026 },
+        { id: "OH-090", from: "AMS", to: "LED", speed: 0.0002 },
+        { id: "OH-512", from: "FCO", to: "WAW", speed: 0.00024 },
+        { id: "OH-777", from: "MAD", to: "CPH", speed: 0.00017 },
+        { id: "OH-441", from: "IST", to: "BER", speed: 0.00021 }
+      ];
+      const FLIGHT_COUNT = 200;
+
+      function buildFlights(count) {
+        const flights = [];
+        const used = new Set();
+        for (const named of NAMED_FLIGHTS) {
+          used.add(`${named.from}-${named.to}`);
+          flights.push({ ...named, featured: true });
+        }
+        const n = HUBS.length;
+        for (let offset = 1; offset < n && flights.length < count; offset++) {
+          for (let i = 0; i < n && flights.length < count; i++) {
+            const from = HUBS[i].id;
+            const to = HUBS[(i + offset) % n].id;
+            if (from === to) continue;
+            const key = `${from}-${to}`;
+            if (used.has(key)) continue;
+            used.add(key);
+            flights.push({
+              id: `OH-${1000 + flights.length}`,
+              from,
+              to,
+              speed: 0.00014 + (flights.length % 13) * 0.000012,
+              featured: false
+            });
+          }
+        }
+        return flights.slice(0, count);
+      }
+      const FLIGHTS = buildFlights(FLIGHT_COUNT);
+
+      const TEMP_MIN = 5;
+      const TEMP_ALARM = 30;
+      const TEMP_MAX = 45;
+      let tempHotShare = 0.1;
+      const now0 = Date.now();
+
+      const map = createMap("map", {
+        center: [50.1, 14.4],
+        zoom: 5,
+        zoomControl: true
+      });
+      tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap"
+      }).addTo(map);
+
+      function iconCanvas(draw) {
+        const c = document.createElement("canvas");
+        c.width = 64;
+        c.height = 64;
+        const ctx = c.getContext("2d");
+        ctx.clearRect(0, 0, 64, 64);
+        draw(ctx);
+        return c;
+      }
+
+      const planeCanvas = iconCanvas((ctx) => {
+        ctx.translate(32, 32);
+        ctx.fillStyle = "#f8fafc";
+        ctx.beginPath();
+        ctx.moveTo(0, -26);
+        ctx.lineTo(6, 6);
+        ctx.lineTo(0, 20);
+        ctx.lineTo(-6, 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-28, -2);
+        ctx.lineTo(28, -2);
+        ctx.lineTo(10, 6);
+        ctx.lineTo(-10, 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#0f766e";
+        ctx.beginPath();
+        ctx.arc(0, -8, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      const hubCanvas = iconCanvas((ctx) => {
+        ctx.fillStyle = "#0f766e";
+        ctx.beginPath();
+        ctx.moveTo(32, 8);
+        ctx.lineTo(54, 52);
+        ctx.lineTo(10, 52);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 18px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("H", 32, 38);
+      });
+
+      function hubById(id) {
+        return HUB_BY_ID.get(id);
+      }
+
+      const pathCache = new Map();
+      function pathFor(fromId, toId) {
+        const key = `${fromId}-${toId}`;
+        const cached = pathCache.get(key);
+        if (cached) return cached;
+        const a = hubById(fromId);
+        const b = hubById(toId);
+        const pts = geodesicInterpolate([a.lat, a.lng], [b.lat, b.lng], 80_000);
+        const path = pts.map((p) => [p.lat, p.lng]);
+        pathCache.set(key, path);
+        return path;
+      }
+
+      function bearing(a, b) {
+        const φ1 = (a[0] * Math.PI) / 180;
+        const φ2 = (b[0] * Math.PI) / 180;
+        const Δλ = ((b[1] - a[1]) * Math.PI) / 180;
+        const y = Math.sin(Δλ) * Math.cos(φ2);
+        const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+        return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+      }
+
+      function along(path, t) {
+        const x = ((t % 1) + 1) % 1;
+        const f = x * (path.length - 1);
+        const i = Math.min(path.length - 2, Math.floor(f));
+        const u = f - i;
+        const a = path[i];
+        const b = path[i + 1];
+        return {
+          lat: a[0] + (b[0] - a[0]) * u,
+          lng: a[1] + (b[1] - a[1]) * u,
+          heading: bearing(a, b)
+        };
+      }
+
+      function el(tag, attrs = {}, children = []) {
+        const node = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          if (k === "class") node.className = v;
+          else if (k === "text") node.textContent = v;
+          else node.setAttribute(k, v);
+        }
+        for (const child of children) node.append(child);
+        return node;
+      }
+
+      function statusTag(state, object, id) {
+        if (object.properties?.type === "plane") {
+          return el("span", { class: "tag tag-air", text: String(object.properties.callsign) });
+        }
+        const temp = sensorTempOf(object, id);
+        const alarm = Number.isFinite(temp) ? temp > TEMP_ALARM : Boolean(state.alarm);
+        if (alarm) return el("span", { class: "tag tag-bad", text: "ALARM" });
+        return el("span", { class: "tag tag-ok", text: "ok" });
+      }
+
+      function popupFor(object, id, context) {
+        const p = object.properties || {};
+        const state = context.manager.getObjectState(id);
+        if (p.type === "plane") {
+          return el("div", { class: "pop" }, [
+            el("h3", { text: `${p.callsign} · ${p.from} → ${p.to}` }),
+            el("p", { text: `heading ${Math.round(p.heading || 0)}° · ${p.fromName} — ${p.toName}` }),
+            statusTag(state, object, id)
+          ]);
+        }
+        if (p.type === "hub") {
+          return el("div", { class: "pop" }, [
+            el("h3", { text: `${p.code} · ${p.name}` }),
+            el("p", { text: "хаб · зона + коридоры привязаны к ObjectManager" })
+          ]);
+        }
+        if (p.type === "zone" || p.type === "airway") {
+          return el("div", { class: "pop" }, [
+            el("h3", { text: String(p.name || id) }),
+            el("p", { text: p.type === "zone" ? "полигон хаба" : "геодезический коридор" })
+          ]);
+        }
+        const city = p.city || p.hub || "";
+        const temp = sensorTempOf(object, id);
+        const tempLabel = Number.isFinite(temp) ? `${temp.toFixed(1)} °C` : "— °C";
+        const seen = p.timestamp
+          ? `last-seen ${Math.round((Date.now() - p.timestamp) / 60000)} мин`
+          : "mass (без time-index)";
+        return el("div", { class: "pop" }, [
+          el("h3", { text: String(p.name || `temp-${id}`) }),
+          el("p", { text: `температура ${tempLabel}` }),
+          el("p", { text: `${city} · ${seen}` }),
+          statusTag(state, object, id)
+        ]);
+      }
+
+      function sensorStyle(object, state, context) {
+        const temp = sensorTempOf(object, context?.id);
+        // Color from live °C only — ignore stale ObjectState.alarm from older ticks.
+        const alarm = Number.isFinite(temp) && temp > TEMP_ALARM;
+        const selected = context.selected;
+        return {
+          color: selected ? "#7c3aed" : alarm ? "#dc2626" : "#14b8a6",
+          size: selected || alarm ? 8 : count >= MASS ? 3 : 4.5,
+          opacity: 0.88
+        };
+      }
+
+      function opsStyle(object, state, context) {
+        const type = object.properties?.type;
+        const selected = context.selected || state.selected;
+        if (type === "airway") {
+          if (object.properties?.featured) {
+            return {
+              line: {
+                width: selected ? 5 : 3,
+                opacity: 0.85,
+                gradient: [
+                  { offset: 0, color: "#22c55e" },
+                  { offset: 0.55, color: "#eab308" },
+                  { offset: 1, color: "#38bdf8" }
+                ]
+              }
+            };
+          }
+          return {
+            line: {
+              width: selected ? 3 : 1.35,
+              opacity: selected ? 0.85 : 0.38,
+              color: "#38bdf8"
+            }
+          };
+        }
+        if (type === "zone") {
+          return {
+            polygon: {
+              fill: selected ? "#7c3aed" : "#0f766e",
+              fillOpacity: 0.18,
+              stroke: selected ? "#c4b5fd" : "#14b8a6",
+              strokeWidth: 1.5,
+              strokeOpacity: 0.9
+            },
+            label: context.zoom >= 6 ? {
+              text: String(object.properties?.name ?? ""),
+              fontSize: 11,
+              color: "#e2e8f0",
+              haloColor: "#071018",
+              haloWidth: 2,
+              priority: 40
+            } : null
+          };
+        }
+        if (type === "hub") {
+          return {
+            icon: "hub",
+            size: selected ? 22 : 16,
+            label: {
+              text: String(object.properties?.code ?? ""),
+              fontSize: 11,
+              color: "#ccfbf1",
+              haloColor: "#071018",
+              haloWidth: 2,
+              offset: [0, -16],
+              priority: 80
+            }
+          };
+        }
+        return {
+          icon: "plane",
+          size: selected ? 28 : 20,
+          rotation: Number(object.properties?.heading) || 0,
+          iconTint: selected ? "#c4b5fd" : "#f8fafc",
+          collisionMode: selected ? "always" : "auto",
+          label: {
+            text: String(object.properties?.callsign ?? ""),
+            fontSize: selected ? 12 : 11,
+            color: "#f8fafc",
+            haloColor: "#071018",
+            haloWidth: 2,
+            offset: [0, -16],
+            priority: selected ? 1000 : 60
+          },
+          trail: {
+            enabled: true,
+            color: selected ? "#a78bfa" : "#67e8f9",
+            width: selected ? 2 : 1.25,
+            opacity: selected ? 0.7 : 0.4,
+            maxPoints: 16,
+            maxAge: 45_000
+          }
+        };
+      }
+
+      const MASS = 250_000;
+      const TEMP_ISOLINE_GRADIENT = {
+        0: "#22c55e",
+        0.35: "#84cc16",
+        0.5: "#eab308",
+        0.72: "#f97316",
+        1: "#dc2626"
+      };
+
+      /** Live °C readings keyed by numeric sensor id (heatmap + popup + style). */
+      let sensorTemps = new Float32Array(0);
+
+      function clamp01(value) {
+        return value < 0 ? 0 : value > 1 ? 1 : value;
+      }
+
+      function rollTemperature() {
+        if (Math.random() < tempHotShare) {
+          return TEMP_ALARM + 0.1 + Math.random() * (TEMP_MAX - TEMP_ALARM - 0.1);
+        }
+        return 5 + Math.random() * (TEMP_ALARM - 5);
+      }
+
+      /** Fast deterministic °C for mass ingest (no Math.random per point). */
+      function tempFromSeed(i) {
+        const h = (Math.imul(i ^ 0x9e3779b9, 0x85ebca6b) >>> 0);
+        const hotBucket = Math.max(0, Math.min(1000, Math.round(tempHotShare * 1000)));
+        if (h % 1000 < hotBucket) {
+          return TEMP_ALARM + 0.1 + ((h >>> 10) % 1490) / 100;
+        }
+        return 5 + ((h >>> 10) % 2500) / 100;
+      }
+
+      function sensorTempOf(object, id) {
+        const idx = id == null || id === "" ? Number.NaN : Number(id);
+        if (Number.isFinite(idx) && idx >= 0 && idx < sensorTemps.length) {
+          return sensorTemps[idx];
+        }
+        const raw = Number(object?.properties?.temp);
+        return Number.isFinite(raw) ? raw : Number.NaN;
+      }
+
+      /** Map °C → heat weight: 5→green, 30→yellow threshold, 45→red. */
+      function tempToHeatWeight(temp) {
+        if (!Number.isFinite(temp)) return 0;
+        if (temp <= TEMP_ALARM) {
+          return 0.08 + clamp01((temp - TEMP_MIN) / (TEMP_ALARM - TEMP_MIN)) * 0.42;
+        }
+        return 0.5 + clamp01((temp - TEMP_ALARM) / (TEMP_MAX - TEMP_ALARM)) * 0.5;
+      }
+
+      /** Packed WebGL buffers: latlng f32 + merc64 + draw merc f32 + rgba f32 + size f32. */
+      const GPU_BYTES_PER_POINT = 8 + 16 + 8 + 16 + 4;
+
+      function sensorOptions(mass) {
+        return {
+          clusterize: false,
+          clusterRenderer: "webgl",
+          webglThreshold: 1,
+          sceneFeatures: false,
+          styleByCategory: false,
+          visualization: "objects",
+          layoutWorker: "auto",
+          search: mass ? null : { fields: ["properties.name", "properties.city", "properties.kind"] },
+          time: mass ? null : { value: (object) => Number(object.properties?.timestamp) || 0 },
+          heatmapWeight: (object, id) => tempToHeatWeight(sensorTempOf(object, id)),
+          clusterProperties: mass ? {} : {
+            alarms: {
+              operation: "count",
+              filter: (object) => Number(object.properties?.temp) > TEMP_ALARM
+            }
+          },
+          style: sensorStyle
+        };
+      }
+
+      function wireSensors(mgr) {
+        mgr.bindPopup(popupFor, { maxWidth: 260, autoPan: true, autoPanPadding: [220, 28] });
+        mgr.bindClusterPopup((objects, ids) => {
+          const alarms = ids.reduce((n, id) => n + (mgr.getObjectState(id).alarm ? 1 : 0), 0);
+          return el("div", { class: "pop" }, [
+            el("h3", { text: `Кластер · ${ids.length}` }),
+            el("p", { text: `алармов в выборке: ${alarms}` })
+          ]);
+        });
+        mgr.on("click", (event) => {
+          if (event.objectId != null) userTouched = true;
+        });
+      }
+
+      let sensors = objectManager(sensorOptions(false)).addTo(map);
+      let sensorsMass = false;
+      wireSensors(sensors);
+
+      const ops = objectManager({
+        clusterize: false,
+        clusterRenderer: "auto",
+        webglThreshold: 100_000,
+        sceneFeatures: true,
+        declutter: true,
+        visualization: "objects",
+        search: { fields: ["properties.callsign", "properties.name", "properties.code"] },
+        style: opsStyle
+      }).addTo(map);
+
+      ops.registerIcon("plane", planeCanvas, { pixelRatio: 2, anchor: [0.5, 0.55] });
+      ops.registerIcon("hub", hubCanvas, { pixelRatio: 2, anchor: [0.5, 0.85] });
+
+      ops.bindPopup(popupFor, { maxWidth: 280, autoPan: true });
+      ops.on("click", (event) => {
+        if (event.objectId != null) {
+          userTouched = true;
+          followId = event.objectId;
+        }
+      });
+
+      const statsEl = document.getElementById("stats");
+      const resultsEl = document.getElementById("search-results");
+      let count = 40_000;
+      let pulseOn = true;
+      let tourOn = true;
+      let followOn = false;
+      let alarmsOnly = false;
+      let pointsOn = true;
+      let heatmapOn = false;
+      let isolinesOn = false;
+      let isolineLayer = null;
+      let lastIsolineSyncMs = 0;
+      let followId = "OH-204";
+      let userTouched = false;
+      let pulseTimer = 0;
+      let flyTimer = 0;
+      let tourTimer = 0;
+      let tourStep = 0;
+      let alarmCursor = 0;
+      let lastAlarmId = null;
+      let alarmIds = new Set();
+      let tempCursor = 0;
+      let lastHeatSyncMs = 0;
+      let lastPatchMs = 0;
+      let lastPatchBatch = 0;
+      let lastIngestMs = 0;
+      let loading = false;
+      let liveError = "";
+      let fpsValue = 0;
+      let fpsFrames = 0;
+      let fpsStamp = performance.now();
+      let lastFlightNow = performance.now();
+      let flightState = FLIGHTS.map((f, i) => {
+        const path = pathFor(f.from, f.to);
+        const t = i * 0.13;
+        const pos = along(path, t);
+        return { ...f, t, path, fromPos: pos, toPos: pos, animStart: 0, animDuration: 1 };
+      });
+
+      function zoneAround(hub, d = 0.35) {
+        const lat = hub.lat;
+        const lng = hub.lng;
+        return [
+          [lng - d, lat - d * 0.6],
+          [lng + d, lat - d * 0.6],
+          [lng + d, lat + d * 0.6],
+          [lng - d, lat + d * 0.6],
+          [lng - d, lat - d * 0.6]
+        ];
+      }
+
+      function buildOpsObjects() {
+        const hubs = HUBS.map((h) => ({
+          id: `hub-${h.id}`,
+          geometry: { type: "Point", coordinates: [h.lng, h.lat] },
+          properties: { type: "hub", code: h.id, name: h.name }
+        }));
+        const zones = HUBS.slice(0, 4).map((h) => ({
+          id: `zone-${h.id}`,
+          geometry: { type: "Polygon", coordinates: [zoneAround(h)] },
+          properties: { type: "zone", name: `TMA ${h.id}` }
+        }));
+        const airways = FLIGHTS.map((f) => {
+          const path = pathFor(f.from, f.to);
+          return {
+            id: `airway-${f.from}-${f.to}`,
+            geometry: {
+              type: "LineString",
+              coordinates: path.map(([lat, lng]) => [lng, lat])
+            },
+            properties: {
+              type: "airway",
+              name: `${f.from}–${f.to}`,
+              callsign: f.id,
+              featured: Boolean(f.featured)
+            }
+          };
+        });
+        const planes = flightState.map((f) => {
+          const pos = along(f.path, f.t);
+          const from = hubById(f.from);
+          const to = hubById(f.to);
+          return {
+            id: f.id,
+            coordinates: [pos.lat, pos.lng],
+            properties: {
+              type: "plane",
+              callsign: f.id,
+              from: f.from,
+              to: f.to,
+              fromName: from.name,
+              toName: to.name,
+              heading: pos.heading
+            }
+          };
+        });
+        return [...zones, ...airways, ...hubs, ...planes];
+      }
+
+      function makeSensorObject(i, slim) {
+        const hub = HUBS[i % HUBS.length];
+        const u = ((i * 2654435761) >>> 0) / 4294967296;
+        const v = ((i * 1597334677) >>> 0) / 4294967296;
+        const lat = hub.lat + (u - 0.5) * 3.2;
+        const lng = hub.lng + (v - 0.5) * 4.8;
+        if (slim) {
+          return {
+            id: i,
+            coordinates: [lat, lng],
+            properties: { type: "iot", kind: "temp", hub: hub.id, seed: i }
+          };
+        }
+        const temp = Math.round(tempFromSeed(i) * 10) / 10;
+        return {
+          id: i,
+          coordinates: [lat, lng],
+          properties: {
+            type: "iot",
+            kind: "temp",
+            city: hub.name,
+            name: `temp-${hub.id}-${i}`,
+            seed: i,
+            temp,
+            timestamp: now0 - (i % 90) * 60_000
+          }
+        };
+      }
+
+      function ensureSensors(mass) {
+        if (sensorsMass === mass && sensors) return;
+        sensors.destroy();
+        sensors = objectManager(sensorOptions(mass)).addTo(map);
+        wireSensors(sensors);
+        sensorsMass = mass;
+        document.getElementById("clusters").classList.remove("active");
+        document.getElementById("heatmap").classList.remove("active");
+        document.getElementById("isolines").classList.remove("active");
+        document.getElementById("alarms-only").classList.remove("active");
+        document.getElementById("points").classList.add("active");
+        alarmsOnly = false;
+        pointsOn = true;
+        setHeatmapVisible(false);
+        setIsolinesVisible(false);
+        document.getElementById("time").disabled = mass;
+      }
+
+      function formatMb(bytes) {
+        const mb = bytes / 1048576;
+        if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+        if (mb >= 10) return `${Math.round(mb)} MB`;
+        return `${mb.toFixed(1)} MB`;
+      }
+
+      function heapInfo() {
+        const mem = performance.memory;
+        if (!mem) return null;
+        return {
+          used: mem.usedJSHeapSize,
+          total: mem.totalJSHeapSize,
+          limit: mem.jsHeapSizeLimit
+        };
+      }
+
+      function ingestOps() {
+        if (ops.items.size) return;
+        try {
+          const objects = buildOpsObjects();
+          ops.beginBulk();
+          try {
+            ops.add(objects);
+          } finally {
+            ops.endBulk({ render: false });
+          }
+          ops.render();
+        } catch (err) {
+          liveError = `ops.add failed: ${err?.message || err}`;
+          console.error(err);
+        }
+      }
+
+      async function loadSensors(n) {
+        if (loading) return;
+        loading = true;
+        count = n;
+        const mass = n >= MASS;
+        for (const btn of document.querySelectorAll("#count-row button")) {
+          btn.classList.toggle("active", Number(btn.dataset.count) === n);
+          btn.disabled = true;
+        }
+        try {
+          ensureSensors(mass);
+          if (mass) {
+            tourOn = false;
+            document.getElementById("popup-tour").classList.remove("active");
+          }
+          sensors.clear();
+          alarmIds = new Set();
+          lastAlarmId = null;
+          alarmCursor = 0;
+          tempCursor = 0;
+          lastHeatSyncMs = 0;
+          lastIsolineSyncMs = 0;
+          sensorTemps = new Float32Array(n);
+          // Smaller chunks + yield keep the UI responsive at 250k–1M.
+          const chunk = n >= MASS ? 12_500 : n >= 80_000 ? 15_000 : 10_000;
+          const t0 = performance.now();
+          sensors.beginBulk();
+          try {
+            for (let i = 0; i < n; i += chunk) {
+              const end = Math.min(n, i + chunk);
+              const slice = new Array(end - i);
+              for (let j = 0; j < slice.length; j++) {
+                const id = i + j;
+                const temp = tempFromSeed(id);
+                sensorTemps[id] = temp;
+                slice[j] = makeSensorObject(id, mass);
+                if (!mass) slice[j].properties.temp = Math.round(temp * 10) / 10;
+              }
+              sensors.add(slice);
+              document.getElementById("kpi-iot").textContent = end.toLocaleString("en-US");
+              statsEl.textContent = `ingest ${end.toLocaleString("en-US")} / ${n.toLocaleString("en-US")}…`;
+              await new Promise((r) => requestAnimationFrame(r));
+            }
+          } finally {
+            sensors.endBulk({ render: false });
+          }
+          await sensors.prepareLayout(map.zoom);
+          lastIngestMs = performance.now() - t0;
+          // Do NOT setObjectStates for ~10% of 250k — that freezes the tab.
+          // Colors/heatmap read sensorTemps; alarmIds is enough for KPI/filters.
+          syncAlarmIdsFromTemps();
+          applySensorPointVisibility();
+          if (isolinesOn) syncIsolines(true);
+          refresh();
+          startLoops();
+        } catch (err) {
+          liveError = `ingest failed: ${err?.message || err}`;
+          statsEl.textContent = liveError;
+        } finally {
+          loading = false;
+          for (const btn of document.querySelectorAll("#count-row button")) btn.disabled = false;
+        }
+      }
+
+      /** Rebuild alarm id set from sensorTemps without touching ObjectState (O(n), no GPU). */
+      function syncAlarmIdsFromTemps() {
+        const next = new Set();
+        const n = sensorTemps.length;
+        for (let id = 0; id < n; id++) {
+          if (sensorTemps[id] > TEMP_ALARM) next.add(id);
+        }
+        alarmIds = next;
+        applySensorPointVisibility();
+      }
+
+      /**
+       * Show/hide IoT markers without dropping heatmap/isolines data.
+       * Empty visible set keeps `_gpuSubset` so heatmap re-render does not restore points.
+       */
+      function applySensorPointVisibility() {
+        if (!pointsOn) {
+          if (sensors.options.clusterize) sensors.setFilter(() => false);
+          else sensors.setVisibleIds([]);
+          return;
+        }
+        if (sensors.filter) sensors.setFilter(null);
+        if (alarmsOnly && alarmIds.size) sensors.setVisibleIds(alarmIds);
+        else sensors.setVisibleIds(null);
+      }
+
+      /**
+       * Apply current tempHotShare to every sensor now (slider must change red point count
+       * immediately, not only after a full slow tick cycle).
+       */
+      function rebalanceTemperatures() {
+        const n = sensors.items.size;
+        if (loading || n < 10) return;
+        const t0 = performance.now();
+        if (sensorTemps.length !== n) sensorTemps = new Float32Array(n);
+        const hotCount = Math.max(0, Math.min(n, Math.round(n * tempHotShare)));
+        // Exact share: pick hotCount distinct ids, then assign °C.
+        const pick = new Int32Array(n);
+        for (let i = 0; i < n; i++) pick[i] = i;
+        for (let i = 0; i < hotCount; i++) {
+          const j = i + Math.floor(Math.random() * (n - i));
+          const swap = pick[i];
+          pick[i] = pick[j];
+          pick[j] = swap;
+        }
+        const hot = new Uint8Array(n);
+        for (let i = 0; i < hotCount; i++) hot[pick[i]] = 1;
+        const writeProps = n < MASS;
+        for (let id = 0; id < n; id++) {
+          const temp = hot[id]
+            ? TEMP_ALARM + 0.1 + Math.random() * (TEMP_MAX - TEMP_ALARM - 0.1)
+            : 5 + Math.random() * (TEMP_ALARM - 5);
+          const rounded = Math.round(temp * 10) / 10;
+          sensorTemps[id] = rounded;
+          if (writeProps) {
+            const obj = sensors.items.get(id);
+            if (obj?.properties) obj.properties.temp = rounded;
+          }
+        }
+        syncAlarmIdsFromTemps();
+        // Drop stale ObjectState.alarm so old red dots cannot outlive the new share.
+        try {
+          sensors.clearObjectStates();
+          // Mass heatmap hides points — skip full style rebuild (O(n) GPU colors).
+          if (!(heatmapOn && n >= 80_000)) {
+            sensors.setStyle((object, state, context) => sensorStyle(object, state, context));
+          }
+        } catch (err) {
+          liveError = `temp rebalance failed: ${err?.message || err}`;
+        }
+        if (heatmapOn) sensors.render();
+        syncIsolines(true);
+        lastPatchMs = performance.now() - t0;
+        lastPatchBatch = alarmIds.size;
+        const openId = sensors.getSelectedId();
+        if (sensors.hasOpenPopup() && openId != null && sensors.items.has(openId)) {
+          sensors.openPopup(openId);
+        }
+        refresh();
+      }
+
+      let hotShareTimer = 0;
+
+      /** Keep alarmIds + GPU colors in sync when a batch crosses T>30. */
+      function applyAlarmDelta(changedIds) {
+        const updates = [];
+        for (const id of changedIds) {
+          const hot = sensorTemps[id] > TEMP_ALARM;
+          const was = alarmIds.has(id);
+          if (hot === was) continue;
+          if (hot) alarmIds.add(id);
+          else alarmIds.delete(id);
+          updates.push({ id, state: { alarm: hot } });
+        }
+        applySensorPointVisibility();
+        if (!updates.length) return 0;
+        // Heatmap at 80k+ hides points; heat reads sensorTemps. Skip ObjectState
+        // patches — each setObjectStates used to force a full mass KDE rebuild.
+        if (heatmapOn && sensors.items.size >= 80_000) return updates.length;
+        try {
+          sensors.setObjectStates(updates);
+        } catch (err) {
+          liveError = `temp state failed: ${err?.message || err}`;
+        }
+        return updates.length;
+      }
+
+      function tempBatchSize(n) {
+        if (n >= MASS) return 320;
+        if (n >= 80_000) return 480;
+        if (n >= 40_000) return 600;
+        return Math.min(400, Math.max(120, Math.floor(n * 0.03)));
+      }
+
+      let tempTickN = 0;
+
+      /**
+       * Advance a sliding window of sensors: new random °C for a small batch.
+       * Share of hot points follows tempHotShare.
+       */
+      function tickTemperature() {
+        if (!pulseOn || loading || sensors.items.size < 10) return;
+        const t0 = performance.now();
+        const n = sensors.items.size;
+        if (sensorTemps.length !== n) {
+          sensorTemps = new Float32Array(n);
+          tempCursor = 0;
+        }
+        const batch = tempBatchSize(n);
+        const changed = [];
+        const writeProps = n < MASS;
+        for (let k = 0; k < batch; k++) {
+          const id = (tempCursor + k) % n;
+          const temp = Math.round(rollTemperature() * 10) / 10;
+          sensorTemps[id] = temp;
+          if (writeProps) {
+            const obj = sensors.items.get(id);
+            if (obj?.properties) obj.properties.temp = temp;
+          }
+          changed.push(id);
+        }
+        tempCursor = (tempCursor + batch) % n;
+        applyAlarmDelta(changed);
+        // Full recount periodically so KPI cannot drift from the Set.
+        tempTickN += 1;
+        if (tempTickN % 25 === 0) syncAlarmIdsFromTemps();
+        // Heat sync is heavier than a point color patch — throttle so UI stays interactive.
+        const heatEvery = sensors.items.size >= MASS ? 450 : sensors.items.size >= 80_000 ? 320 : 220;
+        if (heatmapOn && t0 - lastHeatSyncMs >= heatEvery) {
+          sensors.render();
+          lastHeatSyncMs = t0;
+        }
+        syncIsolines(false);
+        lastPatchMs = performance.now() - t0;
+        lastPatchBatch = batch;
+        const openId = sensors.getSelectedId();
+        if (
+          sensors.hasOpenPopup() &&
+          openId != null &&
+          changed.includes(openId) &&
+          sensors.items.has(openId)
+        ) {
+          sensors.openPopup(openId);
+        }
+      }
+
+      function tickFlights() {
+        const now = performance.now();
+        const dt = Math.max(16, Math.min(400, now - lastFlightNow));
+        lastFlightNow = now;
+        const updates = [];
+        for (const f of flightState) {
+          const from = along(f.path, f.t);
+          f.t += f.speed * dt;
+          const pos = along(f.path, f.t);
+          f.fromPos = from;
+          f.toPos = pos;
+          f.animStart = now;
+          f.animDuration = dt;
+          const prev = ops.getObject(f.id);
+          if (!prev) continue;
+          updates.push({
+            id: f.id,
+            coordinates: [pos.lat, pos.lng],
+            properties: { ...prev.properties, heading: pos.heading }
+          });
+        }
+        if (updates.length) ops.updateObjects(updates, { animate: true, duration: dt });
+      }
+
+      function followVisual(now) {
+        if (!followOn) return;
+        const f = flightState.find((item) => item.id === followId);
+        if (!f) return;
+        const span = Math.max(1, f.animDuration);
+        const u = Math.max(0, Math.min(1, (now - f.animStart) / span));
+        const lat = f.fromPos.lat + (f.toPos.lat - f.fromPos.lat) * u;
+        const lng = f.fromPos.lng + (f.toPos.lng - f.fromPos.lng) * u;
+        map.setView([lat, lng], map.zoom, { settle: false });
+      }
+
+      function collectAlarmIds() {
+        return [...alarmIds].filter((id) => sensors.items.has(id));
+      }
+
+      function objectLatLng(object) {
+        if (!object) return null;
+        const coords = object.coordinates;
+        if (Array.isArray(coords) && typeof coords[0] === "number") return [coords[0], coords[1]];
+        const g = object.geometry;
+        if (g?.type === "Point" && Array.isArray(g.coordinates)) {
+          return [g.coordinates[1], g.coordinates[0]];
+        }
+        return null;
+      }
+
+      function pickAlarmId() {
+        const ids = collectAlarmIds();
+        const n = ids.length;
+        if (!n) return null;
+        for (let k = 0; k < n; k++) {
+          const id = ids[((alarmCursor + k) % n + n) % n];
+          if (id !== lastAlarmId || n === 1) {
+            alarmCursor = alarmCursor + k + 1;
+            return id;
+          }
+        }
+        alarmCursor += 1;
+        return ids[((alarmCursor - 1) % n + n) % n];
+      }
+
+      function showAlarmPopup(id, minZoom = 7) {
+        if (id == null) return false;
+        const obj = sensors.getObject(id);
+        const pos = objectLatLng(obj);
+        if (!obj || !pos) return false;
+        ops.closePopup();
+        sensors.openPopup(id);
+        lastAlarmId = id;
+        if (count < MASS) {
+          try { sensors.setSelected(id); } catch (_) { /* ignore stale selection */ }
+        }
+        map.setView(pos, Math.max(map.zoom, minZoom));
+        return true;
+      }
+
+      function tickTour() {
+        if (!tourOn || userTouched || loading) return;
+        tourStep += 1;
+        const alarms = collectAlarmIds();
+        const showPlane = tourStep % 3 !== 0 || !alarms.length;
+        if (showPlane) {
+          const plane = flightState[tourStep % flightState.length];
+          if (plane && ops.getObject(plane.id)) {
+            sensors.closePopup();
+            ops.openPopup(plane.id);
+            if (!followOn) {
+              const pos = along(plane.path, plane.t);
+              map.setView([pos.lat, pos.lng], Math.max(map.zoom, 5));
+            }
+            return;
+          }
+        }
+        if (!alarms.length) {
+          if (ops.getObject(followId)) {
+            sensors.closePopup();
+            ops.openPopup(followId);
+          }
+          return;
+        }
+        for (let i = 0; i < alarms.length; i++) {
+          if (showAlarmPopup(pickAlarmId(), 5)) return;
+        }
+      }
+
+      function refresh() {
+        const s = sensors.getStats();
+        const o = ops.getStats();
+        const heap = heapInfo();
+        const gpuBytes = s.objects * GPU_BYTES_PER_POINT;
+        document.getElementById("kpi-iot").textContent = s.objects.toLocaleString("en-US");
+        document.getElementById("kpi-air").textContent = String(FLIGHTS.length);
+        document.getElementById("kpi-alarm").textContent = alarmIds.size.toLocaleString("en-US");
+        document.getElementById("kpi-fps").textContent = fpsValue ? fpsValue.toFixed(0) : "—";
+        document.getElementById("kpi-mem").textContent = heap
+          ? formatMb(heap.used)
+          : `GPU ${formatMb(gpuBytes)}`;
+        // Stable width — do not rewrite every 120ms temp tick (that jerks the HUD).
+        document.getElementById("kpi-patch").textContent = lastPatchMs
+          ? `${Math.round(lastPatchMs)} ms`
+          : "—";
+        const heapLine = heap
+          ? `heap ${formatMb(heap.used)} used · ${formatMb(heap.total)} allocated · limit ${formatMb(heap.limit)}`
+          : "heap n/a (Chromium: performance.memory)";
+        const isoStats = isolinesOn && isolineLayer ? isolineLayer.getStats() : null;
+        statsEl.textContent = [
+          liveError,
+          `IoT ${s.objects.toLocaleString("en-US")} · ${s.renderer} · visible ${s.visibleObjects}`,
+          `ops ${o.objects} (planes/hubs/zones/airways)`,
+          `clusters ${s.clusters} · viz ${sensors.options.visualization}`,
+          `sceneFeatures IoT=${sensors.options.sceneFeatures} ops=true`,
+          `GPU points ~${formatMb(gpuBytes)} (${GPU_BYTES_PER_POINT} B/pt packed)`,
+          `index ${s.indexedObjects.toLocaleString("en-US")} objs · ${s.indexCells.toLocaleString("en-US")} cells`,
+          heapLine,
+          lastIngestMs ? `ingest ${Math.round(lastIngestMs)} ms` : "ingest idle",
+          lastPatchMs
+            ? `temp tick ${Math.round(lastPatchMs)} ms / ${lastPatchBatch} · live ${pulseOn ? "on" : "paused"}`
+            : "temp idle",
+          isoStats
+            ? `isolines ${isoStats.rings} rings · ${Math.round(isoStats.buildMs)} ms`
+            : "isolines off",
+          `fps ${fpsValue.toFixed(0)}`
+        ].filter(Boolean).join("\n");
+      }
+
+      function tickFps(now) {
+        followVisual(now);
+        fpsFrames++;
+        const dt = now - fpsStamp;
+        if (dt >= 500) {
+          fpsValue = (fpsFrames * 1000) / dt;
+          fpsFrames = 0;
+          fpsStamp = now;
+          const elFps = document.getElementById("kpi-fps");
+          if (elFps) elFps.textContent = fpsValue.toFixed(0);
+          const heap = heapInfo();
+          const elMem = document.getElementById("kpi-mem");
+          if (elMem) {
+            elMem.textContent = heap
+              ? formatMb(heap.used)
+              : `GPU ${formatMb(sensors.items.size * GPU_BYTES_PER_POINT)}`;
+          }
+        }
+        requestAnimationFrame(tickFps);
+      }
+      requestAnimationFrame(tickFps);
+
+      function startLoops() {
+        clearInterval(pulseTimer);
+        clearInterval(flyTimer);
+        clearInterval(tourTimer);
+        pulseTimer = setInterval(tickTemperature, 120);
+        flyTimer = setInterval(tickFlights, count >= MASS ? 320 : 220);
+        tourTimer = setInterval(tickTour, 3500);
+        tickTemperature();
+        tickFlights();
+        tickTour();
+      }
+
+      for (const btn of document.querySelectorAll("#count-row button")) {
+        btn.addEventListener("click", () => void loadSensors(Number(btn.dataset.count)));
+      }
+
+      document.getElementById("temp-pause").addEventListener("click", (event) => {
+        pulseOn = !pulseOn;
+        const paused = !pulseOn;
+        event.currentTarget.classList.toggle("active", paused);
+        event.currentTarget.textContent = paused ? "Продолжить температуру" : "Пауза температуры";
+        if (pulseOn) tickTemperature();
+      });
+      document.getElementById("hot-share").addEventListener("input", (event) => {
+        const pct = Number(event.currentTarget.value) || 0;
+        tempHotShare = Math.max(0, Math.min(1, pct / 100));
+        document.getElementById("hot-share-label").textContent = `${pct}%`;
+        clearTimeout(hotShareTimer);
+        hotShareTimer = setTimeout(rebalanceTemperatures, count >= MASS ? 120 : 40);
+      });
+      document.getElementById("hot-share").addEventListener("change", () => {
+        clearTimeout(hotShareTimer);
+        rebalanceTemperatures();
+      });
+      document.getElementById("alarms-only").addEventListener("click", (event) => {
+        alarmsOnly = event.currentTarget.classList.toggle("active");
+        if (alarmsOnly && !pointsOn) {
+          pointsOn = true;
+          document.getElementById("points").classList.add("active");
+        }
+        applySensorPointVisibility();
+        refresh();
+      });
+      document.getElementById("points").addEventListener("click", (event) => {
+        pointsOn = event.currentTarget.classList.toggle("active");
+        if (!pointsOn) {
+          alarmsOnly = false;
+          document.getElementById("alarms-only").classList.remove("active");
+        }
+        applySensorPointVisibility();
+        // Heatmap ≤80k re-shows the WebGL layer each render — push visibility again.
+        if (heatmapOn) sensors.render();
+        refresh();
+      });
+      function setHeatmapVisible(on) {
+        heatmapOn = on;
+        // Planes / hubs / airways stay on the map over the heat field.
+        ops.setFilter(null);
+      }
+
+      /** Subsample sensors for isolines — full 1M marching-squares freezes the tab. */
+      function isolineBudget() {
+        if (count >= MASS) return 20_000;
+        if (count >= 80_000) return 28_000;
+        return Math.min(40_000, Math.max(4_000, count));
+      }
+
+      function collectIsolinePoints() {
+        const n = sensorTemps.length || sensors.items.size;
+        if (!n) return [];
+        const budget = isolineBudget();
+        const stride = Math.max(1, Math.ceil(n / budget));
+        const out = [];
+        for (let id = 0; id < n && out.length < budget; id += stride) {
+          const obj = sensors.items.get(id);
+          const pos = objectLatLng(obj);
+          if (!pos) continue;
+          const w = tempToHeatWeight(sensorTemps[id]);
+          if (w <= 1e-6) continue;
+          out.push([pos[0], pos[1], w]);
+        }
+        // Enrich with a denser hot sample so 2–20% alarms still draw warm contours.
+        if (alarmIds.size && out.length < budget) {
+          const hotStride = Math.max(1, Math.ceil(alarmIds.size / Math.max(1, budget - out.length)));
+          let i = 0;
+          for (const id of alarmIds) {
+            if (i++ % hotStride !== 0) continue;
+            if (id % stride === 0) continue;
+            const obj = sensors.items.get(id);
+            const pos = objectLatLng(obj);
+            if (!pos) continue;
+            out.push([pos[0], pos[1], tempToHeatWeight(sensorTemps[id])]);
+            if (out.length >= budget) break;
+          }
+        }
+        return out;
+      }
+
+      function syncIsolines(force = false) {
+        if (!isolinesOn) return;
+        const now = performance.now();
+        const every = count >= MASS ? 650 : count >= 80_000 ? 420 : 280;
+        if (!force && now - lastIsolineSyncMs < every) return;
+        lastIsolineSyncMs = now;
+        const pts = collectIsolinePoints();
+        if (!pts.length) {
+          if (isolineLayer) isolineLayer.clear();
+          return;
+        }
+        if (!isolineLayer) {
+          isolineLayer = heatIsolineLayer(pts, {
+            levels: [0.28, 0.42, 0.55, 0.7, 0.85],
+            radius: 16,
+            blur: 12,
+            scaleZoom: 5,
+            cols: 72,
+            rows: 54,
+            gradient: TEMP_ISOLINE_GRADIENT,
+            colorByLevel: true,
+            strokeWidth: 1.45,
+            opacity: 0.92,
+            labels: true,
+            labelFont: "600 11px ui-sans-serif, system-ui, sans-serif",
+            labelColor: "#0f172a",
+            labelFormat: (ring) =>
+              `${Math.round(TEMP_MIN + ring.t * (TEMP_MAX - TEMP_MIN))}°`
+          }).addTo(map);
+          return;
+        }
+        isolineLayer.setLatLngs(pts);
+      }
+
+      function setIsolinesVisible(on) {
+        isolinesOn = on;
+        if (on) {
+          syncIsolines(true);
+          return;
+        }
+        if (isolineLayer) {
+          isolineLayer.remove();
+          isolineLayer = null;
+        }
+        lastIsolineSyncMs = 0;
+      }
+
+      document.getElementById("clusters").addEventListener("click", (event) => {
+        const on = event.currentTarget.classList.toggle("active");
+        document.getElementById("heatmap").classList.remove("active");
+        setHeatmapVisible(false);
+        if (on) {
+          alarmsOnly = false;
+          document.getElementById("alarms-only").classList.remove("active");
+          statsEl.textContent = `clustering ${count.toLocaleString("en-US")}…`;
+          sensors.setClusterize(true);
+          sensors.setVisualization("clusters");
+          applySensorPointVisibility();
+          void sensors.prepareLayout(map.zoom).then(() => {
+            applySensorPointVisibility();
+            refresh();
+          });
+          return;
+        }
+        sensors.setClusterize(false);
+        sensors.setVisualization("objects");
+        applySensorPointVisibility();
+        refresh();
+      });
+      document.getElementById("heatmap").addEventListener("click", (event) => {
+        const on = event.currentTarget.classList.toggle("active");
+        document.getElementById("clusters").classList.remove("active");
+        setHeatmapVisible(on);
+        if (on) {
+          alarmsOnly = false;
+          document.getElementById("alarms-only").classList.remove("active");
+          sensors.setClusterize(false);
+          sensors.setVisualization("heatmap");
+        } else {
+          sensors.setVisualization("objects");
+        }
+        applySensorPointVisibility();
+        refresh();
+      });
+      document.getElementById("isolines").addEventListener("click", (event) => {
+        const on = event.currentTarget.classList.toggle("active");
+        setIsolinesVisible(on);
+        refresh();
+      });
+      document.getElementById("follow").addEventListener("click", (event) => {
+        followOn = event.currentTarget.classList.toggle("active");
+        const f = flightState.find((item) => item.id === followId);
+        const pos = f ? along(f.path, f.t) : null;
+        if (followOn && pos) {
+          map.setView([pos.lat, pos.lng], Math.max(map.zoom, 6));
+        } else {
+          map.setView(map.getCenter(), map.getZoom());
+        }
+      });
+      document.getElementById("popup-tour").addEventListener("click", (event) => {
+        tourOn = event.currentTarget.classList.toggle("active");
+        if (tourOn) {
+          userTouched = false;
+          tickTour();
+        } else {
+          sensors.closePopup();
+          ops.closePopup();
+        }
+      });
+      document.getElementById("next-alarm").addEventListener("click", () => {
+        userTouched = true;
+        tourOn = false;
+        document.getElementById("popup-tour").classList.remove("active");
+        const ids = collectAlarmIds();
+        if (!ids.length) {
+          tickTemperature();
+        }
+        let opened = false;
+        const tries = Math.max(1, collectAlarmIds().length);
+        for (let i = 0; i < tries; i++) {
+          if (showAlarmPopup(pickAlarmId())) {
+            opened = true;
+            break;
+          }
+        }
+        if (!opened) {
+          liveError = "нет активных алармов — снимите паузу температуры";
+          refresh();
+        }
+      });
+
+      document.getElementById("search-btn").addEventListener("click", () => {
+        const q = document.getElementById("q").value.trim();
+        resultsEl.replaceChildren();
+        if (!q) return;
+        const hits = [...sensors.search(q, { limit: 8 }), ...ops.search(q, { limit: 6 })];
+        for (const hit of hits) {
+          const btn = el("button", { type: "button", text: `${hit.id} · ${Math.round(hit.score * 100)}` });
+          btn.addEventListener("click", () => {
+            const inOps = ops.getObject(hit.id);
+            const mgr = inOps ? ops : sensors;
+            mgr.openPopup(hit.id);
+            mgr.setSelected(hit.id);
+            const obj = mgr.getObject(hit.id);
+            const pos = obj?.coordinates || (obj?.geometry?.coordinates
+              ? [obj.geometry.coordinates[1], obj.geometry.coordinates[0]]
+              : null);
+            if (pos) map.setView(pos, Math.max(map.zoom, 8));
+          });
+          resultsEl.append(btn);
+        }
+      });
+      document.getElementById("q").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") document.getElementById("search-btn").click();
+      });
+
+      document.getElementById("time").addEventListener("input", (event) => {
+        const pct = Number(event.currentTarget.value) / 100;
+        const from = now0 - (1 - pct) * 90 * 60_000;
+        sensors.setTimeRange(from, now0 + 60_000);
+        refresh();
+      });
+
+      ingestOps();
+      void loadSensors(count).then(() => {
+        ingestOps();
+        startLoops();
+        refresh();
+      });
+      setInterval(refresh, 1500);
+    </script>
+  </body>
+</html>

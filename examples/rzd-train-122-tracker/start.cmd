@@ -6,7 +6,7 @@ where node >nul 2>nul
 if errorlevel 1 (
   echo.
   echo Node.js не найден.
-  echo Установите Node.js 18 или новее, затем снова запустите этот файл.
+  echo Установите Node.js 18 или новее.
   echo.
   pause
   exit /b 1

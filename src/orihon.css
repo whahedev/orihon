@@ -150,6 +150,9 @@
   pointer-events: auto;
   transform-origin: 0 0;
   will-change: transform;
+  /* Host pages often style `button { transition: transform }` — that desyncs
+     markers from tiles/SVG during wheel zoom. Keep camera transforms instant. */
+  transition: none;
 }
 
 .oh-marker-pin {

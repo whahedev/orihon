@@ -9,7 +9,8 @@ test("standalone IIFE renders canvas, vectors and markers", async ({ page }) => 
   await loadVisualMap(page);
   await expect(page.locator("#map")).toBeVisible();
   await expect(page.locator(".oh-canvas-base")).toHaveCount(1);
-  await expect(page.locator(".oh-svg-layer path")).toHaveCount(3);
+  await expect(page.locator(".oh-svg-layer path")).toHaveCount(2);
+  await expect(page.locator(".oh-svg-layer circle")).toHaveCount(1);
   await expect(page.locator(".oh-marker")).toHaveCount(1);
 
   const canvas = await page.locator(".oh-canvas-base").evaluate((element) => {

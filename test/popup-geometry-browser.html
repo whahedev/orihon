@@ -55,7 +55,11 @@
     }
     globalThis.popupGeometryMap = map;
     globalThis.popupGeometryTargets = {
-      marker: map.latLngToContainerPoint([10, -20]),
+      // Tip sits on the latlng; click into the pin body so the hit is not on the edge.
+      marker: (() => {
+        const tip = map.latLngToContainerPoint([10, -20]);
+        return { x: tip.x, y: tip.y - 14 };
+      })(),
       circleMarker: map.latLngToContainerPoint([10, 0]),
       polyline: map.latLngToContainerPoint([10, 20]),
       polygon: map.latLngToContainerPoint([-10, -20]),

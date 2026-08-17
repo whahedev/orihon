@@ -8,6 +8,8 @@ on:
       - "examples/showcase/**"
       - "examples/site/**"
       - "examples/rzd-train-122-tracker/**"
+      - "examples/navigation/**"
+      - "examples/common.css"
       - "src/**"
       - "package.json"
       - "package-lock.json"
@@ -39,12 +41,16 @@ jobs:
           cache: npm
       - name: Prepare site
         run: |
-          mkdir -p _site/bench _site/rzd
+          mkdir -p _site/bench _site/rzd _site/osrm
           cp examples/site/index.html _site/index.html
           cp -R examples/bench-compare/. _site/bench/
           cp -R examples/showcase/. _site/showcase/
           cp examples/rzd-train-122-tracker/index.html _site/rzd/index.html
           cp examples/rzd-train-122-tracker/rail-route-cache.json _site/rzd/rail-route-cache.json
+          cp examples/navigation/index.html _site/osrm/index.html
+          cp examples/common.css _site/osrm/common.css
+          # Pages: common.css is co-located with the demo.
+          sed -i 's|href="../common.css"|href="./common.css"|' _site/osrm/index.html
           # Showcase + bench + RZD load Orihon from jsDelivr when /dist is absent (no build on Pages).
           # Drop optional local vendor stubs if present.
           rm -rf _site/showcase/vendor _site/bench/vendor

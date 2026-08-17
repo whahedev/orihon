@@ -2050,6 +2050,7 @@
           center: [52.2, 38.5],
           zoom: 5,
           locale: "ru",
+          controls: false,
           ariaLabel:
             "Маршрут поезда Санкт-Петербург — Новороссийск"
         });
@@ -2057,8 +2058,7 @@
         Orihon.tileLayer(
           "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
           {
-            attribution:
-              "© OpenStreetMap contributors",
+            attribution: "",
             maxZoom: 19
           }
         ).addTo(map);
@@ -2066,8 +2066,7 @@
         railwayLayer = Orihon.tileLayer(
           "https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",
           {
-            attribution:
-              "Data © OpenStreetMap contributors · Style CC-BY-SA 2.0 OpenRailwayMap",
+            attribution: "",
             minZoom: 2,
             maxZoom: 19,
             opacity: 0.88
@@ -2158,7 +2157,7 @@
 
         if (typeof Orihon.zoomControl === "function") {
           Orihon.zoomControl({
-            position: "bottom-right"
+            position: "top-right"
           }).addTo(map);
         }
 

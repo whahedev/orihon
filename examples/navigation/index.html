@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Orihon — Навигация</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" data-orihon-css href="/dist/orihon.css" />
+    <link rel="stylesheet" href="../common.css" />
+    <style>
+      :root {
+        --nav-drive: #0f766e;
+        --nav-bike: #1d4ed8;
+        --nav-walk: #b45309;
+      }
+
+      #map {
+        touch-action: none;
+      }
+
+      .nav-block {
+        position: absolute;
+        z-index: 1100;
+        top: 12px;
+        left: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: min(380px, calc(100vw - 24px));
+        max-height: calc(100% - 24px);
+        padding: 14px;
+        border: 1px solid rgba(23, 32, 38, 0.12);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 16px 44px rgba(23, 32, 38, 0.16);
+        backdrop-filter: blur(12px);
+        overflow: hidden;
+      }
+
+      .nav-block h1 {
+        margin: 0;
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        font-size: 1.18rem;
+        letter-spacing: -0.03em;
+      }
+
+      .nav-block .lead {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+        line-height: 1.4;
+      }
+
+      .source-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: rgba(15, 118, 110, 0.08);
+        color: var(--nav-drive);
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      .source-pill::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      .hint {
+        margin: 0;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #f4f7f9;
+        color: var(--muted);
+        font-size: 0.82rem;
+        line-height: 1.4;
+      }
+
+      .hint.active {
+        background: rgba(15, 118, 110, 0.08);
+        color: var(--nav-drive);
+      }
+
+      .points {
+        display: grid;
+        gap: 6px;
+      }
+
+      .point-row {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        font-size: 0.84rem;
+      }
+
+      .point-row .badge {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.78rem;
+      }
+
+      .point-row .badge.a {
+        background: var(--nav-drive);
+      }
+
+      .point-row .badge.b {
+        background: #334155;
+      }
+
+      .point-row .coords {
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        font-size: 0.8rem;
+      }
+
+      .modes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .modes label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        font-size: 0.82rem;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .modes label:has(input:checked) {
+        border-color: transparent;
+        color: #fff;
+      }
+
+      .modes label.drive:has(input:checked) {
+        background: var(--nav-drive);
+      }
+
+      .modes label.bike:has(input:checked) {
+        background: var(--nav-bike);
+      }
+
+      .modes label.walk:has(input:checked) {
+        background: var(--nav-walk);
+      }
+
+      .modes input {
+        accent-color: currentColor;
+      }
+
+      .routes-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .routes-head strong {
+        font-size: 0.86rem;
+      }
+
+      .routes-head span {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .route-list {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        min-height: 0;
+        max-height: min(42vh, 340px);
+        overflow: auto;
+        padding-right: 2px;
+      }
+
+      .route-card {
+        display: grid;
+        grid-template-columns: 8px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        width: 100%;
+        padding: 10px 10px 10px 8px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        text-align: left;
+        font: inherit;
+        cursor: pointer;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      .route-card:hover {
+        border-color: #9bb6b2;
+      }
+
+      .route-card.selected {
+        border-color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.18);
+      }
+
+      .route-card .stripe {
+        align-self: stretch;
+        width: 8px;
+        border-radius: 6px;
+      }
+
+      .route-card .title {
+        display: block;
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+
+      .route-card .meta {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .route-card .speed {
+        color: var(--ink);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.95rem;
+        white-space: nowrap;
+      }
+
+      .route-card .speed small {
+        display: block;
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 0.68rem;
+        text-align: right;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .actions button {
+        height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .actions button.primary {
+        border-color: transparent;
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .status {
+        min-height: 1.15em;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      .status.error {
+        color: #b91c1c;
+      }
+
+      .empty {
+        padding: 14px 10px;
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        text-align: center;
+      }
+
+      @media (max-width: 720px) {
+        body {
+          grid-template-rows: auto 1fr auto;
+        }
+
+        header {
+          padding: 0.65rem 0.9rem;
+        }
+
+        header p:not(.brand) {
+          display: none;
+        }
+
+        .nav-block {
+          position: relative;
+          top: auto;
+          left: auto;
+          width: 100%;
+          max-height: none;
+          border-radius: 16px 16px 0 0;
+          border-left: 0;
+          border-right: 0;
+          border-bottom: 0;
+          padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        }
+
+        .route-list {
+          max-height: 28vh;
+        }
+
+        #map .oh-bottom-right,
+        #map .oh-bottom-left {
+          bottom: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="brand">Orihon</p>
+        <h1>Навигация по OSM</h1>
+        <p>
+          Отдельный блок: источник дорог OSM → OSRM, несколько вариантов маршрута
+          с разной дистанцией и скоростью.
+        </p>
+      </div>
+      <div class="toolbar">
+        <a href="../">All demos</a>
+      </div>
+    </header>
+
+    <div id="map" role="application" aria-label="Карта навигации"></div>
+
+    <section class="nav-block" aria-label="Блок навигации">
+      <div>
+        <h1>Маршрут</h1>
+        <p class="lead">Кликните A, затем B — или запустите демо.</p>
+        <div class="source-pill">Источник: OSM · OSRM · приоритет улиц, не дворов</div>
+      </div>
+
+      <p id="hint" class="hint active">Кликните на карте точку A (старт).</p>
+
+      <div class="points">
+        <div class="point-row">
+          <span class="badge a">A</span>
+          <div>
+            <div>Старт</div>
+            <div id="pointA" class="coords">не задан</div>
+          </div>
+        </div>
+        <div class="point-row">
+          <span class="badge b">B</span>
+          <div>
+            <div>Финиш</div>
+            <div id="pointB" class="coords">не задан</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modes" role="group" aria-label="Профили движения">
+        <label class="drive">
+          <input id="modeDrive" type="checkbox" checked />
+          Авто
+        </label>
+        <label class="bike">
+          <input id="modeBike" type="checkbox" checked />
+          Вело
+        </label>
+        <label class="walk">
+          <input id="modeWalk" type="checkbox" checked />
+          Пешком
+        </label>
+      </div>
+
+      <div class="routes-head">
+        <strong>Варианты</strong>
+        <span id="routesCount">0</span>
+      </div>
+      <div id="routeList" class="route-list" role="listbox" aria-label="Варианты маршрута">
+        <div class="empty">Пока нет маршрутов</div>
+      </div>
+
+      <div class="actions">
+        <button id="demoButton" class="primary" type="button">Демо: Кремль → Сити</button>
+        <button id="clearButton" type="button">Сбросить</button>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+
+    <script type="module">
+      const ORIHON_CDN =
+        "https://cdn.jsdelivr.net/npm/orihon@1.0.5/dist/orihon.esm.js";
+      const ORIHON_CDN_CSS =
+        "https://cdn.jsdelivr.net/npm/orihon@1.0.5/dist/orihon.css";
+      const OSRM_HOST = "https://router.project-osrm.org";
+
+      const DEMO_A = [55.7558, 37.6173];
+      const DEMO_B = [55.7494, 37.5395];
+
+      // Public demo OSRM only serves a car graph; bike/walk reuse OSM geometries
+      // with typical urban speeds so distance/speed variants stay meaningful.
+      const PROFILES = {
+        driving: {
+          id: "driving",
+          label: "Авто",
+          color: "#0f766e",
+          speedKmh: null
+        },
+        cycling: {
+          id: "cycling",
+          label: "Вело",
+          color: "#1d4ed8",
+          speedKmh: 16
+        },
+        walking: {
+          id: "walking",
+          label: "Пешком",
+          color: "#b45309",
+          speedKmh: 5
+        }
+      };
+
+      async function loadOrihon() {
+        try {
+          const mod = await import("/dist/orihon.esm.js");
+          const link = document.querySelector("link[data-orihon-css]");
+          if (link) link.href = "/dist/orihon.css";
+          return mod;
+        } catch {
+          const link = document.querySelector("link[data-orihon-css]");
+          if (link) link.href = ORIHON_CDN_CSS;
+          return import(ORIHON_CDN);
+        }
+      }
+
+      function formatKm(meters) {
+        if (!Number.isFinite(meters)) return "—";
+        if (meters < 1000) return `${Math.round(meters)} м`;
+        return `${(meters / 1000).toFixed(1)} км`;
+      }
+
+      function formatDuration(seconds) {
+        if (!Number.isFinite(seconds)) return "—";
+        const total = Math.max(1, Math.round(seconds / 60));
+        const hours = Math.floor(total / 60);
+        const minutes = total % 60;
+        if (hours <= 0) return `${minutes} мин`;
+        return `${hours} ч ${minutes} мин`;
+      }
+
+      function formatSpeed(meters, seconds) {
+        if (!Number.isFinite(meters) || !Number.isFinite(seconds) || seconds <= 0) {
+          return "—";
+        }
+        return `${((meters / seconds) * 3.6).toFixed(0)} км/ч`;
+      }
+
+      function formatLatLng(latlng) {
+        const ll = Array.isArray(latlng)
+          ? { lat: latlng[0], lng: latlng[1] }
+          : latlng;
+        return `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
+      }
+
+      function toLonLat(point) {
+        const ll = Array.isArray(point)
+          ? { lat: point[0], lng: point[1] }
+          : point.latlng
+            ? Array.isArray(point.latlng)
+              ? { lat: point.latlng[0], lng: point.latlng[1] }
+              : point.latlng
+            : point;
+        return `${ll.lng},${ll.lat}`;
+      }
+
+      function selectedProfiles() {
+        const list = [];
+        if (modeDrive.checked) list.push(PROFILES.driving);
+        if (modeBike.checked) list.push(PROFILES.cycling);
+        if (modeWalk.checked) list.push(PROFILES.walking);
+        return list;
+      }
+
+      function analyzeOsrmRoute(route) {
+        const steps = (route.legs || []).flatMap((leg) => leg.steps || []);
+        let namedDistance = 0;
+        let serviceDistance = 0;
+        let turnCount = 0;
+
+        for (const step of steps) {
+          const distance = Number(step.distance) || 0;
+          if (distance <= 0) continue;
+          if (String(step.name || "").trim()) namedDistance += distance;
+          else serviceDistance += distance;
+
+          const type = step.maneuver?.type;
+          if (
+            type === "turn" ||
+            type === "fork" ||
+            type === "end of road" ||
+            type === "continue"
+          ) {
+            turnCount += 1;
+          }
+        }
+
+        const measured = namedDistance + serviceDistance;
+        const total = measured > 0 ? measured : route.distance || 1;
+        const serviceRatio = serviceDistance / total;
+
+        return {
+          namedDistance,
+          serviceDistance,
+          serviceRatio,
+          turnCount,
+          // Lower is better: prefer street routes over courtyards.
+          score:
+            (route.duration || route.distance / 8) +
+            serviceRatio * 900 +
+            turnCount * 12 +
+            (serviceRatio > 0.35 ? 1200 : 0)
+        };
+      }
+
+      function pickRoadGeometries(osrmRoutes) {
+        const ranked = osrmRoutes
+          .map((route) => ({ route, quality: analyzeOsrmRoute(route) }))
+          .sort((a, b) => a.quality.score - b.quality.score);
+
+        const streetFirst = ranked.filter((item) => item.quality.serviceRatio <= 0.35);
+        const chosen = (streetFirst.length ? streetFirst : ranked.slice(0, 1)).slice(
+          0,
+          3
+        );
+
+        return chosen;
+      }
+
+      /**
+       * Navigation provider: OSM roads via OSRM driving graph, then
+       * several options (alt paths + mode speeds).
+       * Courtyard / unnamed-service shortcuts are demoted or dropped.
+       */
+      function createNavigationProvider() {
+        return async (waypoints, context = {}) => {
+          if (waypoints.length < 2) return [];
+
+          const profiles = selectedProfiles();
+          if (!profiles.length) {
+            throw new Error("Включите хотя бы один профиль: авто, вело или пешком");
+          }
+
+          const coords = waypoints.map(toLonLat).join(";");
+          const url =
+            `${OSRM_HOST}/route/v1/driving/${coords}` +
+            "?overview=full&geometries=geojson&alternatives=true&steps=true" +
+            "&radiuses=40;40";
+
+          const response = await fetch(url, {
+            signal: context.signal,
+            headers: { Accept: "application/json" }
+          });
+          const payload = await response.json();
+
+          if (!response.ok || payload.code !== "Ok" || !payload.routes?.length) {
+            throw new Error(
+              payload?.message || payload?.code || `OSRM HTTP ${response.status}`
+            );
+          }
+
+          const geometries = pickRoadGeometries(payload.routes);
+          const routes = [];
+
+          for (const profile of profiles) {
+            geometries.forEach((item, index) => {
+              const { route, quality } = item;
+              const estimated = profile.speedKmh != null;
+              const duration = estimated
+                ? route.distance / (profile.speedKmh / 3.6)
+                : route.duration;
+              const avgSpeedKmh = estimated
+                ? profile.speedKmh
+                : duration > 0
+                  ? (route.distance / duration) * 3.6
+                  : 0;
+              const viaYards = quality.serviceRatio > 0.35;
+              const rank =
+                index === 0
+                  ? "по улицам"
+                  : viaYards
+                    ? "через дворы"
+                    : `вариант ${index + 1}`;
+              const name = estimated
+                ? `${profile.label} · ${rank} · оценка`
+                : `${profile.label} · ${rank}`;
+
+              routes.push({
+                id: `${profile.id}-${index}`,
+                name,
+                coordinates: route.geometry.coordinates.map(([lon, lat]) => [
+                  lat,
+                  lon
+                ]),
+                distance: route.distance,
+                duration,
+                properties: {
+                  provider: "osrm",
+                  source: "osm",
+                  profile: profile.id,
+                  profileLabel: profile.label,
+                  color: profile.color,
+                  avgSpeedKmh,
+                  estimated,
+                  rank: index,
+                  serviceRatio: quality.serviceRatio,
+                  viaYards,
+                  qualityScore: quality.score + (estimated ? duration * 0.15 : 0)
+                }
+              });
+            });
+          }
+
+          routes.sort(
+            (a, b) =>
+              (a.properties?.qualityScore ?? Infinity) -
+              (b.properties?.qualityScore ?? Infinity)
+          );
+          return routes;
+        };
+      }
+
+      const {
+        createMap,
+        tileLayer,
+        marker,
+        routingLayer,
+        zoomControl,
+        scaleControl
+      } = await loadOrihon();
+
+      const map = createMap("map", {
+        center: DEMO_A,
+        zoom: 12,
+        locale: "ru",
+        ariaLabel: "Навигация Orihon"
+      });
+
+      tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap · Routing © OSRM"
+      }).addTo(map);
+
+      if (typeof zoomControl === "function") {
+        zoomControl({ position: "bottom-right" }).addTo(map);
+      }
+      if (typeof scaleControl === "function") {
+        scaleControl({ position: "bottom-left", units: "metric" }).addTo(map);
+      }
+
+      const router = routingLayer({
+        provider: createNavigationProvider(),
+        alternatives: true,
+        routeStyle: (route, index) => ({
+          stroke: route.properties?.color || (index === 0 ? "#0f766e" : "#94a3b8"),
+          strokeWidth: index === 0 ? 6 : 4,
+          strokeOpacity: index === 0 ? 0.92 : 0.45
+        }),
+        selectedStyle: {
+          stroke: "#d97706",
+          strokeWidth: 7,
+          strokeOpacity: 0.98
+        }
+      }).addTo(map);
+
+      const hint = document.getElementById("hint");
+      const status = document.getElementById("status");
+      const routeList = document.getElementById("routeList");
+      const routesCount = document.getElementById("routesCount");
+      const pointAEl = document.getElementById("pointA");
+      const pointBEl = document.getElementById("pointB");
+      const demoButton = document.getElementById("demoButton");
+      const clearButton = document.getElementById("clearButton");
+      const modeDrive = document.getElementById("modeDrive");
+      const modeBike = document.getElementById("modeBike");
+      const modeWalk = document.getElementById("modeWalk");
+
+      let startMarker = null;
+      let endMarker = null;
+      let startLatLng = null;
+      let endLatLng = null;
+      let step = "A";
+      let lastRoutes = [];
+
+      function setStatus(text, isError = false) {
+        status.textContent = text || "";
+        status.classList.toggle("error", Boolean(isError));
+      }
+
+      function setHint(text, active = false) {
+        hint.textContent = text;
+        hint.classList.toggle("active", active);
+      }
+
+      function clearRouteVisuals(resetStep = true) {
+        router.cancel();
+        router.clearLayers?.();
+        router.routes = [];
+        lastRoutes = [];
+        startMarker?.remove();
+        endMarker?.remove();
+        startMarker = null;
+        endMarker = null;
+        startLatLng = null;
+        endLatLng = null;
+        pointAEl.textContent = "не задан";
+        pointBEl.textContent = "не задан";
+        renderRouteList([]);
+        if (resetStep) {
+          step = "A";
+          setHint("Кликните на карте точку A (старт).", true);
+        }
+        setStatus("");
+      }
+
+      function renderRouteList(routes) {
+        lastRoutes = routes;
+        routesCount.textContent =
+          routes.length === 0
+            ? "0"
+            : `${routes.length} · улицы раньше дворов`;
+
+        if (!routes.length) {
+          routeList.innerHTML = `<div class="empty">Пока нет маршрутов</div>`;
+          return;
+        }
+
+        const selected = router.selectedIndex ?? 0;
+        routeList.innerHTML = routes
+          .map((route, index) => {
+            const color = route.properties?.color || "#64748b";
+            const speed = formatSpeed(route.distance, route.duration);
+            const isSelected = index === selected;
+            return `
+              <button
+                type="button"
+                class="route-card${isSelected ? " selected" : ""}"
+                role="option"
+                aria-selected="${isSelected}"
+                data-index="${index}"
+              >
+                <span class="stripe" style="background:${color}"></span>
+                <span>
+                  <span class="title">${route.name}</span>
+                  <span class="meta">${formatKm(route.distance)} · ${formatDuration(route.duration)}</span>
+                </span>
+                <span class="speed">${speed}<small>ср. скорость</small></span>
+              </button>
+            `;
+          })
+          .join("");
+      }
+
+      function selectRoute(index) {
+        if (index < 0 || index >= lastRoutes.length) return;
+        router.select(index);
+        renderRouteList(lastRoutes);
+        const route = lastRoutes[index];
+        setStatus(
+          `Выбран: ${route.name} · ${formatKm(route.distance)} · ${formatSpeed(
+            route.distance,
+            route.duration
+          )}`
+        );
+      }
+
+      async function routeBetween(a, b) {
+        setStatus("Строю варианты по OSM roads…");
+        setHint("Маршруты строятся…", true);
+
+        try {
+          const routes = await router.route([a, b]);
+          if (!routes.length) throw new Error("Нет маршрутов");
+
+          renderRouteList(routes);
+          selectRoute(0);
+          setHint("Выберите вариант в списке или кликните линию на карте.", false);
+
+          if (typeof map.fitBounds === "function" && routes[0].coordinates?.length) {
+            map.fitBounds(routes[0].coordinates, { padding: 56 });
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          setStatus(message, true);
+          setHint("Не удалось построить маршрут. Попробуйте снова.", false);
+          renderRouteList([]);
+        }
+      }
+
+      function placePoint(latlng, role) {
+        const pin = marker(latlng, {
+          title: role === "A" ? "A · старт" : "B · финиш"
+        })
+          .bindPopup(role === "A" ? "A · старт" : "B · финиш")
+          .addTo(map);
+
+        if (role === "A") {
+          startMarker?.remove();
+          startMarker = pin;
+          startLatLng = latlng;
+          pointAEl.textContent = formatLatLng(latlng);
+        } else {
+          endMarker?.remove();
+          endMarker = pin;
+          endLatLng = latlng;
+          pointBEl.textContent = formatLatLng(latlng);
+        }
+
+        return pin;
+      }
+
+      routeList.addEventListener("click", (event) => {
+        const card = event.target.closest("[data-index]");
+        if (!card) return;
+        selectRoute(Number(card.dataset.index));
+      });
+
+      router.on("routeclick", (event) => {
+        if (typeof event.index === "number") {
+          renderRouteList(lastRoutes);
+          const route = lastRoutes[event.index];
+          if (route) {
+            setStatus(
+              `Выбран: ${route.name} · ${formatKm(route.distance)} · ${formatSpeed(
+                route.distance,
+                route.duration
+              )}`
+            );
+          }
+        }
+      });
+
+      map.on("click", async (event) => {
+        const latlng = event.latlng || event.ll;
+        if (!latlng) return;
+
+        if (step === "A") {
+          router.cancel();
+          router.clearLayers?.();
+          router.routes = [];
+          lastRoutes = [];
+          renderRouteList([]);
+          endMarker?.remove();
+          endMarker = null;
+          endLatLng = null;
+          pointBEl.textContent = "не задан";
+
+          placePoint(latlng, "A");
+          step = "B";
+          setHint("Теперь кликните точку B (финиш).", true);
+          setStatus("");
+          return;
+        }
+
+        if (step === "wait") {
+          // restart from new A
+          clearRouteVisuals(false);
+          placePoint(latlng, "A");
+          step = "B";
+          setHint("Теперь кликните точку B (финиш).", true);
+          return;
+        }
+
+        placePoint(latlng, "B");
+        step = "wait";
+        await routeBetween(startLatLng, latlng);
+      });
+
+      async function rebuildIfReady() {
+        if (!startLatLng || !endLatLng) return;
+        step = "wait";
+        await routeBetween(startLatLng, endLatLng);
+      }
+
+      for (const input of [modeDrive, modeBike, modeWalk]) {
+        input.addEventListener("change", () => {
+          rebuildIfReady();
+        });
+      }
+
+      demoButton.addEventListener("click", async () => {
+        clearRouteVisuals(false);
+        placePoint(DEMO_A, "A");
+        placePoint(DEMO_B, "B");
+        step = "wait";
+        await routeBetween(DEMO_A, DEMO_B);
+      });
+
+      clearButton.addEventListener("click", () => {
+        clearRouteVisuals(true);
+      });
+
+      demoButton.click();
+    </script>
+  </body>
+</html>

@@ -112,6 +112,38 @@
       color: #fca5a5;
     }
 
+    .rzd-actual-status {
+      margin-top: 5px;
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .rzd-actual-status.live {
+      color: #86efac;
+    }
+
+    .rzd-actual-status.stale {
+      color: #fcd34d;
+    }
+
+    .rzd-actual-status.error {
+      color: #fca5a5;
+    }
+
+    .stop-fact {
+      color: #86efac;
+      font-weight: 700;
+    }
+
+    .stop-fact.late {
+      color: #fda4af;
+    }
+
+    .stop-fact.early {
+      color: #93c5fd;
+    }
+
     .badge {
       flex: 0 0 auto;
       display: inline-flex;
@@ -798,6 +830,9 @@
           <div class="rail-vector-status" id="railVectorStatus">
             OSM-вектор: ожидает построения маршрута по railway=rail…
           </div>
+          <div class="rzd-actual-status" id="rzdActualStatus">
+            РЖД: подключение к фактическому движению…
+          </div>
         </div>
         <div class="badge">
           <span class="badge-dot"></span>
@@ -891,6 +926,11 @@
           <details>
             <summary>Фактическая корректировка по данным РЖД</summary>
 
+            <div class="button-row">
+              <button id="rzdAutoButton" class="active" type="button">Авто РЖД: ВКЛ</button>
+              <button id="rzdRefreshButton" type="button">Обновить факт</button>
+            </div>
+
             <div class="actual-grid">
               <div class="field">
                 <label for="actualStation">Контрольная станция</label>
@@ -914,10 +954,11 @@
             </div>
 
             <div class="mode-note">
-              Это не GPS/ГЛОНАСС. Текущее время берётся через Date.now() из системных часов браузера. Прототип оценивает положение между соседними
-              станциями по расписанию. Если ввести фактическое время проследования
-              станции из сервиса «Фактическое движение поездов» РЖД, расчёт
-              сдвигается на реальную задержку.
+              Это не GPS/ГЛОНАСС. LIVE использует системные часы браузера и автоматически
+              запрашивает фактическое движение РЖД через локальный backend. Последняя
+              подтверждённая станционная отметка задаёт текущую задержку, после чего поезд
+              интерполируется по реальной OSM-геометрии пути. Ручная корректировка остаётся
+              резервным режимом, если источник РЖД временно не отдаёт данные.
             </div>
           </details>
         </div>
@@ -939,7 +980,7 @@
     <div class="legend">
       OpenRailwayMap показывает инфраструктуру. Серая/красная линия строится из векторных OSM railway=rail через Overpass; поезд движется непосредственно вдоль этой полилинии. Справа показаны все остановки с прибытием, отправлением и временем стоянки.
       Источник расписания в прототипе: актуальное расписание поезда 121В/122В на 16 августа 2026.
-      LIVE использует системные часы браузера; для фактического движения используйте контрольные времена РЖД.
+      LIVE использует системные часы браузера и автоматически учитывает последнюю доступную фактическую отметку РЖД; ручная корректировка остаётся fallback.
     </div>
   </div>
 
@@ -1055,6 +1096,9 @@
       const railwayButton = document.getElementById("railwayButton");
       const rebuildRailButton = document.getElementById("rebuildRailButton");
       const railVectorStatus = document.getElementById("railVectorStatus");
+      const rzdActualStatus = document.getElementById("rzdActualStatus");
+      const rzdAutoButton = document.getElementById("rzdAutoButton");
+      const rzdRefreshButton = document.getElementById("rzdRefreshButton");
 
       const actualStation = document.getElementById("actualStation");
       const actualTime = document.getElementById("actualTime");
@@ -1074,6 +1118,12 @@
       let stationMarkers = [];
 
       let delayMinutes = 0;
+      let delaySource = "schedule";
+      let rzdAutoEnabled = true;
+      let rzdActualPayload = null;
+      let rzdActualInFlight = false;
+      let rzdActualTimer = null;
+      const RZD_ACTUAL_REFRESH_MS = 60_000;
       let clockMode = "live";
       let clockMultiplier = 1;
       let demoBaseRealMs = Date.now();
@@ -1621,6 +1671,147 @@
         }
       }
 
+      function serviceDateIso(departureMs) {
+        const parts = moscowDateParts(departureMs);
+        return `${parts.year}-${parts.month}-${parts.day}`;
+      }
+
+      function signedMinutes(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "—";
+        if (n === 0) return "по графику";
+        return `${n > 0 ? "+" : ""}${Math.round(n)} мин`;
+      }
+
+      function updateRzdStationFacts(payload) {
+        const items = timelineList?.children;
+        if (!items) return;
+
+        for (const item of items) {
+          item.querySelectorAll(".stop-fact").forEach((node) => node.remove());
+        }
+
+        if (!Array.isArray(payload?.observations)) return;
+
+        for (const observation of payload.observations) {
+          const index = Number(observation.stationIndex);
+          const item = items[index];
+          if (!item) continue;
+
+          const schedule = item.querySelector(".stop-schedule");
+          if (!schedule) continue;
+
+          const fact = document.createElement("span");
+          fact.className = "stop-fact";
+
+          const delay = Number(observation.delayMinutes);
+          if (delay > 0) fact.classList.add("late");
+          if (delay < 0) fact.classList.add("early");
+
+          const time = observation.actualTimeMsk
+            ? ` · ${observation.actualTimeMsk}`
+            : "";
+
+          fact.textContent = `факт ${signedMinutes(delay)}${time}`;
+          schedule.appendChild(fact);
+        }
+      }
+
+      function setRzdStatus(kind, text) {
+        if (!rzdActualStatus) return;
+        rzdActualStatus.className = `rzd-actual-status${kind ? ` ${kind}` : ""}`;
+        rzdActualStatus.textContent = text;
+      }
+
+      function applyRzdDelay(payload) {
+        rzdActualPayload = payload;
+        updateRzdStationFacts(payload);
+
+        const latest = payload?.latest;
+        const delay = Number(latest?.delayMinutes ?? payload?.delayMinutes);
+
+        if (
+          rzdAutoEnabled &&
+          Number.isFinite(delay) &&
+          payload?.available === true
+        ) {
+          delayMinutes = Math.round(delay);
+          delaySource = "rzd";
+          manualDelay.value = String(delayMinutes);
+          lastTimelineIndex = "";
+        }
+
+        if (payload?.available === true && latest) {
+          const ageSec = Number(payload.ageSeconds || 0);
+          const stale = ageSec > 180;
+          setRzdStatus(
+            stale ? "stale" : "live",
+            `РЖД: ${stale ? "STALE" : "LIVE"} · ${latest.stationName} · ${signedMinutes(latest.delayMinutes)}` +
+            `${latest.actualTimeMsk ? ` · факт ${latest.actualTimeMsk}` : ""}` +
+            `${payload.fetchedAt ? ` · обновлено ${formatMsk(Date.parse(payload.fetchedAt))}` : ""}`
+          );
+        } else if (payload?.status === "disabled") {
+          setRzdStatus("stale", "РЖД: автоисточник отключён на сервере · используется расписание/ручная корректировка");
+        } else {
+          const reason = payload?.message || payload?.error || "фактические отметки пока не получены";
+          setRzdStatus("stale", `РЖД: NO DATA · ${reason}`);
+        }
+      }
+
+      async function refreshRzdActual(force = false) {
+        if (rzdActualInFlight) return;
+
+        const local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+        if (!local) {
+          setRzdStatus(
+            "stale",
+            "РЖД: для автоматического факта нужен локальный server.mjs; на статической странице используется расписание"
+          );
+          return;
+        }
+
+        rzdActualInFlight = true;
+        rzdRefreshButton.disabled = true;
+
+        try {
+          const now = Date.now();
+          const departureMs = parseDepartureMs(now);
+          const date = serviceDateIso(departureMs);
+          const query = new URLSearchParams({
+            date,
+            train: "121В"
+          });
+
+          if (force) query.set("force", "1");
+
+          const response = await fetch(`/api/rzd-actual?${query.toString()}`, {
+            cache: "no-store",
+            headers: { Accept: "application/json" }
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload?.error || payload?.details || `HTTP ${response.status}`);
+          }
+
+          applyRzdDelay(payload);
+        } catch (error) {
+          console.error("RZD actual movement failed:", error);
+          setRzdStatus("error", `РЖД: ERROR · ${error.message}`);
+        } finally {
+          rzdActualInFlight = false;
+          rzdRefreshButton.disabled = false;
+        }
+      }
+
+      function scheduleRzdRefresh() {
+        if (rzdActualTimer) clearInterval(rzdActualTimer);
+        rzdActualTimer = setInterval(
+          () => refreshRzdActual(false),
+          RZD_ACTUAL_REFRESH_MS
+        );
+      }
+
       function currentClockMs() {
         if (clockMode === "live") {
           return Date.now();
@@ -1909,6 +2100,13 @@
           delayMinutes === 0
             ? "0 мин"
             : `${delayMinutes > 0 ? "+" : ""}${delayMinutes} мин`;
+
+        delayText.title =
+          delaySource === "rzd"
+            ? "Автоматически по последней фактической отметке РЖД"
+            : delaySource === "manual"
+              ? "Ручная корректировка"
+              : "По расписанию";
 
         const mobileProgress =
           document.getElementById(
@@ -2707,6 +2905,11 @@
             60_000
           );
 
+        delaySource = "manual";
+        rzdAutoEnabled = false;
+        rzdAutoButton.classList.remove("active");
+        rzdAutoButton.textContent = "Авто РЖД: ВЫКЛ";
+
         manualDelay.value =
           String(delayMinutes);
 
@@ -2892,8 +3095,33 @@
                 ? Math.round(value)
                 : 0;
 
+            delaySource = "manual";
+            rzdAutoEnabled = false;
+            rzdAutoButton.classList.remove("active");
+            rzdAutoButton.textContent = "Авто РЖД: ВЫКЛ";
             lastTimelineIndex = "";
           }
+        );
+
+        rzdAutoButton.addEventListener(
+          "click",
+          () => {
+            rzdAutoEnabled = !rzdAutoEnabled;
+            rzdAutoButton.classList.toggle("active", rzdAutoEnabled);
+            rzdAutoButton.textContent = rzdAutoEnabled
+              ? "Авто РЖД: ВКЛ"
+              : "Авто РЖД: ВЫКЛ";
+
+            if (rzdAutoEnabled) {
+              delaySource = "schedule";
+              refreshRzdActual(true);
+            }
+          }
+        );
+
+        rzdRefreshButton.addEventListener(
+          "click",
+          () => refreshRzdActual(true)
         );
 
         actualStation.addEventListener(
@@ -2989,6 +3217,8 @@
         fillActualTimeForStation();
 
         loadRailRoute(false);
+        refreshRzdActual(false);
+        scheduleRzdRefresh();
         requestAnimationFrame(frame);
       }
 

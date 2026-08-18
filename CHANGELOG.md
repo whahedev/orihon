@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- changelog-polish-33 -->
+
 ## Unreleased
 
 ## 2.0.1 — 2026-08-30

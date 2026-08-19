@@ -1,4 +1,7 @@
-# Local Overpass dumps / helper scripts — not published
+# Runtime caches
+train-cache/
+
+# Local Overpass dumps / helper scripts
 _rel*.json
 _build-from-relation.mjs
 _fix-stop-coords.mjs

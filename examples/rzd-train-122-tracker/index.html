@@ -167,6 +167,190 @@
       box-shadow: 0 0 0 4px rgba(251, 113, 133, .12);
     }
 
+    .train-search {
+      display: grid;
+      grid-template-columns: minmax(120px, 1fr) 34px minmax(120px, 1fr) 144px auto;
+      gap: 7px;
+      margin-top: 12px;
+      align-items: end;
+    }
+
+    .train-search .field label {
+      white-space: nowrap;
+    }
+
+    .swap-route-button {
+      width: 34px;
+      padding: 0;
+      font-size: 16px;
+    }
+
+    .train-search-status {
+      min-height: 18px;
+      margin-top: 6px;
+      color: #94a3b8;
+      font-size: 9.5px;
+      line-height: 1.4;
+    }
+
+    .train-search-status.busy {
+      color: #fbbf24;
+    }
+
+    .train-search-status.ok {
+      color: #86efac;
+    }
+
+    .train-search-status.error {
+      color: #fca5a5;
+    }
+
+    .route-date-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .route-date-chips[hidden] {
+      display: none;
+    }
+
+    .route-date-chip {
+      height: 27px;
+      padding: 0 9px;
+      border-radius: 999px;
+      font-size: 9.5px;
+    }
+
+    .route-date-chip.active {
+      border-color: rgba(251, 113, 133, .65);
+      background: rgba(225, 29, 72, .18);
+      color: #fecdd3;
+    }
+
+    .route-date-chip.past {
+      border-style: dashed;
+    }
+
+    .train-search-results {
+      display: grid;
+      gap: 6px;
+      max-height: 230px;
+      margin-top: 7px;
+      overflow: auto;
+      scrollbar-width: thin;
+    }
+
+    .train-search-results[hidden] {
+      display: none;
+    }
+
+    .train-result {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      height: auto;
+      min-height: 54px;
+      padding: 7px 9px;
+      text-align: left;
+    }
+
+    .train-result-number {
+      min-width: 48px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .train-result-main {
+      min-width: 0;
+    }
+
+    .train-result-route {
+      overflow: hidden;
+      color: #e2e8f0;
+      font-size: 10px;
+      font-weight: 680;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .train-result-meta {
+      margin-top: 3px;
+      color: #94a3b8;
+      font-size: 9px;
+      line-height: 1.35;
+    }
+
+    .train-result-time {
+      color: #dbeafe;
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .train-result-status {
+      display: inline-block;
+      margin-top: 3px;
+      padding: 2px 5px;
+      border-radius: 999px;
+      background: rgba(14, 116, 144, .18);
+      color: #a5f3fc;
+      font-size: 8px;
+      font-weight: 750;
+    }
+
+    .train-result-status.active {
+      background: rgba(22, 163, 74, .16);
+      color: #bbf7d0;
+    }
+
+    .active-train-icon {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: max-content;
+      padding: 3px 6px;
+      border: 1px solid rgba(125, 211, 252, .55);
+      border-radius: 999px;
+      background: rgba(3, 105, 161, .88);
+      color: #f0f9ff;
+      box-shadow: 0 2px 9px rgba(0,0,0,.42);
+      font: 700 10px/1.1 Inter, system-ui, sans-serif;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    .active-trains-status {
+      margin-top: 5px;
+      color: #7dd3fc;
+      font-size: 9px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 900px) {
+      .train-search {
+        grid-template-columns: 1fr 34px 1fr;
+      }
+
+      .train-search .date-field {
+        grid-column: 1 / 3;
+      }
+
+      .train-search .search-submit {
+        grid-column: 3;
+      }
+
+      .train-search-results {
+        max-height: 170px;
+      }
+    }
+
+
     .stats {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -823,9 +1007,9 @@
     <section class="top-panel">
       <div class="head">
         <div>
-          <h1>Поезд 121В/122В · СПб → Новороссийск</h1>
+          <h1 id="trainTitle">Поезд 121В/122В · СПб → Новороссийск</h1>
           <div class="route-subtitle">
-            Оценочное положение по расписанию РЖД/ФПК · текущее время берётся из системных часов · МСК (UTC+3)
+            Поиск как у РЖД: откуда → куда → дата · активные поезда сразу на карте · выбранный поезд идёт по OSM-путям
           </div>
           <div class="rail-vector-status" id="railVectorStatus">
             OSM-вектор: ожидает построения маршрута по railway=rail…
@@ -838,6 +1022,50 @@
           <span class="badge-dot"></span>
           tracker
         </div>
+      </div>
+
+      <div class="train-search">
+        <div class="field">
+          <label for="trainFromInput">Откуда</label>
+          <input id="trainFromInput" list="trainFromSuggestions" value="Санкт-Петербург" autocomplete="off" spellcheck="false" />
+        </div>
+
+        <button
+          id="swapRouteButton"
+          class="swap-route-button"
+          type="button"
+          title="Поменять станции местами"
+          aria-label="Поменять станции местами"
+        >⇄</button>
+
+        <div class="field">
+          <label for="trainToInput">Куда</label>
+          <input id="trainToInput" list="trainToSuggestions" value="Новороссийск" autocomplete="off" spellcheck="false" />
+        </div>
+
+        <div class="field date-field">
+          <label for="trainDateInput">Дата у станции отправления</label>
+          <input id="trainDateInput" type="date" />
+        </div>
+
+        <button id="trainSearchButton" class="search-submit" type="button">Найти поезда</button>
+      </div>
+
+      <datalist id="trainFromSuggestions"></datalist>
+      <datalist id="trainToSuggestions"></datalist>
+
+      <div class="route-date-chips" id="routeDateChips" hidden></div>
+      <div class="train-search-results" id="trainSearchResults" hidden></div>
+
+      <div class="train-search-status" id="trainSearchStatus">
+        Укажите станции. Для поездов, которые ещё в пути, поиск автоматически покажет и подходящие прошлые даты.
+      </div>
+
+      <div class="button-row">
+        <button id="activeTrainsButton" class="active" type="button">Все поезда: ВКЛ</button>
+      </div>
+      <div class="active-trains-status" id="activeTrainsStatus">
+        Загружаю индекс поездов, которые сейчас в пути…
       </div>
 
       <div class="stats">
@@ -979,7 +1207,7 @@
 
     <div class="legend">
       OpenRailwayMap показывает инфраструктуру. Серая/красная линия строится из векторных OSM railway=rail через Overpass; поезд движется непосредственно вдоль этой полилинии. Справа показаны все остановки с прибытием, отправлением и временем стоянки.
-      Источник расписания в прототипе: актуальное расписание поезда 121В/122В на 16 августа 2026.
+      Для выбранного рейса расписание загружается с публичной страницы расписания без API-ключа; 121В также имеет встроенный offline fallback.
       LIVE использует системные часы браузера и автоматически учитывает последнюю доступную фактическую отметку РЖД; ручная корректировка остаётся fallback.
     </div>
   </div>
@@ -1026,11 +1254,11 @@
       "use strict";
 
       const MOSCOW_OFFSET = "+03:00";
-      const TOTAL_MINUTES = 2613;
+      let TOTAL_MINUTES = 2613;
       const ANIMATION_FPS = 30;
       const FRAME_MS = 1000 / ANIMATION_FPS;
 
-      const stops = [
+      let stops = [
         { name: "Санкт-Петербург (Московский вокзал)", lat: 59.9296, lon: 30.3626, arr: null, dep: 0, major: true },
         { name: "Большая Вишера", lat: 58.9098909, lon: 32.0903823, arr: 120, dep: 138 },
         { name: "Малая Вишера", lat: 58.8462, lon: 32.222, arr: 149, dep: 150 },
@@ -1085,6 +1313,19 @@
       const progressBar = document.getElementById("progressBar");
       const positionLine = document.getElementById("positionLine");
       const nextLine = document.getElementById("nextLine");
+      const trainTitle = document.getElementById("trainTitle");
+      const trainFromInput = document.getElementById("trainFromInput");
+      const trainToInput = document.getElementById("trainToInput");
+      const trainFromSuggestions = document.getElementById("trainFromSuggestions");
+      const trainToSuggestions = document.getElementById("trainToSuggestions");
+      const swapRouteButton = document.getElementById("swapRouteButton");
+      const trainDateInput = document.getElementById("trainDateInput");
+      const trainSearchButton = document.getElementById("trainSearchButton");
+      const trainSearchStatus = document.getElementById("trainSearchStatus");
+      const routeDateChips = document.getElementById("routeDateChips");
+      const trainSearchResults = document.getElementById("trainSearchResults");
+      const activeTrainsButton = document.getElementById("activeTrainsButton");
+      const activeTrainsStatus = document.getElementById("activeTrainsStatus");
 
       const systemTimeBox = document.getElementById("systemTimeBox");
       const serviceDateBox = document.getElementById("serviceDateBox");
@@ -1116,6 +1357,17 @@
       let railwayLayer;
       let railwayLayerVisible = false;
       let stationMarkers = [];
+      let activeTrainMarkers = [];
+      let activeTrainsVisible = true;
+      let activeTrainsTimer = null;
+      let activeRefreshRetryTimer = null;
+      let selectedRun = null;
+      let selectedRoutePayload = null;
+      let routeSearchPayload = null;
+      let selectedSearchDate = null;
+      let stationSuggestTimer = null;
+      const fromSuggestionCodes = new Map();
+      const toSuggestionCodes = new Map();
 
       let delayMinutes = 0;
       let delaySource = "schedule";
@@ -1172,6 +1424,13 @@
       }
 
       function parseDepartureMs(referenceMs = currentClockMs()) {
+        if (
+          selectedRun &&
+          Number.isFinite(Number(selectedRun.departureMs))
+        ) {
+          return Number(selectedRun.departureMs);
+        }
+
         const dayMs = 24 * 60 * 60 * 1000;
         const tripMs = TOTAL_MINUTES * 60_000;
         const todayDeparture = moscowDayDepartureMs(referenceMs);
@@ -1526,8 +1785,8 @@
 
         railVectorStatus.textContent =
           force
-            ? "OSM-вектор: перестраиваю маршрут по relation 121В…"
-            : "OSM-вектор: загружаю/строю маршрут по ж/д путям…";
+            ? `OSM-вектор: перестраиваю маршрут ${selectedRun?.number || "121В"}…`
+            : `OSM-вектор: загружаю маршрут ${selectedRun?.number || "121В"} по ж/д путям…`;
 
         rebuildRailButton.disabled = true;
 
@@ -1536,8 +1795,16 @@
           let payload = null;
 
           try {
+            const routeUrl =
+              selectedRun?.runId
+                ? `/api/trains/route?${new URLSearchParams({
+                    runId: selectedRun.runId,
+                    ...(force ? { force: "1" } : {})
+                  }).toString()}`
+                : `/api/rail-route${force ? "?force=1" : ""}`;
+
             response = await fetch(
-              `/api/rail-route${force ? "?force=1" : ""}`,
+              routeUrl,
               {
                 cache: "no-store",
                 headers: {
@@ -1553,7 +1820,7 @@
             // Static GitHub Pages has no /api — fall through to cache file.
           }
 
-          if (!payload) {
+          if (!payload && !selectedRun?.runId) {
             const staticResponse =
               await fetch(
                 "./rail-route-cache.json",
@@ -1583,6 +1850,19 @@
               cache: true
             };
           }
+
+          if (!payload) {
+            let details = "маршрут не получен";
+            if (response) {
+              try {
+                const errorPayload = await response.json();
+                details = errorPayload?.details || errorPayload?.error || details;
+              } catch {}
+            }
+            throw new Error(details);
+          }
+
+          selectedRoutePayload = payload;
 
           if (
             !Array.isArray(payload.segments) ||
@@ -1626,16 +1906,7 @@
             );
           }
 
-          stationMarkers.forEach(
-            (marker, index) => {
-              const anchor =
-                railAnchor(index);
-
-              marker.setLatLng(
-                [anchor.lat, anchor.lon]
-              );
-            }
-          );
+          rebuildStationMarkers();
 
           railVectorStatus.className =
             "rail-vector-status ready";
@@ -1672,6 +1943,10 @@
       }
 
       function serviceDateIso(departureMs) {
+        if (selectedRun?.serviceDate) {
+          return selectedRun.serviceDate;
+        }
+
         const parts = moscowDateParts(departureMs);
         return `${parts.year}-${parts.month}-${parts.day}`;
       }
@@ -1777,9 +2052,23 @@
           const now = Date.now();
           const departureMs = parseDepartureMs(now);
           const date = serviceDateIso(departureMs);
+          const trainNumber =
+            selectedRun?.number || "121В";
+
+          if (
+            selectedRun &&
+            trainNumber !== "121В"
+          ) {
+            setRzdStatus(
+              "stale",
+              `РЖД: выбран ${trainNumber} · массовый/универсальный факт пока не запрашивается; положение считается по расписанию`
+            );
+            return;
+          }
+
           const query = new URLSearchParams({
             date,
-            train: "121В"
+            train: trainNumber
           });
 
           if (force) query.set("force", "1");
@@ -2305,39 +2594,7 @@
           }
         ).addTo(map);
 
-        stationMarkers = stops.map(
-          (stop, index) => {
-            const marker = Orihon.marker(
-              [stop.lat, stop.lon],
-              {
-                icon: Orihon.divIcon({
-                  content: makeStationNode(
-                    Boolean(stop.major)
-                  ),
-                  iconSize:
-                    stop.major
-                      ? [14, 14]
-                      : [10, 10],
-                  iconAnchor:
-                    stop.major
-                      ? [7, 7]
-                      : [5, 5],
-                  className: ""
-                }),
-                title: stop.name,
-                zIndexOffset: stop.major ? 50 : 10
-              }
-            );
-
-            marker.bindPopup(
-              () => stationPopup(stop, index)
-            );
-
-            marker.addTo(map);
-
-            return marker;
-          }
-        );
+        rebuildStationMarkers();
 
         trainMarker = Orihon.marker(
           [stops[0].lat, stops[0].lon],
@@ -2348,7 +2605,7 @@
               iconAnchor: [17, 17],
               className: ""
             }),
-            title: "Поезд 121В/122В",
+            title: `Поезд ${selectedRun?.number || "121В"}`,
             zIndexOffset: 1000
           }
         ).addTo(map);
@@ -2602,7 +2859,15 @@
           actualStation.appendChild(option);
         });
 
-        actualStation.value = "10";
+        if (actualStation.options.length) {
+          actualStation.value =
+            String(
+              Math.min(
+                10,
+                stops.length - 1
+              )
+            );
+        }
       }
 
       function dwellMinutes(stop) {
@@ -2673,7 +2938,7 @@
             const departure =
               document.createElement("span");
             departure.textContent =
-              `отпр. ${minutesToClock(stop.dep)}`;
+              `отпр. ${stopScheduleClock(stop, "departure")}`;
 
             schedule.append(departure);
           } else if (index === stops.length - 1) {
@@ -2683,7 +2948,7 @@
             const arrival =
               document.createElement("span");
             arrival.textContent =
-              `приб. ${minutesToClock(stop.arr)}`;
+              `приб. ${stopScheduleClock(stop, "arrival")}`;
 
             schedule.append(arrival);
           } else {
@@ -2695,12 +2960,12 @@
             const arrival =
               document.createElement("span");
             arrival.textContent =
-              `приб. ${minutesToClock(stop.arr)}`;
+              `приб. ${stopScheduleClock(stop, "arrival")}`;
 
             const departure =
               document.createElement("span");
             departure.textContent =
-              `отпр. ${minutesToClock(stop.dep)}`;
+              `отпр. ${stopScheduleClock(stop, "departure")}`;
 
             const dwell =
               document.createElement("span");
@@ -2756,10 +3021,18 @@
                 drawer.open = false;
               }
 
-              map.flyTo(
-                [stop.lat, stop.lon],
-                9
-              );
+              const anchor =
+                railAnchor(index);
+
+              if (
+                Number.isFinite(anchor.lat) &&
+                Number.isFinite(anchor.lon)
+              ) {
+                map.flyTo(
+                  [anchor.lat, anchor.lon],
+                  9
+                );
+              }
 
               if (
                 stationMarkers[index] &&
@@ -2775,27 +3048,65 @@
       }
 
       function minutesToClock(minutes) {
-        const start =
-          15 * 60 + 57;
+        if (
+          minutes === null ||
+          minutes === undefined ||
+          !Number.isFinite(Number(minutes))
+        ) {
+          return "—";
+        }
 
-        const total =
-          start + minutes;
+        const departureMs =
+          parseDepartureMs(
+            currentClockMs()
+          );
 
-        const day =
-          Math.floor(total / 1440);
+        const targetMs =
+          departureMs +
+          Number(minutes) *
+          60_000;
 
-        const inDay =
-          ((total % 1440) + 1440) % 1440;
-
-        const h =
-          Math.floor(inDay / 60);
-
-        const m =
-          inDay % 60;
+        const sameDay =
+          serviceDateIso(
+            targetMs
+          ) ===
+          serviceDateIso(
+            departureMs
+          );
 
         return (
-          `${day > 0 ? `+${day}д ` : ""}` +
-          `${pad2(h)}:${pad2(m)}`
+          `${sameDay ? "" : formatMsk(targetMs, true) + " · "}` +
+          formatMsk(targetMs)
+        );
+      }
+
+      function stopScheduleClock(stop, event) {
+        const local =
+          event === "arrival"
+            ? stop.arrivalLocal
+            : stop.departureLocal;
+
+        const localDate =
+          event === "arrival"
+            ? stop.arrivalDateLocal
+            : stop.departureDateLocal;
+
+        if (local) {
+          if (
+            localDate &&
+            selectedRun?.serviceDate &&
+            localDate !== selectedRun.serviceDate
+          ) {
+            return `${localDate.slice(5)} ${local}`;
+          }
+
+          return local;
+        }
+
+        return minutesToClock(
+          event === "arrival"
+            ? stop.arr
+            : stop.dep
         );
       }
 
@@ -3029,6 +3340,1209 @@
         }
       }
 
+      function setTrainSearchStatus(kind, text) {
+        trainSearchStatus.className =
+          `train-search-status${kind ? ` ${kind}` : ""}`;
+
+        trainSearchStatus.textContent =
+          text;
+      }
+
+      function fitCurrentRoute() {
+        const points =
+          routeCoords.filter(
+            (point) =>
+              Array.isArray(point) &&
+              Number.isFinite(point[0]) &&
+              Number.isFinite(point[1])
+          );
+
+        if (points.length < 2) {
+          return;
+        }
+
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let minLon = Infinity;
+        let maxLon = -Infinity;
+
+        for (const [lat, lon] of points) {
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+          minLon = Math.min(minLon, lon);
+          maxLon = Math.max(maxLon, lon);
+        }
+
+        map.fitBounds([
+          [minLat, minLon],
+          [maxLat, maxLon]
+        ]);
+      }
+
+      function clearStationMarkers() {
+        for (const marker of stationMarkers) {
+          if (
+            marker &&
+            typeof marker.remove === "function"
+          ) {
+            marker.remove();
+          }
+        }
+
+        stationMarkers = [];
+      }
+
+      function rebuildStationMarkers() {
+        if (!map) return;
+
+        clearStationMarkers();
+
+        stationMarkers =
+          stops.map(
+            (stop, index) => {
+              const anchor =
+                railAnchors?.[index];
+
+              const lat =
+                Number.isFinite(anchor?.lat)
+                  ? anchor.lat
+                  : stop.lat;
+
+              const lon =
+                Number.isFinite(anchor?.lon)
+                  ? anchor.lon
+                  : stop.lon;
+
+              if (
+                !Number.isFinite(lat) ||
+                !Number.isFinite(lon)
+              ) {
+                return null;
+              }
+
+              const marker =
+                Orihon.marker(
+                  [lat, lon],
+                  {
+                    icon:
+                      Orihon.divIcon({
+                        content:
+                          makeStationNode(
+                            Boolean(stop.major)
+                          ),
+                        iconSize:
+                          stop.major
+                            ? [14, 14]
+                            : [10, 10],
+                        iconAnchor:
+                          stop.major
+                            ? [7, 7]
+                            : [5, 5],
+                        className: ""
+                      }),
+                    title:
+                      stop.name,
+                    zIndexOffset:
+                      stop.major
+                        ? 50
+                        : 10
+                  }
+                );
+
+              marker.bindPopup(
+                () =>
+                  stationPopup(
+                    stop,
+                    index
+                  )
+              );
+
+              marker.addTo(map);
+
+              return marker;
+            }
+          );
+      }
+
+      function applyRoutePayload(payload) {
+        railSegments =
+          payload.segments.map(
+            prepareRailSegment
+          );
+
+        railAnchors =
+          payload.anchors;
+
+        railRouteMeta =
+          payload;
+
+        railRouteLoaded =
+          true;
+
+        selectedRoutePayload =
+          payload;
+
+        routeCoords = [];
+
+        for (
+          const segment of
+          railSegments
+        ) {
+          appendLatLngs(
+            routeCoords,
+            segment.latLngs
+          );
+        }
+
+        if (
+          routeLine &&
+          typeof routeLine.setLatLngs === "function"
+        ) {
+          routeLine.setLatLngs(
+            routeCoords
+          );
+        }
+
+        rebuildStationMarkers();
+
+        if (trainMarker) {
+          const start =
+            railAnchor(0);
+
+          if (
+            Number.isFinite(start.lat) &&
+            Number.isFinite(start.lon)
+          ) {
+            trainMarker.setLatLng(
+              [start.lat, start.lon]
+            );
+          }
+        }
+      }
+
+      async function applySelectedRun(run) {
+        selectedRun = run;
+        TOTAL_MINUTES =
+          Number(run.totalMinutes);
+
+        stops =
+          (run.stops || []).map(
+            (stop, index, list) => ({
+              ...stop,
+              lat:
+                Number.isFinite(Number(stop.lat))
+                  ? Number(stop.lat)
+                  : null,
+              lon:
+                Number.isFinite(Number(stop.lon))
+                  ? Number(stop.lon)
+                  : null,
+              major:
+                Boolean(stop.major) ||
+                index === 0 ||
+                index === list.length - 1
+            })
+          );
+
+        if (
+          stops.length < 2 ||
+          !Number.isFinite(TOTAL_MINUTES)
+        ) {
+          throw new Error(
+            "Источник вернул неполное расписание"
+          );
+        }
+
+        delayMinutes = 0;
+        delaySource = "schedule";
+        manualDelay.value = "0";
+        rzdActualPayload = null;
+
+        railSegments = null;
+        railAnchors = null;
+        railRouteLoaded = false;
+        railRouteMeta = null;
+        selectedRoutePayload = null;
+
+        routeCoords =
+          stops
+            .filter(
+              (stop) =>
+                Number.isFinite(stop.lat) &&
+                Number.isFinite(stop.lon)
+            )
+            .map(
+              (stop) => [
+                stop.lat,
+                stop.lon
+              ]
+            );
+
+        trainTitle.textContent =
+          `Поезд ${run.number} · ${run.from} → ${run.to}`;
+
+        trainFromInput.value =
+          run.from;
+
+        trainToInput.value =
+          run.to;
+
+        trainDateInput.value =
+          run.serviceDate;
+
+        document.title =
+          `РЖД — поезд ${run.number} ${run.from} → ${run.to}`;
+
+        serviceDateBox.textContent =
+          run.serviceDate;
+
+        lastTimelineIndex = "";
+        didFocusTrain = false;
+
+        populateActualStationSelect();
+        renderTimeline();
+
+        if (
+          routeCoords.length >= 2 &&
+          routeLine
+        ) {
+          routeLine.setLatLngs(
+            routeCoords
+          );
+        }
+
+        rebuildStationMarkers();
+
+        setTrainSearchStatus(
+          "busy",
+          `Поезд ${run.number} найден. Загружаю железнодорожную геометрию…`
+        );
+
+        await loadRailRoute(false);
+
+        setTrainSearchStatus(
+          railRouteLoaded
+            ? "ok"
+            : "error",
+          railRouteLoaded
+            ? `${run.number} · ${run.from} → ${run.to} · ${run.totalMinutes} мин · маршрут по OSM готов`
+            : `${run.number} загружен, но OSM-маршрут недоступен`
+        );
+
+        setClockMode(
+          "live",
+          1
+        );
+
+        fitCurrentRoute();
+
+        if (
+          run.number === "121В"
+        ) {
+          void refreshRzdActual(
+            true
+          );
+        } else {
+          setRzdStatus(
+            "stale",
+            `РЖД: для ${run.number} используется расчёт по расписанию; live-факт пока не масштабируется на произвольный рейс`
+          );
+        }
+
+        if (
+          activeTrainsVisible
+        ) {
+          void refreshActiveTrains();
+        }
+      }
+
+      async function loadTrainRun(runId) {
+        trainSearchButton.disabled =
+          true;
+
+        try {
+          const response =
+            await fetch(
+              `/api/trains/run?${new URLSearchParams({
+                runId
+              }).toString()}`,
+              {
+                cache:
+                  "no-store",
+                headers: {
+                  Accept:
+                    "application/json"
+                }
+              }
+            );
+
+          const run =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              run?.details ||
+              run?.error ||
+              `HTTP ${response.status}`
+            );
+          }
+
+          await applySelectedRun(
+            run
+          );
+        } finally {
+          trainSearchButton.disabled =
+            false;
+        }
+      }
+
+      function formatSearchDate(dateIso) {
+        try {
+          return new Intl.DateTimeFormat(
+            "ru-RU",
+            {
+              day: "numeric",
+              month: "short"
+            }
+          ).format(
+            new Date(
+              `${dateIso}T12:00:00`
+            )
+          );
+        } catch {
+          return dateIso;
+        }
+      }
+
+      function formatSearchClock(ms, fallback = "—") {
+        const value =
+          Number(ms);
+
+        if (!Number.isFinite(value)) {
+          return fallback;
+        }
+
+        return new Intl.DateTimeFormat(
+          "ru-RU",
+          {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false
+          }
+        ).format(
+          new Date(value)
+        );
+      }
+
+      function clearRouteSearchUi() {
+        routeDateChips.innerHTML = "";
+        trainSearchResults.innerHTML = "";
+        routeDateChips.hidden = true;
+        trainSearchResults.hidden = true;
+        routeSearchPayload = null;
+        selectedSearchDate = null;
+      }
+
+      function renderRouteDateChips() {
+        routeDateChips.innerHTML = "";
+
+        const groups =
+          routeSearchPayload?.groups ||
+          [];
+
+        routeDateChips.hidden =
+          groups.length === 0;
+
+        for (
+          const group of
+          groups
+        ) {
+          const button =
+            document.createElement(
+              "button"
+            );
+
+          button.type =
+            "button";
+
+          button.className =
+            "route-date-chip";
+
+          if (group.isPast) {
+            button.classList.add(
+              "past"
+            );
+          }
+
+          if (
+            group.date ===
+            selectedSearchDate
+          ) {
+            button.classList.add(
+              "active"
+            );
+          }
+
+          let suffix = "";
+
+          if (group.isToday) {
+            suffix = " · сегодня";
+          } else if (group.isPast) {
+            suffix = " · ещё в пути";
+          }
+
+          button.textContent =
+            `${formatSearchDate(group.date)}${suffix}`;
+
+          button.addEventListener(
+            "click",
+            () => {
+              selectedSearchDate =
+                group.date;
+
+              renderRouteDateChips();
+              renderRouteSearchResults();
+            }
+          );
+
+          routeDateChips.appendChild(
+            button
+          );
+        }
+      }
+
+      function renderRouteSearchResults() {
+        trainSearchResults.innerHTML = "";
+
+        const group =
+          routeSearchPayload
+            ?.groups
+            ?.find(
+              (item) =>
+                item.date ===
+                selectedSearchDate
+            );
+
+        if (
+          !group ||
+          !group.candidates?.length
+        ) {
+          trainSearchResults.hidden =
+            true;
+          return;
+        }
+
+        trainSearchResults.hidden =
+          false;
+
+        for (
+          const candidate of
+          group.candidates
+        ) {
+          const button =
+            document.createElement(
+              "button"
+            );
+
+          button.type =
+            "button";
+
+          button.className =
+            "train-result";
+
+          const number =
+            document.createElement(
+              "div"
+            );
+
+          number.className =
+            "train-result-number";
+
+          number.textContent =
+            `№ ${candidate.number}`;
+
+          const main =
+            document.createElement(
+              "div"
+            );
+
+          main.className =
+            "train-result-main";
+
+          const route =
+            document.createElement(
+              "div"
+            );
+
+          route.className =
+            "train-result-route";
+
+          route.textContent =
+            `${candidate.segment.fromStop} → ${candidate.segment.toStop}`;
+
+          const meta =
+            document.createElement(
+              "div"
+            );
+
+          meta.className =
+            "train-result-meta";
+
+          meta.textContent =
+            `Полный маршрут: ${candidate.from} → ${candidate.to} · отправление состава ${candidate.serviceDate}`;
+
+          const status =
+            document.createElement(
+              "span"
+            );
+
+          status.className =
+            "train-result-status";
+
+          if (candidate.activeNow) {
+            status.classList.add(
+              "active"
+            );
+
+            status.textContent =
+              "СЕЙЧАС В ПУТИ";
+          } else {
+            status.textContent =
+              "ОТПРАВИТСЯ";
+          }
+
+          main.append(
+            route,
+            meta,
+            status
+          );
+
+          const time =
+            document.createElement(
+              "div"
+            );
+
+          time.className =
+            "train-result-time";
+
+          const departure =
+            candidate.segment.departureLocal ||
+            formatSearchClock(
+              candidate.segment.departureMs
+            );
+
+          const arrival =
+            candidate.segment.arrivalLocal ||
+            formatSearchClock(
+              candidate.segment.arrivalMs
+            );
+
+          time.innerHTML =
+            `<strong>${departure}</strong><br>→ ${arrival}`;
+
+          button.append(
+            number,
+            main,
+            time
+          );
+
+          button.addEventListener(
+            "click",
+            async () => {
+              setTrainSearchStatus(
+                "busy",
+                `Загружаю поезд ${candidate.number}…`
+              );
+
+              try {
+                await loadTrainRun(
+                  candidate.runId
+                );
+              } catch (error) {
+                setTrainSearchStatus(
+                  "error",
+                  `Не удалось открыть поезд: ${error.message}`
+                );
+              }
+            }
+          );
+
+          trainSearchResults.appendChild(
+            button
+          );
+        }
+      }
+
+      function normalizeSuggestionLabel(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/ё/g, "е")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      async function refreshStationSuggestions(
+        input,
+        datalist,
+        codeMap
+      ) {
+        const query =
+          input.value.trim();
+
+        if (
+          query.length < 2
+        ) {
+          datalist.innerHTML = "";
+          codeMap.clear();
+          return;
+        }
+
+        try {
+          const response =
+            await fetch(
+              `/api/trains/suggest?${new URLSearchParams({
+                q: query
+              }).toString()}`,
+              {
+                cache: "no-store",
+                headers: {
+                  Accept: "application/json"
+                }
+              }
+            );
+
+          const payload =
+            await response.json();
+
+          datalist.innerHTML = "";
+          codeMap.clear();
+
+          for (
+            const item of
+            payload.suggestions || []
+          ) {
+            const option =
+              document.createElement(
+                "option"
+              );
+
+            option.value =
+              item.title;
+
+            option.label =
+              item.code;
+
+            datalist.appendChild(
+              option
+            );
+
+            codeMap.set(
+              normalizeSuggestionLabel(
+                item.title
+              ),
+              item.code
+            );
+          }
+        } catch {
+          // Suggestions are convenience only; route search still works by name.
+        }
+      }
+
+      function scheduleStationSuggestions(
+        input,
+        datalist,
+        codeMap
+      ) {
+        if (
+          stationSuggestTimer
+        ) {
+          clearTimeout(
+            stationSuggestTimer
+          );
+        }
+
+        stationSuggestTimer =
+          setTimeout(
+            () => {
+              stationSuggestTimer =
+                null;
+
+              void refreshStationSuggestions(
+                input,
+                datalist,
+                codeMap
+              );
+            },
+            220
+          );
+      }
+
+      async function searchRoute() {
+        const from =
+          trainFromInput.value
+            .trim();
+
+        const to =
+          trainToInput.value
+            .trim();
+
+        const date =
+          trainDateInput.value;
+
+        const fromId =
+          fromSuggestionCodes.get(
+            normalizeSuggestionLabel(
+              from
+            )
+          ) || "";
+
+        const toId =
+          toSuggestionCodes.get(
+            normalizeSuggestionLabel(
+              to
+            )
+          ) || "";
+
+        if (
+          !from ||
+          !to ||
+          !date
+        ) {
+          setTrainSearchStatus(
+            "error",
+            "Укажите станцию отправления, станцию назначения и дату"
+          );
+          return;
+        }
+
+        trainSearchButton.disabled =
+          true;
+
+        clearRouteSearchUi();
+
+        setTrainSearchStatus(
+          "busy",
+          `Ищу поезда ${from} → ${to}. Проверяю выбранную дату и активные отправления предыдущих дней…`
+        );
+
+        try {
+          const response =
+            await fetch(
+              `/api/trains/search-route?${new URLSearchParams({
+                from,
+                to,
+                date,
+                ...(fromId ? { fromId } : {}),
+                ...(toId ? { toId } : {}),
+                lookback: "4"
+              }).toString()}`,
+              {
+                cache:
+                  "no-store",
+                headers: {
+                  Accept:
+                    "application/json"
+                }
+              }
+            );
+
+          const payload =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              payload?.details ||
+              payload?.error ||
+              `HTTP ${response.status}`
+            );
+          }
+
+          routeSearchPayload =
+            payload;
+
+          const requestedGroup =
+            payload.groups?.find(
+              (group) =>
+                group.date ===
+                date
+            );
+
+          selectedSearchDate =
+            requestedGroup?.date ||
+            payload.groups?.[0]?.date ||
+            null;
+
+          renderRouteDateChips();
+          renderRouteSearchResults();
+
+          if (!payload.count) {
+            setTrainSearchStatus(
+              "error",
+              "Подходящих поездов не найдено. Завершённые прошлые рейсы скрываются автоматически."
+            );
+            return;
+          }
+
+          const pastGroups =
+            payload.groups.filter(
+              (group) =>
+                group.isPast
+            ).length;
+
+          setTrainSearchStatus(
+            "ok",
+            `Найдено поездов: ${payload.count}` +
+            (
+              pastGroups
+                ? ` · прошлых дат с поездами, которые ещё в пути: ${pastGroups}`
+                : ""
+            )
+          );
+        } catch (error) {
+          console.error(
+            "Route search failed:",
+            error
+          );
+
+          setTrainSearchStatus(
+            "error",
+            `Поиск: ${error.message}`
+          );
+        } finally {
+          trainSearchButton.disabled =
+            false;
+        }
+      }
+
+      function swapSearchStations() {
+        const from =
+          trainFromInput.value;
+
+        trainFromInput.value =
+          trainToInput.value;
+
+        trainToInput.value =
+          from;
+
+        clearRouteSearchUi();
+      }
+
+      function clearActiveTrainMarkers() {
+        for (
+          const marker of
+          activeTrainMarkers
+        ) {
+          if (
+            marker &&
+            typeof marker.remove === "function"
+          ) {
+            marker.remove();
+          }
+        }
+
+        activeTrainMarkers = [];
+      }
+
+      function makeActiveTrainNode(number) {
+        const node =
+          document.createElement(
+            "div"
+          );
+
+        node.className =
+          "active-train-icon";
+
+        node.textContent =
+          `🚆 ${number}`;
+
+        return node;
+      }
+
+      async function refreshActiveTrains() {
+        if (
+          !activeTrainsVisible ||
+          !map
+        ) {
+          return;
+        }
+
+        try {
+          const response =
+            await fetch(
+              "/api/trains/active",
+              {
+                cache:
+                  "no-store",
+                headers: {
+                  Accept:
+                    "application/json"
+                }
+              }
+            );
+
+          const payload =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              payload?.details ||
+              payload?.error ||
+              `HTTP ${response.status}`
+            );
+          }
+
+          clearActiveTrainMarkers();
+
+          for (
+            const train of
+            payload.trains || []
+          ) {
+            if (
+              selectedRun?.runId ===
+              train.runId
+            ) {
+              continue;
+            }
+
+            const lat =
+              Number(
+                train?.position?.lat
+              );
+
+            const lon =
+              Number(
+                train?.position?.lon
+              );
+
+            if (
+              !Number.isFinite(lat) ||
+              !Number.isFinite(lon)
+            ) {
+              continue;
+            }
+
+            const marker =
+              Orihon.marker(
+                [lat, lon],
+                {
+                  icon:
+                    Orihon.divIcon({
+                      content:
+                        makeActiveTrainNode(
+                          train.number
+                        ),
+                      iconAnchor:
+                        [18, 12],
+                      className: ""
+                    }),
+                  title:
+                    `${train.number} · ${train.from} → ${train.to}`,
+                  zIndexOffset:
+                    500
+                }
+              );
+
+            marker.bindPopup(
+              () => {
+                const root =
+                  document.createElement(
+                    "div"
+                  );
+
+                root.className =
+                  "tooltip-content";
+
+                const title =
+                  document.createElement(
+                    "strong"
+                  );
+
+                title.textContent =
+                  `Поезд ${train.number}`;
+
+                const body =
+                  document.createElement(
+                    "div"
+                  );
+
+                body.innerHTML =
+                  `${train.from} → ${train.to}<br>` +
+                  `Дата: <b>${train.serviceDate}</b><br>` +
+                  `Положение: <b>расчёт по расписанию</b>`;
+
+                const button =
+                  document.createElement(
+                    "button"
+                  );
+
+                button.type =
+                  "button";
+
+                button.textContent =
+                  "Отслеживать";
+
+                button.style.marginTop =
+                  "8px";
+
+                button.addEventListener(
+                  "click",
+                  () =>
+                    loadTrainRun(
+                      train.runId
+                    )
+                );
+
+                root.append(
+                  title,
+                  body,
+                  button
+                );
+
+                return root;
+              }
+            );
+
+            marker.addTo(
+              map
+            );
+
+            activeTrainMarkers.push(
+              marker
+            );
+          }
+
+          const coverage =
+            payload?.coverage;
+
+          const boardText =
+            coverage?.boardCount
+              ? ` · узлов: ${coverage.boardCount}`
+              : "";
+
+          activeTrainsStatus.textContent =
+            `На карте: ${payload.count} активных поездов${boardText}` +
+            (
+              payload.refreshing
+                ? " · индекс обновляется…"
+                : " · позиции расчётные"
+            );
+
+          if (
+            payload.refreshing
+          ) {
+            if (
+              activeRefreshRetryTimer
+            ) {
+              clearTimeout(
+                activeRefreshRetryTimer
+              );
+            }
+
+            activeRefreshRetryTimer =
+              setTimeout(
+                () => {
+                  activeRefreshRetryTimer =
+                    null;
+
+                  void refreshActiveTrains();
+                },
+                8000
+              );
+          }
+        } catch (error) {
+          activeTrainsStatus.textContent =
+            `Не удалось обновить каталог: ${error.message}`;
+        }
+      }
+
+      function startActiveTrainsLayer() {
+        activeTrainsVisible = true;
+
+        activeTrainsButton.classList.add(
+          "active"
+        );
+
+        activeTrainsButton.textContent =
+          "Все поезда: ВКЛ";
+
+        void refreshActiveTrains();
+
+        if (
+          activeTrainsTimer
+        ) {
+          clearInterval(
+            activeTrainsTimer
+          );
+        }
+
+        activeTrainsTimer =
+          setInterval(
+            refreshActiveTrains,
+            60_000
+          );
+      }
+
+      function toggleActiveTrains() {
+        activeTrainsVisible =
+          !activeTrainsVisible;
+
+        activeTrainsButton.classList.toggle(
+          "active",
+          activeTrainsVisible
+        );
+
+        activeTrainsButton.textContent =
+          activeTrainsVisible
+            ? "Все поезда: ВКЛ"
+            : "Все поезда: ВЫКЛ";
+
+        if (
+          activeTrainsVisible
+        ) {
+          void refreshActiveTrains();
+
+          if (
+            activeTrainsTimer
+          ) {
+            clearInterval(
+              activeTrainsTimer
+            );
+          }
+
+          activeTrainsTimer =
+            setInterval(
+              refreshActiveTrains,
+              60_000
+            );
+        } else {
+          if (
+            activeTrainsTimer
+          ) {
+            clearInterval(
+              activeTrainsTimer
+            );
+
+            activeTrainsTimer =
+              null;
+          }
+
+          if (
+            activeRefreshRetryTimer
+          ) {
+            clearTimeout(
+              activeRefreshRetryTimer
+            );
+
+            activeRefreshRetryTimer =
+              null;
+          }
+
+          clearActiveTrainMarkers();
+          activeTrainsStatus.textContent =
+            "Слой всех поездов выключен";
+        }
+      }
+
       function bindControls() {
         syncMobileLayout();
 
@@ -3041,12 +4555,7 @@
 
         fitButton.addEventListener(
           "click",
-          () => {
-            map.fitBounds([
-              [44.0, 29.4],
-              [60.4, 41.0]
-            ]);
-          }
+          fitCurrentRoute
         );
 
         trainButton.addEventListener(
@@ -3077,6 +4586,62 @@
         x600Button.addEventListener(
           "click",
           () => startDemo(600)
+        );
+
+        trainSearchButton.addEventListener(
+          "click",
+          searchRoute
+        );
+
+        swapRouteButton.addEventListener(
+          "click",
+          swapSearchStations
+        );
+
+        for (
+          const input of
+          [
+            trainFromInput,
+            trainToInput,
+            trainDateInput
+          ]
+        ) {
+          input.addEventListener(
+            "keydown",
+            (event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void searchRoute();
+              }
+            }
+          );
+        }
+
+        trainFromInput.addEventListener(
+          "input",
+          () => {
+            scheduleStationSuggestions(
+              trainFromInput,
+              trainFromSuggestions,
+              fromSuggestionCodes
+            );
+          }
+        );
+
+        trainToInput.addEventListener(
+          "input",
+          () => {
+            scheduleStationSuggestions(
+              trainToInput,
+              trainToSuggestions,
+              toSuggestionCodes
+            );
+          }
+        );
+
+        activeTrainsButton.addEventListener(
+          "click",
+          toggleActiveTrains
         );
 
         applyActualButton.addEventListener(
@@ -3210,12 +4775,30 @@
           return;
         }
 
+        if (!trainDateInput.value) {
+          const now =
+            new Date();
+
+          const local =
+            new Date(
+              now.getTime() -
+              now.getTimezoneOffset() *
+              60_000
+            );
+
+          trainDateInput.value =
+            local
+              .toISOString()
+              .slice(0, 10);
+        }
+
         populateActualStationSelect();
         renderTimeline();
         createMap();
         bindControls();
         fillActualTimeForStation();
 
+        startActiveTrainsLayer();
         loadRailRoute(false);
         refreshRzdActual(false);
         scheduleRzdRefresh();

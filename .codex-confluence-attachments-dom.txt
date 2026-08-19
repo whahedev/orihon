@@ -1,0 +1,101 @@
+- banner:
+  - navigation:
+    - heading "Confluence" [level=1]:
+      - link "Confluence":
+        - /url: /
+        - generic: Confluence
+    - generic: 
+- heading "Войти" [level=2]
+- group "Войти в Confluence":
+  - generic: Имя пользователя
+  - textbox "Имя пользователя" [active]
+  - generic: Пароль
+  - textbox "Пароль"
+  - checkbox "Запомнить меня"
+  - text: Запомнить меня
+  - button "Войти"
+  - link "Забыли ваш пароль?":
+    - /url: /forgotuserpassword.action
+- contentinfo:
+  - list:
+    - link "Čeština":
+      - /url: /login.action?language=cs_CZ
+    - text: ·
+    - link "Dansk":
+      - /url: /login.action?language=da_DK
+    - text: ·
+    - link "Deutsch":
+      - /url: /login.action?language=de_DE
+    - text: ·
+    - link "Eesti":
+      - /url: /login.action?language=et_EE
+    - text: ·
+    - link "English (UK)":
+      - /url: /login.action?language=en_GB
+    - text: ·
+    - link "English (US)":
+      - /url: /login.action?language=en_US
+    - text: ·
+    - link "Español":
+      - /url: /login.action?language=es_ES
+    - text: ·
+    - link "Français":
+      - /url: /login.action?language=fr_FR
+    - text: ·
+    - link "Íslenska":
+      - /url: /login.action?language=is_IS
+    - text: ·
+    - link "Italiano":
+      - /url: /login.action?language=it_IT
+    - text: ·
+    - link "Magyar":
+      - /url: /login.action?language=hu_HU
+    - text: ·
+    - link "Nederlands":
+      - /url: /login.action?language=nl_NL
+    - text: ·
+    - link "Norsk":
+      - /url: /login.action?language=no_NO
+    - text: ·
+    - link "Polski":
+      - /url: /login.action?language=pl_PL
+    - text: ·
+    - link "Português":
+      - /url: /login.action?language=pt_BR
+    - text: ·
+    - link "Română":
+      - /url: /login.action?language=ro_RO
+    - text: ·
+    - link "Slovenčina":
+      - /url: /login.action?language=sk_SK
+    - text: ·
+    - link "Suomi":
+      - /url: /login.action?language=fi_FI
+    - text: ·
+    - link "Svenska":
+      - /url: /login.action?language=sv_SE
+    - text: ·
+    - link "Русский":
+      - /url: /login.action?language=ru_RU
+    - text: ·
+    - link "中文":
+      - /url: /login.action?language=zh_CN
+    - text: ·
+    - link "日本語":
+      - /url: /login.action?language=ja_JP
+    - text: ·
+    - link "한국어":
+      - /url: /login.action?language=ko_KR
+  - list:
+    - text: На платформе
+    - link "Atlassian Confluence":
+      - /url: http://www.atlassian.com/software/confluence
+    - text: 7.5.0·
+    - text: ·
+    - link "Сообщить об ошибке":
+      - /url: https://support.atlassian.com/help/confluence
+    - text: ·
+    - link "Новости Atlassian":
+      - /url: https://www.atlassian.com/company
+  - link "Atlassian":
+    - /url: http://www.atlassian.com/

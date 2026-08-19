@@ -2,6 +2,17 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  searchTrainRuns,
+  searchRouteRuns,
+  suggestStations,
+  resolveTrainRun,
+  getRunById,
+  buildRoute as buildTrainRoute,
+  listActiveRuns,
+  triggerActiveIndexRefresh,
+  providerStatus as trainProviderStatus
+} from "./train-catalog.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT || 8788);
@@ -4149,6 +4160,472 @@ const server =
 
         if (
           url.pathname ===
+          "/api/trains/status"
+        ) {
+          json(
+            res,
+            200,
+            trainProviderStatus()
+          );
+          return;
+        }
+
+        if (
+          url.pathname ===
+          "/api/trains/suggest"
+        ) {
+          const q =
+            url.searchParams.get(
+              "q"
+            ) || "";
+
+          try {
+            const suggestions =
+              await suggestStations(
+                q
+              );
+
+            json(
+              res,
+              200,
+              {
+                query:
+                  q,
+                count:
+                  suggestions.length,
+                suggestions
+              }
+            );
+          } catch (error) {
+            json(
+              res,
+              200,
+              {
+                query:
+                  q,
+                count: 0,
+                suggestions: [],
+                warning:
+                  error instanceof Error
+                    ? error.message
+                    : String(error)
+              }
+            );
+          }
+
+          return;
+        }
+
+        if (
+          url.pathname ===
+          "/api/trains/search-route"
+        ) {
+          const from =
+            url.searchParams.get(
+              "from"
+            ) || "";
+
+          const to =
+            url.searchParams.get(
+              "to"
+            ) || "";
+
+          const fromId =
+            url.searchParams.get(
+              "fromId"
+            ) || "";
+
+          const toId =
+            url.searchParams.get(
+              "toId"
+            ) || "";
+
+          const date =
+            url.searchParams.get(
+              "date"
+            ) || "";
+
+          const lookback =
+            Math.max(
+              0,
+              Math.min(
+                6,
+                Number(
+                  url.searchParams.get(
+                    "lookback"
+                  ) || 4
+                )
+              )
+            );
+
+          if (
+            !from.trim() ||
+            !to.trim() ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(
+              date
+            )
+          ) {
+            json(
+              res,
+              400,
+              {
+                error:
+                  "Нужны from, to и date=YYYY-MM-DD"
+              }
+            );
+            return;
+          }
+
+          try {
+            const result =
+              await searchRouteRuns(
+                from,
+                to,
+                date,
+                {
+                  lookbackDays:
+                    lookback,
+                  now:
+                    Date.now(),
+                  fromId,
+                  toId
+                }
+              );
+
+            json(
+              res,
+              200,
+              result
+            );
+          } catch (error) {
+            json(
+              res,
+              502,
+              {
+                error:
+                  "Не удалось найти поезда по направлению",
+                details:
+                  error instanceof Error
+                    ? error.message
+                    : String(error),
+                provider:
+                  trainProviderStatus()
+              }
+            );
+          }
+
+          return;
+        }
+
+        if (
+          url.pathname ===
+          "/api/trains/search"
+        ) {
+          const number =
+            url.searchParams.get(
+              "number"
+            ) || "";
+
+          const date =
+            url.searchParams.get(
+              "date"
+            ) || "";
+
+          const force =
+            url.searchParams.get(
+              "force"
+            ) === "1";
+
+          if (
+            !number ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(
+              date
+            )
+          ) {
+            json(
+              res,
+              400,
+              {
+                error:
+                  "Нужны параметры number и date=YYYY-MM-DD"
+              }
+            );
+            return;
+          }
+
+          try {
+            const result =
+              await searchTrainRuns(
+                number,
+                date,
+                {
+                  force
+                }
+              );
+
+            json(
+              res,
+              200,
+              result
+            );
+          } catch (error) {
+            json(
+              res,
+              502,
+              {
+                error:
+                  "Не удалось найти рейс",
+                details:
+                  error instanceof Error
+                    ? error.message
+                    : String(error),
+                attempts:
+                  error?.attempts ||
+                  null,
+                provider:
+                  trainProviderStatus()
+              }
+            );
+          }
+
+          return;
+        }
+
+        if (
+          url.pathname ===
+          "/api/trains/run"
+        ) {
+          const runId =
+            url.searchParams.get(
+              "runId"
+            ) || "";
+
+          const number =
+            url.searchParams.get(
+              "number"
+            ) || "";
+
+          const date =
+            url.searchParams.get(
+              "date"
+            ) || "";
+
+          const force =
+            url.searchParams.get(
+              "force"
+            ) === "1";
+
+          try {
+            let run = null;
+
+            if (runId) {
+              run =
+                await getRunById(
+                  runId
+                );
+
+              if (!run) {
+                json(
+                  res,
+                  404,
+                  {
+                    error:
+                      "Рейс не найден в локальном каталоге"
+                  }
+                );
+                return;
+              }
+            } else {
+              if (
+                !number ||
+                !/^\d{4}-\d{2}-\d{2}$/.test(
+                  date
+                )
+              ) {
+                json(
+                  res,
+                  400,
+                  {
+                    error:
+                      "Нужен runId либо number + date=YYYY-MM-DD"
+                  }
+                );
+                return;
+              }
+
+              run =
+                await resolveTrainRun(
+                  number,
+                  date,
+                  {
+                    force
+                  }
+                );
+            }
+
+            json(
+              res,
+              200,
+              run
+            );
+          } catch (error) {
+            json(
+              res,
+              502,
+              {
+                error:
+                  "Не удалось загрузить рейс",
+                details:
+                  error instanceof Error
+                    ? error.message
+                    : String(error)
+              }
+            );
+          }
+
+          return;
+        }
+
+        if (
+          url.pathname ===
+          "/api/trains/route"
+        ) {
+          const runId =
+            url.searchParams.get(
+              "runId"
+            ) || "";
+
+          const force =
+            url.searchParams.get(
+              "force"
+            ) === "1";
+
+          if (!runId) {
+            json(
+              res,
+              400,
+              {
+                error:
+                  "Параметр runId обязателен"
+              }
+            );
+            return;
+          }
+
+          try {
+            const run =
+              await getRunById(
+                runId
+              );
+
+            if (!run) {
+              json(
+                res,
+                404,
+                {
+                  error:
+                    "Рейс не найден в локальном каталоге"
+                }
+              );
+              return;
+            }
+
+            const route =
+              await buildTrainRoute(
+                run,
+                {
+                  force
+                }
+              );
+
+            json(
+              res,
+              200,
+              route
+            );
+          } catch (error) {
+            json(
+              res,
+              502,
+              {
+                error:
+                  "Не удалось построить железнодорожный маршрут выбранного рейса",
+                details:
+                  error instanceof Error
+                    ? error.message
+                    : String(error)
+              }
+            );
+          }
+
+          return;
+        }
+
+        if (
+          url.pathname ===
+          "/api/trains/active"
+        ) {
+          const nowParam =
+            Number(
+              url.searchParams.get(
+                "now"
+              )
+            );
+
+          const now =
+            Number.isFinite(
+              nowParam
+            ) &&
+            nowParam > 0
+              ? nowParam
+              : Date.now();
+
+          const refresh =
+            url.searchParams.get(
+              "refresh"
+            ) === "1";
+
+          try {
+            const active =
+              await listActiveRuns(
+                now,
+                {
+                  refresh
+                }
+              );
+
+            json(
+              res,
+              200,
+              {
+                generatedAt:
+                  new Date().toISOString(),
+                now,
+                ...active,
+                note:
+                  "Позиции массового слоя расчётные. Для выбранного состава используется его отдельный железнодорожный маршрут."
+              }
+            );
+          } catch (error) {
+            json(
+              res,
+              500,
+              {
+                error:
+                  "Не удалось сформировать список активных поездов",
+                details:
+                  error instanceof Error
+                    ? error.message
+                    : String(error)
+              }
+            );
+          }
+
+          return;
+        }
+
+        if (
+          url.pathname ===
           "/api/rzd-actual"
         ) {
           const serviceDate = url.searchParams.get("date") || "";
@@ -4326,7 +4803,7 @@ server.listen(
   () => {
     console.log("");
     console.log(
-      "РЖД 121В/122В · OSM rail router"
+      "РЖД Multi-Train Tracker · Orihon + OSM rail router"
     );
     console.log(
       `Откройте: http://${HOST}:${PORT}`
@@ -4337,16 +4814,24 @@ server.listen(
     console.log(
       `RZD actual API: http://${HOST}:${PORT}/api/rzd-actual?date=YYYY-MM-DD&train=121В`
     );
-    console.log("");
     console.log(
-      "При первом запросе сервер загрузит railway=rail из Overpass,"
+      `Route search: http://${HOST}:${PORT}/api/trains/search-route?from=Москва&to=Сочи&date=YYYY-MM-DD`
     );
     console.log(
-      "построит граф маршрута и сохранит rail-route-cache.json."
+      `Active catalog: http://${HOST}:${PORT}/api/trains/active`
+    );
+    console.log("");
+    console.log(
+      "Поиск поездов работает без API-ключа через публичное расписание."
+    );
+    console.log(
+      "Маршруты строятся по OSM route=train или railway=rail и кэшируются локально."
     );
     console.log("");
   }
 );
+
+triggerActiveIndexRefresh();
 
 process.on(
   "SIGINT",

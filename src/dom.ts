@@ -1,6 +1,17 @@
-export function createEl<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", parent?: HTMLElement): HTMLElementTagNameMap[K] {
+export function createEl<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", parent?: Node): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
   if (className) el.className = className;
+  parent?.appendChild(el);
+  return el;
+}
+
+export const SVG_NS = "http://www.w3.org/2000/svg";
+
+export function createSvgEl<K extends keyof SVGElementTagNameMap>(
+  tag: K,
+  parent?: Node
+): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG_NS, tag);
   parent?.appendChild(el);
   return el;
 }

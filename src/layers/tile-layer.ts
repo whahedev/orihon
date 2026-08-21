@@ -4,7 +4,14 @@ import { TILE_SIZE, LatLngBounds, latLngBounds, type LatLngBoundsLike } from "..
 import type { Layer } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { GridLayer, type GridLayerOptions, type ResolvedGridLayerOptions } from "./grid-layer.js";
-import { forEachTileInRect, forEachTileRectDelta, forEachMissingNeeded, tilePriority, type TileRect } from "./tile-grid.js";
+import {
+  forEachTileInRect,
+  forEachTileRectDelta,
+  forEachMissingNeeded,
+  tileLookaheadPadding,
+  tilePriority,
+  type TileRect
+} from "./tile-grid.js";
 
 const EMPTY_TILE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
@@ -287,18 +294,19 @@ export class TileLayer extends GridLayer<ResolvedTileOptions> {
     );
 
     const tileOrigin = { x: origin.x / displayScale, y: origin.y / displayScale };
-    const left = Math.floor(tileOrigin.x / size) - this.options.buffer;
-    const top = Math.floor(tileOrigin.y / size) - this.options.buffer;
-    const right = Math.floor((tileOrigin.x + this.map.size.width / displayScale) / size) + this.options.buffer;
-    const bottom = Math.floor((tileOrigin.y + this.map.size.height / displayScale) / size) + this.options.buffer;
+    const vx = this.map.panVelocity.x;
+    const vy = this.map.panVelocity.y;
+    const lead = tileLookaheadPadding(vx, vy, size);
+    const left = Math.floor(tileOrigin.x / size) - this.options.buffer - lead.left;
+    const top = Math.floor(tileOrigin.y / size) - this.options.buffer - lead.top;
+    const right = Math.floor((tileOrigin.x + this.map.size.width / displayScale) / size) + this.options.buffer + lead.right;
+    const bottom = Math.floor((tileOrigin.y + this.map.size.height / displayScale) / size) + this.options.buffer + lead.bottom;
     const worldMax = 2 ** activeZoom - 1;
     const nextRect: TileRect = { z: activeZoom, left, top, right, bottom };
 
     const candidates: Array<{ x: number; y: number; key: string; distance: number }> = [];
     const centerX = tileOrigin.x / size + this.map.size.width / displayScale / size / 2;
     const centerY = tileOrigin.y / size + this.map.size.height / displayScale / size / 2;
-    const vx = this.map.panVelocity.x;
-    const vy = this.map.panVelocity.y;
     const wrapLocked = this.options.noWrap || this.map.crs.wrapLng === false;
 
     const consider = (x: number, y: number): void => {

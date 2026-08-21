@@ -4,7 +4,8 @@ import { JSDOM } from "jsdom";
 import {
   createEChartsPopupRenderer,
   popupConditionMatches,
-  popupContent
+  popupContent,
+  sanitizePopupHtml
 } from "../dist/popup-content.js";
 
 function installDom() {
@@ -54,6 +55,28 @@ test("popupContent renders safe blocks, autoplay video and adapter charts", asyn
   cleanup();
   assert.equal(video.dataset.paused, "true");
   assert.equal(chartCleanups, 1);
+  dom.window.close();
+});
+
+test("popup HTML sanitizer blocks obfuscated URLs, active controls and CSS", () => {
+  const dom = installDom();
+  const fragment = sanitizePopupHtml(`
+    <a id="bad" href="java&#10;script:alert(1)" target="_blank" style="background:url(https://tracker.example/x)">bad</a>
+    <a id="good" href="https://example.test/path" target="_blank">good</a>
+    <iframe srcdoc="<script>bad()</script>"></iframe>
+    <form action="https://evil.example"><input name="secret"></form>
+    <img src="data:image/svg+xml,bad" srcset="https://tracker.example/x 1x">
+    <svg><animate attributeName="href" values="javascript:alert(1)"></animate></svg>
+  `);
+  document.body.append(fragment);
+
+  assert.equal(document.getElementById("bad").hasAttribute("href"), false);
+  assert.equal(document.getElementById("bad").hasAttribute("style"), false);
+  assert.equal(document.getElementById("good").getAttribute("href"), "https://example.test/path");
+  assert.match(document.getElementById("good").getAttribute("rel"), /noopener/);
+  assert.equal(document.querySelector("iframe,form,input,svg"), null);
+  assert.equal(document.querySelector("img").hasAttribute("src"), false);
+  assert.equal(document.querySelector("img").hasAttribute("srcset"), false);
   dom.window.close();
 });
 

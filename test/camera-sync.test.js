@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import {
+  cameraWarpCoversViewport,
   cameraWarpCss,
   geoTransformCss,
   tileCornerLayerTransform,
@@ -75,6 +76,24 @@ test("camera warp matches live projection for tile corners", () => {
   assert.equal(corner.scale, scale);
   assert.ok(Math.abs(corner.x - (4 * 256 * scale - live.x)) < 1e-9);
   assert.equal(corner.css, tileLevelWarpCss({ x: 4 * 256, y: 7 * 256 }, 10, live, 10.5));
+});
+
+test("camera warp coverage rejects zoom-out and pan edge gaps", () => {
+  const viewport = { width: 800, height: 600 };
+  const origin = { x: 1000, y: 2000 };
+  assert.equal(cameraWarpCoversViewport(origin, 10, origin, 10, viewport), true);
+  assert.equal(cameraWarpCoversViewport(origin, 10, origin, 9.75, viewport), false);
+  assert.equal(cameraWarpCoversViewport(origin, 10, { x: 1010, y: 2000 }, 10, viewport), false);
+
+  // Zooming around a point inside the viewport expands the old framebuffer
+  // past all four edges, so the cheap CSS path remains safe.
+  const scale = 2 ** 0.5;
+  const anchor = { x: 300, y: 220 };
+  const live = {
+    x: origin.x * scale + anchor.x * (scale - 1),
+    y: origin.y * scale + anchor.y * (scale - 1)
+  };
+  assert.equal(cameraWarpCoversViewport(origin, 10, live, 10.5, viewport), true);
 });
 
 test("fractional zoomAround keeps anchor and marker/tile math glued", async () => {

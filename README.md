@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/brand/svg/orihon-logo-horizontal.svg" alt="Orihon — folded map and route logo" width="520" />
+</p>
+
 # Orihon
 
 [![npm](https://img.shields.io/npm/v/orihon?color=0f766e)](https://www.npmjs.com/package/orihon)
@@ -6,6 +10,8 @@
 [![full size](https://img.shields.io/badge/full-≤75_KiB_gzip-0f766e)](https://github.com/whahedev/orihon#tiers)
 [![license](https://img.shields.io/badge/license-Apache%202.0-0f766e)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-ready-3178c6)](./tsconfig.json)
+
+Production-ready SVG/PNG logos, favicons and design tokens are published under [`orihon/brand/*`](./docs/BRAND.md).
 
 ## Unfold the world.
 
@@ -44,6 +50,8 @@ Use the tiny core for simple maps. Add everyday GIS in Standard (still **no WebG
 npm install orihon
 ```
 
+Development and release tooling requires **Node.js 22 or newer**; the repository pins **Node.js 24.19.0 LTS** in `.node-version`. Browser consumers are unaffected by this build-time requirement.
+
 ## Tiers
 
 Orihon is built as three intentional surfaces. Start narrow; grow only when the product needs it.
@@ -80,9 +88,11 @@ import { fullscreenControl, measureControl, miniMap, graticuleLayer } from "orih
 import { bufferPoint } from "orihon/geo";
 ```
 
-Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 35 KiB, full (Advanced + WebGL/WebGPU) ≤ 102 KiB. Prefer the smallest entry that covers the feature set.
+Gzip budgets stay attached to the tiers: core ≤ 22 KiB, standard ≤ 36 KiB, full (Advanced + WebGL/WebGPU) ≤ 105 KiB. Prefer the smallest entry that covers the feature set.
 
 **ObjectManager** is the Advanced-tier answer to heavy datasets: render and manage 100,000+ map objects without keeping 100,000 DOM markers alive.
+
+For 100k–1M imports, prefer `await manager.addAsync(iterable, { chunkSize: 10_000, yieldMode: "task" })`. It accepts synchronous or asynchronous iterables, reports progress, supports `AbortSignal`, and coalesces layout invalidation until the import finishes. `add()` remains the fastest synchronous path for bounded inputs.
 
 ## Quick Start
 
@@ -141,7 +151,7 @@ Everything in Core, plus:
 
 Everything in Standard, plus:
 
-- `MarkerCollection` — viewport-culled DOM or auto WebGL for large point sets (50k+); `iconMinZoom` switches to DivIcon markers when zoomed in.
+- `MarkerCollection` — viewport-culled, recycled HTML markers; `renderer:"svg"` with one real SVG circle per point, shared group style/camera transform, spatially distributed HTML buttons (`htmlButtonLimit` + `buttonCellSize`) and selected-object priority through `setSelected()`; automatic WebGL from 2,500 points; or `renderer:"hybrid"` with bounded HTML over a WebGL remainder. Internal marker nodes stay out of the map-wide frame loop.
 - `ObjectManager` / `RemoteObjectManager` — high-volume collections with viewport DOM, clustering and stale-request cancellation.
 - `WebGLPointLayer`, `WebGLHeatLayer`, `HeatIsolineLayer` / `buildHeatIsolines`, MVT-capable `VectorTileLayer`, canvas `heatLayer`.
 - Provider-based search, suggest, routing and traffic.
@@ -189,7 +199,7 @@ const manager = objectManager({
   layoutWorker: "auto"
 }).addTo(map);
 
-manager.add(
+await manager.addAsync(
   Array.from({ length: 50_000 }, (_, id) => ({
     type: "Feature",
     id,
@@ -198,7 +208,8 @@ manager.add(
       coordinates: [37.4 + Math.random() * 0.5, 55.6 + Math.random() * 0.3]
     },
     properties: { name: `Point ${id}` }
-  }))
+  })),
+  { chunkSize: 10_000, yieldMode: "task" }
 );
 ```
 
@@ -331,6 +342,29 @@ const snapshot = data.toGeoJSON();
 data.resetStyle();
 ```
 
+Large inputs have a responsive asynchronous path. A raw JSON `string` or `Blob` is parsed in a dedicated Worker when the browser permits it; a parsed object is consumed on the main thread in bounded chunks, avoiding a second full structured clone. `AsyncIterable<GeoJSONData>` is accepted for application-owned streaming:
+
+```js
+const controller = new AbortController();
+const lines = geoJSON(null, {
+  renderer: "webgl",
+  interactive: false,
+  retainFeatures: false,
+  maxFeatures: 1_000_000
+}).addTo(map);
+
+await lines.addDataAsync(fileBlob, {
+  chunkSize: 5_000,
+  maxBytes: 256 * 1024 * 1024,
+  signal: controller.signal,
+  onProgress: (processed, total) => console.log(processed, total)
+});
+```
+
+`addDataAsync()` accepts parsed GeoJSON, raw JSON text/Blob, or an async stream. Its defaults are `chunkSize:5000`, `useWorker:true`, `yieldMode:"frame"` and a 256 MiB raw-input limit. If Blob workers are unavailable (for example because of CSP), parsing falls back to the main thread while ingestion remains chunked. `yieldMode:"task"` is useful before a map is attached or in a background import workflow.
+
+For write-once, non-interactive path sets at hundreds of thousands to millions of features, combine `addDataAsync()` with `renderer:"webgl"` and `retainFeatures:false`. This keeps only the packed path buffer; discarded features are intentionally unavailable through `toGeoJSON()` or later per-feature restyling. During continuous pan/zoom, the WebGL path batch camera-warps its last exact frame and throttles full GPU redraws; an exact frame is rendered after the camera settles. Direct `webglPathBatch()` users can tune `cameraRedrawInterval` (default 250 ms; `0` restores every-frame redraw) and `cameraSettleDelay` (default 120 ms).
+
 WMS GetMap URLs are generated per tile with WMS 1.1.1 or 1.3.0 axis ordering and either `EPSG:3857` or `EPSG:4326` bounds:
 
 ```js
@@ -454,10 +488,22 @@ Orihon 1.0 keeps advanced modules opt-in for large datasets and production diagn
 Scale showcase: [`examples/showcase`](examples/showcase) — Core → Standard → Advanced, then 100k+ stress scenes (open `index.html`, or [live](https://whahedev.github.io/orihon/showcase/)). Comparative engine bench: [`examples/bench-compare`](examples/bench-compare) — same point workload across Orihon, Leaflet, OpenLayers and MapLibre (open `index.html`, or [live](https://whahedev.github.io/orihon/bench/)).
 
 ```js
-const points = webglPointLayer(bigPointArray, {
+const points = webglPointLayer([], {
   pointSize: 4,
   color: "#e11d48"
 }).addTo(map);
+
+await points.setDataAsync(bigPointArray, {
+  chunkSize: 50_000,
+  yieldMode: "task"
+});
+
+const heat = webglHeatLayer([], { field: "density" }).addTo(map);
+await heat.setDataAsync(weightedPoints, {
+  chunkSize: 50_000,
+  signal: importController.signal,
+  onProgress: (processed, total) => updateProgress(processed, total)
+});
 
 const vectorTiles = vectorTileLayer({
   provider: async ({ x, y, z, signal }) => {
@@ -520,8 +566,8 @@ For a script-tag/global setup:
 | Artifact | Budget |
 | --- | --- |
 | `orihon.core.esm.js` | ≤ 22 KiB gzip |
-| `orihon.standard.esm.js` | ≤ 35 KiB gzip |
-| `orihon.esm.js` | ≤ 75 KiB gzip (Advanced + WebGL) |
+| `orihon.standard.esm.js` | ≤ 36 KiB gzip |
+| `orihon.esm.js` | ≤ 105 KiB gzip (Advanced + WebGL/WebGPU) |
 | `orihon.controls.esm.js` | ≤ 8 KiB gzip (imports shared modules) |
 | `orihon.geo.esm.js` | ≤ 2 KiB gzip (imports shared geometry) |
 
@@ -531,6 +577,7 @@ Raw minified sizes are larger; production cost is the gzip figure. Prefer modula
 
 - [API reference](docs/API.md)
 - [Security model](docs/SECURITY.md)
+- [Development, versions and benchmarks](docs/DEVELOPMENT.md)
 - [License FAQ](docs/LICENSE-FAQ.md)
 - [Enhancement roadmap](docs/ROADMAP.md)
 - [Recipes](docs/RECIPES.md)

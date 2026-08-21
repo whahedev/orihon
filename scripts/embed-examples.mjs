@@ -9,9 +9,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const CDN_JS = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.esm.js";
-const CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.css";
-const CDN_GLOBAL = "https://cdn.jsdelivr.net/npm/orihon@1.0.4/dist/orihon.global.js";
+const CDN_JS = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.esm.js";
+const CDN_CSS = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.css";
+const CDN_GLOBAL = "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.global.js";
 
 function patchLoadOrihon(source, { withBenchLink = false } = {}) {
   const benchLink = withBenchLink
@@ -32,12 +32,19 @@ function patchLoadOrihon(source, { withBenchLink = false } = {}) {
     document.querySelector("link[data-orihon-css]");${benchLink}
   const http = location.protocol === "http:" || location.protocol === "https:";
   if (http) {
+    const localBuild = "?bench=" + Date.now().toString(36);
     try {
-      const mod = await import("/dist/orihon.esm.js");
-      if (link) link.href = "/dist/orihon.css";
+      const mod = await import("/dist/orihon.esm.js" + localBuild);
+      if (link) link.href = "/dist/orihon.css" + localBuild;
       return mod;
     } catch {
-      /* fall through to CDN */
+      try {
+        const mod = await import("/dist/index.js" + localBuild);
+        if (link) link.href = "/dist/orihon.css" + localBuild;
+        return mod;
+      } catch {
+        /* fall through to CDN */
+      }
     }
   }
   if (link) link.href = ORIHON_CDN_CSS;
@@ -60,7 +67,7 @@ async function readMaybe(path) {
 
 function extractEmbed(html, name) {
   const re = new RegExp(
-    `<!-- EMBED:${name} -->\\s*<script type="module">\\n([\\s\\S]*?)\\n    </script>\\s*<!-- /EMBED:${name} -->`
+    `<!-- EMBED:${name} -->\\s*<script type="module">\\r?\\n([\\s\\S]*?)\\r?\\n\\s*</script>\\s*<!-- /EMBED:${name} -->`
   );
   const m = html.match(re);
   return m ? m[1] : null;
@@ -68,7 +75,7 @@ function extractEmbed(html, name) {
 
 function extractStyleEmbed(html, name) {
   const re = new RegExp(
-    `<!-- EMBED:${name} -->\\s*<style>\\n([\\s\\S]*?)\\n    </style>\\s*<!-- /EMBED:${name} -->`
+    `<!-- EMBED:${name} -->\\s*<style>\\r?\\n([\\s\\S]*?)\\r?\\n\\s*</style>\\s*<!-- /EMBED:${name} -->`
   );
   const m = html.match(re);
   return m ? m[1] : null;

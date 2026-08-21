@@ -3,6 +3,7 @@ import { geoTransformCss } from "../camera.js";
 import { LatLng, latLng, type LatLngLike, type Point } from "../geo.js";
 import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
+import type { OverlayContent, PopupOptions, TooltipOptions } from "../overlays/div-overlay.js";
 import type { MarkerIcon } from "./icon.js";
 
 /** Built-in marker glyph when no custom `icon` / `content` is set. */
@@ -32,6 +33,8 @@ export interface MarkerOptions extends LayerOptions, MarkerAppearance {
   opacity?: number;
   zIndexOffset?: number;
   keyboard?: boolean;
+  /** Attach pointer/keyboard interaction listeners. Default true. */
+  interactive?: boolean;
   rotation?: number;
   rotationOrigin?: string;
 }
@@ -131,6 +134,7 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
       opacity: 1,
       zIndexOffset: 0,
       keyboard: true,
+      interactive: true,
       rotation: 0,
       ...rest,
       shape,
@@ -149,27 +153,17 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     this.options.strokeWidth = normalizeStrokeWidth(this.options.strokeWidth);
   }
 
-  override onAdd(map: Orihon): void {
+  override onAdd(map: Orihon, parent?: HTMLElement | DocumentFragment): void {
     super.onAdd(map);
-    const pane = this.getPane();
+    const pane = parent ?? this.getPane();
     if (!pane) throw new Error(`Orihon pane not found: ${this.options.pane}`);
     this.el = createEl("button", `oh-marker ${this.options.className}`, pane);
     this.el.type = "button";
     this.el.title = this.options.title;
-    this.el.setAttribute("aria-label", this.options.ariaLabel || this.options.title || "Map marker");
     this.el.tabIndex = this.options.keyboard ? 0 : -1;
     this.el.style.opacity = String(this.options.opacity);
     this.#setContent();
-    this._unsub.push(listenTap(this.el, (event) => {
-      event.stopPropagation();
-      this.emit("click", { originalEvent: event, latlng: this.getLatLng() });
-    }));
-    this._unsub.push(listen(this.el, "pointerenter", (event) => {
-      this.emit("mouseover", { originalEvent: event, latlng: this.getLatLng() });
-    }));
-    this._unsub.push(listen(this.el, "pointerleave", (event) => {
-      this.emit("mouseout", { originalEvent: event, latlng: this.getLatLng() });
-    }));
+    this.#syncInteraction();
     if (this.options.draggable) this.#enableDrag();
     this.render();
   }
@@ -196,6 +190,7 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
   setDraggable(draggable: boolean): this {
     this.options.draggable = Boolean(draggable);
     if (!this.el) return this;
+    this.#syncInteraction();
     if (this.options.draggable) this.#enableDrag();
     else this.#disableDrag();
     return this;
@@ -205,8 +200,24 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     return this.options.draggable;
   }
 
+  setInteractive(interactive: boolean): this {
+    this.options.interactive = Boolean(interactive);
+    this.#syncInteraction();
+    return this;
+  }
+
+  override bindPopup(content: OverlayContent, options?: PopupOptions): this {
+    this.setInteractive(true);
+    return super.bindPopup(content, options);
+  }
+
+  override bindTooltip(content: OverlayContent, options?: TooltipOptions): this {
+    this.setInteractive(true);
+    return super.bindTooltip(content, options);
+  }
+
   queryHit(target: Point, options: ResolvedQueryOptions): QueryHit | null {
-    if (!this.map || !this.el) return null;
+    if (!this.map || !this.el || (!this.options.interactive && !this.options.draggable)) return null;
     const center = this.map.latLngToContainerPoint(this.position);
     const anchor = this.options.icon?.getAnchor() ?? { x: this.options.anchor[0], y: this.options.anchor[1] };
     const size = this.options.icon?.getSize() ?? {
@@ -276,6 +287,9 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
 
   #setContent(): void {
     if (!this.el) return;
+    this.el.style.backgroundColor = "";
+    this.el.style.borderRadius = "";
+    this.el.style.boxShadow = "";
     if (this.options.icon) {
       this.iconElement = this.options.icon.createIcon(this.iconElement);
       this.shadowElement = this.options.icon.createShadow(this.shadowElement);
@@ -307,11 +321,42 @@ export class Marker extends Layer<ResolvedMarkerOptions> {
     this.options.anchor = metrics.anchor;
     this.el.style.width = `${metrics.width}px`;
     this.el.style.height = `${metrics.height}px`;
+    if (!this.options.interactive && !this.options.draggable && metrics.shape === "dot") {
+      // One-node fast path for dense, non-interactive DOM collections.
+      this.el.style.backgroundColor = this.options.color;
+      this.el.style.borderRadius = "999px";
+      return;
+    }
     const pin = createEl("span", metrics.shape === "pin" ? "oh-marker-pin" : `oh-marker-pin is-${metrics.shape}`, this.el);
     pin.style.setProperty("--oh-marker-fill", this.options.color);
     pin.style.setProperty("--oh-marker-stroke", this.options.strokeColor);
     pin.style.setProperty("--oh-marker-size", `${metrics.size}px`);
     pin.style.setProperty("--oh-marker-stroke-width", `${metrics.strokeWidth}px`);
+  }
+
+  #syncInteraction(): void {
+    for (const unsubscribe of this._unsub.splice(0)) unsubscribe();
+    if (!this.el) return;
+    const enabled = this.options.interactive || this.options.draggable;
+    this.el.style.pointerEvents = enabled ? "auto" : "none";
+    if (enabled) {
+      this.el.removeAttribute("aria-hidden");
+      this.el.setAttribute("aria-label", this.options.ariaLabel || this.options.title || "Map marker");
+    } else {
+      this.el.removeAttribute("aria-label");
+      this.el.setAttribute("aria-hidden", "true");
+    }
+    if (!this.options.interactive) return;
+    this._unsub.push(listenTap(this.el, (event) => {
+      event.stopPropagation();
+      this.emit("click", { originalEvent: event, latlng: this.getLatLng() });
+    }));
+    this._unsub.push(listen(this.el, "pointerenter", (event) => {
+      this.emit("mouseover", { originalEvent: event, latlng: this.getLatLng() });
+    }));
+    this._unsub.push(listen(this.el, "pointerleave", (event) => {
+      this.emit("mouseout", { originalEvent: event, latlng: this.getLatLng() });
+    }));
   }
 
   #enableDrag(): void {

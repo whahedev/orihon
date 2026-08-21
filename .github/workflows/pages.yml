@@ -33,10 +33,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
       - name: Prepare site
         run: |
@@ -51,7 +51,7 @@ jobs:
           # Showcase + bench + RZD load Orihon from jsDelivr when /dist is absent (no build on Pages).
           # Drop optional local vendor stubs if present.
           rm -rf _site/showcase/vendor _site/bench/vendor
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment

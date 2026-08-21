@@ -312,7 +312,8 @@ test("an unfilled circle remains hittable across its interior", () => {
 test("marker popup opens from a pointer tap without a click event", async () => {
   installDom();
   const map = createMap(new FakeElement("div"), { center: [0, 0], zoom: 4, controls: false });
-  const layer = marker([0, 0]).bindPopup("marker", { autoPan: false }).addTo(map);
+  const layer = marker([0, 0], { interactive: false }).bindPopup("marker", { autoPan: false }).addTo(map);
+  assert.equal(layer.options.interactive, true);
   layer.el.dispatchEvent({ type: "pointerdown", button: 0, pointerId: 2, clientX: 400, clientY: 300 });
   layer.el.dispatchEvent({
     type: "pointerup",

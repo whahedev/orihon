@@ -55,6 +55,13 @@ import type { ManagedIconOptions, ManagedIconSource } from "./object-icon-atlas.
 import type { ObjectSearchOptions, ObjectSearchResult } from "./object-search-index.js";
 import type { ClusterPropertiesConfig } from "./object-cluster-aggregates.js";
 import {
+  isAsyncIterable,
+  resolveAsyncBatchOptions,
+  throwIfAsyncAborted,
+  yieldAsyncBatch,
+  type AsyncBatchOptions
+} from "./async-batch.js";
+import {
   ObjectDirtyFlags,
   type ObjectCollisionMode,
   type ObjectGradientStop,
@@ -112,6 +119,11 @@ export interface ManagedObject {
   geometry?: ManagedGeometry | { coordinates?: number[]; type?: string };
   properties?: { title?: string; [key: string]: unknown };
   [key: string]: unknown;
+}
+
+export interface ObjectManagerAsyncOptions extends AsyncBatchOptions {
+  /** Schedule one render/layout invalidation after the import. Default true. */
+  render?: boolean;
 }
 
 export type ClusterRenderer = "dom" | "webgl" | "auto";
@@ -207,6 +219,12 @@ export interface ObjectManagerOptions {
   layoutWorker?: boolean | "auto";
   /** Default 5000. */
   layoutWorkerThreshold?: number;
+  /**
+   * Largest collection that gets a full all-zoom cluster hierarchy. Above this
+   * limit ObjectManager keeps compact, worker-built layouts only for zooms that
+   * are actually visited. Default 250000. `0` = unlimited hierarchy.
+   */
+  clusterHierarchyMaxObjects?: number;
   /** Stop `add()` once this many objects are stored. `0` / unset = unlimited. */
   maxObjects?: number;
   /** Enable label/icon declutter in the viewport. */
@@ -283,6 +301,7 @@ export interface ObjectManagerStats {
   renderedMarkers: number;
   renderer: "dom" | "webgl";
   layoutZoom: number | null;
+  clusterStrategy: "none" | "greedy" | "hierarchy";
 }
 
 interface ObjectManagerMap extends Evented {
@@ -384,6 +403,7 @@ export class ObjectManager extends Evented {
   private _greedyCache = new Map<number, ClusterLayoutResult>();
   private _pendingGreedyZoom: number | null = null;
   private _greedyRaf = 0;
+  private _greedyPromise: Promise<void> | null = null;
   /** Above this size, never run sync greedy on every zoomend (stale+coalesce instead). */
   private _greedyZoomInlineLimit = 2500;
   private _layoutIds: ObjectId[] = [];
@@ -420,6 +440,7 @@ export class ObjectManager extends Evented {
       webglThreshold: 2000,
       layoutWorker: "auto",
       layoutWorkerThreshold: 5000,
+      clusterHierarchyMaxObjects: 250_000,
       styleByCategory: true,
       style: null,
       maxObjects: 0,
@@ -439,6 +460,10 @@ export class ObjectManager extends Evented {
     this.options.clusterMinPoints = Math.max(2, Math.floor(this.options.clusterMinPoints));
     this.options.webglThreshold = Math.max(1, Math.floor(this.options.webglThreshold));
     this.options.layoutWorkerThreshold = Math.max(1, Math.floor(this.options.layoutWorkerThreshold));
+    const hierarchyLimit = Number(this.options.clusterHierarchyMaxObjects);
+    this.options.clusterHierarchyMaxObjects = Number.isFinite(hierarchyLimit)
+      ? Math.max(0, Math.floor(hierarchyLimit))
+      : 250_000;
     this.options.maxObjects = Math.max(0, Math.floor(Number(this.options.maxObjects) || 0));
     this.options.maxVerticesPerGeometry = Math.max(
       0,
@@ -543,6 +568,58 @@ export class ObjectManager extends Evented {
       this._scheduleRender();
     }
     return this;
+  }
+
+  /**
+   * Cooperatively ingest a large iterable without one long main-thread task.
+   * Layout invalidation/render remains suspended until the import finishes.
+   * Cancellation keeps the already accepted prefix and flushes one final invalidate.
+   */
+  async addAsync(
+    features: Iterable<ManagedObject> | AsyncIterable<ManagedObject>,
+    options: ObjectManagerAsyncOptions = {}
+  ): Promise<this> {
+    const resolved = resolveAsyncBatchOptions(options, 10_000);
+    const total = Array.isArray(features) ? features.length : null;
+    let processed = 0;
+    let chunk: ManagedObject[] = [];
+    const commit = async (final: boolean): Promise<void> => {
+      if (!chunk.length) return;
+      this.add(chunk);
+      processed += chunk.length;
+      chunk = [];
+      resolved.onProgress?.(processed, total);
+      if (!final) await yieldAsyncBatch(resolved.yieldMode);
+    };
+
+    throwIfAsyncAborted(resolved.signal);
+    this.beginBulk();
+    try {
+      if (Array.isArray(features)) {
+        for (let index = 0; index < features.length; index++) {
+          throwIfAsyncAborted(resolved.signal);
+          chunk.push(features[index]);
+          if (chunk.length >= resolved.chunkSize) await commit(index === features.length - 1);
+        }
+      } else if (isAsyncIterable<ManagedObject>(features)) {
+        for await (const feature of features) {
+          throwIfAsyncAborted(resolved.signal);
+          chunk.push(feature);
+          if (chunk.length >= resolved.chunkSize) await commit(false);
+        }
+      } else {
+        for (const feature of features) {
+          throwIfAsyncAborted(resolved.signal);
+          chunk.push(feature);
+          if (chunk.length >= resolved.chunkSize) await commit(false);
+        }
+      }
+      await commit(true);
+      throwIfAsyncAborted(resolved.signal);
+      return this;
+    } finally {
+      this.endBulk({ render: options.render });
+    }
   }
 
   /**
@@ -1221,7 +1298,12 @@ export class ObjectManager extends Evented {
       clusters: clusterCount,
       renderedMarkers: (this._activeRenderer === "webgl" ? webglCount : this.markers.size) + clusterCount,
       renderer: this._activeRenderer,
-      layoutZoom: this._layout?.zoomBucket ?? null
+      layoutZoom: this._layout?.zoomBucket ?? null,
+      clusterStrategy: !this.options.clusterize
+        ? "none"
+        : this._clusterIndex
+          ? "hierarchy"
+          : "greedy"
     };
   }
 
@@ -1510,6 +1592,8 @@ export class ObjectManager extends Evented {
       return this;
     }
 
+    if (!this.#shouldBuildClusterHierarchy(request.ids.length)) return this;
+
     // Small sets: finish hierarchy inline so tests/popups see a stable tree immediately.
     if (request.ids.length < this._greedyZoomInlineLimit) {
       const index = buildClusterIndex(request);
@@ -1527,9 +1611,10 @@ export class ObjectManager extends Evented {
         this.#buildHierarchy(request, generation, zoomBucket).then(resolve, reject);
       });
     });
-    this._layoutPromise = task.finally(() => {
-      if (this._layoutPromise === task) this._layoutPromise = null;
+    const settled = task.finally(() => {
+      if (this._layoutPromise === settled) this._layoutPromise = null;
     });
+    this._layoutPromise = settled;
     return this;
   }
 
@@ -1576,6 +1661,11 @@ export class ObjectManager extends Evented {
     if (mode === true) return true;
     if (mode === false) return false;
     return this.index.size >= this.options.layoutWorkerThreshold;
+  }
+
+  #shouldBuildClusterHierarchy(count: number): boolean {
+    const limit = this.options.clusterHierarchyMaxObjects;
+    return limit === 0 || count <= limit;
   }
 
   #collectLayoutRequest(zoomBucket: number) {
@@ -1678,6 +1768,7 @@ export class ObjectManager extends Evented {
     this._clusterSyncGeneration = -1;
     this._layoutGeneration++;
     this._layoutPromise = null;
+    this._greedyPromise = null;
     this._greedyCache.clear();
     this._pendingGreedyZoom = null;
     this._layoutPackDirty = true;
@@ -1693,20 +1784,38 @@ export class ObjectManager extends Evented {
   /** Coalesce expensive pre-hierarchy reclusters onto the latest zoom only. */
   #scheduleGreedyForZoom(zoomBucket: number): void {
     this._pendingGreedyZoom = zoomBucket;
-    if (this._greedyRaf) return;
+    if (this._greedyRaf || this._greedyPromise) return;
     const run = () => {
       this._greedyRaf = 0;
       const target = this._pendingGreedyZoom;
       this._pendingGreedyZoom = null;
-      if (target == null || this._clusterIndex || this._layoutDirty) return;
-      if (this._layout?.zoomBucket === target) return;
+      if (target == null || this._clusterIndex) return;
+      if (!this._layoutDirty && this._layout?.zoomBucket === target) return;
       const cached = this._greedyCache.get(target);
-      if (cached) {
+      if (cached && !this._layoutDirty) {
         this.#applyLayoutResult(target, cached);
         this._scheduleRender();
         return;
       }
       const request = this.#collectLayoutRequest(target);
+      if (this.#shouldUseLayoutWorker() && request.ids.length >= this._greedyZoomInlineLimit) {
+        const generation = this._layoutGeneration;
+        const task = this._workerPool.greedyClusterLayout(request).then((result) => {
+          if (generation !== this._layoutGeneration || this._clusterIndex) return;
+          this.#rememberGreedy(target, result);
+          const liveZoom = Math.floor(this.map?.zoom ?? target);
+          if (liveZoom === target) {
+            this.#applyLayoutResult(target, result);
+            this._scheduleRender();
+          }
+        });
+        const settled = task.finally(() => {
+          if (this._greedyPromise === settled) this._greedyPromise = null;
+          if (this._pendingGreedyZoom != null) this.#scheduleGreedyForZoom(this._pendingGreedyZoom);
+        });
+        this._greedyPromise = settled;
+        return;
+      }
       const result = buildGreedyClusterLayout(request);
       this.#rememberGreedy(target, result);
       this.#applyLayoutResult(target, result);
@@ -1781,7 +1890,7 @@ export class ObjectManager extends Evented {
         this.#applyLayoutResult(zoomBucket, cached);
         return this._layout!;
       }
-      if (!this._layoutDirty) this.#scheduleGreedyForZoom(zoomBucket);
+      this.#scheduleGreedyForZoom(zoomBucket);
       return this._layout;
     }
 
@@ -1804,7 +1913,12 @@ export class ObjectManager extends Evented {
     this.#rememberGreedy(zoomBucket, greedy);
     this.#applyLayoutResult(zoomBucket, greedy);
 
-    if (request.clusterize && request.ids.length > 0 && !this._layoutPromise) {
+    if (
+      request.clusterize &&
+      request.ids.length > 0 &&
+      this.#shouldBuildClusterHierarchy(request.ids.length) &&
+      !this._layoutPromise
+    ) {
       if (request.ids.length < this._greedyZoomInlineLimit) {
         const index = buildClusterIndex(request);
         this._clusterIndex = index;
@@ -1817,9 +1931,10 @@ export class ObjectManager extends Evented {
             this.#buildHierarchy(request, generation, zoomBucket).then(resolve, reject);
           });
         });
-        this._layoutPromise = task.finally(() => {
-          if (this._layoutPromise === task) this._layoutPromise = null;
+        const settled = task.finally(() => {
+          if (this._layoutPromise === settled) this._layoutPromise = null;
         });
+        this._layoutPromise = settled;
       }
     }
 

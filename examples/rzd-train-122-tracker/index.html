@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
   <title>РЖД — поезд 121В/122В Санкт-Петербург → Новороссийск</title>
+  <link rel="icon" href="../../assets/brand/svg/orihon-favicon.svg" type="image/svg+xml" />
 
   <link
     id="orihon-css"
     rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/orihon@1.0.5/dist/orihon.css"
+    href="https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/orihon.css"
   />
 
   <style>
@@ -1220,7 +1221,7 @@
         );
       const base = local
         ? "/dist/"
-        : "https://cdn.jsdelivr.net/npm/orihon@1.0.5/dist/";
+        : "https://cdn.jsdelivr.net/npm/orihon@1.0.6/dist/";
 
       const css =
         document.getElementById("orihon-css");
@@ -3937,8 +3938,13 @@
               candidate.segment.arrivalMs
             );
 
-          time.innerHTML =
-            `<strong>${departure}</strong><br>→ ${arrival}`;
+          const departureText = document.createElement("strong");
+          departureText.textContent = departure;
+          time.append(
+            departureText,
+            document.createElement("br"),
+            document.createTextNode(`→ ${arrival}`)
+          );
 
           button.append(
             number,
@@ -4365,10 +4371,22 @@
                     "div"
                   );
 
-                body.innerHTML =
-                  `${train.from} → ${train.to}<br>` +
-                  `Дата: <b>${train.serviceDate}</b><br>` +
-                  `Положение: <b>расчёт по расписанию</b>`;
+                const routeLine = document.createTextNode(
+                  `${train.from} → ${train.to}`
+                );
+                const dateValue = document.createElement("b");
+                dateValue.textContent = train.serviceDate;
+                const positionValue = document.createElement("b");
+                positionValue.textContent = "расчёт по расписанию";
+                body.append(
+                  routeLine,
+                  document.createElement("br"),
+                  "Дата: ",
+                  dateValue,
+                  document.createElement("br"),
+                  "Положение: ",
+                  positionValue
+                );
 
                 const button =
                   document.createElement(

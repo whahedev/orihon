@@ -75,6 +75,25 @@ test("ObjectManager maxObjects caps ingest", () => {
   assert.deepEqual(manager.getObject(2)?.coordinates, [52.55, 13.51]);
 });
 
+test("ObjectManager addAsync chunks iterable ingest and flushes bulk state", async () => {
+  const manager = objectManager({ clusterize: false, sceneFeatures: false });
+  function* objects() {
+    for (let index = 0; index < 5; index++) {
+      yield { id: index, coordinates: [52 + index, 13], properties: {} };
+    }
+  }
+  const progress = [];
+  const returned = await manager.addAsync(objects(), {
+    chunkSize: 2,
+    yieldMode: "task",
+    render: false,
+    onProgress: (processed, total) => progress.push([processed, total])
+  });
+  assert.equal(returned, manager);
+  assert.equal(manager.getStats().objects, 5);
+  assert.deepEqual(progress, [[2, null], [4, null], [5, null]]);
+});
+
 test("ObjectManager exposes indexed collection and filter lifecycle", () => {
   const manager = objectManager({ clusterize: true, clusterGridSize: 64 });
   manager.add([
@@ -627,4 +646,38 @@ test("ObjectManager.prepareLayout builds clusters off the hot path", async () =>
   assert.equal(manager.clusters.size, 1);
   assert.equal(manager.getStats().layoutZoom, 10);
   manager.destroy();
+});
+
+test("ObjectManager caps the all-zoom hierarchy for mass clustering", async () => {
+  const manager = objectManager({
+    clusterize: true,
+    clusterGridSize: 256,
+    clusterMaxZoom: 18,
+    clusterHierarchyMaxObjects: 2,
+    layoutWorker: false
+  });
+  manager.add([
+    { id: "a", coordinates: [52.520, 13.405] },
+    { id: "b", coordinates: [52.521, 13.406] },
+    { id: "c", coordinates: [52.522, 13.407] }
+  ]);
+  await manager.prepareLayout(10);
+  assert.equal(manager.getStats().clusterStrategy, "greedy");
+  manager.destroy();
+
+  const unlimited = objectManager({
+    clusterize: true,
+    clusterGridSize: 256,
+    clusterMaxZoom: 18,
+    clusterHierarchyMaxObjects: 0,
+    layoutWorker: false
+  });
+  unlimited.add([
+    { id: "a", coordinates: [52.520, 13.405] },
+    { id: "b", coordinates: [52.521, 13.406] },
+    { id: "c", coordinates: [52.522, 13.407] }
+  ]);
+  await unlimited.prepareLayout(10);
+  assert.equal(unlimited.getStats().clusterStrategy, "hierarchy");
+  unlimited.destroy();
 });

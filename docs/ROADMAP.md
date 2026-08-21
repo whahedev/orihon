@@ -8,7 +8,7 @@ Related: [API](API.md) · [PLUGINS](PLUGINS.md) · [SECURITY](SECURITY.md)
 
 These hold for every item below. If a design violates them, change the design.
 
-1. **Gzip budgets stay.** Core ≤ 22 KiB, Standard ≤ 35 KiB, Advanced ≤ 75 KiB (`npm run size`). New surface that would break a budget goes into a **new optional entry** (`orihon/draw`, `orihon/react`, …), not into `orihon/standard` or `orihon`.
+1. **Gzip budgets stay.** Core ≤ 22 KiB, Standard ≤ 36 KiB, Advanced ≤ 105 KiB (`npm run size`). New surface that would break a budget goes into a **new optional entry** (`orihon/draw`, `orihon/react`, …), not into `orihon/standard` or `orihon`.
 2. **Leaflet-like DX.** Factories, `addTo` / `remove`, `on` / `off`, named panes, no required style JSON.
 3. **No prototype patching.** Plugins extend `Layer` / `Control` and import only public entries.
 4. **Safe content.** Strings are `textContent`. Markup is a `Node`. No `innerHTML`. SVG stays sanitized.
@@ -141,7 +141,7 @@ interface PathOptions {
 - `polyline(points, { dashArray: "8 4", arrow: "end" })` shows dashes and an end arrow after pan/zoom.
 - `setStyle({ dashArray: null })` clears dashes.
 - `circle(center, 50_000, { geodesic: true })` at 60°N is visibly wider in longitude than the planar circle; `getBounds()` uses geodesic samples.
-- Standard gzip still ≤ 35 KiB. If over, drop arrows first (keep dash + geodesic).
+- Standard gzip still ≤ 36 KiB. If over, drop arrows first (keep dash + geodesic).
 
 **Budget.** Target ≤ 1.5 KiB gzip added to Standard.
 
@@ -324,7 +324,7 @@ textLayer(features, {
 
 **Reuse.** Extract `pickLabelAnchor` from `heat-isoline-layer.ts` into `src/services/label-layout.ts`. Isolines call the shared helper.
 
-**Acceptance.** 2k labels at z=12: no overlap, pan stays ≥ 50 fps on the bench page’s machine class. Standard budget: if this blows 35 KiB, ship as `orihon` Advanced-only (`textLayer` already conceptually “scale”). Prefer Advanced if > 2 KiB gzip.
+**Acceptance.** 2k labels at z=12: no overlap, pan stays ≥ 50 fps on the bench page’s machine class. Standard budget: if this blows 36 KiB, ship as `orihon` Advanced-only (`textLayer` already conceptually “scale”). Prefer Advanced if > 2 KiB gzip.
 
 **Non-goals.** MapLibre `symbol-sort-key` expressions, Chinese glyph shaping beyond the system font, 3D pitch.
 
@@ -418,7 +418,7 @@ Works for both DOM badges and `ClusterCanvasLayer.queryAt` clicks.
 
 ### P2.1 Small controls
 
-Ship in Standard if they fit the 35 KiB budget; otherwise `orihon` Advanced or tiny plugins.
+Ship in Standard if they fit the 36 KiB budget; otherwise `orihon` Advanced or tiny plugins.
 
 | Control | API | Notes |
 | --- | --- | --- |

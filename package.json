@@ -1,6 +1,6 @@
 {
   "name": "orihon",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A free, open-source browser map engine. Apache 2.0. Use it anywhere.",
   "type": "module",
   "main": "./dist/index.js",
@@ -62,11 +62,13 @@
     },
     "./global": "./dist/orihon.global.js",
     "./orihon.css": "./dist/orihon.css",
+    "./brand/*": "./assets/brand/*",
     "./package.json": "./package.json"
   },
   "sideEffects": [
     "./dist/orihon.css",
     "./dist/draw.css",
+    "./assets/brand/tokens/orihon-tokens.css",
     "./dist/webgpu-entry.js",
     "./dist/layers/mlt.js",
     "./dist/layers/mvt-wasm.js",
@@ -78,7 +80,7 @@
     "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
     "pretest": "npm run build",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:browser": "node test/browser-smoke.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs",
+    "test:browser": "node test/browser-smoke.mjs && node test/geojson-async-browser.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs",
     "test:server": "node scripts/browser-test-server.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",
@@ -91,7 +93,8 @@
     "dist": "npm run build && node scripts/pack-dist.mjs",
     "prepack": "npm run build && node scripts/strip-publish-maps.mjs",
     "prepublishOnly": "npm run check",
-    "demo:bench": "npx --yes serve . -p 4176",
+    "demo:bench": "npm run build && npx --yes serve . -p 4176",
+    "bench:object-manager": "npm run build && node scripts/bench-object-manager-scene.mjs",
     "demo:showcase": "npx --yes serve . -p 4177",
     "demo:planetary": "npx --yes serve examples/planetary-demo -p 4174",
     "demo:aircraft": "node examples/aircraft-radar-proxy/server.mjs",
@@ -111,8 +114,12 @@
   ],
   "author": "whahe",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "files": [
     "dist",
+    "assets/brand",
     "docs",
     "LICENSE",
     "LICENSE-NOTICE.md",
@@ -123,7 +130,7 @@
     "@playwright/test": "^1.62.1",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "jsdom": "^24.1.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -1,4 +1,4 @@
-import { listen, listenTap } from "../dom.js";
+import { createSvgEl, listen, listenTap } from "../dom.js";
 import {
   EARTH_RADIUS,
   destination,
@@ -15,8 +15,6 @@ import type { QueryHit, ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import type { OverlayContent, PopupOptions, TooltipOptions } from "../overlays/div-overlay.js";
 import { Renderer, type RendererOptions } from "../renderer.js";
-
-const SVG_NS = "http://www.w3.org/2000/svg";
 
 export interface PathOptions extends RendererOptions {
   stroke?: string;
@@ -45,7 +43,7 @@ export class SvgLayer<TOptions extends RendererOptions = RendererOptions> extend
   group: SVGGElement | null = null;
 
   protected override createContainer(): SVGSVGElement {
-    const svg = document.createElementNS(SVG_NS, "svg");
+    const svg = createSvgEl("svg");
     svg.classList.add("oh-svg-layer");
     return svg;
   }
@@ -53,8 +51,7 @@ export class SvgLayer<TOptions extends RendererOptions = RendererOptions> extend
   override onAdd(map: Orihon): void {
     super.onAdd(map);
     this.svg = this.container as SVGSVGElement;
-    this.group = document.createElementNS(SVG_NS, "g");
-    this.svg.appendChild(this.group);
+    this.group = createSvgEl("g", this.svg);
     this.render();
   }
 
@@ -106,7 +103,7 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
   }
 
   protected createPathElement(): SVGPathElement | SVGCircleElement {
-    return document.createElementNS(SVG_NS, "path");
+    return createSvgEl("path");
   }
 
   override onAdd(map: Orihon): void {
@@ -202,9 +199,9 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
       return;
     }
     if (!this.arrowMarker && this.svg) {
-      const defs = document.createElementNS(SVG_NS, "defs");
-      const marker = document.createElementNS(SVG_NS, "marker");
-      const tip = document.createElementNS(SVG_NS, "path");
+      const defs = createSvgEl("defs");
+      const marker = createSvgEl("marker", defs);
+      const tip = createSvgEl("path", marker);
       this.arrowMarkerId = `oh-arrow-${++arrowMarkerSequence}`;
       marker.id = this.arrowMarkerId;
       marker.setAttribute("viewBox", "0 0 10 10");
@@ -213,8 +210,6 @@ export class PathLayer extends SvgLayer<ResolvedPathOptions> {
       marker.setAttribute("markerUnits", "userSpaceOnUse");
       marker.setAttribute("orient", "auto-start-reverse");
       tip.setAttribute("d", "M0 0L10 5L0 10Z");
-      marker.appendChild(tip);
-      defs.appendChild(marker);
       this.svg.insertBefore(defs, this.svg.firstChild);
       this.arrowMarker = marker;
     }
@@ -665,7 +660,7 @@ export class CircleMarker extends PathLayer {
   }
 
   protected override createPathElement(): SVGCircleElement {
-    return document.createElementNS(SVG_NS, "circle");
+    return createSvgEl("circle");
   }
 
   protected override interactionPointerEvents(): "all" {

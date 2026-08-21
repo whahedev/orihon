@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
+  <title id="title">Orihon horizontal logo</title>
+  <desc id="desc">Orihon cartographic library identity: an accordion-folded map crossed by a route.</desc>
+
+  <g transform="translate(8 0)"><g aria-label="orihon accordion map symbol">
+      <path d="M24 35 L144 55 L144 225 L24 245 Z" fill="#D9E0CE" stroke="#0E4E44" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M164 60 L272 42 L272 238 L164 220 Z" fill="#EEE9D2" stroke="#0E4E44" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M272 42 L378 62 L378 218 L272 238 Z" fill="#EEE9D2" stroke="#0E4E44" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M398 60 L500 40 L500 240 L398 220 Z" fill="#D9E0CE" stroke="#0E4E44" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+          <path d="M25 105 L144 118 M25 172 L144 181 M91 46 L91 234" fill="none" stroke="#4A775B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M165 118 L272 105 M220 51 C222 81 204 80 205 108 C205 134 233 145 224 168 C217 188 229 201 229 226" fill="none" stroke="#2D7285" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M272 103 L378 119 M272 164 L378 164 M319 51 L319 229" fill="none" stroke="#4A775B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M399 129 L500 112 M446 51 C447 75 429 76 430 105 C431 126 420 145 426 166 C432 186 423 203 423 225" fill="none" stroke="#2D7285" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M47 160 C112 163 139 179 164 181 C207 185 218 119 270 119 C322 119 335 148 378 150 C416 151 457 148 478 148" fill="none" stroke="#D39D1A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="47" cy="160" r="12" fill="#FBF4ED" stroke="#D05D2D" stroke-width="7"/>
+          <circle cx="478" cy="148" r="12" fill="#FBF4ED" stroke="#D05D2D" stroke-width="7"/>
+        </g></g><g fill="#0B463C" transform="translate(585.00 205.00) scale(0.085000 -0.115000)"><path d="M705 891Q586 891 523.5 805.5Q461 720 461 559Q461 398 523.5 312.5Q586 227 705 227Q822 227 884.0 312.5Q946 398 946 559Q946 720 884.0 805.5Q822 891 705 891ZM705 1147Q994 1147 1156.5 991.0Q1319 835 1319 559Q1319 283 1156.5 127.0Q994 -29 705 -29Q415 -29 251.5 127.0Q88 283 88 559Q88 835 251.5 991.0Q415 1147 705 1147Z" transform="translate(0.0 0)"/><path d="M1004 815Q957 837 910.5 847.5Q864 858 817 858Q679 858 604.5 769.5Q530 681 530 516V0H172V1120H530V936Q599 1046 688.5 1096.5Q778 1147 903 1147Q921 1147 942.0 1145.5Q963 1144 1003 1139Z" transform="translate(1369.0 0)"/><path d="M172 1120H530V0H172ZM172 1556H530V1264H172Z" transform="translate(2341.0 0)"/><path d="M1298 682V0H938V111V520Q938 667 931.5 722.0Q925 777 909 803Q888 838 852.0 857.5Q816 877 770 877Q658 877 594.0 790.5Q530 704 530 551V0H172V1556H530V956Q611 1054 702.0 1100.5Q793 1147 903 1147Q1097 1147 1197.5 1028.0Q1298 909 1298 682Z" transform="translate(3005.0 0)"/><path d="M705 891Q586 891 523.5 805.5Q461 720 461 559Q461 398 523.5 312.5Q586 227 705 227Q822 227 884.0 312.5Q946 398 946 559Q946 720 884.0 805.5Q822 891 705 891ZM705 1147Q994 1147 1156.5 991.0Q1319 835 1319 559Q1319 283 1156.5 127.0Q994 -29 705 -29Q415 -29 251.5 127.0Q88 283 88 559Q88 835 251.5 991.0Q415 1147 705 1147Z" transform="translate(4425.0 0)"/><path d="M1298 682V0H938V111V522Q938 667 931.5 722.0Q925 777 909 803Q888 838 852.0 857.5Q816 877 770 877Q658 877 594.0 790.5Q530 704 530 551V0H172V1120H530V956Q611 1054 702.0 1100.5Q793 1147 903 1147Q1097 1147 1197.5 1028.0Q1298 909 1298 682Z" transform="translate(5794.0 0)"/></g>
+</svg>

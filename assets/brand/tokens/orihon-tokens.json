@@ -1,0 +1,53 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "brand": {
+    "color": {
+      "forest": {
+        "$value": "#0B463C",
+        "$type": "color"
+      },
+      "forestMid": {
+        "$value": "#0E4E44",
+        "$type": "color"
+      },
+      "routeOchre": {
+        "$value": "#D39D1A",
+        "$type": "color"
+      },
+      "nodeTerracotta": {
+        "$value": "#D05D2D",
+        "$type": "color"
+      },
+      "waterBlue": {
+        "$value": "#2D7285",
+        "$type": "color"
+      },
+      "sage": {
+        "$value": "#D9E0CE",
+        "$type": "color"
+      },
+      "sand": {
+        "$value": "#EEE9D2",
+        "$type": "color"
+      },
+      "ivory": {
+        "$value": "#FBF4ED",
+        "$type": "color"
+      }
+    },
+    "space": {
+      "clearSpace": {
+        "$value": "1x",
+        "$type": "dimension"
+      },
+      "minimumLogoWidth": {
+        "$value": "120px",
+        "$type": "dimension"
+      },
+      "minimumMarkWidth": {
+        "$value": "32px",
+        "$type": "dimension"
+      }
+    }
+  }
+}

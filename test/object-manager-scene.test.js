@@ -235,6 +235,25 @@ test("temporal index uses range filtering and keeps inactive ids out", () => {
   assert.equal(index.isActive(0), false);
 });
 
+test("temporal index keeps O(1) update bookkeeping valid after sorting", () => {
+  const index = new ObjectTimeIndex({
+    value: (object) => Number(object.properties?.timestamp)
+  });
+  for (let i = 0; i < 100; i++) index.upsert(i, { properties: { timestamp: i } });
+  index.setRange(0, 99);
+  assert.equal(index.queryActiveIds().size, 100); // sorts and rebuilds slot bookkeeping
+
+  index.upsert(50, { properties: { timestamp: 1000 } });
+  index.remove(20);
+  index.setRange(0, 99);
+  const active = index.queryActiveIds();
+  assert.equal(active.size, 98);
+  assert.equal(active.has(20), false);
+  assert.equal(active.has(50), false);
+  index.setRange(1000, 1000);
+  assert.deepEqual([...index.queryActiveIds()], [50]);
+});
+
 test("motion interrupt starts from interpolated position", () => {
   const scene = new ObjectSceneController();
   scene.startMotion("a", 0, 0, 10, 10, 1000);

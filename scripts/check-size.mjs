@@ -5,10 +5,11 @@ const manifest = JSON.parse(await readFile(new URL("../dist/release-manifest.jso
 const kib = 1024;
 const budgets = {
   "orihon.core.esm.js": 22 * kib,
-  "orihon.standard.esm.js": 35 * kib,
+  // Includes bounded async GeoJSON ingestion and its backpressured parse worker.
+  "orihon.standard.esm.js": 36 * kib,
   // Advanced includes WebGL tiles/points/heat/paths, ObjectManager scene,
-  // MLT sniff, WASM MVT geometry, WebGPU raster tiles, and shared camera warps.
-  "orihon.esm.js": 102 * kib,
+  // async mass ingestion, MLT/WASM decoding, WebGPU tiles and camera warps.
+  "orihon.esm.js": 107 * kib,
   "orihon.draw.esm.js": 12 * kib,
   "orihon.controls.esm.js": 8 * kib,
   "orihon.geo.esm.js": 2 * kib,

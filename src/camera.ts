@@ -53,6 +53,35 @@ export function cameraWarpCss(
   );
 }
 
+/**
+ * Whether a viewport-sized surface painted for one camera still covers the
+ * entire live viewport after the camera warp.
+ *
+ * A zoom-out always shrinks a viewport-sized framebuffer and therefore cannot
+ * cover its own edges. A pure pan has the same problem on the newly exposed
+ * side. Renderers can use this predicate to keep the cheap CSS path for safe
+ * zoom-in gestures, while repainting geometrically unsafe zoom-out / pan
+ * frames before transparent borders become visible.
+ */
+export function cameraWarpCoversViewport(
+  paintedOrigin: CameraOrigin,
+  paintedZoom: number,
+  liveOrigin: CameraOrigin,
+  liveZoom: number,
+  viewport: { width: number; height: number },
+  epsilon = 0.5
+): boolean {
+  const scale = 2 ** (liveZoom - paintedZoom);
+  const x = paintedOrigin.x * scale - liveOrigin.x;
+  const y = paintedOrigin.y * scale - liveOrigin.y;
+  return (
+    x <= epsilon &&
+    y <= epsilon &&
+    x + viewport.width * scale >= viewport.width - epsilon &&
+    y + viewport.height * scale >= viewport.height - epsilon
+  );
+}
+
 /** Top-left of tile `(x,y)` at `tileZoom`, expressed in live layer pixels + CSS scale. */
 export function tileCornerLayerTransform(
   tileX: number,

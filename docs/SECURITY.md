@@ -26,6 +26,8 @@ This page is the contract. Feature docs describe *how* to use an API; this page 
 
 Cleanup runs when content is replaced, the overlay closes, or the layer is destroyed. Rejected async factories emit `contenterror`. Stale async results (after a newer generation) are ignored so late network responses cannot overwrite newer UI.
 
+The optional `popupContent({ children: [{ type: "popupHtml" }] })` block is the only HTML-string renderer. Its sanitizer removes executable/embedded elements, forms and active controls, inline styles, event attributes, `srcdoc`, `srcset`, unsafe URL schemes (including control-character-obfuscated schemes), and SVG/MathML. Safe `http:`, `https:`, `mailto:`, `tel:`, relative and fragment links remain; `_blank` links receive `noopener noreferrer`. Treat `createEChartsPopupRenderer({ libraryUrl })` as trusted application configuration because it intentionally loads a script.
+
 ```js
 // Safe by default — treated as text, not HTML
 marker(position).bindPopup("<img src=x onerror=alert(1)>");
@@ -77,7 +79,9 @@ The browser composition regression decodes a real exported PNG and checks canvas
 `offlineTileCache` helpers are conservative by design:
 
 - **`urlPrefixes`** — without prefixes, the generated Service Worker may *serve* existing cache hits but will **not** network-cache new arbitrary GETs. The same prefixes on `offlineTileCache({ urlPrefixes })` also filter `prefetch()`.
+- Prefix matching parses URLs and requires the same origin before applying the path prefix, so `https://tiles.example.evil/` cannot match `https://tiles.example/`. End directory prefixes with `/` when a path-segment boundary matters.
 - `prefetch()` rejects `javascript:`, `data:`, `vbscript:`, `blob:` and `file:` URLs even when no prefixes are set.
+- `prefetch()` accepts only HTTP(S), deduplicates URLs, enforces `maxTiles` while collecting them, and runs at most `concurrency` requests at once (default 8, clamp 1–32).
 - With prefixes, only URLs that start with an allowlisted prefix are eligible for network→cache writes.
 - Opaque responses are never written into the cache from the Service Worker network path.
 - **`prefetchTileLayer`** requires `bounds` or explicit tile ranges and throws if the request would exceed `maxTiles`.

@@ -4,9 +4,17 @@ import { Layer, type LayerOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { heatKernelAtZoom, heatWarpNeedsGpu, valueHeatTone } from "../services/heat-scale.js";
+import {
+  isAsyncIterable,
+  resolveAsyncBatchOptions,
+  throwIfAsyncAborted,
+  yieldAsyncBatch,
+  type AsyncBatchOptions
+} from "../services/async-batch.js";
 import { compileShader, linkProgram } from "../webgl-utils.js";
 
 export type WebGLHeatInput = LatLngLike | [number, number, number?];
+export interface WebGLHeatAsyncDataOptions extends AsyncBatchOptions {}
 
 export interface WebGLHeatLayerOptions extends LayerOptions {
   /** Kernel radius in CSS px at `scaleZoom`. */
@@ -249,8 +257,73 @@ export class WebGLHeatLayer extends Layer<ResolvedWebGLHeatLayerOptions> {
       }
       this._dataBuf = new Float32Array(values);
       this.data = this._dataBuf;
-      this._count = values.length / 3;
+      return this.#commitData(values.length);
     }
+    return this.#commitData(this.data.length);
+  }
+
+  /** Project and pack a large heat dataset cooperatively, then swap it atomically. */
+  async setDataAsync(
+    points: Iterable<WebGLHeatInput> | AsyncIterable<WebGLHeatInput>,
+    options: WebGLHeatAsyncDataOptions = {}
+  ): Promise<this> {
+    const resolved = resolveAsyncBatchOptions(options, 50_000);
+    const total = Array.isArray(points) ? points.length : null;
+    let buffer = total == null ? null : new Float32Array(total * 3);
+    const values: number[] = [];
+    let processed = 0;
+    let write = 0;
+    throwIfAsyncAborted(resolved.signal);
+
+    const append = (item: WebGLHeatInput): void => {
+      const next = normalizeHeat(item);
+      if (!next) return;
+      const mercator = projectMercator01(next.lat, next.lng);
+      if (buffer) {
+        buffer[write] = mercator.x;
+        buffer[write + 1] = mercator.y;
+        buffer[write + 2] = next.weight;
+      } else {
+        values.push(mercator.x, mercator.y, next.weight);
+      }
+      write += 3;
+    };
+    const checkpoint = async (final: boolean): Promise<void> => {
+      resolved.onProgress?.(processed, total);
+      if (!final) await yieldAsyncBatch(resolved.yieldMode);
+      throwIfAsyncAborted(resolved.signal);
+    };
+
+    if (Array.isArray(points)) {
+      for (let index = 0; index < points.length; index++) {
+        append(points[index]);
+        processed++;
+        if (processed % resolved.chunkSize === 0) await checkpoint(index === points.length - 1);
+      }
+    } else if (isAsyncIterable<WebGLHeatInput>(points)) {
+      for await (const item of points) {
+        append(item);
+        processed++;
+        if (processed % resolved.chunkSize === 0) await checkpoint(false);
+      }
+    } else {
+      for (const item of points) {
+        append(item);
+        processed++;
+        if (processed % resolved.chunkSize === 0) await checkpoint(false);
+      }
+    }
+    if (processed % resolved.chunkSize !== 0) await checkpoint(true);
+
+    if (!buffer) buffer = new Float32Array(values);
+    else if (write !== buffer.length) buffer = buffer.slice(0, write);
+    this._dataBuf = buffer;
+    return this.#commitData(write);
+  }
+
+  #commitData(write: number): this {
+    this.data = this._dataBuf.subarray(0, write);
+    this._count = write / 3;
     this._aggZoom = Number.NaN;
     this._bufferDirty = true;
     this._packedMerc = null;

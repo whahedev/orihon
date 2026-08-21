@@ -47,7 +47,7 @@ class FakeElement {
     this.tagName = tag;
     this.children = [];
     this.classList = new FakeClassList();
-    this.style = {};
+    this.style = { setProperty(name, value) { this[name] = value; } };
     this.attributes = new Map();
     this.clientWidth = 800;
     this.clientHeight = 600;
@@ -55,6 +55,9 @@ class FakeElement {
     this.height = 0;
   }
   appendChild(child) {
+    if (child.parent && child.parent !== this) {
+      child.parent.children = child.parent.children.filter((entry) => entry !== child);
+    }
     this.children.push(child);
     child.parent = this;
     return child;
@@ -64,6 +67,11 @@ class FakeElement {
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   removeAttribute(name) { this.attributes.delete(name); }
+  replaceChildren(...children) {
+    for (const child of this.children) child.parent = null;
+    this.children = [];
+    for (const child of children) this.appendChild(child);
+  }
   setPointerCapture() {}
   releasePointerCapture() {}
   querySelectorAll() { return this.children; }
@@ -113,6 +121,7 @@ class FakeCanvasContext {
 
 globalThis.document = {
   createElement: (tag) => new FakeElement(tag),
+  createElementNS: (_namespace, tag) => new FakeElement(tag),
   getElementById: () => null
 };
 globalThis.window = new FakeElement();
@@ -348,6 +357,23 @@ test("WebGLHeatLayer packs mercator+weight and exposes count", () => {
   assert.equal(layer.count, 0);
 });
 
+test("WebGLHeatLayer setDataAsync packs chunks atomically", async () => {
+  const layer = webglHeatLayer([[0, 0, 1]]);
+  const progress = [];
+  await layer.setDataAsync([
+    [52.52, 13.405, 0.8],
+    [52.53, 13.41, 0.4],
+    [Number.NaN, 1, 1]
+  ], {
+    chunkSize: 2,
+    yieldMode: "task",
+    onProgress: (processed, total) => progress.push([processed, total])
+  });
+  assert.equal(layer.count, 2);
+  assert.equal(layer.data.length, 6);
+  assert.deepEqual(progress, [[2, 3], [3, 3]]);
+});
+
 test("WebGLHeatLayer and HeatIsolineLayer keep points across remove/add", () => {
   class FakeMap extends Evented {
     zoom = 10;
@@ -516,9 +542,10 @@ test("MarkerCollection auto picks webgl above threshold", () => {
     pixelOrigin = { x: 0, y: 0 };
     panes = { overlay: new FakeElement(), marker: new FakeElement() };
     layers = new Set();
+    bounds = [[40, 0], [70, 30]];
     getZoom() { return this.zoom; }
     getSize() { return { x: 800, y: 600 }; }
-    getBounds() { return [[0, 0], [1, 1]]; }
+    getBounds() { return this.bounds; }
     getPane(name) { return this.panes[name] ?? null; }
     latLngToLayerPoint(ll) {
       const lat = Array.isArray(ll) ? ll[0] : ll.lat;
@@ -552,7 +579,58 @@ test("MarkerCollection auto picks webgl above threshold", () => {
   const map = new FakeMap();
   small.addTo(map);
   assert.equal(small.renderer, "dom");
+  assert.equal(map.layers.size, 1, "internal DOM markers must not become map layers");
+  assert.equal(map.panes.marker.children.length, 1);
+  const collectionPane = map.panes.marker.children[0];
+  assert.equal(collectionPane.children.length, 30);
+  assert.equal(collectionPane.children[0].style.pointerEvents, "none");
+  assert.equal(collectionPane.children[0].children.length, 0, "non-interactive dots use the one-node fast path");
+  assert.equal(collectionPane.children[0].getAttribute("aria-hidden"), "true");
+  const mounted = [...collectionPane.children];
+  map.bounds = [[-1, -1], [1, 1]];
+  small.redraw();
+  assert.equal(collectionPane.children.length, 30, "culled markers stay in the bounded recycle pool");
+  map.bounds = [[40, 0], [70, 30]];
+  small.redraw();
+  assert.deepEqual(collectionPane.children, mounted, "viewport return reuses existing DOM nodes");
   small.remove();
+
+  const hybrid = markerCollection(points, { renderer: "hybrid", domLimit: 10 });
+  hybrid.addTo(map);
+  assert.equal(hybrid.renderer, "hybrid");
+  assert.equal(map.panes.marker.children[0].children.length, 10, "hybrid caps live DOM markers");
+  assert.equal(map.layers.size, 2, "hybrid owns one collection plus one WebGL remainder");
+  hybrid.remove();
+
+  const svgDom = markerCollection(points, {
+    renderer: "svg",
+    htmlButtonLimit: 5,
+    marker: { interactive: true, keyboard: true, title: "Open object" }
+  });
+  svgDom.addTo(map);
+  assert.equal(svgDom.renderer, "svg");
+  const buttonRoot = map.panes.marker.children.find((child) => child.tagName === "div");
+  const svg = buttonRoot.children.find((child) => child.tagName === "svg");
+  assert.ok(svg, "SVG DOM renderer mounts one shared root");
+  const group = svg.children.find((child) => child.tagName === "g");
+  assert.equal(group.children.length, 29, "dense points share one automatic HTML-button cell");
+  assert.equal(group.children[0].tagName, "circle");
+  assert.equal(buttonRoot.children.filter((child) => child.tagName === "button").length, 1, "automatic buttons are spatially thinned");
+  svgDom.setSelected([0, 1, 2, 3, 4, 5]);
+  assert.equal(buttonRoot.children.filter((child) => child.tagName === "button").length, 6, "selected objects override the soft button budget");
+  assert.equal(group.children.length, 24);
+  assert.equal(svgDom.getElement(0).tagName, "button");
+  assert.equal(svgDom.getElement(0).style.pointerEvents, "auto", "promoted buttons remain interactive");
+  assert.equal(svgDom.getElement(0).tabIndex, 0, "promoted buttons remain keyboard reachable");
+  svgDom.setPointSelected(5, false);
+  assert.equal(svgDom.getElement(5).tagName, "circle", "deselected points return to the lightweight SVG set");
+  map.pixelOrigin = { x: 24, y: 12 };
+  svgDom.render();
+  assert.notEqual(buttonRoot.style.transform, "", "camera motion warps the shared HTML/SVG root");
+  assert.equal(svg.style.transform ?? "", "", "nested SVG does not trigger a separate rasterizing transform");
+  svgDom.redraw();
+  assert.equal(buttonRoot.style.transform, "", "settled button positions clear the temporary warp");
+  svgDom.remove();
 
   const largePts = [];
   for (let i = 0; i < 120; i++) largePts.push([52 + (i % 10) * 0.1, 13 + Math.floor(i / 10) * 0.1]);
@@ -596,6 +674,24 @@ test("WebGLPointLayer stores large point batches compactly", () => {
   layer.bindPopup((context) => String(context.event?.index));
   assert.equal(layer.options.interactive, true);
   assert.ok(layer.getPopup());
+});
+
+test("WebGLPointLayer setDataAsync projects chunks and adopts packed buffers", async () => {
+  const layer = webglPointLayer([], { interactive: false });
+  const progress = [];
+  const returned = await layer.setDataAsync([
+    [52.52, 13.405],
+    { coordinates: [52.53, 13.41] },
+    { lat: Number.NaN, lng: 1 }
+  ], {
+    chunkSize: 2,
+    yieldMode: "task",
+    onProgress: (processed, total) => progress.push([processed, total])
+  });
+  assert.equal(returned, layer);
+  assert.equal(layer.getStats().points, 2);
+  assert.equal(layer.getLatLngBuf().length, 4);
+  assert.deepEqual(progress, [[2, 3], [3, 3]]);
 });
 
 test("WebGLPointLayer reuses CPU buffers on repeated setData", () => {
@@ -703,8 +799,14 @@ test("GeometryWorkerPool prepares typed point batches with fallback", async () =
   assert.ok(batch.points instanceof Float32Array);
 
   const pool = geometryWorkerPool({ useWorker: false });
-  const prepared = await pool.preparePoints([[5, 6]]);
-  assert.equal(prepared.count, 1);
+  const progress = [];
+  const prepared = await pool.preparePoints([[5, 6], [7, 8], [9, 10]], {
+    chunkSize: 2,
+    yieldMode: "task",
+    onProgress: (processed, total) => progress.push([processed, total])
+  });
+  assert.equal(prepared.count, 3);
+  assert.deepEqual(progress, [[2, 3], [3, 3]]);
   pool.destroy();
 });
 
@@ -725,9 +827,28 @@ test("GeometryWorkerPool.clusterLayout matches sync buildClusterLayout", async (
   pool.destroy();
 });
 
+test("GeometryWorkerPool.greedyClusterLayout preserves caller ids", async () => {
+  const request = {
+    ids: ["near-a", "near-b", "far"],
+    coords: new Float64Array([52.52, 13.405, 52.521, 13.406, 60, 30]),
+    zoomBucket: 10,
+    gridSize: 256,
+    minPoints: 2,
+    clusterize: true,
+    clusterMaxZoom: 18
+  };
+  const pool = geometryWorkerPool({ useWorker: false });
+  const result = await pool.greedyClusterLayout(request);
+  assert.equal(result.clusters.length, 1);
+  assert.deepEqual(new Set(result.clusters[0].ids), new Set(["near-a", "near-b"]));
+  assert.equal(result.singles[0].id, "far");
+  pool.destroy();
+});
+
 test("cluster worker source is valid JavaScript", () => {
   const source = clusterLayoutWorkerSource();
   assert.match(source, /buildClusterIndex/);
+  assert.match(source, /greedyClusterLayout/);
   assert.equal(typeof new Function(source), "function");
 });
 
@@ -826,6 +947,9 @@ test("prefetch rejects blocked schemes and honors urlPrefixes", async () => {
   assert.equal(prefetchUrlAllowed("https://tiles.example/1.png"), true);
   assert.equal(prefetchUrlAllowed("https://evil.example/1.png", ["https://tiles.example/"]), false);
   assert.equal(prefetchUrlAllowed("https://tiles.example/1.png", ["https://tiles.example/"]), true);
+  assert.equal(prefetchUrlAllowed("https://tiles.example.evil/1.png", ["https://tiles.example/"]), false);
+  assert.equal(prefetchUrlAllowed("\njava\tscript:alert(1)"), false);
+  assert.equal(prefetchUrlAllowed("ftp://tiles.example/1.png"), false);
 
   const cache = offlineTileCache({
     cacheName: "prefix-cache",
@@ -839,6 +963,39 @@ test("prefetch rejects blocked schemes and honors urlPrefixes", async () => {
   ]);
   assert.equal(stats.queued, 1);
   assert.equal(stats.failed, 2);
+});
+
+test("OfflineTileCache bounds prefetch concurrency", async () => {
+  const originalCaches = globalThis.caches;
+  let active = 0;
+  let peak = 0;
+  let puts = 0;
+  globalThis.caches = {
+    async open() {
+      return {
+        async put() { puts++; },
+        async match() { return undefined; }
+      };
+    }
+  };
+  try {
+    const cache = offlineTileCache({
+      concurrency: 3,
+      fetcher: async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        active--;
+        return new Response("tile");
+      }
+    });
+    const stats = await cache.prefetch(Array.from({ length: 12 }, (_, i) => `/tile-${i}.png`));
+    assert.equal(peak, 3);
+    assert.equal(puts, 12);
+    assert.equal(stats.cached, 12);
+  } finally {
+    globalThis.caches = originalCaches;
+  }
 });
 
 test("prefetchTileLayer requires bounds and respects maxTiles", async () => {

@@ -1,6 +1,6 @@
 # create-orihon-app
 
-Scaffold a project that already draws a map.
+Scaffold a project that already draws a map — and shows one sample of each Easy overlay.
 
 ```sh
 npm create orihon-app my-map
@@ -14,37 +14,44 @@ npm install
 npm run dev
 ```
 
+Or in one shot:
+
+```sh
+npm create orihon-app my-map -- --yes --install
+```
+
 ## Templates
 
 | Template | What you get |
 | --- | --- |
 | `vanilla` | Vite + JavaScript |
-| `react` | Vite + React 18 with `orihon/react` |
-
-Pick one without the prompt:
+| `vanilla-ts` | Vite + TypeScript |
+| `react` | Vite + React 18 (same Easy API as vanilla) |
+| `react-ts` | Vite + React 18 + TypeScript |
+| `cdn` | One HTML file via jsDelivr, no bundler |
 
 ```sh
-npm create orihon-app my-map -- --template react --yes
+npm create orihon-app my-map -- --template react-ts --yes --install
+npm create orihon-app my-map -- --center 55.75,37.62 --locale ru
 ```
 
 | Option | What it does |
 | --- | --- |
-| `-t, --template <name>` | `vanilla` or `react` |
+| `-t, --template <name>` | `vanilla` / `vanilla-ts` / `react` / `react-ts` / `cdn` |
 | `-y, --yes` | Take the defaults, ask nothing |
+| `--center <lat,lng>` | Map centre (default Berlin `52.52,13.405`) |
+| `--locale <code>` | Map UI locale (default `en`) |
+| `--install` | Run the package manager install after scaffolding |
+| `--no-install` | Never run it |
 | `-h, --help` | Show the usage text |
 
 ## What the generated project already has
 
-The four things a first map is usually missing:
-
-- the stylesheet import — `import "orihon/orihon.css"`
-- a container with a real height, so the map has somewhere to draw
+- the stylesheet import — `import "orihon/orihon.css"` (or CDN link)
+- a container with a real height
 - an attribution for the tile provider
-- one working map with a marker and a popup
-
-That makes the starter the shortest path to a running map, and it is also what the repository
-runs as an integration test: `test/create-orihon-app.test.js` scaffolds every template and
-asserts those four properties in the generated files.
+- one working map with **Marker, Polyline, Polygon, GeoJSON and TileLayer** samples — delete what you do not need
+- `vite --open` on Vite templates so the browser opens itself
 
 ## License
 

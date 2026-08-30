@@ -1,15 +1,14 @@
-# Orihon map (React)
+# Orihon map (React + TypeScript)
 
-A Vite + React project using the same Easy API as the vanilla starter.
+A Vite + React + TypeScript project using the same Easy API as the vanilla starter.
 
 ```sh
 npm install
 npm run dev
 ```
 
-`src/App.jsx` creates the map with `createMap` from `orihon/easy` and shows one sample of
-each overlay. Delete the blocks you do not need. For declarative JSX layers later, see
-`orihon/react` in the docs.
+`src/App.tsx` creates the map with `createMap` from `orihon/easy` and shows one sample of
+each overlay. Delete the blocks you do not need.
 
 ## Where to go next
 

@@ -1,6 +1,6 @@
 {
   "name": "create-orihon-app",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Scaffold an Orihon Maps project that already draws a map.",
   "type": "module",
   "bin": {

@@ -15,7 +15,7 @@ import {
 const center = { lat: __ORIHON_CENTER_LAT__, lng: __ORIHON_CENTER_LNG__ };
 
 export default function App() {
-  const host = useRef(null);
+  const host = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!host.current) return;

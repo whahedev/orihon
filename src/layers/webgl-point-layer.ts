@@ -121,6 +121,8 @@ export class WebGLPointLayer extends InteractiveLayer<ResolvedWebGLPointLayerOpt
   private _sizeBuf = new Float32Array(0);
   /** Reused sorted GPU-slot scratch for batched style updates. */
   private _stylePatchIndexScratch = new Uint32Array(0);
+  /** The same, for batched coordinate updates; kept apart so one cannot clobber the other. */
+  private _pointPatchIndexScratch = new Uint32Array(0);
   private _gpuMercBytes = 0;
   private _gpuColorBytes = 0;
   private _gpuSizeBytes = 0;
@@ -428,6 +430,63 @@ export class WebGLPointLayer extends InteractiveLayer<ResolvedWebGLPointLayerOpt
     // Moving a point has to ask for a repaint, exactly as changing its colour or size does.
     // Without this the new coordinates sit in the GPU buffer and `render()` takes its
     // camera-unchanged shortcut, so positions only appeared the next time the camera moved.
+    this.#requestGpuPaint();
+    return this;
+  }
+
+  /**
+   * Move many points in one pass. `latLngs` is interleaved lat,lng for each entry of `indices`.
+   *
+   * `patchPoint()` issues its own `bufferSubData` per point, which is right for the tens of moving
+   * objects a live map usually has. A fleet or a telemetry feed moves thousands at once, and that
+   * became thousands of driver calls a tick. This runs the same plan `patchStyles()` already uses
+   * for colours and sizes: sort the slots, merge what is adjacent, and let a dense or scattered
+   * batch fall back to one full upload when that works out cheaper.
+   */
+  patchPoints(indices: ArrayLike<number>, latLngs: ArrayLike<number>, count = indices.length): this {
+    const n = Math.min(indices.length, Math.max(0, Math.floor(count)));
+    if (n <= 0) return this;
+    if (this._pointPatchIndexScratch.length < n) this._pointPatchIndexScratch = new Uint32Array(n);
+
+    const pointCount = this.points.length / 2;
+    const canUploadRanges = Number.isFinite(this._refMx);
+    let dirtyCount = 0;
+
+    for (let i = 0; i < n; i++) {
+      const index = Math.trunc(Number(indices[i]));
+      if (!Number.isFinite(index) || index < 0 || index >= pointCount) continue;
+      const src = i * 2;
+      if (src + 1 >= latLngs.length) continue;
+      const lat = Number(latLngs[src]);
+      const lng = Number(latLngs[src + 1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+      const slot = index * 2;
+      const m = projectMercator01(lat, lng);
+      this._latlngBuf[slot] = lat;
+      this._latlngBuf[slot + 1] = lng;
+      this._merc64[slot] = m.x;
+      this._merc64[slot + 1] = m.y;
+      if (this.options.interactive) this._pickIndex.set(index, { lat, lng }, index);
+
+      if (canUploadRanges && this._drawMerc.length >= slot + 2) {
+        this._drawMerc[slot] = m.x - this._refMx;
+        this._drawMerc[slot + 1] = m.y - this._refMy;
+        this._pointPatchIndexScratch[dirtyCount++] = index;
+      } else {
+        // No camera reference yet, so there is nothing to encode against: let the next render
+        // rebuild the whole buffer instead of uploading garbage.
+        this._bufferDirty = true;
+      }
+    }
+
+    if (dirtyCount > 0 && !this._bufferDirty) {
+      const dirty = this._pointPatchIndexScratch.subarray(0, dirtyCount);
+      dirty.sort();
+      this.#uploadPatchRanges(dirty, pointCount, (start, points) =>
+        this.#uploadMercatorRange(start * 2, points * 2)
+      );
+    }
     this.#requestGpuPaint();
     return this;
   }

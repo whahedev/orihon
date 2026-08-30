@@ -4,6 +4,10 @@
 
 # Orihon Maps
 
+<!-- brand-note-34 -->
+
+The product is **Orihon Maps**; the package name remains `orihon`.
+
 <!-- stable-2x-polish-32 -->
 
 **A fast, typed browser map engine with a small path from first map to large-scale GIS.**

@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- **Fixed — the showcase carried one scenario's clusters into the next.** Its teardown called
+  `remove()` on everything it tracked, inside a `catch` that ignored the result. `ObjectManager` is
+  a service rather than a layer and has `destroy()`, not `remove()`, so the call threw into that
+  silent catch and the manager stayed on the map: the 50,000-lot property scene kept its cluster
+  canvas alive, and every scenario after it drew a single 50,000 bubble on top — most visibly on
+  Live aircraft, whose wide view collapses the whole Berlin dataset into one point. The teardown now
+  picks whichever of `remove` and `destroy` the object actually has, and reports what it cannot tear
+  down instead of swallowing it.
+
 ## 2.0.1 — 2026-08-30
 
 - **Fixed — WebGL points drifted and snapped back while zooming.** A layer above 8,000 points is

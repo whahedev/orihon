@@ -630,10 +630,15 @@ function stopMotion() {
 function clearOverlayLayers() {
   stopMotion();
   for (const layer of state.layers) {
+    // ObjectManager is a service, not a layer: it has destroy(), not remove(). Calling remove() on
+    // it threw straight into a swallowing catch, so its cluster canvas outlived every scenario
+    // switch — 50,000 lots kept drawing as one bubble over whatever came next.
     try {
-      layer.remove();
-    } catch {
-      /* ignore */
+      if (typeof layer?.remove === "function") layer.remove();
+      else if (typeof layer?.destroy === "function") layer.destroy();
+      else console.error("showcase: nothing to tear down on", layer);
+    } catch (error) {
+      console.error("showcase: could not tear down a layer", error);
     }
   }
   state.layers = [];

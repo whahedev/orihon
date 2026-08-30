@@ -12,6 +12,16 @@ export interface MVTDecodeOptions {
   maxFeatures?: number;
   /** Drop protobuf strings longer than this. Default 8192. */
   maxStringLength?: number;
+  /**
+   * Hand the input buffer to the decode worker instead of copying it, the way
+   * `WebGLPointLayer.setPackedData` takes ownership with `adopt`. The caller must not touch the
+   * buffer afterwards: a transfer detaches it. Only whole buffers move — a `Uint8Array` that views
+   * part of a larger one is still copied, because a transfer cannot take a slice.
+   *
+   * Worth it for a buffer the caller just created and will not reuse, which is what
+   * `response.arrayBuffer()` hands back. Ignored on every path that decodes without a worker.
+   */
+  transferInput?: boolean;
 }
 
 export interface PackedMVTLayer {
@@ -143,7 +153,9 @@ export function createMVTProvider(
     const response = await fetch(url, { signal: tile.signal });
     if (!response.ok) throw new Error(`MVT request failed: ${response.status}`);
     const buffer = await response.arrayBuffer();
-    const packed = await decodePackedMVTAsync(buffer, tile, options);
+    // This buffer was created here and is never read again, so the decoder may take it rather than
+    // copy the whole tile first. Not the caller's choice to make: they never see it.
+    const packed = await decodePackedMVTAsync(buffer, tile, { ...options, transferInput: true });
     return packedToGeoJSON(packed, options);
   };
 }
@@ -165,15 +177,38 @@ export async function decodePackedMVTAsync(
   }
   const slot = mvtDecoder();
   if (!slot) return decodePackedMVTJs(data, tile, options);
-  const bytes = data instanceof Uint8Array
-    ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
-    : data.slice(0);
+  const bytes = ownedInput(data, options);
   const id = ++mvtRequestId;
   return new Promise((resolve, reject) => {
     mvtPending.set(id, { resolve, reject, slot });
     slot.pending += 1;
     slot.worker.postMessage({ id, bytes, tile, options }, [bytes]);
   });
+}
+
+/**
+ * The buffer to hand the worker. Transferring detaches whatever is sent, so without an explicit
+ * hand-over the library has to copy: it cannot neuter a buffer its caller still owns. With
+ * `transferInput` the caller has said it is finished with it, and a whole buffer moves for free.
+ */
+function ownedInput(data: ArrayBuffer | Uint8Array, options: MVTDecodeOptions): ArrayBuffer {
+  if (options.transferInput === true) {
+    if (!(data instanceof Uint8Array)) return data;
+    // A view over part of a larger buffer cannot be transferred on its own, and transferring the
+    // whole backing store would detach memory the caller never offered. A SharedArrayBuffer cannot
+    // be transferred at all, so it copies like everything else.
+    if (
+      data.byteOffset === 0 &&
+      data.byteLength === data.buffer.byteLength &&
+      data.buffer instanceof ArrayBuffer
+    ) {
+      return data.buffer;
+    }
+  }
+  const view = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const copy = new Uint8Array(view.byteLength);
+  copy.set(view);
+  return copy.buffer;
 }
 
 interface MvtDecoderSlot {

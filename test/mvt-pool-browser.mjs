@@ -51,11 +51,28 @@ try {
       )
     );
 
+    // Ownership contract: transferInput detaches what it was given, and only that.
+    const kept = tileFor(1).slice().buffer;
+    await decodePackedMVTAsync(kept, { x: 0, y: 0, z: 4 }, { layer: "places" });
+
+    const given = tileFor(1).slice().buffer;
+    await decodePackedMVTAsync(given, { x: 0, y: 0, z: 4 }, { layer: "places", transferInput: true });
+
+    // A view over part of a larger buffer cannot be transferred, so it must fall back to a copy.
+    const backing = new ArrayBuffer(tileFor(1).byteLength + 8);
+    const partial = new Uint8Array(backing, 4, tileFor(1).byteLength);
+    partial.set(tileFor(1));
+    const fromPartial = await decodePackedMVTAsync(partial, { x: 0, y: 0, z: 4 }, { layer: "places", transferInput: true });
+
     return {
       count: decoded.length,
       tilesInOrder: decoded.every((packed, i) => packed.x === i && packed.z === 4),
       everyTileHasItsLayer: decoded.every((packed) => packed.layers?.[0]?.name === "places"),
-      ids: decoded.map((packed) => packed.layers[0].ids[0])
+      ids: decoded.map((packed) => packed.layers[0].ids[0]),
+      keptAlive: kept.byteLength > 0,
+      givenDetached: given.byteLength === 0,
+      partialSurvived: backing.byteLength > 0,
+      partialDecoded: fromPartial.layers?.[0]?.name === "places"
     };
   });
 
@@ -65,7 +82,12 @@ try {
   // A response routed to the wrong pending entry would show up as a duplicated or shifted id.
   assert.deepEqual(result.ids, Array.from({ length: 24 }, (_, i) => i + 1), "ids match their tiles");
 
-  console.log("mvt pool browser checks passed · 24 concurrent decodes, ids intact");
+  assert.ok(result.keptAlive, "a buffer decoded without transferInput is left usable");
+  assert.ok(result.givenDetached, "transferInput hands the buffer over instead of copying it");
+  assert.ok(result.partialSurvived, "a partial view falls back to a copy rather than detaching its backing buffer");
+  assert.ok(result.partialDecoded, "and still decodes");
+
+  console.log("mvt pool browser checks passed · 24 concurrent decodes, ids intact, ownership held");
 } finally {
   await browser.close();
   server.close();

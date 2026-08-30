@@ -272,7 +272,13 @@ export class WebGLPointLayer extends InteractiveLayer<ResolvedWebGLPointLayerOpt
       }
       this.points = latlng.subarray(0, write);
       this.mercator = this._drawMerc.subarray(0, write);
-      this.pointData = keepData ? data.slice(0, kept) : [];
+      // slice() copied the whole array even when nothing had been filtered out, which is the usual
+      // case. Truncating in place costs nothing and keeps the same array when every point was kept.
+      if (!keepData) this.pointData = [];
+      else {
+        if (kept !== data.length) data.length = kept;
+        this.pointData = data;
+      }
       keptCount = write / 2;
     } else {
       const latlngValues: number[] = [];

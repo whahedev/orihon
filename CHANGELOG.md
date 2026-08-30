@@ -4,6 +4,26 @@
 
 ## Unreleased
 
+- **Every bounds query on `SpatialGridIndex` got about a fifth cheaper.** Two costs were paid on
+  every query and could only ever matter on one: the cell walk allocated and filled a `Set` to
+  reject duplicates, and each candidate went through `longitudeRanges.some(([w, e]) => …)` — a
+  closure, a destructure and a call, tens of thousands of times a frame. A record lives in exactly
+  one cell and each cell is walked once, so a duplicate is only possible when two longitude ranges
+  overlap it, which is the antimeridian split alone; ordinary queries now skip the Set entirely and
+  compare against two hoisted numbers. Measured over 2,000 viewport-shaped queries against 200,000
+  records, 1.5M hits, minimum of five runs: `searchIds` 1465 → 1162 ms, `search` 1856 → 1636 ms.
+
+- **Added — `SpatialGridIndex.forEachInBoundsRaw()`.** Visits each hit as `(id, lat, lng, value)`
+  with no public record, no cloned position and no result array. It is not faster per hit — a
+  callback costs more than an array push, 1393 ms against 1162 on the same benchmark — so it is for
+  paths that would throw the array away: `markerCollection`'s redraw built an array of every visible
+  id and immediately poured it into a `Set`, once per frame that repaints, and now fills the Set
+  directly. `search()` keeps copying defensively for callers outside the library.
+
+- **Fixed — `webglPointLayer.setData()` copied its whole point array when nothing was filtered.**
+  `slice(0, kept)` ran even when every point was valid, which is the usual case. It truncates in
+  place now and keeps the same array when nothing was dropped.
+
 - **Fixed — the live demo's two heat surfaces picked their rebuild cadence from different numbers.**
   The manager heatmap read `sensors.items.size` and the isolines read `count`, and at mass scale
   those diverge: the manager keeps mass points outside `items`, so with a million loaded the first

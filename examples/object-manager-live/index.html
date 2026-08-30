@@ -473,6 +473,18 @@
       }
 
       const MASS = 250_000;
+
+      /**
+       * How often each heat surface may rebuild. Both cadences used to be written out separately,
+       * and they read different quantities to pick a tier: the manager heatmap looked at
+       * `sensors.items.size` while the isolines looked at `count`. When those disagree — and at a
+       * million they did, 40,000 against 1,000,000 — the heatmap silently took the cadence meant
+       * for a small dataset and rebuilt twice as often as intended. One table, one quantity.
+       */
+      function heatRebuildEveryMs(surface) {
+        const tier = count >= MASS ? 0 : count >= 80_000 ? 1 : 2;
+        return surface === "isolines" ? [650, 420, 280][tier] : [450, 320, 220][tier];
+      }
       /**
        * The heat field is a sum of overlapping kernels, so its peak follows point density, not
        * degrees. Feeding it a constant number of points makes that peak a constant too, which is
@@ -1043,7 +1055,7 @@
         tempTickN += 1;
         if (tempTickN % 25 === 0) syncAlarmIdsFromTemps();
         // Heat sync is heavier than a point color patch — throttle so UI stays interactive.
-        const heatEvery = sensors.items.size >= MASS ? 450 : sensors.items.size >= 80_000 ? 320 : 220;
+        const heatEvery = heatRebuildEveryMs("heatmap");
         if (heatmapOn && t0 - lastHeatSyncMs >= heatEvery) {
           sensors.render();
           lastHeatSyncMs = t0;
@@ -1327,7 +1339,7 @@
       function syncIsolines(force = false) {
         if (!isolinesOn) return;
         const now = performance.now();
-        const every = count >= MASS ? 650 : count >= 80_000 ? 420 : 280;
+        const every = heatRebuildEveryMs("isolines");
         if (!force && now - lastIsolineSyncMs < every) return;
         lastIsolineSyncMs = now;
         const pts = collectIsolinePoints();

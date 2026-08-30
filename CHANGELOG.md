@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- **Fixed — the live demo's two heat surfaces picked their rebuild cadence from different numbers.**
+  The manager heatmap read `sensors.items.size` and the isolines read `count`, and at mass scale
+  those diverge: the manager keeps mass points outside `items`, so with a million loaded the first
+  saw 40,000 and took the cadence meant for a small dataset — rebuilding on a 220 ms gate where 450
+  was intended. One table keyed off `count` now serves both, so they cannot drift apart again.
+  Measured at 250,000 with both surfaces on: isolines rebuild 1.37 times a second against their
+  1.54 cap.
+
 - **Fixed — the showcase carried one scenario's clusters into the next.** Its teardown called
   `remove()` on everything it tracked, inside a `catch` that ignored the result. `ObjectManager` is
   a service rather than a layer and has `destroy()`, not `remove()`, so the call threw into that

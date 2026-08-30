@@ -163,55 +163,105 @@ export async function decodePackedMVTAsync(
     const packed = packedMvtWasm(data, tile, options);
     if (packed) return packed;
   }
-  const worker = mvtWorker();
-  if (!worker) return decodePackedMVTJs(data, tile, options);
+  const slot = mvtDecoder();
+  if (!slot) return decodePackedMVTJs(data, tile, options);
   const bytes = data instanceof Uint8Array
     ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
     : data.slice(0);
   const id = ++mvtRequestId;
   return new Promise((resolve, reject) => {
-    mvtPending.set(id, { resolve, reject });
-    worker.postMessage({ id, bytes, tile, options }, [bytes]);
+    mvtPending.set(id, { resolve, reject, slot });
+    slot.pending += 1;
+    slot.worker.postMessage({ id, bytes, tile, options }, [bytes]);
   });
 }
 
+interface MvtDecoderSlot {
+  worker: Worker;
+  /** In-flight requests, so a new tile can go to whoever has the least to do. */
+  pending: number;
+}
+
 let mvtRequestId = 0;
-let mvtWorkerInstance: Worker | null = null;
 let mvtWorkerUrl: string | null = null;
+const mvtDecoders: MvtDecoderSlot[] = [];
 const mvtPending = new Map<number, {
   resolve: (value: PackedVectorTile) => void;
   reject: (reason: unknown) => void;
+  slot: MvtDecoderSlot;
 }>();
 
-function mvtWorker(): Worker | null {
-  if (mvtWorkerInstance) return mvtWorkerInstance;
+/**
+ * A pan or a zoom hands over six to twenty tiles at once. Fetching them is parallel, but protobuf
+ * decoding is CPU-bound, so one worker turned that into a queue and the last visible tile waited
+ * for every tile before it.
+ *
+ * Deliberately far below `hardwareConcurrency`: decoding competes with rendering, layout and the
+ * browser's own threads, and the goal is to stop one tile blocking the rest rather than to
+ * saturate the machine.
+ */
+function mvtDecoderLimit(): number {
+  const cores = typeof navigator !== "undefined" ? Number(navigator.hardwareConcurrency) : 0;
+  if (!Number.isFinite(cores) || cores <= 0) return 1;
+  if (cores >= 8) return 4;
+  if (cores >= 4) return 2;
+  return 1;
+}
+
+function mvtDecoder(): MvtDecoderSlot | null {
+  let least: MvtDecoderSlot | null = null;
+  for (const slot of mvtDecoders) {
+    if (!least || slot.pending < least.pending) least = slot;
+  }
+  // Grow only while every existing decoder is busy, so a map that decodes one tile at a time never
+  // spawns a second worker.
+  if (least && least.pending === 0) return least;
+  if (mvtDecoders.length < mvtDecoderLimit()) return createMvtDecoder() ?? least;
+  return least;
+}
+
+function createMvtDecoder(): MvtDecoderSlot | null {
   if (typeof document === "undefined" || typeof Worker === "undefined" || typeof URL === "undefined" || typeof Blob === "undefined") return null;
   try {
-    const blob = new Blob([packedMvtWorkerSource()], { type: "text/javascript" });
-    mvtWorkerUrl = URL.createObjectURL(blob);
-    mvtWorkerInstance = new Worker(mvtWorkerUrl);
-    mvtWorkerInstance.onmessage = (event: MessageEvent) => {
+    if (!mvtWorkerUrl) {
+      const blob = new Blob([packedMvtWorkerSource()], { type: "text/javascript" });
+      mvtWorkerUrl = URL.createObjectURL(blob);
+    }
+    const slot: MvtDecoderSlot = { worker: new Worker(mvtWorkerUrl), pending: 0 };
+    slot.worker.onmessage = (event: MessageEvent) => {
       const data = event.data || {};
       const pending = mvtPending.get(data.id);
       if (!pending) return;
       mvtPending.delete(data.id);
+      pending.slot.pending = Math.max(0, pending.slot.pending - 1);
       if (data.error) pending.reject(new Error(String(data.error)));
       else pending.resolve(revivePackedTile(data.packed));
     };
-    mvtWorkerInstance.onerror = () => {
-      mvtWorkerInstance?.terminate();
-      mvtWorkerInstance = null;
-      if (mvtWorkerUrl) URL.revokeObjectURL(mvtWorkerUrl);
-      mvtWorkerUrl = null;
-      for (const pending of mvtPending.values()) pending.reject(new Error("MVT worker failed"));
-      mvtPending.clear();
-    };
-    return mvtWorkerInstance;
+    slot.worker.onerror = () => dropMvtDecoder(slot);
+    mvtDecoders.push(slot);
+    return slot;
   } catch {
-    if (mvtWorkerUrl) URL.revokeObjectURL(mvtWorkerUrl);
-    mvtWorkerUrl = null;
+    if (!mvtDecoders.length) releaseMvtWorkerUrl();
     return null;
   }
+}
+
+/** One failed decoder loses only its own requests; the rest of the pool keeps working. */
+function dropMvtDecoder(slot: MvtDecoderSlot): void {
+  slot.worker.terminate();
+  const at = mvtDecoders.indexOf(slot);
+  if (at >= 0) mvtDecoders.splice(at, 1);
+  for (const [id, pending] of mvtPending) {
+    if (pending.slot !== slot) continue;
+    mvtPending.delete(id);
+    pending.reject(new Error("MVT worker failed"));
+  }
+  if (!mvtDecoders.length) releaseMvtWorkerUrl();
+}
+
+function releaseMvtWorkerUrl(): void {
+  if (mvtWorkerUrl) URL.revokeObjectURL(mvtWorkerUrl);
+  mvtWorkerUrl = null;
 }
 
 function revivePackedTile(raw: PackedVectorTile): PackedVectorTile {

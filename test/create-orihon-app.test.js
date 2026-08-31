@@ -6,9 +6,15 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { create } from "../packages/create-orihon-app/index.mjs";
 
-// The starter is the consumer flow: whatever it writes is what a first-time user runs. These
-// assertions are the four things a blank map is usually missing, checked in the generated files
-// rather than in prose telling someone to remember them.
+const VITE_TEMPLATES = [
+  ["vanilla", "src/main.js"],
+  ["vanilla-ts", "src/main.ts"],
+  ["react", "src/App.jsx"],
+  ["react-ts", "src/App.tsx"]
+];
+
+const ALL_TEMPLATES = ["vanilla", "vanilla-ts", "react", "react-ts", "cdn"];
+
 async function scaffold(argv) {
   const root = await mkdtemp(join(tmpdir(), "orihon-create-"));
   const result = await create(argv, { cwd: root, interactive: false, log: () => {} });
@@ -19,40 +25,76 @@ async function read(directory, file) {
   return readFile(join(directory, file), "utf8");
 }
 
-for (const [template, entry] of [["vanilla", "src/main.js"], ["react", "src/App.jsx"]]) {
-  test(`${template}: the generated project draws one attributed map`, async () => {
-    const { root, result } = await scaffold(["my-map", "--template", template, "--yes"]);
+function assertEasySurface(source) {
+  assert.match(source, /createMap\b/);
+  assert.match(source, /OpenStreetMap contributors/);
+  assert.match(source, /addMarker\b/);
+  assert.match(source, /addPolyline\b/);
+  assert.match(source, /addPolygon\b/);
+  assert.match(source, /addGeoJSON\b/);
+  assert.match(source, /addTileLayer\b/);
+  assert.match(source, /circleMarker\b/);
+  assert.match(source, /circle\b/);
+  assert.match(source, /rectangle\b/);
+  assert.match(source, /textLayer\b/);
+  assert.match(source, /imageOverlay\b/);
+  assert.match(source, /videoOverlay\b/);
+  assert.match(source, /featureGroup\b/);
+  assert.match(source, /pointToLayer/);
+  assert.match(source, /bindPopup/);
+  assert.match(source, /interactive-examples\.mdn\.mozilla\.net/);
+  assert.match(source, /data:image\/svg\+xml/);
+  assert.match(source, /Delete any block|Edit or delete/i);
+}
+
+for (const [template, entry] of VITE_TEMPLATES) {
+  test(`${template}: the generated project draws an attributed Easy map`, async () => {
+    const { root, result } = await scaffold([
+      "my-map",
+      "--template",
+      template,
+      "--yes",
+      "--center",
+      "55.75,37.62",
+      "--locale",
+      "en"
+    ]);
     try {
       assert.equal(result.template, template);
       assert.equal(result.name, "my-map");
+      assert.deepEqual(result.center, { lat: 55.75, lng: 37.62 });
+      assert.equal(result.locale, "en");
 
       const source = await read(result.directory, entry);
       const css = await read(result.directory, "src/style.css");
-      const styleImport = template === "react" ? await read(result.directory, "src/main.jsx") : source;
+      const styleImport =
+        template.startsWith("react")
+          ? await read(result.directory, template === "react" ? "src/main.jsx" : "src/main.tsx")
+          : source;
 
-      // 1. the stylesheet, which is silently missing from most first attempts
       assert.match(styleImport, /import "orihon\/orihon\.css"/);
-      // 2. a container with a real height
       assert.match(css, /height:\s*100vh/);
       assert.match(css, /min-height:\s*360px/);
-      // 3. credit for the tile provider
-      assert.match(source, /OpenStreetMap contributors/);
-      // 4. exactly one map
-      assert.equal(source.match(/createMap\(|<Map\b/g)?.length, 1);
+      assertEasySurface(source);
+      assert.match(source, /55\.75/);
+      assert.match(source, /37\.62/);
+      assert.match(source, /"en"/);
+      assert.equal(source.match(/createMap\s*\(/g)?.length, 1);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
-  test(`${template}: the manifest installs orihon and runs on vite`, async () => {
+  test(`${template}: the manifest installs orihon and opens on vite`, async () => {
     const { root, result } = await scaffold(["my-map", "--template", template, "--yes"]);
     try {
       const manifest = JSON.parse(await read(result.directory, "package.json"));
       assert.equal(manifest.name, "my-map");
       assert.equal(manifest.type, "module");
       assert.ok(manifest.dependencies.orihon, "orihon is a dependency");
-      assert.equal(manifest.scripts.dev, "vite");
-      assert.equal(manifest.scripts.build, "vite build");
+      assert.match(manifest.dependencies.orihon, /^\^\d+\.\d+\.\d+/);
+      assert.equal(manifest.scripts.dev, "vite --open");
+      assert.equal(manifest.scripts.build, template.endsWith("-ts") ? "tsc --noEmit && vite build" : "vite build");
       const html = await read(result.directory, "index.html");
       assert.match(html, /<div id="(map|root)"><\/div>/);
     } finally {
@@ -60,6 +102,23 @@ for (const [template, entry] of [["vanilla", "src/main.js"], ["react", "src/App.
     }
   });
 }
+
+test("cdn: single HTML file with Easy samples and pinned CDN version", async () => {
+  const { root, result } = await scaffold(["my-map", "--template", "cdn", "--yes", "--center", "1,2"]);
+  try {
+    assert.equal(result.template, "cdn");
+    const html = await read(result.directory, "index.html");
+    assertEasySurface(html);
+    assert.match(html, /cdn\.jsdelivr\.net\/npm\/orihon@\d+\.\d+\.\d+\//);
+    assert.doesNotMatch(html, /__ORIHON_/);
+    assert.match(html, /\b1\b/);
+    assert.match(html, /\b2\b/);
+    const entries = await readdir(result.directory);
+    assert.ok(!entries.includes("package.json"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("the directory name becomes a legal package name", async () => {
   const { root, result } = await scaffold(["My Map!", "--template", "vanilla", "--yes"]);
@@ -96,6 +155,18 @@ test("an unknown template is refused by name instead of scaffolding something el
   }
 });
 
+test("a bad --center is refused", async () => {
+  const root = await mkdtemp(join(tmpdir(), "orihon-create-"));
+  try {
+    await assert.rejects(
+      create(["my-map", "--yes", "--center", "not-a-point"], { cwd: root, interactive: false, log: () => {} }),
+      /Invalid --center/
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("a directory with files in it is left alone", async () => {
   const root = await mkdtemp(join(tmpdir(), "orihon-create-"));
   try {
@@ -116,11 +187,11 @@ test("every template is listed in the help and reachable by name", async () => {
   await create(["--help"], { cwd: tmpdir(), interactive: false, log: (line) => lines.push(line) });
   const help = lines.join("\n");
   assert.match(help, /npm create orihon-app/);
-  for (const template of ["vanilla", "react"]) assert.match(help, new RegExp(template));
+  for (const template of ALL_TEMPLATES) assert.match(help, new RegExp(template));
+  assert.match(help, /--install/);
+  assert.match(help, /--center/);
 });
 
-// The other tests call `create()` directly, which cannot catch a CLI that parses its arguments
-// and then never runs — the entry-point guard is only exercised by starting the file as a process.
 test("running the file as a command scaffolds and reports where", async () => {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
@@ -134,6 +205,7 @@ test("running the file as a command scaffolds and reports where", async () => {
     );
     assert.match(stdout, /Created cli-app in /);
     assert.match(stdout, /npm run dev/);
+    assert.match(stdout, /Easy API/);
     assert.match(await read(join(root, "cli-app"), "src/main.js"), /createMap\("map"/);
   } finally {
     await rm(root, { recursive: true, force: true });

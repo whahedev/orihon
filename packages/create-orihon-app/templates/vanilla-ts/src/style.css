@@ -1,0 +1,12 @@
+/* A map fills its container, and a <div> has no height of its own.
+   Give #map a height or the map renders into nothing. */
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#map {
+  height: 100vh;
+  min-height: 360px;
+}

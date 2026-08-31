@@ -38,7 +38,11 @@ npm install
 npm run dev
 ```
 
-Templates are `vanilla` and `react`, both on Vite; `npm create orihon-app my-map -- --template react --yes` skips the prompts. The generated project already contains the stylesheet import, a container with a height, an attribution and one working map, so the first thing you see is a map rather than a setup checklist.
+Templates are `vanilla`, `vanilla-ts`, `react`, `react-ts` and `cdn`. Skip prompts with
+`npm create orihon-app my-map -- --template react-ts --yes --install`. The generated project
+already has the stylesheet, a container with a height, attribution, and one sample of each Easy
+overlay (marker, polyline, polygon, GeoJSON, tile layer), so the first thing you see is a map
+rather than a setup checklist.
 
 Already have a Vite, React, Vue or other ESM application?
 

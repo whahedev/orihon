@@ -37,7 +37,7 @@ npm run size
 
 `npm run build` emits modular ESM, declarations, source maps and browser bundles into `dist`. Applications must import public package entries (`orihon`, `orihon/core`, `orihon/standard` and the optional entries in `package.json`). Files under `dist/services` and `dist/layers` are build artifacts, not stable package exports.
 
-`npm run size` enforces the gzip budgets recorded in `README.md`. `npm run dist` produces the staged publish artifact and release manifest.
+`npm run size` enforces the gzip budgets recorded in `README.md`. `npm run dist` produces the staged browser package under `_publish_stage/orihon-dist`; `npm run stage` also creates the publish-ready modular package under `_publish_stage/orihon`.
 
 ## ObjectManager CPU/RAM benchmark
 
@@ -46,13 +46,13 @@ npm run bench:object-manager
 $env:COUNT=1000000; npm run bench:object-manager
 ```
 
-The command rebuilds first, imports `objectManager` from the public Advanced entry, and prints library/runtime/OS versions. It measures ingest, layout, batched position/state/property updates, search and temporal configuration. It intentionally does not claim browser FPS or GPU paint performance.
+The command rebuilds first, imports `objectManager` from the public ObjectManager entry, and prints library/runtime/OS versions. It measures ingest, layout, batched position/state/property updates, search and temporal configuration. It intentionally does not claim browser FPS or GPU paint performance.
 
 Never import `dist/services/object-scene.js` or inspect `timeIndex`, `motions` or other internal fields in a public benchmark. Internal microbenchmarks belong in focused engineering scripts and must be labelled as implementation-specific.
 
 ## Browser engine benchmark
 
-Run `npm run demo:bench`, then open `http://localhost:4176/examples/bench-compare/`. The command rebuilds the current checkout before starting the server. On HTTP(S), the page tries local `/dist/index.js`, then `/dist/orihon.esm.js`; only a direct-file or failed-local run falls back to the pinned Orihon CDN build.
+Run `npm run demo:bench`, then open `http://localhost:4176/examples/bench-compare/`. The command rebuilds the current checkout before starting the server. On HTTP(S), the page combines local `/dist/orihon.esm.js` and `/dist/orihon.object-manager.esm.js`, then falls back to `/dist/full-entry.js`; only a direct-file or failed-local run falls back to the pinned Orihon CDN build.
 
 The comparison libraries are pinned in `examples/bench-compare/index.html` for reproducibility. A version update must change both CSS and JavaScript URLs, update the example README, smoke-test every scenario, and record the browser/OS in exported results.
 

@@ -15,7 +15,7 @@ Running technical prose keeps the short form — "an Orihon map", "normal Orihon
 MapLibre GL JS is called MapLibre once the title has done its job. Spell the product out where a
 reader arrives, not in every sentence after.
 
-The npm package includes production SVG and PNG artwork in `assets/brand`. These files are visual assets only and do not add JavaScript to the runtime bundle.
+The npm package includes production SVG artwork and design tokens in `assets/brand`. Repository PNG exports remain available for social previews and app stores, but are not copied into the npm package.
 
 ![Orihon logo](../assets/brand/svg/orihon-logo-stacked.svg)
 
@@ -28,7 +28,6 @@ The npm package includes production SVG and PNG artwork in `assets/brand`. These
 | Standalone folded-map mark | `orihon/brand/svg/orihon-mark.svg` |
 | Favicon | `orihon/brand/svg/orihon-favicon.svg` |
 | Avatar | `orihon/brand/svg/orihon-avatar.svg` |
-| PNG exports | `orihon/brand/png/*` |
 | CSS design tokens | `orihon/brand/tokens/orihon-tokens.css` |
 | DTCG JSON tokens | `orihon/brand/tokens/orihon-tokens.json` |
 
@@ -38,7 +37,7 @@ With a bundler that supports asset imports, resolve the public package subpath:
 import logoUrl from "orihon/brand/svg/orihon-logo-horizontal.svg";
 ```
 
-For a static page, copy the required asset to the application's public directory. Use the SVG variants for UI and documentation; use the supplied PNG sizes for social previews, app icons and systems that do not accept SVG.
+For a static page, copy the required asset to the application's public directory. Use the package SVG variants for UI and documentation; generate a PNG at the required size when a social network, app store or other system does not accept SVG.
 
 ## Color tokens
 

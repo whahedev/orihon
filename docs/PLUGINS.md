@@ -49,6 +49,6 @@ Keep the plugin as its own package with `Orihon` as a peer dependency, package e
 | Controls | `orihon/controls` | ≤ 8 KiB gzip | `orihon` |
 | Geo | `orihon/geo` | ≤ 2 KiB gzip | none |
 
-The PMTiles entry contains a minimal v3 range reader, MVT provider and raster blob source without a runtime dependency on the full `pmtiles` package. Advanced `orihon` already sniffs Orihon MLT and uses WASM MVT geometry plus WebGPU raster tiles through `createMVTProvider` / `decodePackedMVT` / `tileLayer({ renderer: "auto" })`. The optional entries remain for the MLT encoder (`encodePackedMLT`) and for Standard-only apps that import `orihon/mvt-wasm` or `orihon/webgpu` without the Advanced bundle.
+The PMTiles entry contains a minimal v3 range reader, MVT provider and raster blob source without a runtime dependency on the full `pmtiles` package. `orihon/advanced` already sniffs Orihon MLT and uses WASM MVT geometry plus WebGPU raster tiles through `createMVTProvider` / `decodePackedMVT` / `tileLayer({ renderer: "auto" })`. The optional entries remain for the MLT encoder (`encodePackedMLT`) and for Standard-only apps that import `orihon/mvt-wasm` or `orihon/webgpu` without the Advanced bundle.
 
 This table is the first-party registry. Third-party plugins should publish their import entry, measured gzip size, Orihon peer range, lifecycle guarantees and data-provider attribution in the same form.

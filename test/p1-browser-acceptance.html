@@ -23,8 +23,9 @@
       textLayer,
       wmtsTileLayer
     } from "/dist/standard.js";
-    import { objectManager } from "/dist/index.js";
-    import { createSuggestProvider, routingLayer, marker as bundleMarker, icon as bundleIcon, objectManager as bundleManager } from "/dist/orihon.esm.js";
+    import { objectManager } from "/dist/object-manager-entry.js";
+    import { objectManager as bundleManager } from "/dist/orihon.object-manager.esm.js";
+    import { createSuggestProvider, routingLayer, marker as bundleMarker, icon as bundleIcon } from "/dist/orihon.esm.js";
     import { DrawHandler, drawControl } from "/dist/draw/index.js";
 
     const assert = (condition, message) => {

@@ -23,7 +23,7 @@ import {
   queryClusterLayout,
   vectorTileLayer,
   webglPointLayer
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 import { decodePackedMVT, packedToGeoJSON } from "orihon/mvt";
 import { prefetchUrlAllowed } from "../dist/services/offline-cache.js";
 

@@ -15,7 +15,7 @@ try {
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${address.port}/`);
   const result = await page.evaluate(async () => {
-    const { geoJSON } = await import("/dist/index.js");
+    const { geoJSON } = await import("/dist/standard.js");
     const features = Array.from({ length: 11 }, (_, index) => ({
       type: "Feature",
       id: index,

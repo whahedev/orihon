@@ -2,7 +2,7 @@ import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { createMap, marker, featureGroup, LatLng, Point, RoutingLayer, ObjectManager,
-  polyline, popup, tooltip, imageOverlay, TileLayer, VectorTileLayer, TrafficLayer } from "../dist/index.js";
+  polyline, popup, tooltip, imageOverlay, TileLayer, VectorTileLayer, TrafficLayer } from "../dist/full-entry.js";
 import { drawControl } from "../dist/draw/index.js";
 
 const dom = new JSDOM("<!doctype html><body></body>", { pretendToBeVisual: true });

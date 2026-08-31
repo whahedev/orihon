@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { getEventListeners } from "node:events";
 import { JSDOM } from "jsdom";
-import { Evented, objectManager, createMap } from "../dist/index.js";
+import { Evented, objectManager, createMap } from "../dist/full-entry.js";
 
 class FakeMap extends Evented {
   zoom = 10;

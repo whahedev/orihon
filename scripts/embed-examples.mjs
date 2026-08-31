@@ -38,12 +38,15 @@ function patchLoadOrihon(source, { withBenchLink = false } = {}) {
   if (http) {
     const localBuild = "?bench=" + Date.now().toString(36);
     try {
-      const mod = await import("/dist/orihon.esm.js" + localBuild);
+      const [advanced, objectManager] = await Promise.all([
+        import("/dist/orihon.esm.js" + localBuild),
+        import("/dist/orihon.object-manager.esm.js" + localBuild)
+      ]);
       if (link) link.href = "/dist/orihon.css" + localBuild;
-      return mod;
+      return { ...advanced, ...objectManager };
     } catch {
       try {
-        const mod = await import("/dist/index.js" + localBuild);
+        const mod = await import("/dist/full-entry.js" + localBuild);
         if (link) link.href = "/dist/orihon.css" + localBuild;
         return mod;
       } catch {

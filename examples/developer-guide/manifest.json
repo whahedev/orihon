@@ -1,6 +1,6 @@
 {
   "version": "2.0.1",
-  "source": "src/index.ts",
+  "source": "src/advanced-entry.ts",
   "confluenceSource": "http://confluence.home",
   "functions": [
     {
@@ -76,7 +76,7 @@
     {
       "name": "fromGeoJSONPosition",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Явно преобразует GeoJSON-пару [долгота, широта] в именованную координату Orihon.",
       "url": "./functions/fromGeoJSONPosition/"
     },
@@ -90,7 +90,7 @@
     {
       "name": "toGeoJSONPosition",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Преобразует именованную координату Orihon в новую GeoJSON-пару [долгота, широта].",
       "url": "./functions/toGeoJSONPosition/"
     },
@@ -167,7 +167,7 @@
     {
       "name": "decodeMVT",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Декодирует бинарный MVT-тайл в набор геометрий и свойств, доступных JavaScript-коду.",
       "url": "./functions/decodeMVT/"
     },
@@ -181,42 +181,42 @@
     {
       "name": "buildClusterIndex",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создает индекс кластерного layout для быстрых запросов.",
       "url": "./functions/buildClusterIndex/"
     },
     {
       "name": "queryClusterLayout",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Возвращает видимые элементы cluster layout для текущих bounds/zoom.",
       "url": "./functions/queryClusterLayout/"
     },
     {
       "name": "buildClusterLayout",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Строит layout кластеров для объектных коллекций.",
       "url": "./functions/buildClusterLayout/"
     },
     {
       "name": "preparePointBatch",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Синхронно упаковывает точки в типизированные массивы, пригодные для массовой GPU-отрисовки.",
       "url": "./functions/preparePointBatch/"
     },
     {
       "name": "preparePointBatchAsync",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Кооперативно подготавливает большой iterable или async iterable точек без длительной блокировки main thread.",
       "url": "./functions/preparePointBatchAsync/"
     },
     {
       "name": "buildHeat",
       "group": "Вычисления без отрисовки",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Строит scalar field и, при необходимости, изолинии без создания слоя карты.",
       "url": "./functions/buildHeat/"
     },
@@ -286,7 +286,7 @@
     {
       "name": "vectorTileLayer",
       "group": "Растровые тайлы",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Запрашивает векторные тайлы через provider и отображает их геометрию по правилам paint.",
       "url": "./functions/vectorTileLayer/"
     },
@@ -314,7 +314,7 @@
     {
       "name": "wTinyLfu",
       "group": "Растровые тайлы",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создаёт ограниченный кэш с политикой W-TinyLFU, устойчивой к вытеснению часто используемых записей случайным потоком.",
       "url": "./functions/wTinyLfu/"
     },
@@ -377,7 +377,7 @@
     {
       "name": "createMVTProvider",
       "group": "Векторные данные",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создаёт загрузчик бинарных MVT-тайлов, который можно передать в vectorTileLayer.",
       "url": "./functions/createMVTProvider/"
     },
@@ -566,147 +566,147 @@
     {
       "name": "objectManager",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/object-manager",
       "summary": "Хранит, индексирует, фильтрует, кластеризует и отображает большие наборы разнородных объектов карты.",
       "url": "./functions/objectManager/"
     },
     {
       "name": "remoteObjectManager",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/object-manager",
       "summary": "Создаёт менеджер объектов, который подгружает данные через loader по текущему виду карты.",
       "url": "./functions/remoteObjectManager/"
     },
     {
       "name": "markerCollection",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/object-manager",
       "summary": "Создаёт лёгкую коллекцию однотипных точек — явная альтернатива вызову objectManager({ points }).",
       "url": "./functions/markerCollection/"
     },
     {
       "name": "searchProvider",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создаёт единый поисковый provider из локального массива или пользовательского адаптера search/geocode/reverse.",
       "url": "./functions/searchProvider/"
     },
     {
       "name": "routingLayer",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Запрашивает маршруты у provider и отображает основной и альтернативные варианты на карте.",
       "url": "./functions/routingLayer/"
     },
     {
       "name": "createSuggestWidget",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создаёт готовое поле ввода с выпадающими подсказками и обработкой выбора результата.",
       "url": "./functions/createSuggestWidget/"
     },
     {
       "name": "createSuggestProvider",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Добавляет задержку, отмену устаревших запросов и нормализацию результатов к пользовательской функции подсказок.",
       "url": "./functions/createSuggestProvider/"
     },
     {
       "name": "trafficLayer",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Отображает пробки или другую дорожную обстановку из переданного тайлового источника.",
       "url": "./functions/trafficLayer/"
     },
     {
       "name": "spatialGridIndex",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Индексирует объекты по ячейкам, чтобы быстро находить элементы в прямоугольной области.",
       "url": "./functions/spatialGridIndex/"
     },
     {
       "name": "createStraightLineRoutingProvider",
       "group": "ObjectManager и поиск",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создаёт демонстрационный routing provider, соединяющий путевые точки прямыми отрезками без дорожного графа.",
       "url": "./functions/createStraightLineRoutingProvider/"
     },
     {
       "name": "webglPointLayer",
       "group": "WebGL",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Рисует десятки тысяч и миллионы точек через WebGL с компактным хранением данных.",
       "url": "./functions/webglPointLayer/"
     },
     {
       "name": "pathBatch",
       "group": "WebGL",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создаёт единый пакетный слой линий с выбором реализации по требуемому стилю.",
       "url": "./functions/pathBatch/"
     },
     {
       "name": "webglSymbolLayer",
       "group": "WebGL",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Рисует большой набор GPU-символов с atlas-текстурами, поворотом и масштабированием.",
       "url": "./functions/webglSymbolLayer/"
     },
     {
       "name": "webglPolygonBatch",
       "group": "WebGL",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Триангулирует и рисует пакет полигонов через WebGL.",
       "url": "./functions/webglPolygonBatch/"
     },
     {
       "name": "heatLayer",
       "group": "Тепловые карты и изолинии",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создаёт единый интерактивный слой тепловой поверхности, изолиний или их комбинации.",
       "url": "./functions/heatLayer/"
     },
     {
       "name": "heatSupport",
       "group": "Тепловые карты и изолинии",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Асинхронно сообщает, доступны ли ускоренные WASM и WebGPU backend’ы в текущей среде.",
       "url": "./functions/heatSupport/"
     },
     {
       "name": "offlineTileCache",
       "group": "Производительность и инфраструктура",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Управляет предварительной загрузкой тайлов в Cache Storage для последующей работы без сети.",
       "url": "./functions/offlineTileCache/"
     },
     {
       "name": "performanceInspector",
       "group": "Производительность и инфраструктура",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Собирает и показывает FPS, задержки кадров, количество слоёв и другие показатели работающей карты.",
       "url": "./functions/performanceInspector/"
     },
     {
       "name": "createMapAdapter",
       "group": "Производительность и инфраструктура",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Оборачивает жизненный цикл карты в небольшой adapter для интеграции с UI-фреймворками.",
       "url": "./functions/createMapAdapter/"
     },
     {
       "name": "defineOrihonElement",
       "group": "Производительность и инфраструктура",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Регистрирует Web Component, позволяющий создавать карту декларативным HTML-тегом.",
       "url": "./functions/defineOrihonElement/"
     },
     {
       "name": "createGeometryWorkerPool",
       "group": "Производительность и инфраструктура",
-      "entry": "orihon",
+      "entry": "orihon/advanced",
       "summary": "Создаёт принадлежащий вызывающему пул Web Workers для подготовки больших массивов геометрии вне main thread.",
       "url": "./functions/createGeometryWorkerPool/"
     },

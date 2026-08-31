@@ -240,15 +240,17 @@ Package size and API difficulty are separate concerns. The Easy API is a beginne
 | Tier | Import | What it includes |
 | --- | --- | --- |
 | **Core** | `orihon/core` | Map, camera, events, geometry, DOM raster tiles and grid primitives |
-| **Standard** | `orihon/standard` | Core + markers, SVG/canvas vectors, GeoJSON, popups, overlays, controls and locales |
-| **Advanced** | `orihon` | Standard + WebGL/WebGPU, MVT, heat, ObjectManager, workers, routing, traffic and offline tooling |
+| **Standard** | `orihon` or `orihon/standard` | Core + markers, SVG/canvas vectors, GeoJSON, popups, overlays and built-in English locale |
+| **Advanced** | `orihon/advanced` | Standard + WebGL/WebGPU, MVT, heat, workers, routing, traffic and offline tooling |
+| **ObjectManager** | `orihon/object-manager` | High-volume local and remote object collections |
+| **Full compatibility** | `orihon/full` | Advanced + ObjectManager + all locale packs |
 
-A normal application can stay on Standard indefinitely. Importing the Advanced root is for cases where dataset size, rendering load or infrastructure features justify it.
+A normal application can stay on the default Standard entry indefinitely. Advanced rendering, ObjectManager and non-English locale packs are independent opt-ins, so choosing one does not pull in the others.
 
 GPU rendering is explicit:
 
 ```js
-import { tileLayer } from "orihon";
+import { tileLayer } from "orihon/advanced";
 
 tileLayer("/tiles/{z}/{x}/{y}.png");
 // DOM renderer — stable default.
@@ -265,6 +267,8 @@ Optional product-specific entry points stay separate from those tiers:
 - `orihon/easy` — map-centric first-map API
 - `orihon/source` — reactive `FeatureSource`
 - `orihon/react` — React bindings
+- `orihon/react/object-manager` — React ObjectManager binding
+- `orihon/locales` — Russian, Arabic, Turkish, Chinese, German, French, Danish and Hindi locale packs
 - `orihon/draw` — drawing and editing
 - `orihon/controls` — fullscreen, measure, minimap and graticule
 - `orihon/geo` — additional geographic helpers
@@ -300,12 +304,12 @@ One source can feed GeoJSON, labels and high-volume rendering. See [FeatureSourc
 
 ### Large datasets
 
-The Advanced entry includes `ObjectManager`, GPU point/path rendering, heatmaps, vector tiles, workers and performance diagnostics. `ObjectManager` is intended for tens of thousands to millions of application objects without one DOM marker per object.
+The Advanced entry includes GPU point/path rendering, heatmaps, vector tiles, workers and performance diagnostics. `ObjectManager` is a separate entry intended for tens of thousands to millions of application objects without one DOM marker per object.
 
 For large cooperative imports:
 
 ```js
-import { objectManager } from "orihon";
+import { objectManager } from "orihon/object-manager";
 
 const manager = objectManager({
   clusterize: true,
@@ -324,7 +328,7 @@ The detailed data, styling, clustering, heatmap and lifecycle contracts live in 
 
 ### React
 
-React bindings are published from `orihon/react` and use the same map/layer concepts. React and React DOM are optional peer dependencies, so non-React applications do not pull them in.
+Base React bindings are published from `orihon/react`; the ObjectManager component is in `orihon/react/object-manager`. React and React DOM are optional peer dependencies, so non-React applications do not pull them in.
 
 See the [API reference](./docs/API.md) and the runnable example under [`examples/react`](./examples/react).
 
@@ -375,10 +379,13 @@ Nothing Orihon ships crosses **150 KiB gzip**. `npm run size` fails the build wh
 | `orihon.controls.esm.js` | ≤ 8 KiB gzip | Optional controls |
 | `orihon.draw.esm.js` | ≤ 12 KiB gzip | Draw/edit tools |
 | `orihon.core.esm.js` | ≤ 18 KiB gzip | Map, events, geometry, DOM tiles |
-| `orihon.standard.esm.js` | ≤ 38 KiB gzip | Everyday GIS, no WebGL |
-| `orihon.esm.js` | ≤ 132 KiB gzip | Advanced: Standard + GPU, MVT, ObjectManager and WASM |
-| `orihon.react.esm.js` | ≤ 118 KiB gzip | React bindings over the Advanced surface |
-| `orihon.global.js` | ≤ 149 KiB gzip | Standalone script-tag build |
+| `orihon.locales.esm.js` | ≤ 3 KiB gzip | Optional non-English locale packs |
+| `orihon.react.esm.js` | ≤ 36 KiB gzip | Base React bindings |
+| `orihon.standard.esm.js` | ≤ 37 KiB gzip | Everyday GIS, no GPU or ObjectManager |
+| `orihon.object-manager.esm.js` | ≤ 100 KiB gzip | ObjectManager without Advanced GPU integrations |
+| `orihon.react-object-manager.esm.js` | ≤ 100 KiB gzip | React ObjectManager binding |
+| `orihon.esm.js` | ≤ 120 KiB gzip | Advanced: Standard + GPU, MVT and WASM; no ObjectManager or extra locales |
+| `orihon.global.js` | ≤ 125 KiB gzip | Standalone Advanced script-tag build |
 
 Prefer the smallest entry point that contains the capability you need. Exact raw and gzip sizes for the current build are written to `dist/release-manifest.json`.
 
@@ -390,10 +397,15 @@ Main artifacts include:
 
 - `dist/core.js`
 - `dist/standard.js`
-- `dist/index.js`
+- `dist/advanced-entry.js`
+- `dist/object-manager-entry.js`
+- `dist/locales-entry.js`
+- `dist/full-entry.js`
 - `dist/orihon.core.esm.js`
 - `dist/orihon.standard.esm.js`
 - `dist/orihon.esm.js`
+- `dist/orihon.object-manager.esm.js`
+- `dist/orihon.locales.esm.js`
 - `dist/orihon.global.js`
 - `dist/orihon.css`
 

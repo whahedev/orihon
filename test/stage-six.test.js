@@ -9,7 +9,7 @@ import {
   marker,
   resolveLocale,
   ruLocale
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 
 test("Marker exposes opacity and z-index controls", () => {
   // Marker keeps its own appearance vocabulary (`color`, `opacity`, `size`,

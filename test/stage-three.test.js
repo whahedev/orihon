@@ -25,7 +25,7 @@ import {
   rectangle,
   svgOverlay,
   videoOverlay
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 import { svgAttributeIsDangerous, svgTagIsDangerous } from "../dist/overlays/svg-overlay.js";
 
 test("SVG sanitizer policy rejects scripts, style, external href and handlers", () => {

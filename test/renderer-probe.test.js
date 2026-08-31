@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GPUTileLayer, TileLayer, tileLayer } from "../dist/index.js";
+import { GPUTileLayer, TileLayer, tileLayer } from "../dist/full-entry.js";
 
 // The WebGL probe is module state, so this file must own the process: no other test may run a
 // probe first. `GPUTileLayer` does not touch a canvas until it is added to a map, so a minimal

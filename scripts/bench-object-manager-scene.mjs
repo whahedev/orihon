@@ -8,7 +8,7 @@
  */
 import { performance } from "node:perf_hooks";
 import { readFile } from "node:fs/promises";
-import { objectManager } from "../dist/index.js";
+import { objectManager } from "../dist/object-manager-entry.js";
 
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 

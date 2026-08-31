@@ -48,20 +48,6 @@ export {
   ensureLocalePacks,
   registerLocalePacks
 } from "./ui/locale.js";
-export {
-  ruLocale,
-  arLocale,
-  trLocale,
-  zhLocale,
-  deLocale,
-  frLocale,
-  daLocale,
-  hiLocale,
-  localePacks
-} from "./ui/locale-packs.js";
-import { registerLocalePacks } from "./ui/locale.js";
-import { localePacks } from "./ui/locale-packs.js";
-registerLocalePacks(localePacks);
 
 export type { RendererOptions } from "./renderer.js";
 export type { WMSParameterValue, WMSTileLayerOptions } from "./layers/wms-tile-layer.js";

@@ -138,11 +138,10 @@
     </aside>
 
     <script type="module">
-      const {
-        createMap,
-        tileLayer,
-        objectManager
-      } = await import("/dist/index.js").catch(() => import("/dist/orihon.esm.js"));
+      const [{ createMap, tileLayer }, { objectManager }] = await Promise.all([
+        import("/dist/standard.js"),
+        import("/dist/object-manager-entry.js")
+      ]);
 
       const map = createMap("map", {
         center: ({ lat: 55.7558, lng: 37.6173 }),

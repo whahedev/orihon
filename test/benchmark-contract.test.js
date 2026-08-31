@@ -6,7 +6,7 @@ const root = new URL("../", import.meta.url);
 
 test("ObjectManager benchmark uses the public built entry and records its environment", async () => {
   const source = await readFile(new URL("scripts/bench-object-manager-scene.mjs", root), "utf8");
-  assert.match(source, /from "\.\.\/dist\/index\.js"/);
+  assert.match(source, /from "\.\.\/dist\/object-manager-entry\.js"/);
   assert.doesNotMatch(source, /dist\/services\//);
   assert.doesNotMatch(source, /ObjectSceneController|\.timeIndex|\.motions/);
   assert.match(source, /process\.version/);

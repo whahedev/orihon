@@ -37,7 +37,8 @@ Use `setParams({ layers: "planning:routes" })` to change the visible service lay
 Use `objectManager` for interactive clustered objects and `webglPointLayer` for raw point density:
 
 ```js
-import { objectManager, webglPointLayer } from "orihon";
+import { objectManager } from "orihon/object-manager";
+import { webglPointLayer } from "orihon/advanced";
 
 const objects = objectManager({ clusterize: true, clusterRadiusPixels: 50 }).addTo(map);
 objects.add(featureCollection);
@@ -51,7 +52,7 @@ density.setViewTransform({ rotation: 20, pitch: 30 });
 Use `heatLayer` for weighted point density with blur and a color gradient:
 
 ```js
-import { heatLayer } from "orihon";
+import { heatLayer } from "orihon/advanced";
 
 const points = [
   [52.52, 13.405, 0.8],
@@ -73,7 +74,7 @@ heatLayer(points, {
 ## Binary Vector Tiles
 
 ```js
-import { createMVTProvider, vectorTileLayer } from "orihon";
+import { createMVTProvider, vectorTileLayer } from "orihon/advanced";
 
 const provider = createMVTProvider("/mvt/{z}/{x}/{y}.pbf", {
   layer: ["roads", "water"]
@@ -91,7 +92,7 @@ vectorTileLayer({
 ## Offline Tile Cache
 
 ```js
-import { offlineTileCache } from "orihon";
+import { offlineTileCache } from "orihon/advanced";
 
 const cache = offlineTileCache({ cacheName: "city-v1", maxEntries: 500 });
 await cache.prefetch(urls, { concurrency: 6 });
@@ -106,7 +107,8 @@ Cache only sources whose terms permit offline storage. Bump the cache name when 
 ## Cleanup In Single-Page Applications
 
 ```js
-import { createMap, objectManager } from "orihon";
+import { createMap } from "orihon";
+import { objectManager } from "orihon/object-manager";
 
 const map = createMap(container, options);
 const remote = objectManager({ loader }).addTo(map);

@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import * as Orihon from "../dist/index.js";
+import * as Orihon from "../dist/full-entry.js";
+import * as Root from "orihon";
+import * as Advanced from "orihon/advanced";
+import * as ObjectManagerApi from "orihon/object-manager";
+import * as Locales from "orihon/locales";
+import * as ReactBase from "orihon/react";
+import * as ReactObjectManager from "orihon/react/object-manager";
 import * as Core from "../dist/core.js";
 import * as Standard from "../dist/standard.js";
 import * as PMTiles from "orihon/pmtiles";
@@ -12,6 +18,30 @@ import * as Controls from "orihon/controls";
 import * as Geo from "orihon/geo";
 import * as PopupContent from "orihon/popup-content";
 import * as Source from "orihon/source";
+
+test("package entries keep optional capabilities out of the default import", () => {
+  assert.equal(typeof Root.createMap, "function");
+  assert.equal("GPUTileLayer" in Root, false);
+  assert.equal("ObjectManager" in Root, false);
+  assert.equal("localePacks" in Root, false);
+
+  assert.equal(typeof Advanced.GPUTileLayer, "function");
+  assert.equal("ObjectManager" in Advanced, false);
+  assert.equal("MarkerCollection" in Advanced, false);
+  assert.equal("localePacks" in Advanced, false);
+
+  assert.equal(typeof ObjectManagerApi.ObjectManager, "function");
+  assert.equal("GPUTileLayer" in ObjectManagerApi, false);
+  assert.equal(typeof Locales.localePacks, "object");
+
+  assert.equal(typeof ReactBase.Map, "function");
+  assert.equal("ObjectManager" in ReactBase, false);
+  assert.equal(typeof ReactObjectManager.ObjectManager, "function");
+
+  assert.equal(typeof Orihon.GPUTileLayer, "function");
+  assert.equal(typeof Orihon.ObjectManager, "function");
+  assert.equal(typeof Orihon.localePacks, "object");
+});
 
 test("public API exports stage one additions", () => {
   assert.equal(typeof Orihon.AttributionControl, "function");

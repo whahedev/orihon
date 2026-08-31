@@ -1,12 +1,14 @@
 import {
   type Orihon, type LatLng, type LatLngLike, type Point, type Polyline,
   type Circle, type Popup, type Tooltip, type ImageOverlay, type VideoOverlay,
-  type SVGOverlay, type TextLayer, type TileLayer, type VectorTileLayer,
-  type HeatLayer, type HeatFeature, type WebGLPointLayer, type WebGLPointInput,
-  type WebGLSymbolLayer, type WebGLSymbolInstance, type TrafficLayer,
+  type SVGOverlay, type TextLayer, type TileLayer,
   type TileLayerEventMap, type EventFor, type EventHandler, type FeatureGroup,
-  type GPUTileLayerEventMap, type GeoJSONLayer
+  type GeoJSONLayer
 } from "orihon";
+import type {
+  VectorTileLayer, HeatLayer, HeatFeature, WebGLPointLayer, WebGLPointInput,
+  WebGLSymbolLayer, WebGLSymbolInstance, TrafficLayer, GPUTileLayerEventMap
+} from "orihon/advanced";
 import type { TileLayerEventMap as CoreTiles } from "orihon/core";
 import type { PathEventMap, MediaOverlayEventMap, ImageOverlayEventMap,
   VideoOverlayEventMap, DivOverlayEventMap, OverlayLifecycleEventMap,

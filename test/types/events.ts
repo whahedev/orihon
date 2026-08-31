@@ -1,10 +1,10 @@
 // Check the shipped declarations, not just source-level inference.
 import {
   Evented, type Orihon, type LatLng, type Point, type Marker, type Circle,
-  type MapEventMap, type MarkerEventMap, type EventFor, type EventHandler,
-  type ObjectManager, type RemoteObjectManager, type RoutingLayer,
-  type SuggestWidget, type PerformanceInspector, type RouteResult
+  type MapEventMap, type MarkerEventMap, type EventFor, type EventHandler
 } from "orihon";
+import type { RoutingLayer, SuggestWidget, PerformanceInspector, RouteResult } from "orihon/advanced";
+import type { ObjectManager, RemoteObjectManager } from "orihon/object-manager";
 import type { EventFor as CoreEventFor, MapEventMap as CoreMapEventMap } from "orihon/core";
 import type { MarkerEventMap as StandardMarkerEventMap } from "orihon/standard";
 import { type DrawHandler, type DrawControl, type DrawMode } from "orihon/draw";

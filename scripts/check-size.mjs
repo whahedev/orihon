@@ -19,14 +19,16 @@ const HEADLINE_CEILING_KIB = 150;
 const budgets = {
   "orihon.core.esm.js": 18 * kib,
   // Includes async GeoJSON ingestion plus incremental FeatureSource sync on GeoJSONLayer.
-  "orihon.standard.esm.js": 38 * kib,
-  // Advanced includes whole-index clustering/MVT WASM, unified WASM heat fields,
-  // WebGL scene renderers, async mass ingestion and lazy WebGPU compute/tiles.
-  "orihon.esm.js": 132 * kib,
-  // React bindings re-export the Advanced surface, so they track `orihon.esm.js`.
-  "orihon.react.esm.js": 118 * kib,
-  // Script-tag build: no code splitting, so it carries the lazy chunks inline.
-  "orihon.global.js": 149 * kib,
+  "orihon.standard.esm.js": 37 * kib,
+  // Advanced is explicit and excludes ObjectManager/locales. Its budget is the
+  // complete synchronous import closure, not only the entry file.
+  "orihon.esm.js": 120 * kib,
+  "orihon.object-manager.esm.js": 100 * kib,
+  "orihon.locales.esm.js": 3 * kib,
+  "orihon.react.esm.js": 36 * kib,
+  "orihon.react-object-manager.esm.js": 100 * kib,
+  // Script-tag build mirrors Advanced; ObjectManager and extra locales are opt-in.
+  "orihon.global.js": 125 * kib,
   "orihon.draw.esm.js": 12 * kib,
   "orihon.controls.esm.js": 8 * kib,
   "orihon.geo.esm.js": 2 * kib,
@@ -37,13 +39,21 @@ const manifest = JSON.parse(await readFile(new URL("../dist/release-manifest.jso
 
 const failures = [];
 for (const [file, budget] of Object.entries(budgets)) {
-  const actual = manifest.sizes?.[file]?.gzipBytes;
-  assert.equal(typeof actual, "number", `Missing gzip size for ${file}`);
+  const ownSize = manifest.sizes?.[file]?.gzipBytes;
+  const actual = manifest.initialLoads?.[file]?.gzipBytes ?? ownSize;
+  assert.equal(typeof ownSize, "number", `Missing gzip size for ${file}`);
+  assert.equal(typeof actual, "number", `Missing initial-load gzip size for ${file}`);
   if (actual > budget) {
     failures.push(`${file}: ${(actual / kib).toFixed(2)} KiB gzip exceeds its ${(budget / kib).toFixed(0)} KiB budget`);
   }
   if (actual > HEADLINE_CEILING_KIB * kib) {
     failures.push(`${file}: ${(actual / kib).toFixed(2)} KiB gzip breaks the advertised ${HEADLINE_CEILING_KIB} KiB ceiling`);
+  }
+}
+
+for (const [file, size] of Object.entries(manifest.sizes ?? {})) {
+  if (size.gzipBytes > HEADLINE_CEILING_KIB * kib) {
+    failures.push(`${file}: ${(size.gzipBytes / kib).toFixed(2)} KiB gzip breaks the advertised ${HEADLINE_CEILING_KIB} KiB per-file ceiling`);
   }
 }
 
@@ -83,6 +93,7 @@ for (const file of Object.keys(budgets)) {
   if (!tableRows.some(([, listed]) => listed === file)) {
     failures.push(`README budget table is missing \`${file}\``);
   }
+}
 
 /**
  * The showcase publishes the same claim to a wider audience than the README, and it carried
@@ -101,8 +112,6 @@ for (const [, artifact, claimed] of tierBadges) {
   }
 }
 
-}
-
 if (failures.length) {
   console.error(failures.map((line) => `  - ${line}`).join("\n"));
   throw new Error(`${failures.length} size check failure(s)`);
@@ -111,8 +120,12 @@ if (failures.length) {
 const report = Object.entries(manifest.sizes)
   .map(([file, size]) => {
     const budget = budgets[file];
+    const initial = manifest.initialLoads?.[file]?.gzipBytes;
     const suffix = budget ? ` (budget ${(budget / kib).toFixed(0)} KiB)` : "";
-    return `${file}: ${(size.gzipBytes / kib).toFixed(2)} KiB gzip${suffix}`;
+    const initialSuffix = typeof initial === "number" && initial !== size.gzipBytes
+      ? `; ${(initial / kib).toFixed(2)} KiB initial load`
+      : "";
+    return `${file}: ${(size.gzipBytes / kib).toFixed(2)} KiB gzip${initialSuffix}${suffix}`;
   })
   .join("\n");
 console.log(report);

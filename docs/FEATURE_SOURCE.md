@@ -5,7 +5,7 @@
 ```ts
 import { featureSource } from "orihon/source";
 import { geoJSON, textLayer } from "orihon/standard";
-import { objectManager } from "orihon";
+import { objectManager } from "orihon/object-manager";
 
 const vehicles = featureSource(featureCollection);
 

@@ -1,51 +1,65 @@
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const dist = join(root, "dist");
-const out = join(root, "orihon-dist");
-const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+const dist = resolve(root, "dist");
+const stageRoot = resolve(root, "_publish_stage");
+const out = resolve(stageRoot, "orihon-dist");
+if (relative(stageRoot, out).startsWith(`..${sep}`)) {
+  throw new Error(`Refusing to stage outside ${stageRoot}`);
+}
 
-const artifacts = [
-  "orihon.css",
-  "orihon.core.esm.js",
-  "orihon.standard.esm.js",
-  "orihon.esm.js",
-  "orihon.global.js",
-  "index.d.ts",
-  "core.d.ts",
-  "standard.d.ts"
-];
+async function walk(dir) {
+  const files = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = resolve(dir, entry.name);
+    if (entry.isDirectory()) files.push(...await walk(path));
+    else files.push(path);
+  }
+  return files;
+}
 
-const manifest = JSON.parse(await readFile(join(dist, "release-manifest.json"), "utf8"));
-const chunks = Array.isArray(manifest.chunks) ? manifest.chunks : [];
-for (const chunk of chunks) artifacts.push(chunk);
+async function copyInto(source, destination) {
+  await mkdir(dirname(destination), { recursive: true });
+  await copyFile(source, destination);
+}
+
+const pkg = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
+const manifest = JSON.parse(await readFile(resolve(dist, "release-manifest.json"), "utf8"));
+const browserFiles = Object.keys(manifest.sizes ?? {}).filter((file) => file.endsWith(".js"));
 
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
 
-for (const file of artifacts) {
-  await copyFile(join(dist, file), join(out, file));
+for (const file of [...browserFiles, "orihon.css", "draw.css"]) {
+  await copyInto(resolve(dist, file), resolve(out, file));
+}
+for (const source of (await walk(dist)).filter((path) => path.endsWith(".d.ts"))) {
+  await copyInto(source, resolve(out, relative(dist, source)));
+}
+for (const name of ["LICENSE", "LICENSE-NOTICE.md"]) {
+  await copyInto(resolve(root, name), resolve(out, name));
 }
 
-await copyFile(join(root, "LICENSE"), join(out, "LICENSE"));
-await copyFile(join(root, "LICENSE-NOTICE.md"), join(out, "LICENSE-NOTICE.md"));
+const readme = `# Orihon ${pkg.version} (browser distribution)
 
-const readme = `# Orihon ${pkg.version} (compiled)
+Prebuilt, minified browser/CDN artifacts. The default ESM and script-tag builds
+contain the explicit Advanced surface; ObjectManager, extra locales and their
+React binding are separate opt-in files.
 
-Prebuilt browser/CDN artifacts from the \`orihon\` package root.
+## Entries
 
-## Files
-
-| File | Use |
+| Import | Use |
 | --- | --- |
-| \`orihon.global.js\` | \`<script>\` → \`Orihon\` / \`OrihonReady\` |
-| \`orihon.esm.js\` | Advanced ESM entry (loads \`orihon-*.js\` chunks on demand) |
-| \`orihon.standard.esm.js\` | Standard tier ESM bundle |
-| \`orihon.core.esm.js\` | Core tier ESM bundle |
-| \`orihon.css\` | Stylesheet |
-| \`*.d.ts\` | TypeScript entry declarations |
+| \`orihon-dist\` | Advanced ESM entry |
+| \`orihon-dist/standard\` | Standard map API |
+| \`orihon-dist/core\` | Core primitives |
+| \`orihon-dist/object-manager\` | ObjectManager APIs |
+| \`orihon-dist/locales\` | Non-English locale packs |
+| \`orihon-dist/react\` | Base React bindings |
+| \`orihon-dist/react/object-manager\` | React ObjectManager binding |
+| \`orihon-dist/global\` | Script-tag build → \`Orihon\` / \`OrihonReady\` |
 
 ## Script tag
 
@@ -57,46 +71,49 @@ Prebuilt browser/CDN artifacts from the \`orihon\` package root.
 </script>
 \`\`\`
 
-## ESM
-
-\`\`\`js
-import { createMap, tileLayer } from "./orihon.esm.js";
-\`\`\`
-
 ## License
 
 Apache License 2.0 — see \`LICENSE\` and \`LICENSE-NOTICE.md\`.
 Copyright 2026 whahe.
 `;
 
-await writeFile(join(out, "README.md"), readme);
+await writeFile(resolve(out, "README.md"), readme);
 
-await writeFile(join(out, "package.json"), JSON.stringify({
+const exports = {
+  ".": { types: "./advanced-entry.d.ts", import: "./orihon.esm.js" },
+  "./advanced": { types: "./advanced-entry.d.ts", import: "./orihon.esm.js" },
+  "./core": { types: "./core.d.ts", import: "./orihon.core.esm.js" },
+  "./standard": { types: "./standard.d.ts", import: "./orihon.standard.esm.js" },
+  "./object-manager": { types: "./object-manager-entry.d.ts", import: "./orihon.object-manager.esm.js" },
+  "./locales": { types: "./locales-entry.d.ts", import: "./orihon.locales.esm.js" },
+  "./controls": { types: "./controls.d.ts", import: "./orihon.controls.esm.js" },
+  "./geo": { types: "./geo-entry.d.ts", import: "./orihon.geo.esm.js" },
+  "./popup-content": { types: "./popup-content.d.ts", import: "./orihon.popup-content.esm.js" },
+  "./draw": { types: "./draw/index.d.ts", import: "./orihon.draw.esm.js" },
+  "./react": { types: "./react/index.d.ts", import: "./orihon.react.esm.js" },
+  "./react/object-manager": { types: "./react/object-manager.d.ts", import: "./orihon.react-object-manager.esm.js" },
+  "./global": "./orihon.global.js",
+  "./orihon.css": "./orihon.css",
+  "./draw.css": "./draw.css",
+  "./package.json": "./package.json"
+};
+
+await writeFile(resolve(out, "package.json"), `${JSON.stringify({
   name: "orihon-dist",
   version: pkg.version,
-  description: "Prebuilt Orihon map library artifacts (no source).",
+  description: "Prebuilt Orihon browser map library artifacts.",
   type: "module",
   main: "./orihon.global.js",
   module: "./orihon.esm.js",
-  types: "./index.d.ts",
+  types: "./advanced-entry.d.ts",
+  exports,
   license: "Apache-2.0",
-  files: [
-    "orihon.css",
-    "orihon.core.esm.js",
-    "orihon.standard.esm.js",
-    "orihon.esm.js",
-    "orihon.global.js",
-    "orihon-*.js",
-    "index.d.ts",
-    "core.d.ts",
-    "standard.d.ts",
-    "LICENSE",
-    "LICENSE-NOTICE.md",
-    "README.md"
-  ],
-  sideEffects: ["./orihon.css"],
-  keywords: ["orihon", "map", "gis"],
+  files: ["**/*.js", "**/*.d.ts", "*.css", "LICENSE", "LICENSE-NOTICE.md", "README.md"],
+  sideEffects: ["./orihon.css", "./draw.css", "./orihon.esm.js", "./orihon.locales.esm.js"],
+  peerDependencies: pkg.peerDependencies,
+  peerDependenciesMeta: pkg.peerDependenciesMeta,
+  keywords: ["orihon", "map", "gis", "browser", "cdn"],
   private: false
-}, null, 2) + "\n");
+}, null, 2)}\n`);
 
-console.log(`Wrote compiled distribution → ${out}`);
+console.log(`Wrote compiled distribution -> ${out}`);

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TileLayer, tileLayer as coreTileLayer, UnsupportedCapabilityError } from "../dist/core.js";
-import { GPUTileLayer, tileLayer } from "../dist/index.js";
+import { GPUTileLayer, tileLayer } from "../dist/full-entry.js";
 
 const URL_TEMPLATE = "https://tiles/{z}/{x}/{y}.png";
 

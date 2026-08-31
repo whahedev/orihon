@@ -40,7 +40,7 @@ dom.window.HTMLCanvasElement.prototype.getContext = () => ({
 const [{ featureSource }, { createMap, geoJSON, textLayer }, { objectManager }] = await Promise.all([
   import("orihon/source"),
   import("orihon/standard"),
-  import("orihon")
+  import("orihon/object-manager")
 ]);
 
 function point(id, name, coordinates = [37.618423, 55.751244]) {

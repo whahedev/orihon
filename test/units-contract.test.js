@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { Orihon, CRS, circle, circleMarker, objectManager, routingLayer, createStraightLineRoutingProvider } from "../dist/index.js";
+import { Orihon, CRS, circle, circleMarker, objectManager, routingLayer, createStraightLineRoutingProvider } from "../dist/full-entry.js";
 import { ObjectSceneController } from "../dist/services/object-scene.js";
 import { ObjectTrailStore } from "../dist/services/object-trail-store.js";
 import { WebGLSymbolLayer } from "../dist/layers/webgl-symbol-layer.js";

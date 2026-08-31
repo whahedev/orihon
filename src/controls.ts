@@ -20,6 +20,34 @@ const fullscreenLabels: Record<LocaleName, readonly [enter: string, exit: string
   hi: ["पूर्ण स्क्रीन", "पूर्ण स्क्रीन से बाहर निकलें"]
 };
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function createMeasureIcon(): SVGSVGElement {
+  const icon = document.createElementNS(SVG_NS, "svg");
+  for (const [name, value] of Object.entries({
+    viewBox: "0 0 24 24",
+    width: "20",
+    height: "20",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.8",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    "aria-hidden": "true",
+    focusable: "false"
+  })) icon.setAttribute(name, value);
+
+  const body = document.createElementNS(SVG_NS, "rect");
+  for (const [name, value] of Object.entries({ x: "3", y: "8", width: "18", height: "8", rx: "1" })) {
+    body.setAttribute(name, value);
+  }
+
+  const ticks = document.createElementNS(SVG_NS, "path");
+  ticks.setAttribute("d", "M7 8v4M11 8v2.5M15 8v4M19 8v2.5");
+  icon.append(body, ticks);
+  return icon;
+}
+
 export interface FullscreenControlOptions extends ControlOptions {
   title?: string;
   exitTitle?: string;
@@ -122,7 +150,7 @@ export class MeasureControl extends Control<MeasureControlOptions> {
     this.el.classList.add("oh-measure-control");
     this.button = createEl("button", "oh-control-button", this.el);
     this.button.type = "button";
-    this.button.textContent = "↔";
+    this.button.append(createMeasureIcon());
     this.button.title = this.options.title ?? "Measure distance";
     this.button.setAttribute("aria-label", this.button.title);
     this._unsub.push(listen(this.button, "click", () => this.active ? this.finish() : this.start()));

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import * as Orihon from "../dist/index.js";
+import * as Orihon from "../dist/full-entry.js";
 import * as Core from "../dist/core.js";
 import * as Geo from "../dist/geo-entry.js";
 

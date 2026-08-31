@@ -11,7 +11,7 @@ import {
   searchProvider,
   routingLayer,
   trafficLayer
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 
 class FakeClassList {
   values = new Set();

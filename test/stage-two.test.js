@@ -11,7 +11,7 @@ import {
   latLng,
   lngLat,
   point
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 
 test("geometry classes keep value semantics", () => {
   const source = point([10, 20]);

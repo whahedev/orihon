@@ -10,6 +10,7 @@ const sourceEntry = join(root, "src", "index.ts");
  * build those entries are excluded below rather than documented as if they were product API.
  */
 const optionalEntries = [
+  ["orihon/object-manager", join(root, "src", "object-manager-entry.ts")],
   ["orihon/source", join(root, "src", "feature-source.ts")],
   ["orihon/draw", join(root, "src", "draw", "index.ts")],
   ["orihon/controls", join(root, "src", "controls.ts")],
@@ -229,7 +230,7 @@ marker(moscow).addTo(map);`
   },
   heatLayer: {
     summary: "Создаёт единый интерактивный слой тепловой поверхности, изолиний или их комбинации.",
-    example: `import { heatLayer } from "orihon";
+    example: `import { heatLayer } from "orihon/advanced";
 
 const heat = heatLayer(points, {
   mode: "both",
@@ -288,7 +289,7 @@ heat.bindTooltip(() => {
   },
   buildHeat: {
     summary: "Строит scalar field и, при необходимости, изолинии без создания слоя карты.",
-    example: `import { bounds, buildHeat } from "orihon";
+    example: `import { bounds, buildHeat } from "orihon/advanced";
 
 const area = bounds({ lat: 55.45, lng: 37.05 }, { lat: 56.03, lng: 38.15 });
 
@@ -320,7 +321,7 @@ if (result) {
   },
   heatSupport: {
     summary: "Асинхронно сообщает, доступны ли ускоренные WASM и WebGPU backend’ы в текущей среде.",
-    example: `import { heatSupport } from "orihon";
+    example: `import { heatSupport } from "orihon/advanced";
 
 const support = await heatSupport();
 console.log({
@@ -358,7 +359,7 @@ function objectManager(options: UnifiedObjectManagerOptions): ObjectManager | Re
         ["Полигон", "`polygon.fill`, `fillOpacity`, `stroke`, `strokeOpacity`, `strokeWidth`", "Совпадает с vocabulary обычных vector paths."]
       ]
     }],
-    example: `import { objectManager, remoteObjectManager, markerCollection } from "orihon";
+    example: `import { objectManager, remoteObjectManager, markerCollection } from "orihon/object-manager";
 
 const local = objectManager({ clusterize: true }).addTo(map);
 await local.addAsync(objects, { render: false });
@@ -386,7 +387,7 @@ showResult(local.getStats());`
   },
   tileLayer: {
     summary: "Создаёт растровую подложку: по умолчанию DOM во всех tier, а renderer \"auto\" дополнительно разрешает WebGL и WebGPU.",
-    example: `import { tileLayer } from "orihon";
+    example: `import { tileLayer } from "orihon/advanced";
 
 const basemap = tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   renderer: "auto",
@@ -398,7 +399,7 @@ const basemap = tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 }).addTo(map);
 
 console.log(basemap.getStats?.());`,
-    note: "Без \`renderer\` слой всегда DOM — одинаково в \`orihon/core\`, \`orihon/standard\` и \`orihon\`: импорт Advanced entry расширяет выбор, но не меняет то, что строит уже написанный вызов. \`renderer:'auto'\` — предпочтение: WebGPU, затем WebGL, затем DOM, и молча деградирует. \`renderer:'webgl'\` и \`renderer:'webgpu'\` — требование: они дают именно эту реализацию либо бросают UnsupportedCapabilityError (\`code: 'ERR_UNSUPPORTED_CAPABILITY'\`), потому что тихий откат на DOM выглядел бы как GPU-путь в разработке и профилировался бы как DOM в продакшене. Обе GPU-реализации делят общий cache/request/prefetch/zoom-backstop pipeline.",
+    note: "Без \`renderer\` слой всегда DOM — одинаково в \`orihon/core\`, \`orihon/standard\` и \`orihon/advanced\`: импорт Advanced entry расширяет выбор, но не меняет то, что строит уже написанный вызов. \`renderer:'auto'\` — предпочтение: WebGPU, затем WebGL, затем DOM, и молча деградирует. \`renderer:'webgl'\` и \`renderer:'webgpu'\` — требование: они дают именно эту реализацию либо бросают UnsupportedCapabilityError (\`code: 'ERR_UNSUPPORTED_CAPABILITY'\`), потому что тихий откат на DOM выглядел бы как GPU-путь в разработке и профилировался бы как DOM в продакшене. Обе GPU-реализации делят общий cache/request/prefetch/zoom-backstop pipeline.",
     sections: [{
       title: "Выбор backend",
       rows: [
@@ -442,7 +443,7 @@ function pathBatch(options: FeaturePathBatchOptions): WebGLStyledPathBatch`,
 };
 
 const explicitExamples = {
-  createGeometryWorkerPool: `import { createGeometryWorkerPool } from "orihon";
+  createGeometryWorkerPool: `import { createGeometryWorkerPool } from "orihon/advanced";
 
 const pool = createGeometryWorkerPool();
 try {
@@ -451,11 +452,11 @@ try {
 } finally {
   pool.destroy();
 }`,
-  markerCollection: `import { markerCollection } from "orihon";
+  markerCollection: `import { markerCollection } from "orihon/object-manager";
 
 const collection = markerCollection(points.slice(0, 2000), { renderer: "auto" }).addTo(map);
 showResult({ size: collection.size, renderer: collection.renderer });`,
-  remoteObjectManager: `import { remoteObjectManager } from "orihon";
+  remoteObjectManager: `import { remoteObjectManager } from "orihon/object-manager";
 
 const manager = remoteObjectManager({
   debounceMs: 150,
@@ -474,7 +475,7 @@ registerLocalePacks({ ru: { ...resolveLocale("ru"), zoomIn: "Ближе", zoomOu
 map.setLocale("ru");
 await map.localeReady;
 showResult({ zoomIn: map.locale.zoomIn, zoomOut: map.locale.zoomOut });`,
-  wTinyLfu: `import { wTinyLfu } from "orihon";
+  wTinyLfu: `import { wTinyLfu } from "orihon/advanced";
 
 const cache = wTinyLfu(64);
 let evicted = 0;
@@ -509,7 +510,7 @@ const xml = \`<Capabilities xmlns="http://www.opengis.net/wmts/1.0">
 const config = createWMTSFromCapabilities(xml);
 wmtsTileLayer(config.template, config.options).addTo(map);
 showResult(config);`,
-  webglSymbolLayer: `import { webglSymbolLayer } from "orihon";
+  webglSymbolLayer: `import { webglSymbolLayer } from "orihon/advanced";
 
 // Каждый instance описан полностью: слой не додумывает размер, поворот и цвет.
 const layer = webglSymbolLayer().addTo(map);
@@ -536,7 +537,7 @@ textLayer([
   halo: "#ffffff",
   haloWidth: 3
 }).addTo(map);`,
-  preparePointBatchAsync: `import { preparePointBatchAsync } from "orihon";
+  preparePointBatchAsync: `import { preparePointBatchAsync } from "orihon/advanced";
 
 // Готовит типизированный буфер, не блокируя main thread: результат — данные, а не слой.
 const packed = await preparePointBatchAsync(points, {
@@ -906,7 +907,7 @@ function rankOf(name) {
  * part only; this builds the map around them and folds the extra names into the existing import
  * lines so the result still reads as one file.
  */
-const ENTRY_ORDER = ["orihon/core", "orihon/standard", "orihon", ...optionalEntries.map(([entry]) => entry)];
+const ENTRY_ORDER = ["orihon/core", "orihon/standard", "orihon", "orihon/advanced", ...optionalEntries.map(([entry]) => entry)];
 
 function exportedNames(path) {
   const source = program.getSourceFile(path);
@@ -920,7 +921,8 @@ function exportedNames(path) {
 const entryExports = new Map([
   ["orihon/core", new Set(exportedNames(join(root, "src", "core.ts")))],
   ["orihon/standard", new Set(exportedNames(join(root, "src", "standard.ts")))],
-  ["orihon", new Set(exportedNames(sourceEntry))],
+  ["orihon", new Set(exportedNames(join(root, "src", "standard.ts")))],
+  ["orihon/advanced", new Set(exportedNames(sourceEntry))],
   ...optionalEntries.map(([entry, path]) => [entry, new Set(exportedNames(path))])
 ]);
 
@@ -1155,7 +1157,7 @@ function entryFor(group, name) {
   const standard = new Set(["featureGroup", "wmsTileLayer", "wmtsTileLayer", "createWMTSFromCapabilities", "marker", "markerShapeMetrics", "icon", "textLayer", "polyline", "polygon", "rectangle", "circle", "circleMarker", "geoJSON", "popup", "tooltip", "imageOverlay", "videoOverlay", "svgOverlay", "sanitizeSvgElement", "zoomControl", "scaleControl", "geolocationControl", "attributionControl", "layersControl", "customControl", "resolveLocale", "ensureLocalePacks", "registerLocalePacks"]);
   if (core.has(name)) return "orihon/core";
   if (standard.has(name)) return "orihon/standard";
-  return "orihon";
+  return "orihon/advanced";
 }
 
 function fallbackSummary(record) {
@@ -1285,7 +1287,7 @@ for (let index = 0; index < functions.length; index++) {
 await writeFile(join(guideRoot, "index.html"), renderHome(functions, navigation), "utf8");
 await writeFile(join(guideRoot, "manifest.json"), JSON.stringify({
   version: pkg.version,
-  source: "src/index.ts",
+  source: "src/advanced-entry.ts",
   confluenceSource: confluence.source,
   functions: functions.map(({ name, group, entry, summary }) => ({
     name, group, entry, summary, url: `./functions/${name}/`

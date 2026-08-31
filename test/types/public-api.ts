@@ -9,7 +9,7 @@ import {
   type LatLng,
   type Orihon,
   type RasterTileLayer
-} from "../../src/index.js";
+} from "../../src/full-entry.js";
 import { featureSource } from "../../src/feature-source.js";
 import { DrawHandler, drawControl } from "../../src/draw/index.js";
 const draw = new DrawHandler();
@@ -83,10 +83,10 @@ void explicitRangePrefetch;
 void missingYRange;
 
 // @ts-expect-error The library-managed shared worker is not part of the package API.
-import { getSharedGeometryWorkerPool } from "../../src/index.js";
+import { getSharedGeometryWorkerPool } from "../../src/full-entry.js";
 void getSharedGeometryWorkerPool;
 
-import { marker, createMap, fromGeoJSONPosition, toGeoJSONPosition, type LatLngLike, type ManagedGeometry } from "../../src/index.js";
+import { marker, createMap, fromGeoJSONPosition, toGeoJSONPosition, type LatLngLike, type ManagedGeometry } from "../../src/full-entry.js";
 const geoJSONPosition: [number, number] = [37.618423, 55.751244];
 marker(fromGeoJSONPosition(geoJSONPosition));
 const namedPosition: LatLngLike = { lat: 55.751244, lng: 37.618423 };
@@ -100,7 +100,7 @@ const managedPoint: ManagedGeometry = { type: "Point", coordinates: geoJSONPosit
 // @ts-expect-error ObjectManager GeoJSON cannot silently become a latitude-first marker.
 marker(managedPoint.coordinates);
 
-import { circle, circleMarker, objectManager, type CircleRadius, type RouteResult, type WebGLSymbolInstance } from "../../src/index.js";
+import { circle, circleMarker, objectManager, type CircleRadius, type RouteResult, type WebGLSymbolInstance } from "../../src/full-entry.js";
 const radius: CircleRadius = { radiusMapUnits: 10 };
 circle(namedPosition, radius).setRadius({ radiusMeters: 100 });
 circle(namedPosition, { radiusMeters: 50 }).setRadiusMeters(75).getRadiusMeters();
@@ -128,7 +128,7 @@ const oldMotion: Partial<WebGLSymbolInstance> = { startTime: 1, duration: 2 };
 void oldRoute;
 void oldMotion;
 
-import { createSuggestProvider, routingLayer } from "../../src/index.js";
+import { createSuggestProvider, routingLayer } from "../../src/full-entry.js";
 const suggestions = createSuggestProvider(async (_query, context) => {
   const signal: AbortSignal | undefined = context.signal;
   void signal;
@@ -145,7 +145,7 @@ routing._controller;
 void suggestionResult;
 void routeResult;
 
-import type { ManagedObject, RemoteObjectReloadOptions } from "../../src/index.js";
+import type { ManagedObject, RemoteObjectReloadOptions } from "../../src/full-entry.js";
 const remote = objectManager({ loader: () => [] });
 const reloadOptions: RemoteObjectReloadOptions = { signal };
 const reloaded: Promise<ManagedObject[]> = remote.reload(reloadOptions);
@@ -166,7 +166,7 @@ remote.remove(1);
 localManager.isDestroyed = false;
 void destroyed;
 
-import { icon, type Icon, type DivIcon, type MarkerOptions, type ObjectManager as LocalManager, type RemoteObjectManager, type MarkerCollection, type UnifiedObjectManagerOptions } from "../../src/index.js";
+import { icon, type Icon, type DivIcon, type MarkerOptions, type ObjectManager as LocalManager, type RemoteObjectManager, type MarkerCollection, type UnifiedObjectManagerOptions } from "../../src/full-entry.js";
 import { createMap as createEasyMap, type EasyMarkerOptions } from "../../src/easy-entry.js";
 import type { MarkerProps } from "../../src/react/layers.js";
 const imageIcon: Icon = icon({ iconUrl: "pin.png" });

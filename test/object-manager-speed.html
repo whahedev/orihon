@@ -67,11 +67,8 @@
       <div class="stats live" id="live"></div>
     </aside>
     <script type="module">
-      import {
-        createMap,
-        objectManager,
-        tileLayer
-      } from "/dist/orihon.esm.js";
+      import { createMap, tileLayer } from "/dist/orihon.standard.esm.js";
+      import { objectManager } from "/dist/orihon.object-manager.esm.js";
 
       const params = new URLSearchParams(location.search);
       let count = Math.max(1000, Number(params.get("count")) || 25_000);

@@ -8,7 +8,7 @@ Related: [API](API.md) · [PLUGINS](PLUGINS.md) · [SECURITY](SECURITY.md)
 
 These hold for every item below. If a design violates them, change the design.
 
-1. **Gzip budgets stay.** Core ≤ 18 KiB, Standard ≤ 38 KiB, Advanced ≤ 132 KiB, and nothing shipped crosses the advertised 150 KiB ceiling (`npm run size`, which also verifies the README table). New surface that would break a budget goes into a **new optional entry** (`orihon/draw`, `orihon/react`, …), not into `orihon/standard` or `orihon`.
+1. **Gzip budgets stay.** Core ≤ 18 KiB, Standard ≤ 37 KiB, Advanced ≤ 120 KiB, and nothing shipped crosses the advertised 150 KiB ceiling (`npm run size`, which also verifies the README table). New surface that would break a budget goes into a **new optional entry** (`orihon/draw`, `orihon/react`, …), not into `orihon/standard` or the default `orihon` entry.
 2. **Leaflet-like DX.** Factories, `addTo` / `remove`, `on` / `off`, named panes, no required style JSON.
 3. **No prototype patching.** Plugins extend `Layer` / `Control` and import only public entries.
 4. **Safe content.** Strings are `textContent`. Markup is a `Node`. No `innerHTML`. SVG stays sanitized.
@@ -141,7 +141,7 @@ interface PathOptions {
 - `polyline(points, { dashArray: "8 4", arrow: "end" })` shows dashes and an end arrow after pan/zoom.
 - `setStyle({ dashArray: null })` clears dashes.
 - `circle(center, 50_000, { geodesic: true })` at 60°N is visibly wider in longitude than the planar circle; `getBounds()` uses geodesic samples.
-- Standard gzip still ≤ 36 KiB. If over, drop arrows first (keep dash + geodesic).
+- Standard gzip still ≤ 37 KiB. If over, drop arrows first (keep dash + geodesic).
 
 **Budget.** Target ≤ 1.5 KiB gzip added to Standard.
 
@@ -242,7 +242,7 @@ import "orihon/orihon.css";
 
 - Strict Mode double-mount does not leak maps (lifecycle leak test with `map.remove` spy).
 - Updating `center`/`zoom` from props calls `setView` and does not reset layers.
-- Package export `orihon/react` is tree-shakeable; `orihon` Advanced bundle does not import React.
+- Package export `orihon/react` is tree-shakeable; `orihon/advanced` does not import React, and the ObjectManager wrapper is isolated in `orihon/react/object-manager`.
 - Example: `examples/react` (Vite) with Map + GeoJSON + ObjectManager.
 
 **Non-goals.** React Native, SSR map rendering, Vue.
@@ -324,7 +324,7 @@ textLayer(features, {
 
 **Reuse.** `src/layers/heat.ts` and `textLayer` share `pickLabelAnchor` from `src/services/label-layout.ts`.
 
-**Acceptance.** 2k labels at z=12: no overlap, pan stays ≥ 50 fps on the bench page’s machine class. Standard budget: if this blows 36 KiB, ship as `orihon` Advanced-only (`textLayer` already conceptually “scale”). Prefer Advanced if > 2 KiB gzip.
+**Acceptance.** 2k labels at z=12: no overlap, pan stays ≥ 50 fps on the bench page’s machine class. Standard budget: if this blows 37 KiB, ship from `orihon/advanced` (`textLayer` already conceptually “scale”). Prefer Advanced if > 2 KiB gzip.
 
 **Non-goals.** MapLibre `symbol-sort-key` expressions, Chinese glyph shaping beyond the system font, 3D pitch.
 
@@ -363,7 +363,7 @@ Filter is a **predicate**, not an expression AST: `filter: (feature) => feature.
 **PMTiles**
 
 ```ts
-import { createPMTilesProvider } from "orihon";
+import { createPMTilesProvider } from "orihon/pmtiles";
 
 vectorTileLayer({
   provider: createPMTilesProvider("/city.pmtiles", { layer: "roads" })
@@ -418,7 +418,7 @@ Works for both DOM badges and `ClusterCanvasLayer.queryAt` clicks.
 
 ### P2.1 Small controls
 
-Ship in Standard if they fit the 36 KiB budget; otherwise `orihon` Advanced or tiny plugins.
+Ship in Standard if they fit the 37 KiB budget; otherwise `orihon/advanced` or tiny plugins.
 
 | Control | API | Notes |
 | --- | --- | --- |

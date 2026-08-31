@@ -63,11 +63,11 @@
   <main class="content"><article>
     <nav class="breadcrumbs"><a href="/examples/developer-guide/">Функции</a><span>/</span><a href="/examples/developer-guide/#растровые-тайлы">Растровые тайлы</a></nav>
     <header class="api-header">
-      <div><p class="eyebrow">orihon</p><h1><code>wTinyLfu()</code></h1><p class="lede">Создаёт ограниченный кэш с политикой W-TinyLFU, устойчивой к вытеснению часто используемых записей случайным потоком.</p></div>
+      <div><p class="eyebrow">orihon/advanced</p><h1><code>wTinyLfu()</code></h1><p class="lede">Создаёт ограниченный кэш с политикой W-TinyLFU, устойчивой к вытеснению часто используемых записей случайным потоком.</p></div>
       <a class="source-link" href="https://github.com/whahedev/orihon/blob/main/src/services/tiny-lfu.ts#L146" target="_blank" rel="noreferrer">Исходник · L146</a>
     </header>
     <section class="doc-section purpose"><h2>Для чего нужна</h2><p>Функция относится к разделу «Растровые тайлы». DOM, WebGL, WMS и WMTS-источники подложки.</p></section>
-    <section class="doc-section"><h2>Импорт</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>import { wTinyLfu } from &quot;orihon&quot;;</code></pre></div></section>
+    <section class="doc-section"><h2>Импорт</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>import { wTinyLfu } from &quot;orihon/advanced&quot;;</code></pre></div></section>
     <section class="doc-section"><h2>Сигнатура и результат</h2><div class="code"><div class="code-bar"><span>ts</span><button type="button" data-copy-code>Копировать</button></div><pre><code>function wTinyLfu(capacity: number, options?: { trace?: boolean; windowRatio?: number }): WTinyLfu</code></pre></div><p class="returns"><strong>Возвращает:</strong> <code>WTinyLfu</code> — значение типа WTinyLfu, описанное в сигнатуре выше</p></section>
     <section class="doc-section"><h2>Параметры</h2><div class="table-wrap"><table><thead><tr><th>Параметр</th><th>Тип</th><th>Обязателен</th><th>По умолчанию</th><th>Описание</th></tr></thead><tbody><tr><td><code>capacity</code></td><td><code>number</code></td><td>да</td><td>—</td><td>Числовое значение «capacity»; единица и допустимый диапазон следуют из назначения функции.</td></tr><tr><td><code>options</code></td><td><code>{ trace?: boolean; windowRatio?: number; } | undefined</code></td><td>нет</td><td>—</td><td>Необязательные настройки поведения. Все поддерживаемые поля, их единицы и назначение перечислены в таблице ниже.</td></tr></tbody></table></div><div class="option-detail"><h3>Состав <code>options</code></h3><p>Объект <code>{ trace?: boolean; windowRatio?: number; } | undefined</code> поддерживает следующие поля:</p><div class="table-wrap"><table><thead><tr><th>Поле</th><th>Тип</th><th>Обязательное</th><th>Назначение</th></tr></thead><tbody><tr><td><code>trace</code></td><td><code>boolean | undefined</code></td><td>нет</td><td>Если true, включает параметр «trace»; false отключает его.</td></tr><tr><td><code>windowRatio</code></td><td><code>number | undefined</code></td><td>нет</td><td>Числовая настройка «window ratio».</td></tr></tbody></table></div></div></section>
     <section class="doc-section playground-section" data-playground data-function="wTinyLfu">
@@ -75,7 +75,7 @@
       <div class="playground-shell">
         <div class="playground-editor">
           <div class="playground-toolbar"><span>JavaScript</span><div><button type="button" data-playground-reset>Сбросить</button><button class="run" type="button" data-playground-run>Выполнить</button></div></div>
-          <textarea data-playground-code spellcheck="false" aria-label="Код примера wTinyLfu">import { wTinyLfu } from &quot;orihon&quot;;
+          <textarea data-playground-code spellcheck="false" aria-label="Код примера wTinyLfu">import { wTinyLfu } from &quot;orihon/advanced&quot;;
 
 const weightedPoints = Array.from({ length: 2500 }, (item, index) =&gt; ({
   lat: 55.45 + Math.random() * 0.58,

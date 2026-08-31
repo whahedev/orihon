@@ -1,7 +1,7 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createMap, marker, icon, Icon, DivIcon, ObjectManager, RemoteObjectManager, MarkerCollection, objectManager } from "../dist/index.js";
+import { createMap, marker, icon, Icon, DivIcon, ObjectManager, RemoteObjectManager, MarkerCollection, objectManager } from "../dist/full-entry.js";
 import { createMap as createEasyMap } from "../dist/easy-entry.js";
 import { Marker as ReactMarker } from "../dist/react/layers.js";
 import * as standardBundle from "../dist/orihon.standard.esm.js";

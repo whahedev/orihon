@@ -11,7 +11,7 @@ import {
   geoJSON,
   polygon,
   wmsTileLayer
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 import { registerGeoJSONWebGLBatch } from "../dist/layers/geojson.js";
 import { WebGLPathBatch, webglPathBatch } from "../dist/layers/webgl-path-batch.js";
 

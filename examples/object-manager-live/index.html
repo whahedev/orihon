@@ -139,13 +139,17 @@
     </aside>
 
     <script type="module">
+      const [advanced, objectManagers] = await Promise.all([
+        import("/dist/advanced-entry.js"),
+        import("/dist/object-manager-entry.js")
+      ]);
       const {
         createMap,
         tileLayer,
         objectManager,
         geodesicInterpolate,
         heatLayer
-      } = await import("/dist/index.js").catch(() => import("/dist/orihon.esm.js"));
+      } = { ...advanced, ...objectManagers };
 
       const HUBS = [
         { id: "SVO", name: "Moscow", lat: 55.973, lng: 37.415 },

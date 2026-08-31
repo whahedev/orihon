@@ -15,7 +15,7 @@ try {
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${address.port}/`);
   const result = await page.evaluate(async () => {
-    const { buildHeat, heatSupport } = await import("/dist/index.js");
+    const { buildHeat, heatSupport } = await import("/dist/advanced-entry.js");
     const support = await heatSupport();
     const points = Array.from({ length: 1500 }, (_, index) => {
       const angle = index * 0.13;
@@ -154,7 +154,7 @@ try {
   // `levels` above 1 have always been absolute field values. Gradient stops now read the same
   // way, so a caller does not keep two conventions side by side in neighbouring options.
   const gradientScale = await page.evaluate(async () => {
-    const { createMap, heatLayer } = await import("/dist/index.js");
+    const { createMap, heatLayer } = await import("/dist/advanced-entry.js");
     const REFERENCE = 40;
     const points = Array.from({ length: 900 }, (_, index) => {
       const angle = index * 0.21;

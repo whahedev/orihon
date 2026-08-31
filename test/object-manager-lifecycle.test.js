@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getEventListeners } from "node:events";
-import { objectManager, Evented } from "../dist/index.js";
+import { objectManager, Evented } from "../dist/full-entry.js";
 
 class FakeMap extends Evented {
   zoom = 1;

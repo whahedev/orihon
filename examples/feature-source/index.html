@@ -23,9 +23,8 @@
   <div id="map"><span class="fallback">Подложка зависит от доступа к openstreetmap.org</span></div>
   <script type="module">
     import { featureSource } from "/dist/feature-source.js";
-    import {
-      createMap, tileLayer, geoJSON, textLayer, circleMarker, objectManager
-    } from "/dist/index.js";
+    import { createMap, tileLayer, geoJSON, textLayer, circleMarker } from "/dist/standard.js";
+    import { objectManager } from "/dist/object-manager-entry.js";
 
     const palette = { ready: "#55e6c1", busy: "#ffbf69", late: "#ff6b7a" };
     const courier = (id, name, lng, lat, status, speed) => ({

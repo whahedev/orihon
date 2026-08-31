@@ -567,6 +567,10 @@
   cursor: pointer;
 }
 
+.oh-measure-control .oh-control-button svg {
+  display: block;
+}
+
 .oh-control-button:hover {
   background: #f4f7f9;
 }

@@ -11,25 +11,11 @@ export { GridLayer } from "./layers/grid-layer.js";
 export { TileLayer, tileLayer } from "./layers/tile-layer.js";
 export { GPUTileLayer } from "./layers/gpu-tile-layer.js";
 export { WTinyLfu, CountMinSketch, wTinyLfu } from "./services/tiny-lfu.js";
-import { registerGpuTileFactory } from "./layers/tile-layer.js";
-import { GPUTileLayer } from "./layers/gpu-tile-layer.js";
-import { sniffPackedMLT } from "./layers/mlt.js";
-import { decodePackedMVTWasm, mvtGeometryWasmSupported } from "./layers/mvt-wasm.js";
-import { registerPackedMvtWasm, registerPackedTileSniffer } from "./layers/mvt.js";
-// Advanced: enable GPU raster tiles for tileLayer({ renderer: "webgl" | "webgpu" | "auto" }).
-registerGpuTileFactory((template, options) => new GPUTileLayer(template, {
-  ...options,
-  backend: options?.renderer === "webgl" || options?.renderer === "webgpu" ? options.renderer : "auto"
-}));
-// Advanced: createMVTProvider / decodeMVT accept MLT and use WASM geometry when present.
-registerPackedTileSniffer(sniffPackedMLT);
-if (mvtGeometryWasmSupported()) registerPackedMvtWasm(decodePackedMVTWasm);
 export { WMSTileLayer, wmsTileLayer } from "./layers/wms-tile-layer.js";
 export { WMTSTileLayer, wmtsTileLayer, createWMTSFromCapabilities } from "./layers/wmts-tile-layer.js";
 export { VectorTileLayer, vectorTileLayer } from "./layers/vector-tile-layer.js";
 export { createMVTProvider, decodeMVT } from "./layers/mvt.js";
 export { Marker, marker, markerShapeMetrics } from "./layers/marker.js";
-export { MarkerCollection } from "./layers/marker-collection.js";
 export { Icon, DivIcon, icon } from "./layers/icon.js";
 export { TextLayer, textLayer } from "./layers/text-layer.js";
 export {
@@ -47,10 +33,6 @@ export {
   circleMarker
 } from "./layers/vector.js";
 export { GeoJSONLayer, geoJSON } from "./layers/geojson.js";
-import { registerGeoJSONWebGLBatch } from "./layers/geojson.js";
-import { WebGLPathBatch } from "./layers/webgl-path-batch.js";
-// Advanced: enable GPU GeoJSON lines for renderer "webgl" / "auto" on large sets.
-registerGeoJSONWebGLBatch((options) => new WebGLPathBatch(options));
 export { DivOverlay, Popup, Tooltip, popup, tooltip } from "./overlays/div-overlay.js";
 export { ImageOverlay, imageOverlay } from "./overlays/image-overlay.js";
 export { VideoOverlay, videoOverlay } from "./overlays/video-overlay.js";
@@ -77,23 +59,6 @@ export {
   ensureLocalePacks,
   registerLocalePacks
 } from "./ui/locale.js";
-export {
-  ruLocale,
-  arLocale,
-  trLocale,
-  zhLocale,
-  deLocale,
-  frLocale,
-  daLocale,
-  hiLocale,
-  localePacks
-} from "./ui/locale-packs.js";
-import { registerLocalePacks } from "./ui/locale.js";
-import { localePacks } from "./ui/locale-packs.js";
-registerLocalePacks(localePacks);
-export { ObjectManager, OBJECT_MANAGER_PALETTE } from "./services/object-manager.js";
-export { RemoteObjectManager } from "./services/remote-object-manager.js";
-export { objectManager, remoteObjectManager, markerCollection } from "./services/object-manager-factory.js";
 export { SpatialGridIndex, spatialGridIndex } from "./services/spatial-grid-index.js";
 export { TrafficLayer, trafficLayer } from "./services/traffic-layer.js";
 export { SearchProvider, searchProvider } from "./services/search.js";
@@ -173,7 +138,6 @@ export type { WMTSTileLayerOptions, WMTSCapabilitiesConfig } from "./layers/wmts
 export type { MVTPaintRule, VectorTileCoordinates, VectorTileLayerOptions, VectorTileProvider, VectorTileEventMap } from "./layers/vector-tile-layer.js";
 export type { MVTDecodeOptions } from "./layers/mvt.js";
 export type { MarkerOptions, MarkerAppearance, MarkerShape, MarkerEventMap } from "./layers/marker.js";
-export type { MarkerCollectionOptions, MarkerCollectionRenderer } from "./layers/marker-collection.js";
 export type { IconOptions, DivIconOptions, MarkerIcon } from "./layers/icon.js";
 export type { TextLayerOptions, TextLayerEventMap } from "./layers/text-layer.js";
 export type { PathOptions, CircleMarkerOptions, CircleRadius, PathEventMap } from "./layers/vector.js";
@@ -222,44 +186,6 @@ export type {
   CustomControlContent
 } from "./ui/control.js";
 export type { OrihonLocale, LocaleInput, LocaleName } from "./ui/locale.js";
-export type {
-  ClusterIconFactory,
-  ClusterRenderer,
-  ManagedObject,
-  ManagedGeometry,
-  ManagedPointGeometry,
-  ManagedLineStringGeometry,
-  ManagedPolygonGeometry,
-  ObjectId,
-  ObjectFilter,
-  ObjectManagerAsyncOptions,
-  ObjectManagerOptions,
-  ObjectManagerStats,
-  ObjectManagerEventMap,
-  ObjectPopupContent,
-  ObjectPopupContext,
-  ObjectState,
-  ObjectStateValue,
-  ObjectStyle,
-  ObjectStyleContext,
-  ObjectStyleResolver,
-  ObjectLabelStyle,
-  ObjectLineStyle,
-  ObjectPolygonStyle,
-  ObjectTrailStyle,
-  ObjectCollisionMode,
-  ObjectGradientStop,
-  ObjectSearchOptions,
-  ObjectSearchResult,
-  ClusterPropertiesConfig,
-  ClusterPropertyDefinition,
-  ObjectVisualizationMode,
-  ObjectVisualizationByZoom,
-  ClusterPopupContent,
-  ClusterPopupContext
-} from "./services/object-manager.js";
-export type { RemoteObjectLoadContext, RemoteObjectLoader, RemoteObjectManagerOptions, RemoteObjectReloadOptions, RemoteObjectManagerEventMap } from "./services/remote-object-manager.js";
-export type { LocalObjectManagerOptions, PointObjectManagerOptions, UnifiedObjectManagerOptions } from "./services/object-manager-factory.js";
 export type { SpatialId, SpatialRecord } from "./services/spatial-grid-index.js";
 export type { TrafficLayerOptions, TrafficState, TrafficEventMap } from "./services/traffic-layer.js";
 export type { SearchAdapter, SearchContext, SearchResult, SearchProviderSource, SearchProviderOptions, SearchProviderConfig, ReverseFallback } from "./services/search.js";

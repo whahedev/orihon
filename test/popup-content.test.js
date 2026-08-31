@@ -11,7 +11,7 @@ import {
   polygon,
   polyline,
   rectangle
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 
 class FakeContentNode {
   constructor() {

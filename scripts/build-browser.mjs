@@ -107,19 +107,22 @@ const artifacts = [
     entry: "standard.ts",
     file: "orihon.standard.esm.js",
     format: "esm",
+    split: true,
     // Compress boundary validation while preserving property names used by plugins
-    // and the external map-export module. The Standard budget remains 37 KiB.
+    // and application objects.
     terser: true,
-    mangleProperties: false,
-    external: ["./services/map-export.js"]
+    mangleProperties: false
   },
-  { entry: "index.ts", file: "orihon.esm.js", format: "esm", split: true },
+  { entry: "advanced-entry.ts", file: "orihon.esm.js", format: "esm", split: true },
+  { entry: "object-manager-entry.ts", file: "orihon.object-manager.esm.js", format: "esm", terser: true },
+  { entry: "locales-entry.ts", file: "orihon.locales.esm.js", format: "esm", terser: true },
   { entry: "controls.ts", file: "orihon.controls.esm.js", format: "esm", bundle: false },
   { entry: "geo-entry.ts", file: "orihon.geo.esm.js", format: "esm", bundle: false },
   { entry: "popup-content.ts", file: "orihon.popup-content.esm.js", format: "esm", bundle: false },
   { entry: "draw/index.ts", file: "orihon.draw.esm.js", format: "esm", peerExternal: true },
   { entry: "react/index.ts", file: "orihon.react.esm.js", format: "esm", external: ["react", "react-dom/client"] },
-  { entry: "index.ts", file: "orihon.global.js", format: "iife", globalName: "Orihon", terser: true }
+  { entry: "react/object-manager.ts", file: "orihon.react-object-manager.esm.js", format: "esm", external: ["react"] },
+  { entry: "advanced-entry.ts", file: "orihon.global.js", format: "iife", globalName: "Orihon", terser: true }
 ];
 
 const chunkFiles = [];
@@ -134,8 +137,9 @@ for (const artifact of artifacts) {
   if (artifact.split) {
     const outdir = resolve(dist, "bundle-tmp");
     await mkdir(outdir, { recursive: true });
+    const entryName = artifact.file.replace(/\.js$/, "");
     const result = await build({
-      entryPoints: { "orihon.esm": resolve(root, "src", artifact.entry) },
+      entryPoints: { [entryName]: resolve(root, "src", artifact.entry) },
       outdir,
       entryNames: "[name]",
       chunkNames: "orihon-[name]-[hash]",
@@ -152,6 +156,7 @@ for (const artifact of artifacts) {
     // EPERM-lock a hashed chunk; copy to an alternate name and rewrite imports.
     const written = await readdir(outdir);
     const renamed = [];
+    const artifactChunks = [];
     for (const name of written) {
       const from = join(outdir, name);
       const to = join(dist, name);
@@ -175,7 +180,8 @@ for (const artifact of artifacts) {
         if (name.endsWith(".js")) renamed.push([name, destName]);
       }
       if (destName.startsWith("orihon-") && destName.endsWith(".js") && destName !== "orihon.esm.js") {
-        chunkFiles.push(destName);
+        if (!chunkFiles.includes(destName)) chunkFiles.push(destName);
+        artifactChunks.push(destName);
       }
     }
     if (renamed.length) {
@@ -190,9 +196,15 @@ for (const artifact of artifacts) {
     const { rm } = await import("node:fs/promises");
     await rm(outdir, { recursive: true, force: true });
 
-    await terserMinifyFile(resolve(dist, "orihon.esm.js"), { module: true });
-    for (const chunk of chunkFiles) {
-      await terserMinifyFile(resolve(dist, chunk), { module: true });
+    await terserMinifyFile(resolve(dist, artifact.file), {
+      module: true,
+      mangleProperties: artifact.mangleProperties ?? true
+    });
+    for (const chunk of artifactChunks) {
+      await terserMinifyFile(resolve(dist, chunk), {
+        module: true,
+        mangleProperties: artifact.mangleProperties ?? true
+      });
     }
     // Ensure meta outputs tracked
     void result;
@@ -240,12 +252,46 @@ const sizes = Object.fromEntries(await Promise.all(sizeTargets.map(async (file) 
   return [file, { bytes: contents.length, gzipBytes: gzipSync(contents, { level: 9 }).length }];
 })));
 
+const staticImports = {};
+for (const file of sizeTargets) {
+  const source = await readFile(resolve(dist, file), "utf8");
+  staticImports[file] = [...source.matchAll(/(?:^|;)import(?:[^;]*?from)?["']\.\/([^"']+\.js)["']/gm)]
+    .map((match) => match[1])
+    .filter((dependency) => dependency in sizes);
+}
+
+function staticClosure(entry) {
+  const seen = new Set([entry]);
+  const queue = [entry];
+  while (queue.length) {
+    const current = queue.pop();
+    for (const dependency of staticImports[current] ?? []) {
+      if (seen.has(dependency)) continue;
+      seen.add(dependency);
+      queue.push(dependency);
+    }
+  }
+  return [...seen];
+}
+
+const initialLoads = Object.fromEntries(artifacts.map(({ file }) => {
+  const files = staticClosure(file);
+  return [file, {
+    files,
+    bytes: files.reduce((total, dependency) => total + sizes[dependency].bytes, 0),
+    gzipBytes: files.reduce((total, dependency) => total + sizes[dependency].gzipBytes, 0)
+  }];
+}));
+
 await writeFile(manifestPath, JSON.stringify({
   name: pkg.name,
   version: pkg.version,
-  module: "index.js",
+  module: "standard.js",
   core: "core.js",
   standard: "standard.js",
+  advanced: "advanced-entry.js",
+  objectManager: "object-manager-entry.js",
+  locales: "locales-entry.js",
   controls: "controls.js",
   geo: "geo-entry.js",
   popupContent: "popup-content.js",
@@ -253,5 +299,7 @@ await writeFile(manifestPath, JSON.stringify({
   chunks: chunkFiles,
   global: "orihon.global.js",
   css: "orihon.css",
-  sizes
+  sizes,
+  staticImports,
+  initialLoads
 }, null, 2));

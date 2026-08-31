@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GPUTileLayer } from "../dist/index.js";
+import { GPUTileLayer } from "../dist/full-entry.js";
 
 test("GPUTileLayer webgl backend builds wrapped OSM-style URLs", () => {
   const layer = new GPUTileLayer("https://{s}.tile.example/{z}/{x}/{y}{r}.png", {

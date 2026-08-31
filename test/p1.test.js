@@ -11,7 +11,7 @@ import {
   decodeMVT,
   latLng,
   wmtsTileLayer
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 import { TextLayer } from "../dist/standard.js";
 import { pickLabelAnchor } from "../dist/services/label-layout.js";
 import {

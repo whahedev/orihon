@@ -67,7 +67,7 @@ test("an explicit GPU renderer refuses when no implementation is registered", ()
 
 test("a stopped operation and a call on a dead resource are different errors", async () => {
   const { SuggestProvider, SuggestWidget, objectManager, DestroyedError, OrihonError } =
-    await import("../dist/index.js");
+    await import("../dist/full-entry.js");
 
   // Started before destroy: the operation was cancelled, and the same call on a live
   // provider could still succeed.

@@ -37,7 +37,7 @@ dom.window.HTMLCanvasElement.prototype.toBlob = function(callback) {
 };
 
 const [{ Orihon, CRS, icon, marker }, controls, geo] = await Promise.all([
-  import("../dist/index.js"),
+  import("../dist/full-entry.js"),
   import("orihon/controls"),
   import("orihon/geo")
 ]);
@@ -93,6 +93,10 @@ test("fullscreenControl uses the CSS fallback and localized labels", async () =>
 test("measureControl accumulates map distance and restores behaviors", () => {
   const map = new Orihon(createContainer(), { controls: false });
   const control = controls.measureControl().addTo(map).start();
+  const icon = control.button.querySelector("svg");
+  assert.equal(icon?.getAttribute("viewBox"), "0 0 24 24");
+  assert.equal(icon?.querySelector("rect")?.getAttribute("width"), "18");
+  assert.equal(icon?.querySelector("path")?.getAttribute("d"), "M7 8v4M11 8v2.5M15 8v4M19 8v2.5");
   assert.equal(map.behaviors.isEnabled("drag"), false);
   map.emit("click", { latlng: ({ lat: 0, lng: 0 }) });
   map.emit("click", { latlng: ({ lat: 0, lng: 1 }) });

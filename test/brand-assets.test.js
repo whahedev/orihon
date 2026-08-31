@@ -4,26 +4,27 @@ import { access, readFile } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
 
-const productionAssets = [
+const publishedAssets = [
   "assets/brand/svg/orihon-logo-horizontal.svg",
   "assets/brand/svg/orihon-logo-reversed.svg",
   "assets/brand/svg/orihon-mark.svg",
   "assets/brand/svg/orihon-favicon.svg",
-  "assets/brand/png/orihon-logo-horizontal-600.png",
-  "assets/brand/png/orihon-favicon-180.png",
   "assets/brand/tokens/orihon-tokens.css",
   "assets/brand/tokens/orihon-tokens.json"
 ];
 
 test("brand assets are published through the package", async () => {
   const pkg = JSON.parse(await readFile(new URL("package.json", root), "utf8"));
-  assert.equal(pkg.exports["./brand/*"], "./assets/brand/*");
-  assert.ok(pkg.files.includes("assets/brand"));
-  await Promise.all(productionAssets.map((path) => access(new URL(path, root))));
+  assert.equal(pkg.exports["./brand/svg/*"], "./assets/brand/svg/*");
+  assert.equal(pkg.exports["./brand/tokens/*"], "./assets/brand/tokens/*");
+  assert.equal("./brand/png/*" in pkg.exports, false);
+  assert.ok(pkg.files.includes("assets/brand/svg"));
+  assert.ok(pkg.files.includes("assets/brand/tokens"));
+  await Promise.all(publishedAssets.map((path) => access(new URL(path, root))));
 });
 
 test("published SVG artwork has no active or remote content", async () => {
-  const paths = productionAssets.filter((path) => path.endsWith(".svg"));
+  const paths = publishedAssets.filter((path) => path.endsWith(".svg"));
   const source = (await Promise.all(paths.map((path) => readFile(new URL(path, root), "utf8")))).join("\n");
   assert.doesNotMatch(source, /<script|<foreignObject|javascript:|data:/i);
   assert.doesNotMatch(source, /(?:href|src)=["']https?:/i);

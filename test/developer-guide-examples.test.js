@@ -54,7 +54,7 @@ function freeIdentifiers(code) {
 }
 
 test("every guide example runs in the playground scope", async () => {
-  const root = await import("../dist/index.js");
+  const root = await import("../dist/full-entry.js");
   const optional = {};
   for (const entry of [
     "../dist/feature-source.js", "../dist/draw/index.js", "../dist/controls.js",
@@ -100,7 +100,10 @@ test("every guide example runs in the playground scope", async () => {
 
 test("every guide example imports the names it uses from an entry that exports them", async () => {
   const entryModules = {
-    "orihon": "../dist/index.js",
+    "orihon": "../dist/standard.js",
+    "orihon/advanced": "../dist/advanced-entry.js",
+    "orihon/object-manager": "../dist/object-manager-entry.js",
+    "orihon/locales": "../dist/locales-entry.js",
     "orihon/core": "../dist/core.js",
     "orihon/standard": "../dist/standard.js",
     "orihon/easy": "../dist/easy-entry.js",

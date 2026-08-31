@@ -8,12 +8,13 @@
 
 This is the reference. If you are drawing your first map, start with the [README](../README.md) and the [Easy API guide](./EASY.md); come back here when you need the exact command.
 
-Each table lists the command, the entry point it is imported from, and what it does. The smallest entry that contains a symbol is the one shown — `orihon` re-exports everything below it, so an import from `orihon` always works too.
+Each table lists the command, the entry point it is imported from, and what it does. The smallest entry that contains a symbol is shown. The default `orihon` entry is Standard; Advanced, ObjectManager and extra locales are explicit opt-ins.
 
 ```js
 import { createMap, tileLayer } from "orihon/core";      // map + basemap
 import { marker, geoJSON, polyline } from "orihon/standard";  // everyday GIS
-import { objectManager, heatLayer } from "orihon";       // large data, GPU
+import { heatLayer } from "orihon/advanced";             // GPU and large rendering jobs
+import { objectManager } from "orihon/object-manager";   // high-volume object collections
 ```
 
 ## Contents
@@ -167,7 +168,7 @@ polyline(fromGeoJSONPositions(feature.geometry.coordinates));
 | `wmtsTileLayer(template, options)` | standard | OGC WMTS REST source |
 | `createWMTSFromCapabilities(xml)` | standard | Build that configuration from a GetCapabilities document |
 | `createPMTilesRasterSource(url)` | pmtiles | Raster tiles from a single PMTiles archive |
-| `wTinyLfu(capacity)` | orihon | Cache admission policy used by the tile pipeline |
+| `wTinyLfu(capacity)` | advanced | Cache admission policy used by the tile pipeline |
 
 ```js
 tileLayer("/tiles/{z}/{x}/{y}.png");                       // DOM renderer, the stable default
@@ -191,8 +192,8 @@ Layer methods: `setUrl(template)`, `setOpacity(opacity)`, `redraw()`, `getStats(
 | `circleMarker(center, style)` | standard | Circle measured in screen pixels |
 | `textLayer(features, { text })` | standard | Collision-aware labels |
 | `featureGroup(layers)` | standard | Treat several layers as one for events and bounds |
-| `vectorTileLayer({ provider, style })` | orihon | Vector tiles through a provider |
-| `createMVTProvider(url, options)` | orihon | Mapbox Vector Tile provider |
+| `vectorTileLayer({ provider, style })` | advanced | Vector tiles through a provider |
+| `createMVTProvider(url, options)` | advanced | Mapbox Vector Tile provider |
 
 ```js
 polygon(latLngs([[52.50, 13.38], [52.54, 13.39], [52.53, 13.45], [52.50, 13.38]]), {
@@ -322,19 +323,19 @@ See [FeatureSource](./FEATURE_SOURCE.md) for the full contract.
 
 | Command | Entry | What it does |
 | --- | --- | --- |
-| `objectManager(options)` | orihon | Local manager for tens of thousands to millions of objects |
-| `remoteObjectManager({ loader })` | orihon | The same, loading by viewport |
-| `markerCollection(points, options)` | orihon | A large set of plain markers |
-| `spatialGridIndex(cellSize)` | orihon | Standalone spatial index |
-| `buildClusterIndex(request)` | orihon | Build a cluster hierarchy once |
-| `queryClusterLayout(index, zoom, minPoints)` | orihon | Query that hierarchy per zoom |
-| `buildClusterLayout(request)` | orihon | Both in one call |
-| `preparePointBatch(points)` | orihon | Pack points into typed arrays |
-| `preparePointBatchAsync(points, options)` | orihon | The same without blocking the main thread |
-| `createGeometryWorkerPool(options)` | orihon | Run that packing in workers |
+| `objectManager(options)` | object-manager | Local manager for tens of thousands to millions of objects |
+| `remoteObjectManager({ loader })` | object-manager | The same, loading by viewport |
+| `markerCollection(points, options)` | object-manager | A large set of plain markers |
+| `spatialGridIndex(cellSize)` | advanced | Standalone spatial index |
+| `buildClusterIndex(request)` | advanced | Build a cluster hierarchy once |
+| `queryClusterLayout(index, zoom, minPoints)` | advanced | Query that hierarchy per zoom |
+| `buildClusterLayout(request)` | advanced | Both in one call |
+| `preparePointBatch(points)` | advanced | Pack points into typed arrays |
+| `preparePointBatchAsync(points, options)` | advanced | The same without blocking the main thread |
+| `createGeometryWorkerPool(options)` | advanced | Run that packing in workers |
 
 ```js
-import { objectManager } from "orihon";
+import { objectManager } from "orihon/object-manager";
 
 const manager = objectManager({ clusterize: true, clusterRenderer: "auto", layoutWorker: "auto" }).addTo(map);
 
@@ -348,10 +349,10 @@ console.log(manager.getStats());
 
 | Command | Entry | What it does |
 | --- | --- | --- |
-| `webglPointLayer(points, options)` | orihon | Large point sets in one draw call |
-| `webglSymbolLayer(options)` | orihon | Instanced symbols with rotation and tint |
-| `pathBatch(options)` | orihon | Batched lines |
-| `webglPolygonBatch(options)` | orihon | Batched filled shapes |
+| `webglPointLayer(points, options)` | advanced | Large point sets in one draw call |
+| `webglSymbolLayer(options)` | advanced | Instanced symbols with rotation and tint |
+| `pathBatch(options)` | advanced | Batched lines |
+| `webglPolygonBatch(options)` | advanced | Batched filled shapes |
 
 GPU is opt-in and never silent. Core and Standard stay on DOM, SVG and canvas; the Advanced entry adds these layers for workloads where dataset size or continuous camera stress pays for them.
 
@@ -359,9 +360,9 @@ GPU is opt-in and never silent. Core and Standard stay on DOM, SVG and canvas; t
 
 | Command | Entry | What it does |
 | --- | --- | --- |
-| `heatLayer(points, options)` | orihon | Heatmap, isolines, or both from one scalar field |
-| `buildHeat(points, area, options)` | orihon | The same computation without a map layer |
-| `heatSupport()` | orihon | What the current browser can accelerate |
+| `heatLayer(points, options)` | advanced | Heatmap, isolines, or both from one scalar field |
+| `buildHeat(points, area, options)` | advanced | The same computation without a map layer |
+| `heatSupport()` | advanced | What the current browser can accelerate |
 
 ```js
 const heat = heatLayer(points, { mode: "both", backend: "auto", labels: true, interactive: true }).addTo(map);
@@ -378,12 +379,12 @@ heat.bindTooltip(() => {
 
 | Command | Entry | What it does |
 | --- | --- | --- |
-| `searchProvider(items)` | orihon | Search over a local list |
-| `createSuggestProvider(fetcher, options)` | orihon | Debounced, cancellable suggestions from any source |
-| `createSuggestWidget({ input, provider })` | orihon | Bind that provider to an input element |
-| `routingLayer(options)` | orihon | Draw and manage a route |
-| `createStraightLineRoutingProvider()` | orihon | Straight-line provider for tests and fallbacks |
-| `trafficLayer(options)` | orihon | Traffic overlay |
+| `searchProvider(items)` | advanced | Search over a local list |
+| `createSuggestProvider(fetcher, options)` | advanced | Debounced, cancellable suggestions from any source |
+| `createSuggestWidget({ input, provider })` | advanced | Bind that provider to an input element |
+| `routingLayer(options)` | advanced | Draw and manage a route |
+| `createStraightLineRoutingProvider()` | advanced | Straight-line provider for tests and fallbacks |
+| `trafficLayer(options)` | advanced | Traffic overlay |
 
 Providers are plain functions, so an application can supply a local, commercial or test implementation without changing the layer.
 
@@ -410,8 +411,8 @@ Modes are `point`, `polyline`, `polygon`, `rectangle`, `circle`, `edit`, `delete
 
 | Command | Entry | What it does |
 | --- | --- | --- |
-| `decodeMVT(bytes, tile, options)` | orihon | Decode a Mapbox Vector Tile to GeoJSON features |
-| `createMVTProvider(url, options)` | orihon | Fetch and decode MVT per tile |
+| `decodeMVT(bytes, tile, options)` | advanced | Decode a Mapbox Vector Tile to GeoJSON features |
+| `createMVTProvider(url, options)` | advanced | Fetch and decode MVT per tile |
 | `createPMTilesProvider(url)` | pmtiles | Vector tiles from a PMTiles archive |
 | `deserializePMTilesDirectory(bytes)` | pmtiles | Parse a PMTiles directory |
 | `findPMTilesEntry(directory, tileId)` | pmtiles | Look up one tile |
@@ -426,11 +427,11 @@ Modes are `point`, `polyline`, `polygon`, `rectangle`, `circle`, `edit`, `delete
 
 | Command | Entry | What it does |
 | --- | --- | --- |
-| `offlineTileCache(options)` | orihon | Cache tiles in the browser Cache API |
-| `cache.prefetchTileLayer(layer, { bounds, zooms })` | orihon | Warm an area ahead of time |
-| `performanceInspector(map)` | orihon | Frame, layer and memory diagnostics |
-| `createMapAdapter(map)` | orihon | Framework-agnostic adapter object |
-| `defineOrihonElement(options)` | orihon | Register an `<orihon-map>` custom element |
+| `offlineTileCache(options)` | advanced | Cache tiles in the browser Cache API |
+| `cache.prefetchTileLayer(layer, { bounds, zooms })` | advanced | Warm an area ahead of time |
+| `performanceInspector(map)` | advanced | Frame, layer and memory diagnostics |
+| `createMapAdapter(map)` | advanced | Framework-agnostic adapter object |
+| `defineOrihonElement(options)` | advanced | Register an `<orihon-map>` custom element |
 
 `prefetchTileLayer` refuses a world-wide prefetch: give it `bounds` or explicit `xRange` / `yRange`.
 

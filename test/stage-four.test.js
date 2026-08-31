@@ -10,7 +10,7 @@ import {
   objectManager,
   queryClusterLayout,
   spatialGridIndex
-} from "../dist/index.js";
+} from "../dist/full-entry.js";
 
 test("SpatialGridIndex updates cells and searches only matching records", () => {
   const index = spatialGridIndex(0.5);

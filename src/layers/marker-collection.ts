@@ -363,7 +363,11 @@ export class MarkerCollection extends InteractiveLayer<ResolvedMarkerCollectionO
     svg.setAttribute("viewBox", `0 0 ${map.size.width} ${map.size.height}`);
 
     const area = this.options.viewportCull ? bounds(map.getBounds()).pad(0.12) : null;
-    const visible = new Set(area ? this.index.searchIds(area) : this.index.records.keys());
+    // Straight into the Set: searchIds() would build an array of every visible id first, and this
+    // is the render path, so that array is allocated and thrown away on every frame that redraws.
+    const visible = new Set<number>();
+    if (area) this.index.forEachInBoundsRaw(area, (id) => { visible.add(id); });
+    else for (const id of this.index.records.keys()) visible.add(id);
 
     const buttonIds = new Set<number>();
     for (const id of this._selected) if (visible.has(id)) buttonIds.add(id);

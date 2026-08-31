@@ -145,12 +145,39 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
     const candidates = estimatedCells > this.cells.size * 4
       ? this.records.values()
       : this.#recordsInCells(longitudeRanges, minY, maxY);
+    // Only an antimeridian query has more than one longitude range, and every other query pays for
+    // the general form: a closure, a destructure and a call per candidate, tens of thousands of
+    // times a frame. Hoist the single range into two numbers and compare them directly.
+    const singleRange = longitudeRanges.length === 1;
+    const onlyWest = longitudeRanges[0][0];
+    const onlyEast = longitudeRanges[0][1];
     for (const record of candidates) {
       const { lat, lng } = record.position;
       if (lat < south || lat > north) continue;
-      if (!fullWorld && !longitudeRanges.some(([rangeWest, rangeEast]) => lng >= rangeWest && lng <= rangeEast)) continue;
+      if (!fullWorld) {
+        if (singleRange) {
+          if (lng < onlyWest || lng > onlyEast) continue;
+        } else if (!longitudeRanges.some(([rangeWest, rangeEast]) => lng >= rangeWest && lng <= rangeEast)) {
+          continue;
+        }
+      }
       visit(record);
     }
+  }
+
+  /**
+   * Visit what is inside `bounds` without building anything: no public record, no cloned position,
+   * no result array. `search()` stays the safe copy for callers outside the library, and
+   * `searchIds()` still hands back an array; this is for the paths that consume each hit once —
+   * hit testing, viewport culling, cluster queries — where the intermediate is pure overhead.
+   */
+  forEachInBoundsRaw(
+    value: LatLngBoundsLike,
+    visit: (id: TId, lat: number, lng: number, value: TValue) => void
+  ): void {
+    this.#forEachInBounds(value, (record) => {
+      visit(record.id, record.position.lat, record.position.lng, record.value);
+    });
   }
 
   *#recordsInCells(
@@ -158,7 +185,10 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
     minY: number,
     maxY: number
   ): IterableIterator<StoredRecord<TValue, TId>> {
-    const yielded = new Set<TId>();
+    // A record lives in exactly one cell and each cell is walked once, so the same record can only
+    // come back twice when two longitude ranges overlap it — which is the antimeridian split alone.
+    // Every ordinary query was allocating and filling a Set that could never reject anything.
+    const yielded = longitudeRanges.length > 1 ? new Set<TId>() : null;
     for (const [west, east] of longitudeRanges) {
       const minX = this.#xFor(west);
       const maxX = this.#xFor(east);
@@ -169,8 +199,12 @@ export class SpatialGridIndex<TValue, TId extends SpatialId = SpatialId> {
             const record = this.records.get(cursor);
             if (!record) break;
             const next = record.next;
-            if (!yielded.has(cursor)) {
-              yielded.add(cursor);
+            if (yielded) {
+              if (!yielded.has(cursor)) {
+                yielded.add(cursor);
+                yield record;
+              }
+            } else {
               yield record;
             }
             cursor = next;

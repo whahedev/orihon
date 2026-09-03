@@ -4,6 +4,24 @@
 
 ## Unreleased
 
+- **Added — semantic AI plans now execute through native Orihon model capabilities.**
+  `AICapabilityRegistry` exposes ObjectManager and Route Model operations,
+  `AIAgentRuntime` turns `create_visit_route` into a dependency plan, previews it on an isolated
+  engine fork, and commits the full plan as one revision and one SSE transaction. Semantic routes
+  retain their constraints and reactively recalculate after source objects move or disappear.
+  Compact context, capability discovery, intent preview/commit HTTP endpoints, and the narrow
+  `orihon_plan` model tool keep the command engine as an internal safety boundary instead of making
+  the model orchestrate low-level map mutations.
+
+- **Added — `orihon/ai` turns structured model output into ordinary Orihon layers.** A versioned,
+  JSON-only `SceneSpec` covers markers, polylines, polygons, GeoJSON, raster layers, the camera and
+  basemap without callbacks, DOM values or ambiguous coordinate arrays. Stateful sessions expose
+  nine small commands with stable layer IDs, deep updates, query/fit/remove operations and
+  repairable `{ code, path, message, received }` errors. `createAITool()` binds that session to one
+  provider-neutral `orihon_execute` function definition, including a self-contained command schema
+  and canonical system prompt. The npm package includes both schemas, `llms.txt` and focused AI
+  guides; the new subpath remains outside every existing Core, Standard and Advanced browser bundle.
+
 - **Every bounds query on `SpatialGridIndex` got about a fifth cheaper.** Two costs were paid on
   every query and could only ever matter on one: the cell walk allocated and filled a `Set` to
   reject duplicates, and each candidate went through `longitudeRanges.some(([w, e]) => …)` — a

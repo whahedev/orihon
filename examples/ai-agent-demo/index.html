@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orihon AI Agent Playground</title>
+  <link rel="stylesheet" href="/dist/orihon.css" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="map-panel" aria-label="Карта Orihon">
+      <header class="map-heading">
+        <div>
+          <span class="eyebrow">LIVE MAP</span>
+          <h1>Orihon AI Agent</h1>
+        </div>
+        <div class="connection"><span></span> server + SSE active</div>
+      </header>
+      <div id="map"></div>
+      <div class="map-note">OpenStreetMap · CommandEngine на сервере · ObjectManager в браузере</div>
+    </section>
+
+    <aside class="agent-panel">
+      <section>
+        <span class="eyebrow">AGENT PLAYGROUND</span>
+        <h2>Проверьте команды</h2>
+        <p class="intro">Карта обновляется через HTTP: <code>POST /api/orihon/places</code>, затем <code>POST /api/orihon/intents</code>. Ключ модели для этого не нужен. Кнопка «Через LLM» — отдельный серверный tool loop, если заданы <code>ORIHON_LLM_*</code>.</p>
+      </section>
+
+      <div class="suggestions" aria-label="Готовые запросы">
+        <button data-prompt="deep">Создай маршрут через AI-модели</button>
+        <button data-prompt="scene">Покажи Москву и маршрут</button>
+        <button data-prompt="places">Покажи 15 мест компактно</button>
+        <button data-prompt="route">Рассчитай маршрут движком</button>
+        <button data-prompt="move">Передвинь Кремль севернее</button>
+        <button data-prompt="repair">Допусти ошибку и исправь её</button>
+        <button data-prompt="live">Обнови объекты онлайн</button>
+      </div>
+
+      <form id="prompt-form">
+        <label for="prompt">Запрос пользователя</label>
+        <div class="prompt-row">
+          <input id="prompt" autocomplete="off" value="Покажи Москву и маршрут" />
+          <button type="submit" class="send">Локально</button>
+          <button id="run-model" type="button" class="send model-send">Через LLM</button>
+        </div>
+      </form>
+
+      <details>
+        <summary>Отправить JSON-команду вручную</summary>
+        <textarea id="command-input" spellcheck="false">{
+  "op": "query"
+}</textarea>
+        <button id="execute-json" type="button">orihon_execute</button>
+      </details>
+
+      <section class="state-card" aria-live="polite">
+        <div><span>Статус</span><strong id="status" data-testid="status">Ожидает команду</strong></div>
+        <div><span>AI-слои</span><strong id="layer-count" data-testid="layer-count">0</strong></div>
+        <div><span>Объекты</span><strong id="object-count">0</strong></div>
+        <div><span>Маршруты</span><strong id="route-count">0</strong></div>
+        <div><span>Ревизия</span><strong id="revision">0</strong></div>
+        <div><span>Последняя операция</span><strong id="last-op" data-testid="last-op">—</strong></div>
+        <div><span>Модель</span><strong id="model-status">проверка…</strong></div>
+        <div><span>LLM-токены</span><strong id="model-tokens">—</strong></div>
+      </section>
+
+      <section class="log-section">
+        <div class="log-heading">
+          <h3>Tool-call журнал</h3>
+          <button id="clear-log" type="button">Очистить</button>
+        </div>
+        <div id="log" class="log" data-testid="tool-log"></div>
+      </section>
+    </aside>
+  </main>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

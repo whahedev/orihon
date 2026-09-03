@@ -1,0 +1,49 @@
+# Orihon
+
+Orihon is a TypeScript browser mapping library.
+
+For AI-generated maps prefer `orihon/ai`. It accepts versioned, JSON-only scenes and
+machine-readable commands. For ordinary application code prefer `orihon/easy`.
+
+Imports:
+
+    import { createMap } from "orihon/easy";
+    import { createAISession, applyScene } from "orihon/ai";
+    import "orihon/orihon.css";
+
+Coordinate rules:
+- Orihon AI coordinates are objects: `{ "lat": 55.75, "lng": 37.61 }`.
+- Coordinate arrays are not accepted by the AI API.
+- GeoJSON remains standard longitude-first: `[37.61, 55.75]`.
+
+Scene rules:
+- Use `version: 1`.
+- Every layer has a stable, unique `id`.
+- Layer types are `marker`, `polyline`, `polygon`, `geojson`, and `raster`.
+- Popup and tooltip content is plain text: `{ "text": "Moscow" }`.
+- Functions, DOM nodes, class instances, `undefined`, and non-finite numbers are rejected.
+
+Server/agent rules:
+- `createAICommandEngine()` is headless and owns canonical revisioned JSON state.
+- Prefer `createAIIntentTool(createAIAgentRuntime(engine))` for semantic goals; it plans through
+  registered ObjectManager and Route Model capabilities and commits atomically.
+- `create_visit_route` routes are reactive by default: collection changes trigger engine-side
+  replanning without another model call.
+- `createAIHTTPHandler(engine)` exposes snapshot, command, and SSE endpoints.
+- Semantic HTTP endpoints expose capabilities, compact context, intent preview, and intent commit.
+- `createAIMapProjection(map)` applies server events in the browser.
+- Live domain entities use `objects.*` commands and stable GeoJSON feature IDs.
+- Object deltas flow through `FeatureSource` into `ObjectManager`.
+- Named point maps can use `points.replace` with declarative popups, circular `visual.image`, hover-first `visual.label`, and `viewport.mode:"fit"`.
+- `route.plan` orders an existing point collection and projects its RouteResult through RoutingLayer.
+- `createAIEngineTool(engine, { profile })` supports `full`, `scene`, `objects`, `points`, `routes`, and `readonly` schemas.
+- Engine tool results are compact by default; HTTP and SSE retain complete revisioned events.
+
+Authoritative references:
+- `docs/AI.md`
+- `docs/AI_SYSTEM_PROMPT.md`
+- `schemas/orihon-scene-v1.schema.json`
+- `schemas/orihon-command-v1.schema.json`
+- `schemas/orihon-engine-command-v1.schema.json`
+- `docs/EASY.md`
+- `docs/API.md`

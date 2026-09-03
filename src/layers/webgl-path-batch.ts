@@ -1,14 +1,27 @@
-import { createEl } from "../dom.js";
+import { createEl, listenTap } from "../dom.js";
 import { nonNegativeFinite, rejectLegacyUnit } from "../units.js";
 import { cameraWarpCss } from "../camera.js";
 import { TILE_SIZE, LatLngBounds, latLng, projectMercator01, type LatLngLike } from "../geo.js";
 import { InteractiveLayer } from "../interactive-layer.js";
-import { type LayerOptions } from "../layer.js";
+import { type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import { assertMercator } from "../crs.js";
 import { compileShader, linkProgram, parseCssColor, type RgbColor } from "../webgl-utils.js";
-import type { PathOptions } from "./vector.js";
+import { ringContainsPoint, segmentDistance, type PathOptions } from "./vector.js";
 import { rejectStyleAliases } from "../style-contract.js";
+
+/** Retained per path so the batch can answer a click; the GPU buffer has no feature boundaries. */
+interface WebGLPathRecord {
+  rings: LatLngLike[][];
+  closed: boolean;
+  filled: boolean;
+  strokeWidth: number;
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+  feature?: unknown;
+}
 
 export interface WebGLPathBatchOptions extends LayerOptions, PathOptions {
   className?: string;
@@ -70,6 +83,8 @@ export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
   private ext: InstancedExt | null = null;
   /** Per-segment: ax, ay, bx, by (normalized mercator). */
   private _segBuf = new Float32Array(0);
+  private _records: WebGLPathRecord[] = [];
+  private _interactionUnsub: (() => void) | null = null;
   private _segmentCount = 0;
   private _bufferDirty = true;
   private _gpuBytes = 0;
@@ -116,6 +131,48 @@ export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
     return this._segmentCount;
   }
 
+  /**
+   * Hit test over the paths this batch drew.
+   *
+   * The GPU knows nothing about features, so the test runs on the retained records: reject on the
+   * box, then the same even-odd and stroke-distance rules the SVG and canvas paths use, so a
+   * consumer reads `hit.feature` the same way whatever renderer the layer happens to have picked.
+   */
+  queryHit(target: { x: number; y: number }, options: ResolvedQueryOptions): QueryHit | null {
+    if (!this.map || !this.options.interactive) return null;
+    for (let index = this._records.length - 1; index >= 0; index -= 1) {
+      const record = this._records[index];
+      const tolerance = options.tolerance + record.strokeWidth / 2;
+      const a = this.map.latLngToContainerPoint({ lat: record.minLat, lng: record.minLng });
+      const b = this.map.latLngToContainerPoint({ lat: record.maxLat, lng: record.maxLng });
+      const padding = tolerance + 1;
+      if (target.x < Math.min(a.x, b.x) - padding || target.x > Math.max(a.x, b.x) + padding
+        || target.y < Math.min(a.y, b.y) - padding || target.y > Math.max(a.y, b.y) + padding) continue;
+
+      const projected = record.rings.map((ring) => ring.map((value) => this.map!.latLngToContainerPoint(value)));
+      let inside = false;
+      if (record.filled) for (const ring of projected) if (ringContainsPoint(target, ring)) inside = !inside;
+      const onStroke = projected.some((ring) => {
+        const segments = record.closed ? ring.length : ring.length - 1;
+        for (let segment = 0; segment < segments; segment += 1) {
+          if (segmentDistance(target, ring[segment], ring[(segment + 1) % ring.length]) <= tolerance) return true;
+        }
+        return false;
+      });
+      if (!inside && !onStroke) continue;
+      const id = (record.feature as { id?: string | number } | undefined)?.id;
+      return {
+        layer: this,
+        latlng: this.map.containerPointToLatLng(target),
+        source: "webgl",
+        index,
+        ...(id !== undefined ? { id } : {}),
+        feature: record.feature
+      };
+    }
+    return null;
+  }
+
   getBounds(): LatLngBounds {
     const bounds = new LatLngBounds();
     if (!Number.isFinite(this._minLat)) return bounds;
@@ -126,6 +183,7 @@ export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
 
   clearPaths(): this {
     this._segBuf = new Float32Array(0);
+    this._records = [];
     this._segmentCount = 0;
     this._bufferDirty = true;
     this._minLat = Number.POSITIVE_INFINITY;
@@ -138,10 +196,25 @@ export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
     return this;
   }
 
-  addPath(rings: LatLngLike[][], _closed = false, style: PathOptions = {}): this {
+  addPath(rings: LatLngLike[][], closed = false, style: PathOptions = {}, feature?: unknown): this {
     if (style.stroke) this.color = parseCssColor(String(style.stroke), { r: 15, g: 118, b: 110 });
     if (style.strokeWidth != null) this.writableOptions.strokeWidth = style.strokeWidth;
     if (style.strokeOpacity != null) this.writableOptions.strokeOpacity = style.strokeOpacity;
+
+    // The GPU buffer is one flat run of segments with no feature boundaries in it, so hit testing
+    // needs its own record. Kept beside the buffer rather than inside it: the draw path stays
+    // untouched, and the cost is a reference to the rings plus a box per path.
+    const record: WebGLPathRecord = {
+      rings,
+      closed,
+      filled: closed && (style.fill ?? this.options.fill) !== "none",
+      strokeWidth: Number(style.strokeWidth ?? this.options.strokeWidth ?? 1.5),
+      minLat: Number.POSITIVE_INFINITY,
+      maxLat: Number.NEGATIVE_INFINITY,
+      minLng: Number.POSITIVE_INFINITY,
+      maxLng: Number.NEGATIVE_INFINITY,
+      feature
+    };
 
     for (const ring of rings) {
       if (ring.length < 2) continue;
@@ -158,6 +231,10 @@ export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
         if (p.lat > this._maxLat) this._maxLat = p.lat;
         if (p.lng < this._minLng) this._minLng = p.lng;
         if (p.lng > this._maxLng) this._maxLng = p.lng;
+        if (p.lat < record.minLat) record.minLat = p.lat;
+        if (p.lat > record.maxLat) record.maxLat = p.lat;
+        if (p.lng < record.minLng) record.minLng = p.lng;
+        if (p.lng > record.maxLng) record.maxLng = p.lng;
         if (i > 0) {
           buf[write++] = prevX;
           buf[write++] = prevY;
@@ -169,6 +246,7 @@ export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
       }
       this._segmentCount = write / 4;
     }
+    if (Number.isFinite(record.minLat)) this._records.push(record);
     this._bufferDirty = true;
     this._drawnZoom = Number.NaN;
     this._forceGpu = true;
@@ -185,7 +263,7 @@ export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
     this.canvas.style.position = "absolute";
     this.canvas.style.left = "0";
     this.canvas.style.top = "0";
-    this.canvas.style.pointerEvents = "none";
+    this.canvas.style.pointerEvents = this.options.interactive ? "auto" : "none";
     this.canvas.style.willChange = "transform";
     this.gl =
       this.canvas.getContext("webgl", {
@@ -217,17 +295,53 @@ export class WebGLPathBatch extends InteractiveLayer<ResolvedOptions> {
       this.canvas.style.position = "absolute";
       this.canvas.style.left = "0";
       this.canvas.style.top = "0";
-      this.canvas.style.pointerEvents = "none";
+      this.canvas.style.pointerEvents = this.options.interactive ? "auto" : "none";
       this.canvas.style.willChange = "transform";
       this.renderer = "canvas";
       this.gl = null;
     } else {
       this.renderer = "none";
     }
+    this.#syncInteraction();
     this.render();
   }
 
+  /**
+   * Click delivery for the batch.
+   *
+   * Mirrors `CanvasPathBatch`: one tap listener on the canvas, one `queryHit`, and a `click` event
+   * carrying the feature — which is what lets `bindPopup` on a GeoJSON layer work in this renderer
+   * at all. Nothing is attached when the layer is not interactive.
+   */
+  #syncInteraction(): void {
+    this._interactionUnsub?.();
+    this._interactionUnsub = null;
+    if (!this.canvas) return;
+    // Without this class the map takes pointer capture on pointerdown, which retargets pointerup
+    // and click to the container — the tap below would never fire.
+    this.canvas.classList.toggle("oh-interactive", this.options.interactive === true);
+    if (!this.options.interactive) return;
+    this._interactionUnsub = listenTap(this.canvas, (event) => {
+      if (!this.map || !this.canvas) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const hit = this.queryHit(
+        { x: event.clientX - rect.left, y: event.clientY - rect.top },
+        { tolerance: 8, layers: [this], pane: "", limit: 1 }
+      );
+      if (!hit) return;
+      event.stopPropagation();
+      this.emit("click", {
+        originalEvent: event,
+        latlng: hit.latlng,
+        feature: hit.feature,
+        index: hit.index
+      });
+    });
+  }
+
   override onRemove(): void {
+    this._interactionUnsub?.();
+    this._interactionUnsub = null;
     if (this._redrawFrame && typeof cancelAnimationFrame === "function") {
       cancelAnimationFrame(this._redrawFrame);
       this._redrawFrame = 0;

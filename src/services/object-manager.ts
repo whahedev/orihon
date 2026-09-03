@@ -4,7 +4,7 @@ import type { FeatureSourceChange, ReadonlyFeatureSource } from "../source-types
 import { CRSCompatibilityError } from "../crs.js";
 import { rafThrottle } from "../dom.js";
 import { ClusterCanvasLayer, clusterCanvasLayer } from "../layers/cluster-canvas-layer.js";
-import { DivIcon, type MarkerIcon } from "../layers/icon.js";
+import { DivIcon, Icon, type MarkerIcon } from "../layers/icon.js";
 import { Marker, validateMarkerOptions, type MarkerOptions } from "../layers/marker.js";
 import type { GeoJSONFeature } from "../geojson-types.js";
 import { Polyline, polyline } from "../layers/vector.js";
@@ -64,6 +64,7 @@ import {
   type ObjectCollisionMode,
   type ObjectGradientStop,
   type ObjectId,
+  type ObjectImageStyle,
   type ObjectLabelStyle,
   type ObjectLineStyle,
   type ObjectPolygonStyle,
@@ -85,6 +86,7 @@ export type {
 export type {
   ObjectCollisionMode,
   ObjectGradientStop,
+  ObjectImageStyle,
   ObjectLabelStyle,
   ObjectLineStyle,
   ObjectPolygonStyle,
@@ -146,6 +148,7 @@ interface ResolvedObjectStyle {
   opacity: number;
   size: number;
   icon: string | null;
+  image: ObjectImageStyle | null;
   iconTint: string | null;
   rotation: number;
   visible: boolean;
@@ -502,6 +505,10 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
   private _hoveredId: ObjectId | null = null;
   private readonly objectStates = new Map<ObjectId, ObjectState>();
   private _styleResolver: ObjectStyleResolver | null = null;
+  /** Last data-driven image installed on each DOM marker. */
+  private readonly _domImageKeys = new Map<ObjectId, string>();
+  /** Last hover-only label bound through the native Tooltip API. */
+  private readonly _domTooltipKeys = new Map<ObjectId, string>();
   private _styleZoom: number | null = null;
   /** Nested beginBulk()/endBulk() depth — suppress per-chunk invalidate+render. */
   private _bulkDepth = 0;
@@ -2273,6 +2280,8 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       if (records.has(id)) continue;
       marker.remove();
       this.markers.delete(id);
+      this._domImageKeys.delete(id);
+      this._domTooltipKeys.delete(id);
     }
     for (const [id, record] of records) {
       const current = this.markers.get(id);
@@ -2325,6 +2334,37 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     el.classList.toggle("oh-om-hover", hovered);
     if (!this._styleResolver) return;
     const resolved = this.#resolveObjectStyle(id, object, "dom");
+    if (resolved.image) {
+      const image = resolved.image;
+      const key = JSON.stringify([image.url, image.alt, image.shape, image.fit, image.borderColor, image.borderWidth, image.zIndexOffset, resolved.size]);
+      if (this._domImageKeys.get(id) !== key) {
+        const size = Math.max(4, Math.round(resolved.size));
+        marker.setIcon(new Icon({
+          iconUrl: image.url,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+          alt: image.alt || String(object.properties?.title || "Map marker"),
+          shape: image.shape ?? "circle",
+          fit: image.fit ?? "cover",
+          borderColor: image.borderColor ?? "#ffffff",
+          borderWidth: image.borderWidth ?? 2
+        }));
+        marker.setZIndexOffset(Number.isFinite(Number(image.zIndexOffset)) ? Number(image.zIndexOffset) : 1000);
+        this._domImageKeys.set(id, key);
+      }
+    } else if (this._domImageKeys.delete(id)) {
+      const base = this.options.marker;
+      marker.setZIndexOffset(Number(base.zIndexOffset) || 0);
+      if (base.icon) marker.setIcon(base.icon);
+      else if (base.content !== undefined) marker.setContent(base.content);
+      else marker.setAppearance({
+        shape: base.shape,
+        color: base.color,
+        strokeColor: base.strokeColor,
+        size: base.size,
+        strokeWidth: base.strokeWidth
+      });
+    }
     el.style.setProperty("--oh-om-color", resolved.color);
     el.style.setProperty("--oh-marker-fill", resolved.color);
     el.style.opacity = String(resolved.opacity);
@@ -2332,6 +2372,22 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     if (pin) {
       pin.style.setProperty("--oh-marker-fill", resolved.color);
       pin.style.setProperty("--oh-marker-size", `${resolved.size}px`);
+    }
+    const hoverLabel = resolved.label?.display === "hover" ? resolved.label : null;
+    if (hoverLabel) {
+      const rawOffset = hoverLabel.offset ?? [0, -(resolved.size / 2 + 8)];
+      const offset: [number, number] = [rawOffset[0], rawOffset[1]];
+      const key = JSON.stringify([hoverLabel.text, offset]);
+      if (this._domTooltipKeys.get(id) !== key) {
+        marker.bindTooltip(hoverLabel.text, {
+          permanent: false,
+          direction: "top",
+          offset
+        });
+        this._domTooltipKeys.set(id, key);
+      }
+    } else if (this._domTooltipKeys.delete(id)) {
+      marker.unbindTooltip();
     }
   }
 
@@ -3370,6 +3426,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
       fillOpacity: defaults.fillOpacity ?? DEFAULT_OBJECT_OPACITY,
       size: defaults.size ?? DEFAULT_OBJECT_SIZE,
       icon: null,
+      image: null,
       rotation: 0,
       visible: true,
       label: null,
@@ -3387,6 +3444,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
         if (custom.fillOpacity !== undefined) merged.fillOpacity = custom.fillOpacity;
         if (custom.size !== undefined) merged.size = custom.size;
         if (custom.icon !== undefined) merged.icon = custom.icon;
+        if (custom.image !== undefined) merged.image = custom.image;
         if (custom.iconTint !== undefined) merged.iconTint = custom.iconTint;
         if (custom.rotation !== undefined) merged.rotation = custom.rotation;
         if (custom.visible !== undefined) merged.visible = custom.visible;
@@ -3610,7 +3668,7 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
             });
           }
         }
-        if (resolved.label && this.map) {
+        if (resolved.label && resolved.label.display !== "hover" && this.map) {
           const zoom = this.map.zoom;
           if (
             (resolved.label.minZoom != null && zoom < resolved.label.minZoom) ||
@@ -4078,11 +4136,15 @@ export class ObjectManager<TEvents extends object = ObjectManagerEventMap> exten
     const marker = this.markers.get(id);
     marker?.remove();
     this.markers.delete(id);
+    this._domImageKeys.delete(id);
+    this._domTooltipKeys.delete(id);
   }
 
   #clearObjectMarkers(): void {
     for (const marker of this.markers.values()) marker.remove();
     this.markers.clear();
+    this._domImageKeys.clear();
+    this._domTooltipKeys.clear();
   }
 
   #clearDomClusters(): void {
@@ -4205,6 +4267,7 @@ function normalizeResolvedStyle(style: ObjectStyle): ResolvedObjectStyle {
     opacity,
     size,
     icon: style.icon ?? null,
+    image: style.image ?? null,
     iconTint: typeof style.iconTint === "string" && style.iconTint.trim() ? style.iconTint : null,
     rotation,
     visible: style.visible !== false,

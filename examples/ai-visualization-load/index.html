@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orihon AI · Visualization Load Test</title>
+  <link rel="stylesheet" href="/dist/orihon.css" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main>
+    <section class="map-shell" aria-label="Нагрузочная карта Orihon">
+      <div id="map"></div>
+      <header class="map-title">
+        <span>ORIHON / AI</span>
+        <h1>Visualization Load Test</h1>
+        <p>Semantic intent → Visualization Model → ObjectManager</p>
+      </header>
+    </section>
+
+    <aside>
+      <section>
+        <span class="eyebrow">СЦЕНАРИЙ</span>
+        <h2>Массовая визуализация</h2>
+        <p>Короткий AI-intent создаёт данные внутри движка. Модель не генерирует тысячи GeoJSON-объектов и не рассчитывает маршрут.</p>
+      </section>
+
+      <form id="load-form">
+        <label>Объекты
+          <select id="object-count">
+            <option value="1000">1 000</option>
+            <option value="5000">5 000</option>
+            <option value="10000" selected>10 000</option>
+            <option value="25000">25 000</option>
+          </select>
+        </label>
+        <label>Остановки маршрута
+          <input id="route-stops" type="number" min="2" max="100" value="60" />
+        </label>
+        <label>Обновлений за тик
+          <select id="update-count">
+            <option value="250">250</option>
+            <option value="1000" selected>1 000</option>
+            <option value="2500">2 500</option>
+            <option value="5000">5 000</option>
+          </select>
+        </label>
+        <div class="actions">
+          <button class="primary" type="submit">Создать сцену</button>
+          <button id="start-live" type="button">Запустить поток</button>
+          <button id="stop-live" type="button" disabled>Остановить</button>
+        </div>
+      </form>
+
+      <section class="metrics" aria-live="polite">
+        <div><span>Статус</span><strong id="status">Ожидание</strong></div>
+        <div><span>Ревизия</span><strong id="revision">0</strong></div>
+        <div><span>Объекты</span><strong id="objects">0</strong></div>
+        <div><span>Маршрут</span><strong id="route">0 остановок</strong></div>
+        <div><span>Renderer</span><strong id="renderer">—</strong></div>
+        <div><span>FPS</span><strong id="fps">—</strong></div>
+        <div><span>Последний commit</span><strong id="commit-ms">—</strong></div>
+        <div><span>Поток</span><strong id="updates-rate">0 объектов/с</strong></div>
+      </section>
+
+      <section class="token-card">
+        <span class="eyebrow">ТОКЕНЫ · O200K_BASE</span>
+        <div><span>Semantic intent</span><strong id="intent-tokens">—</strong></div>
+        <div><span>Schema + prompt</span><strong id="schema-tokens">—</strong></div>
+        <div><span>Сырые JSON-команды</span><strong id="raw-tokens">—</strong></div>
+        <p id="token-saving">Локальный точный замер, включая schema + system prompt.</p>
+      </section>
+
+      <pre id="log" aria-label="Журнал нагрузочного теста"></pre>
+    </aside>
+  </main>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

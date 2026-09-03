@@ -1,0 +1,165 @@
+{
+  "remote": "legacy",
+  "branch": "master",
+  "source_remote": "origin",
+  "notes": "One step per calendar day on orihon-legacy. Take tree from tip_sha, set package.json (and lock) version, commit with message, push. Run: node scripts/apply-legacy-v2-step.mjs",
+  "completed": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "last": {
+    "day": 21,
+    "version": "2.0.1",
+    "sha": "f9e6277",
+    "tip_sha": "1238de6",
+    "at": "2026-08-30T09:49:16.247Z",
+    "dating": "backdated from 2026-08-30 backwards one day per step"
+  },
+  "steps": [
+    {
+      "day": 1,
+      "version": "1.1.0",
+      "tip_sha": "16fcc5e",
+      "message": "refactor: restructure the app for the next major surface"
+    },
+    {
+      "day": 2,
+      "version": "1.2.0",
+      "tip_sha": "5126449",
+      "message": "feat: tighten public API consistency and lifecycle safety"
+    },
+    {
+      "day": 3,
+      "version": "1.2.1",
+      "tip_sha": "cb9205d",
+      "message": "fix: align CI and browser smoke with the new layout"
+    },
+    {
+      "day": 4,
+      "version": "1.3.0",
+      "tip_sha": "0d0c237",
+      "message": "feat!: require named geographic coordinates"
+    },
+    {
+      "day": 5,
+      "version": "1.4.0",
+      "tip_sha": "c0d642e",
+      "message": "feat!: make time and radius units explicit"
+    },
+    {
+      "day": 6,
+      "version": "1.5.0",
+      "tip_sha": "3b575ec",
+      "message": "fix!: make remote reload awaitable and lifecycle-safe"
+    },
+    {
+      "day": 7,
+      "version": "1.6.0",
+      "tip_sha": "17b0377",
+      "message": "fix!: make Draw and ObjectManager destruction terminal"
+    },
+    {
+      "day": 8,
+      "version": "1.7.0",
+      "tip_sha": "5aae19b",
+      "message": "fix!: reject conflicting visual and object-manager modes"
+    },
+    {
+      "day": 9,
+      "version": "1.8.0",
+      "tip_sha": "080c58e",
+      "message": "feat!: type layer, overlay and subscription events"
+    },
+    {
+      "day": 10,
+      "version": "1.9.0",
+      "tip_sha": "bb391e9",
+      "message": "feat!: flatten events and finish the DX API cleanup"
+    },
+    {
+      "day": 11,
+      "version": "1.10.0",
+      "tip_sha": "eb09273",
+      "message": "feat!: make capabilities follow arguments, not import order"
+    },
+    {
+      "day": 12,
+      "version": "1.11.0",
+      "tip_sha": "0549cb4",
+      "message": "feat!: require named renderers and close writable live state"
+    },
+    {
+      "day": 13,
+      "version": "1.12.0",
+      "tip_sha": "66c063a",
+      "message": "feat!: split setView from updateView; name camera animation"
+    },
+    {
+      "day": 14,
+      "version": "1.13.0",
+      "tip_sha": "b03be9c",
+      "message": "feat!: remove LatLng.toArray()"
+    },
+    {
+      "day": 15,
+      "version": "1.14.0",
+      "tip_sha": "3a04d0d",
+      "message": "refactor!: bind overlays by import; separate cancel from destroy"
+    },
+    {
+      "day": 16,
+      "version": "1.15.0",
+      "tip_sha": "9f7cea3",
+      "message": "fix: repair demos and WebGL layers after the API break"
+    },
+    {
+      "day": 17,
+      "version": "1.16.0",
+      "tip_sha": "efdd430",
+      "message": "feat: name coordinate order once; warn on zero-height maps"
+    },
+    {
+      "day": 18,
+      "version": "1.17.0",
+      "tip_sha": "98c045c",
+      "message": "docs: rewrite API reference, README and guide catalogue"
+    },
+    {
+      "day": 19,
+      "version": "1.18.0",
+      "tip_sha": "06babc0",
+      "message": "feat: mean heat, overlay rotation, draw recordEdit; fix demos"
+    },
+    {
+      "day": 20,
+      "version": "2.0.0",
+      "tip_sha": "e93ae1b",
+      "message": "release: Orihon Maps 2.0.0"
+    },
+    {
+      "day": 21,
+      "version": "2.0.1",
+      "tip_sha": "1238de6",
+      "message": "fix: keep WebGL points on their coordinates while zooming"
+    }
+  ]
+}

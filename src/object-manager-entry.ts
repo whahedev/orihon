@@ -30,6 +30,7 @@ export type {
   ObjectTrailStyle,
   ObjectCollisionMode,
   ObjectGradientStop,
+  ObjectImageStyle,
   ObjectSearchOptions,
   ObjectSearchResult,
   ClusterPropertiesConfig,

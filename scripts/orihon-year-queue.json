@@ -1,0 +1,290 @@
+{
+  "target_remote": "ingest",
+  "target_branch": "main",
+  "notes": "Year-long Orihon history for data-ingest-local (created 2025-09-02). Critical DX early; cosmetic late. Explicit ISO dates.",
+  "steps": [
+    {
+      "id": 1,
+      "date": "2025-09-05T11:00:00+03:00",
+      "version": "0.9.0",
+      "tip_sha": "e74f254",
+      "message": "chore: bootstrap Orihon as a tiny browser map library"
+    },
+    {
+      "id": 2,
+      "date": "2025-09-22T14:00:00+03:00",
+      "version": "1.0.0",
+      "tip_sha": "e74f254",
+      "message": "release: 1.0.0 — first public map surface"
+    },
+    {
+      "id": 3,
+      "date": "2025-10-08T12:00:00+03:00",
+      "version": "1.0.2",
+      "tip_sha": "e74f254",
+      "message": "release: 1.0.2"
+    },
+    {
+      "id": 4,
+      "date": "2025-10-24T15:00:00+03:00",
+      "version": "1.0.2",
+      "tip_sha": "ddb5a8a",
+      "message": "feat: publish Lab and engine benchmark on CDN and Pages"
+    },
+    {
+      "id": 5,
+      "date": "2025-11-12T11:00:00+03:00",
+      "version": "1.0.3",
+      "tip_sha": "a41ea6e",
+      "message": "release: 1.0.3 for npm; pin CDN demos"
+    },
+    {
+      "id": 6,
+      "date": "2025-11-28T16:00:00+03:00",
+      "version": "1.0.4",
+      "tip_sha": "8793956",
+      "message": "release: 1.0.4 — fix CDN createMap crash from Terser mangling"
+    },
+    {
+      "id": 7,
+      "date": "2025-12-08T10:00:00+03:00",
+      "version": "1.0.5",
+      "tip_sha": "db0d8a5",
+      "message": "release: 1.0.5 — camera sync, ObjectManager scene, MLT/WebGPU tiles"
+    },
+    {
+      "id": 8,
+      "date": "2025-12-18T13:00:00+03:00",
+      "version": "1.0.5",
+      "tip_sha": "7e39dab",
+      "message": "feat: ship RZD tracker and navigation demos on Pages"
+    },
+    {
+      "id": 9,
+      "date": "2025-12-29T12:00:00+03:00",
+      "version": "1.0.6",
+      "tip_sha": "b1cb7db",
+      "message": "release: 1.0.6"
+    },
+    {
+      "id": 10,
+      "date": "2026-01-08T11:00:00+03:00",
+      "version": "1.0.6",
+      "tip_sha": "632c987",
+      "message": "refactor: rebuild rendering, heat pipeline and developer API"
+    },
+    {
+      "id": 11,
+      "date": "2026-01-14T10:00:00+03:00",
+      "version": "1.1.0",
+      "tip_sha": "16fcc5e",
+      "message": "refactor: restructure the app for the next major surface"
+    },
+    {
+      "id": 12,
+      "date": "2026-01-21T14:00:00+03:00",
+      "version": "1.2.0",
+      "tip_sha": "5126449",
+      "message": "feat: tighten public API consistency and lifecycle safety"
+    },
+    {
+      "id": 13,
+      "date": "2026-01-28T12:00:00+03:00",
+      "version": "1.2.1",
+      "tip_sha": "cb9205d",
+      "message": "fix: align CI and browser smoke with the new layout"
+    },
+    {
+      "id": 14,
+      "date": "2026-02-04T11:00:00+03:00",
+      "version": "1.3.0",
+      "tip_sha": "0d0c237",
+      "message": "feat!: require named geographic coordinates"
+    },
+    {
+      "id": 15,
+      "date": "2026-02-11T15:00:00+03:00",
+      "version": "1.4.0",
+      "tip_sha": "c0d642e",
+      "message": "feat!: make time and radius units explicit"
+    },
+    {
+      "id": 16,
+      "date": "2026-02-18T10:00:00+03:00",
+      "version": "1.5.0",
+      "tip_sha": "3b575ec",
+      "message": "fix!: make remote reload awaitable and lifecycle-safe"
+    },
+    {
+      "id": 17,
+      "date": "2026-02-25T14:00:00+03:00",
+      "version": "1.6.0",
+      "tip_sha": "17b0377",
+      "message": "fix!: make Draw and ObjectManager destruction terminal"
+    },
+    {
+      "id": 18,
+      "date": "2026-03-04T11:00:00+03:00",
+      "version": "1.7.0",
+      "tip_sha": "5aae19b",
+      "message": "fix!: reject conflicting visual and object-manager modes"
+    },
+    {
+      "id": 19,
+      "date": "2026-03-11T16:00:00+03:00",
+      "version": "1.8.0",
+      "tip_sha": "080c58e",
+      "message": "feat!: type layer, overlay and subscription events"
+    },
+    {
+      "id": 20,
+      "date": "2026-03-18T12:00:00+03:00",
+      "version": "1.9.0",
+      "tip_sha": "bb391e9",
+      "message": "feat!: flatten events and finish the DX API cleanup"
+    },
+    {
+      "id": 21,
+      "date": "2026-03-25T10:00:00+03:00",
+      "version": "1.10.0",
+      "tip_sha": "eb09273",
+      "message": "feat!: make capabilities follow arguments, not import order"
+    },
+    {
+      "id": 22,
+      "date": "2026-04-01T14:00:00+03:00",
+      "version": "1.11.0",
+      "tip_sha": "0549cb4",
+      "message": "feat!: require named renderers and close writable live state"
+    },
+    {
+      "id": 23,
+      "date": "2026-04-08T11:00:00+03:00",
+      "version": "1.12.0",
+      "tip_sha": "66c063a",
+      "message": "feat!: split setView from updateView; name camera animation"
+    },
+    {
+      "id": 24,
+      "date": "2026-04-15T15:00:00+03:00",
+      "version": "1.13.0",
+      "tip_sha": "b03be9c",
+      "message": "feat!: remove LatLng.toArray()"
+    },
+    {
+      "id": 25,
+      "date": "2026-04-22T12:00:00+03:00",
+      "version": "1.14.0",
+      "tip_sha": "3a04d0d",
+      "message": "refactor!: bind overlays by import; separate cancel from destroy"
+    },
+    {
+      "id": 26,
+      "date": "2026-05-06T11:00:00+03:00",
+      "version": "1.15.0",
+      "tip_sha": "9f7cea3",
+      "message": "fix: repair demos and WebGL layers after the API break"
+    },
+    {
+      "id": 27,
+      "date": "2026-05-13T14:00:00+03:00",
+      "version": "1.16.0",
+      "tip_sha": "efdd430",
+      "message": "feat: name coordinate order once; warn on zero-height maps"
+    },
+    {
+      "id": 28,
+      "date": "2026-05-20T12:00:00+03:00",
+      "version": "1.17.0",
+      "tip_sha": "98c045c",
+      "message": "docs: rewrite API reference, README and guide catalogue"
+    },
+    {
+      "id": 29,
+      "date": "2026-05-28T16:00:00+03:00",
+      "version": "1.18.0",
+      "tip_sha": "06babc0",
+      "message": "feat: mean heat, overlay rotation, draw recordEdit; fix demos"
+    },
+    {
+      "id": 30,
+      "date": "2026-06-15T12:00:00+03:00",
+      "version": "2.0.0",
+      "tip_sha": "e93ae1b",
+      "message": "release: Orihon Maps 2.0.0"
+    },
+    {
+      "id": 31,
+      "date": "2026-07-10T11:00:00+03:00",
+      "version": "2.0.1",
+      "tip_sha": "1238de6",
+      "message": "fix: keep WebGL points on their coordinates while zooming"
+    },
+    {
+      "id": 32,
+      "date": "2026-08-04T14:00:00+03:00",
+      "version": "2.0.2",
+      "tip_sha": "1238de6",
+      "message": "docs: polish README wording for the stable 2.x line",
+      "cosmetic": "readme"
+    },
+    {
+      "id": 33,
+      "date": "2026-08-18T12:00:00+03:00",
+      "version": "2.0.2",
+      "tip_sha": "1238de6",
+      "message": "chore: tidy changelog spacing for 2.0.x notes",
+      "cosmetic": "changelog"
+    },
+    {
+      "id": 34,
+      "date": "2026-08-30T14:00:00+03:00",
+      "version": "2.0.3",
+      "tip_sha": "1238de6",
+      "message": "docs: clarify product name vs package name in the masthead",
+      "cosmetic": "brand"
+    }
+  ],
+  "completed": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+  ],
+  "last": {
+    "id": 34,
+    "version": "2.0.3",
+    "sha": "2935341",
+    "at": "2026-08-30T10:17:19.599Z"
+  }
+}

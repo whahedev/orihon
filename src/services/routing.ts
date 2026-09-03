@@ -90,13 +90,7 @@ export class RoutingLayer extends FeatureGroup<RoutingEventMap> {
         });
       });
       operation.throwIfAborted();
-      for (const route of result ?? []) {
-        rejectLegacyUnit(route, "duration", "durationMs");
-        if (route.durationMs !== undefined) nonNegativeFinite(route.durationMs, "durationMs");
-      }
-      this.routes = result || [];
-      this.selectedIndex = 0;
-      this.#renderRoutes();
+      this.setRoutes(result || []);
       if (normalized.length >= 2) this.emit("load", { routes: this.routes, waypoints: normalized });
       return this.routes;
     } catch (error) {
@@ -130,6 +124,24 @@ export class RoutingLayer extends FeatureGroup<RoutingEventMap> {
     this.selectedIndex = Math.floor(index);
     this.#renderRoutes();
     this.emit("select", { index: this.selectedIndex, route: this.routes[this.selectedIndex] });
+    return this;
+  }
+
+  /** Install already computed provider results, for snapshots, caches and server-side planners. */
+  setRoutes(routes: readonly RouteResult[], selectedIndex = 0): this {
+    for (const route of routes) {
+      rejectLegacyUnit(route, "duration", "durationMs");
+      if (route.durationMs !== undefined) nonNegativeFinite(route.durationMs, "durationMs");
+    }
+    this.routes = routes.map((route) => ({
+      ...route,
+      coordinates: [...route.coordinates],
+      ...(route.properties ? { properties: { ...route.properties } } : {})
+    }));
+    this.selectedIndex = this.routes.length === 0
+      ? 0
+      : Math.min(Math.max(0, Math.floor(selectedIndex)), this.routes.length - 1);
+    this.#renderRoutes();
     return this;
   }
 

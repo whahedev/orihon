@@ -169,7 +169,7 @@ void destroyed;
 import { icon, type Icon, type DivIcon, type MarkerOptions, type ObjectManager as LocalManager, type RemoteObjectManager, type MarkerCollection, type UnifiedObjectManagerOptions } from "../../src/full-entry.js";
 import { createMap as createEasyMap, type EasyMarkerOptions } from "../../src/easy-entry.js";
 import type { MarkerProps } from "../../src/react/layers.js";
-const imageIcon: Icon = icon({ iconUrl: "pin.png" });
+const imageIcon: Icon = icon({ iconUrl: "pin.png", shape: "circle", fit: "cover", borderColor: "white", borderWidth: 3 });
 const textIcon: DivIcon = icon({ content: "" });
 marker(namedPosition, { icon: imageIcon });
 marker(namedPosition, { content: 0 }).setContent("").setIcon(null).setAppearance({ shape: "circle" });

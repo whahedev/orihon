@@ -174,6 +174,9 @@ export class CanvasPathBatch extends InteractiveLayer<CanvasPathBatchOptions, Ca
     if (!this.map || !this.options.interactive) return null;
     for (let recordIndex = this.records.length - 1; recordIndex >= 0; recordIndex--) {
       const record = this.records[recordIndex];
+      // Reject on the bounding box the record already carries before projecting its rings: two
+      // corner projections against every vertex of every record, on every click.
+      if (!this.#boxCouldContain(record, target, options.tolerance)) continue;
       const rings = record.geodesicRings && this.map.crs.code === "EPSG:3857" ? record.geodesicRings : record.rings;
       const projected = rings.map((ring) => Array.from({ length: ring.lat.length }, (_, index) =>
         this.map!.latLngToContainerPoint({ lat: ring.lat[index], lng: ring.lng[index] })
@@ -190,15 +193,37 @@ export class CanvasPathBatch extends InteractiveLayer<CanvasPathBatchOptions, Ca
         }
         return false;
       });
-      if (inside || onStroke) return {
-        layer: this,
-        latlng: this.map.containerPointToLatLng(target),
-        source: "canvas",
-        index: recordIndex,
-        feature: record.feature
-      };
+      if (inside || onStroke) {
+        const id = (record.feature as { id?: string | number } | undefined)?.id;
+        return {
+          layer: this,
+          latlng: this.map.containerPointToLatLng(target),
+          source: "canvas",
+          index: recordIndex,
+          ...(id !== undefined ? { id } : {}),
+          feature: record.feature
+        };
+      }
     }
     return null;
+  }
+
+  /**
+   * Container-space bounding box test for one record.
+   *
+   * The projection is monotonic in both axes inside a world copy, so projecting the two corners of
+   * the stored lat/lng box gives a correct axis-aligned box to reject against — no geodesic
+   * densification, no per-vertex work.
+   */
+  #boxCouldContain(record: PathRecord, target: Point, tolerance: number): boolean {
+    if (!this.map) return false;
+    const a = this.map.latLngToContainerPoint({ lat: record.minLat, lng: record.minLng });
+    const b = this.map.latLngToContainerPoint({ lat: record.maxLat, lng: record.maxLng });
+    const padding = tolerance + record.strokeWidth / 2 + 1;
+    return target.x >= Math.min(a.x, b.x) - padding
+      && target.x <= Math.max(a.x, b.x) + padding
+      && target.y >= Math.min(a.y, b.y) - padding
+      && target.y <= Math.max(a.y, b.y) + padding;
   }
 
   override onAdd(map: Orihon): void {
@@ -232,6 +257,9 @@ export class CanvasPathBatch extends InteractiveLayer<CanvasPathBatchOptions, Ca
     this._interactionUnsub = null;
     if (!this.canvas) return;
     this.canvas.style.pointerEvents = this.options.interactive ? "auto" : "none";
+    // Without this class the map takes pointer capture on pointerdown, which retargets pointerup
+    // and click to the container — the tap below would never fire.
+    this.canvas.classList.toggle("oh-interactive", this.options.interactive === true);
     if (!this.options.interactive) return;
     this._interactionUnsub = listenTap(this.canvas, (event) => {
       if (!this.map || !this.canvas) return;

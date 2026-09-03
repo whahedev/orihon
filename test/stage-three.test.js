@@ -102,13 +102,24 @@ test("DivIcon strings stay text even when they look like HTML", () => {
   }
 });
 
-test("Icon and DivIcon retain size and anchor semantics", () => {
-  const image = icon({ iconUrl: "marker.png", iconSize: [30, 40], iconAnchor: [15, 40] });
+test("Icon and DivIcon retain size, anchor and circular image semantics", () => {
+  const image = icon({
+    iconUrl: "marker.png",
+    iconSize: [30, 40],
+    iconAnchor: [15, 40],
+    shape: "circle",
+    fit: "cover",
+    borderColor: "white",
+    borderWidth: 3
+  });
   const div = icon({ content: "A", iconSize: [28, 28] });
 
   assert.ok(image instanceof Icon);
   assert.deepEqual(image.getSize().toArray(), [30, 40]);
   assert.deepEqual(image.getAnchor().toArray(), [15, 40]);
+  assert.equal(image.options.shape, "circle");
+  assert.equal(image.options.fit, "cover");
+  assert.equal(image.options.borderWidth, 3);
   assert.ok(div instanceof DivIcon);
   assert.deepEqual(div.getAnchor().toArray(), [14, 14]);
 

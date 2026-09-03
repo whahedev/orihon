@@ -17,6 +17,8 @@ export interface ObjectState {
 
 export interface ObjectLabelStyle {
   text: string;
+  /** `always` draws in the label layer; `hover` uses the marker's native Tooltip. */
+  display?: "always" | "hover";
   fontFamily?: string;
   fontSize?: number;
   fontWeight?: string | number;
@@ -64,6 +66,18 @@ export interface ObjectPolygonStyle {
   strokeWidth?: number;
 }
 
+/** DOM point image. Use clusterRenderer:"dom" when images must remain visible for large sets. */
+export interface ObjectImageStyle {
+  url: string;
+  alt?: string;
+  shape?: "rectangle" | "circle";
+  fit?: "fill" | "cover" | "contain";
+  borderColor?: string;
+  borderWidth?: number;
+  /** Draw above ordinary point glyphs by default. */
+  zIndexOffset?: number;
+}
+
 export type ObjectCollisionMode = "auto" | "always" | "hide";
 
 export interface ObjectStyle extends RemovedPointStyleAliases {
@@ -73,6 +87,8 @@ export interface ObjectStyle extends RemovedPointStyleAliases {
   fillOpacity?: number;
   size?: number;
   icon?: string | null;
+  /** Per-object DOM image, independent from the registered WebGL icon atlas. */
+  image?: ObjectImageStyle | null;
   /** Explicit icon tint; when omitted, `fill` is used for tintable icons. */
   iconTint?: string;
   /** Degrees: 0 up, 90 right, 180 down, 270 left. */

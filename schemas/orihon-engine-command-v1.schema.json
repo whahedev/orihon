@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orihon.dev/schemas/orihon-engine-command-v1.schema.json",
+  "title": "Orihon AI Engine Command v1",
+  "description": "One JSON command accepted by AICommandEngine.execute().",
+  "oneOf": [
+    { "$ref": "./orihon-command-v1.schema.json" },
+    { "$ref": "#/$defs/add" },
+    { "$ref": "#/$defs/update" },
+    { "$ref": "#/$defs/remove" },
+    { "$ref": "#/$defs/replace" },
+    { "$ref": "#/$defs/clear" },
+    { "$ref": "#/$defs/batch" },
+    { "$ref": "#/$defs/pointsReplace" },
+    { "$ref": "#/$defs/routePlan" }
+  ],
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "objectId": {
+      "oneOf": [
+        { "$ref": "#/$defs/name" },
+        { "type": "number" }
+      ]
+    },
+    "objectIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/objectId" }
+    },
+    "position": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "type": "number", "minimum": -180, "maximum": 180 },
+        { "type": "number", "minimum": -90, "maximum": 90 }
+      ]
+    },
+    "geometry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "coordinates"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "Point" },
+            "coordinates": { "$ref": "#/$defs/position" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "coordinates"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "LineString" },
+            "coordinates": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/position" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "coordinates"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "Polygon" },
+            "coordinates": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/position" } }
+            }
+          }
+        }
+      ]
+    },
+    "feature": {
+      "type": "object",
+      "required": ["type", "id", "geometry"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "Feature" },
+        "id": { "$ref": "#/$defs/objectId" },
+        "geometry": { "$ref": "#/$defs/geometry" },
+        "properties": { "oneOf": [{ "type": "object" }, { "type": "null" }] }
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/feature" }
+    },
+    "add": {
+      "type": "object",
+      "required": ["op", "collection", "objects"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "objects.add" },
+        "collection": { "$ref": "#/$defs/name" },
+        "objects": { "$ref": "#/$defs/features" }
+      }
+    },
+    "update": {
+      "type": "object",
+      "required": ["op", "collection", "objects"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "objects.update" },
+        "collection": { "$ref": "#/$defs/name" },
+        "objects": { "$ref": "#/$defs/features" }
+      }
+    },
+    "remove": {
+      "type": "object",
+      "required": ["op", "collection", "ids"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "objects.remove" },
+        "collection": { "$ref": "#/$defs/name" },
+        "ids": { "$ref": "#/$defs/objectIds" }
+      }
+    },
+    "replace": {
+      "type": "object",
+      "required": ["op", "collection", "objects"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "objects.replace" },
+        "collection": { "$ref": "#/$defs/name" },
+        "objects": { "$ref": "#/$defs/features" }
+      }
+    },
+    "clear": {
+      "type": "object",
+      "required": ["op", "collection"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "objects.clear" },
+        "collection": { "$ref": "#/$defs/name" }
+      }
+    },
+    "change": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "objects"],
+          "additionalProperties": false,
+          "properties": { "type": { "const": "add" }, "objects": { "$ref": "#/$defs/features" } }
+        },
+        {
+          "type": "object",
+          "required": ["type", "objects"],
+          "additionalProperties": false,
+          "properties": { "type": { "const": "update" }, "objects": { "$ref": "#/$defs/features" } }
+        },
+        {
+          "type": "object",
+          "required": ["type", "ids"],
+          "additionalProperties": false,
+          "properties": { "type": { "const": "remove" }, "ids": { "$ref": "#/$defs/objectIds" } }
+        }
+      ]
+    },
+    "batch": {
+      "type": "object",
+      "required": ["op", "collection", "changes"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "objects.batch" },
+        "collection": { "$ref": "#/$defs/name" },
+        "changes": { "type": "array", "items": { "$ref": "#/$defs/change" } }
+      }
+    },
+    "namedPosition": {
+      "type": "object",
+      "required": ["lat", "lng"],
+      "additionalProperties": false,
+      "properties": {
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lng": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "pointCategory": { "enum": ["alpha", "beta", "gamma", "alert"] },
+    "pointPopupImage": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "alt": { "type": "string", "maxLength": 500 },
+        "caption": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "pointPopupRich": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "text": { "type": "string", "maxLength": 4000 },
+        "image": { "$ref": "#/$defs/pointPopupImage" }
+      }
+    },
+    "pointPopup": {
+      "oneOf": [
+        { "type": "string" },
+        { "$ref": "#/$defs/pointPopupRich" }
+      ]
+    },
+    "pointVisualImage": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "alt": { "type": "string", "maxLength": 500 },
+        "shape": { "enum": ["circle", "rectangle"] },
+        "fit": { "enum": ["cover", "contain", "fill"] },
+        "borderColor": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "borderWidth": { "type": "number", "minimum": 0, "maximum": 16 }
+      }
+    },
+    "pointVisualOffset": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number", "minimum": -256, "maximum": 256 },
+        "y": { "type": "number", "minimum": -256, "maximum": 256 }
+      }
+    },
+    "pointVisualLabel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+      "text": { "type": "string", "maxLength": 500 },
+      "display": { "enum": ["hover", "always"] },
+      "fontSize": { "type": "number", "minimum": 8, "maximum": 48 },
+        "fontWeight": { "type": "number", "minimum": 100, "maximum": 900 },
+        "color": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "haloColor": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "haloWidth": { "type": "number", "minimum": 0, "maximum": 8 },
+        "offset": { "$ref": "#/$defs/pointVisualOffset" },
+        "priority": { "type": "number" },
+        "minZoom": { "type": "number", "minimum": 0, "maximum": 30 },
+        "maxZoom": { "type": "number", "minimum": 0, "maximum": 30 }
+      }
+    },
+    "pointVisual": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "image": { "$ref": "#/$defs/pointVisualImage" },
+        "label": {
+          "oneOf": [
+            { "type": "string", "maxLength": 500 },
+            { "$ref": "#/$defs/pointVisualLabel" }
+          ]
+        },
+        "size": { "type": "number", "minimum": 8, "maximum": 256 },
+        "collisionMode": { "enum": ["auto", "always", "hide"] }
+      }
+    },
+    "pointItem": {
+      "type": "object",
+      "required": ["id", "position"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/objectId" },
+        "position": { "$ref": "#/$defs/namedPosition" },
+        "title": { "type": "string" },
+        "popup": { "$ref": "#/$defs/pointPopup" },
+        "visual": { "$ref": "#/$defs/pointVisual" },
+        "category": { "$ref": "#/$defs/pointCategory" }
+      }
+    },
+    "pointDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "category": { "$ref": "#/$defs/pointCategory" } }
+    },
+    "pointViewport": {
+      "type": "object",
+      "required": ["mode"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "const": "fit" },
+        "padding": { "type": "number", "minimum": 0 },
+        "animation": { "enum": ["none", "fly"] },
+        "durationMs": { "type": "number", "minimum": 0 }
+      }
+    },
+    "pointsReplace": {
+      "type": "object",
+      "required": ["op", "collection", "points"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "points.replace" },
+        "collection": { "$ref": "#/$defs/name" },
+        "points": { "type": "array", "items": { "$ref": "#/$defs/pointItem" } },
+        "defaults": { "$ref": "#/$defs/pointDefaults" },
+        "viewport": { "$ref": "#/$defs/pointViewport" },
+        "clearMap": { "type": "boolean" }
+      }
+    },
+    "routePlan": {
+      "type": "object",
+      "required": ["op", "routeId", "collection"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "route.plan" },
+        "routeId": { "$ref": "#/$defs/name" },
+        "collection": { "$ref": "#/$defs/name" },
+        "ids": { "$ref": "#/$defs/objectIds" },
+        "startId": { "$ref": "#/$defs/objectId" },
+        "endId": { "$ref": "#/$defs/objectId" },
+        "optimize": { "const": "shortest" },
+        "closeLoop": { "type": "boolean" },
+        "annotateStops": { "type": "boolean" }
+      }
+    }
+  }
+}

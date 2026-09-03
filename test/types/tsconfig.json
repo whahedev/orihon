@@ -4,5 +4,5 @@
     "noEmit": true,
     "rootDir": "../.."
   },
-  "include": ["./public-api.ts", "./events.ts", "./layer-events.ts"]
+  "include": ["./public-api.ts", "./events.ts", "./layer-events.ts", "./ai.ts"]
 }

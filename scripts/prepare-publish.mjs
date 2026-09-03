@@ -49,12 +49,16 @@ for (const name of ["LICENSE", "LICENSE-NOTICE.md", "README.md", "CHANGELOG.md"]
 for (const source of (await walk(resolve(root, "docs"))).filter((path) => path.endsWith(".md"))) {
   await copyInto(source, resolve(out, "docs", relative(resolve(root, "docs"), source)));
 }
+for (const source of (await walk(resolve(root, "schemas"))).filter((path) => path.endsWith(".json"))) {
+  await copyInto(source, resolve(out, "schemas", relative(resolve(root, "schemas"), source)));
+}
+await copyInto(resolve(root, "llms.txt"), resolve(out, "llms.txt"));
 
 const pkg = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
 delete pkg.scripts;
 delete pkg.devDependencies;
 pkg.sideEffects = pkg.sideEffects.filter((path) => !path.startsWith("./src/"));
-pkg.files = ["dist", "assets/brand/svg", "assets/brand/tokens", "docs", "LICENSE", "LICENSE-NOTICE.md", "README.md", "CHANGELOG.md"];
+pkg.files = ["dist", "assets/brand/svg", "assets/brand/tokens", "schemas", "llms.txt", "docs", "LICENSE", "LICENSE-NOTICE.md", "README.md", "CHANGELOG.md"];
 await writeFile(resolve(out, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
 
 console.log(`Wrote publish-ready modular package -> ${out}`);

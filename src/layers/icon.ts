@@ -13,6 +13,12 @@ export interface IconOptions {
   shadowAnchor?: PointLike;
   className?: string;
   alt?: string;
+  /** Crop the image to a circle or keep its rectangular box. Default rectangle. */
+  shape?: "rectangle" | "circle";
+  /** CSS object-fit used inside iconSize. Default fill for compatibility. */
+  fit?: "fill" | "cover" | "contain";
+  borderColor?: string;
+  borderWidth?: number;
 }
 
 interface ResolvedIconOptions {
@@ -26,6 +32,10 @@ interface ResolvedIconOptions {
   shadowAnchor: Point;
   className: string;
   alt: string;
+  shape: "rectangle" | "circle";
+  fit: "fill" | "cover" | "contain";
+  borderColor: string;
+  borderWidth: number;
 }
 
 export class Icon {
@@ -45,7 +55,11 @@ export class Icon {
       shadowSize: point(options.shadowSize ?? iconSize),
       shadowAnchor: point(options.shadowAnchor ?? [iconSize.x / 2, iconSize.y]),
       className: options.className ?? "",
-      alt: options.alt ?? "Map marker"
+      alt: options.alt ?? "Map marker",
+      shape: options.shape === "circle" ? "circle" : "rectangle",
+      fit: options.fit === "cover" || options.fit === "contain" ? options.fit : "fill",
+      borderColor: options.borderColor ?? "transparent",
+      borderWidth: Math.max(0, Number(options.borderWidth) || 0)
     };
   }
 
@@ -57,6 +71,12 @@ export class Icon {
     image.className = `oh-marker-icon ${this.options.className}`.trim();
     image.style.width = `${this.options.iconSize.x}px`;
     image.style.height = `${this.options.iconSize.y}px`;
+    image.style.objectFit = this.options.fit;
+    image.style.borderRadius = this.options.shape === "circle" ? "50%" : "";
+    image.style.border = this.options.borderWidth > 0
+      ? `${this.options.borderWidth}px solid ${this.options.borderColor}`
+      : "";
+    image.style.boxSizing = "border-box";
     image.draggable = false;
     return image;
   }

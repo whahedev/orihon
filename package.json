@@ -39,6 +39,13 @@
       "types": "./dist/easy-entry.d.ts",
       "import": "./dist/easy-entry.js"
     },
+    "./ai": {
+      "types": "./dist/ai-entry.d.ts",
+      "import": "./dist/ai-entry.js"
+    },
+    "./schema/scene-v1.json": "./schemas/orihon-scene-v1.schema.json",
+    "./schema/command-v1.json": "./schemas/orihon-command-v1.schema.json",
+    "./schema/engine-command-v1.json": "./schemas/orihon-engine-command-v1.schema.json",
     "./source": {
       "types": "./dist/feature-source.d.ts",
       "import": "./dist/feature-source.js"
@@ -120,7 +127,7 @@
     "build": "tsc -p tsconfig.json && node scripts/build-browser.mjs",
     "pretest": "npm run build",
     "test": "node scripts/run-unit-tests.mjs",
-    "test:browser": "node test/browser-smoke.mjs && node test/tile-gpu-browser.mjs && node test/geojson-async-browser.mjs && node test/heat-browser.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs && node test/webgl-warp-browser.mjs",
+    "test:browser": "node test/browser-smoke.mjs && node test/tile-gpu-browser.mjs && node test/geojson-async-browser.mjs && node test/geojson-query-browser.mjs && node test/heat-browser.mjs && node test/export-png-browser.mjs && node test/popup-geometry-browser.mjs && node test/p1-browser.mjs && node test/object-manager-speed-browser.mjs && node test/webgl-warp-browser.mjs",
     "test:server": "node scripts/browser-test-server.mjs",
     "test:e2e": "playwright test",
     "test:fuzz": "node --test test/coordinate-fuzz.test.js",
@@ -145,6 +152,7 @@
     "demo:aircraft": "node examples/aircraft-radar-proxy/server.mjs",
     "demo:rzd": "node examples/rzd-train-122-tracker/server.mjs",
     "demo:navigation": "npx --yes serve . -p 8791",
+    "demo:ai": "npm run build && node examples/ai-agent-demo/server.mjs",
     "demo:studio": "node _local/studio/server.mjs",
     "embed:examples": "node scripts/embed-examples.mjs",
     "bench:p0": "npm run build && node --expose-gc scripts/bench-p0-webgl.mjs"
@@ -170,6 +178,8 @@
     "!dist/orihon*.js",
     "assets/brand/svg",
     "assets/brand/tokens",
+    "schemas",
+    "llms.txt",
     "docs/*.md",
     "docs/developer-guide/README.md",
     "LICENSE",

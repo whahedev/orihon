@@ -264,7 +264,8 @@ interface PointLikeXY {
   y: number;
 }
 
-function segmentDistance(target: PointLikeXY, a: PointLikeXY, b: PointLikeXY): number {
+/** @internal Shared by every path hit test in the package; not part of the public surface. */
+export function segmentDistance(target: PointLikeXY, a: PointLikeXY, b: PointLikeXY): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   if (!dx && !dy) return Math.hypot(target.x - a.x, target.y - a.y);
@@ -272,7 +273,8 @@ function segmentDistance(target: PointLikeXY, a: PointLikeXY, b: PointLikeXY): n
   return Math.hypot(target.x - (a.x + t * dx), target.y - (a.y + t * dy));
 }
 
-function ringContainsPoint(target: PointLikeXY, ring: PointLikeXY[]): boolean {
+/** @internal Even-odd ray cast in projected space, shared with the GeoJSON and batch hit tests. */
+export function ringContainsPoint(target: PointLikeXY, ring: PointLikeXY[]): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const a = ring[i];

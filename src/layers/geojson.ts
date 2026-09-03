@@ -1,7 +1,7 @@
 import { LatLng, LatLngBounds, latLng, type LatLngLike } from "../geo.js";
 import { FeatureGroup } from "../layer-group.js";
 import { InteractiveLayer } from "../interactive-layer.js";
-import { Layer, type LayerOptions } from "../layer.js";
+import { Layer, type LayerOptions, type QueryHit, type ResolvedQueryOptions } from "../layer.js";
 import type { Orihon } from "../map.js";
 import {
   isReadonlyFeatureSource
@@ -47,6 +47,8 @@ import {
   projectedBounds,
   projectedBoundsIntersectsViewport,
   projectedPointsToPath,
+  ringContainsPoint,
+  segmentDistance,
   simplifyProjectedPoints,
   type PathOptions
 } from "./vector.js";
@@ -250,11 +252,19 @@ function countPathFeatures(data: GeoJSONData | null | undefined): number {
 class GeoJSONPathLayer extends PathLayer {
   readonly geometry: PathGeometry;
   readonly convert: (coordinates: GeoJSONPosition) => LatLng;
+  /**
+   * The feature this path was built from.
+   *
+   * `GeoJSONLayer` also assigns `.feature` onto every child it keeps, but that happens after
+   * construction; `queryHit` runs whenever the user clicks and cannot depend on assignment order.
+   */
+  readonly sourceFeature: GeoJSONFeature | null;
 
   constructor(
     geometry: PathGeometry,
     options: PathOptions,
-    convert: (coordinates: GeoJSONPosition) => LatLng
+    convert: (coordinates: GeoJSONPosition) => LatLng,
+    sourceFeature: GeoJSONFeature | null = null
   ) {
     super({
       fill: geometry.type === "Polygon" || geometry.type === "MultiPolygon" ? "#2563eb" : "none",
@@ -262,6 +272,54 @@ class GeoJSONPathLayer extends PathLayer {
     });
     this.geometry = geometry;
     this.convert = convert;
+    this.sourceFeature = sourceFeature;
+  }
+
+  /**
+   * Hit test for one GeoJSON path feature.
+   *
+   * `PathLayer` has no `queryHit` — only `Polyline` and `Polygon` do — and this class extends
+   * `PathLayer` directly, so until now every line and polygon a GeoJSON layer drew was invisible to
+   * `map.query()` no matter how few features it held. The rules match `Polygon`/`Polyline`: a
+   * closed geometry counts a hit inside its rings (even-odd, so holes fall through) or within the
+   * stroke, an open one only near the stroke.
+   */
+  override queryHit(target: { x: number; y: number }, options: ResolvedQueryOptions): QueryHit | null {
+    if (!this.map || !this.options.interactive) return null;
+    const project = (ring: GeoJSONPosition[]) => ring.map((coordinates) => this.map!.latLngToContainerPoint(this.convert(coordinates)));
+    const closed = this.geometry.type === "Polygon" || this.geometry.type === "MultiPolygon";
+    // One entry per polygon or line: each holds its rings, each ring its projected points.
+    const parts: Array<Array<Array<{ x: number; y: number }>>> = closed
+      ? (this.geometry.type === "Polygon"
+        ? [this.geometry.coordinates.map(project)]
+        : this.geometry.coordinates.map((polygon) => polygon.map(project)))
+      : (this.geometry.type === "LineString"
+        ? [[project(this.geometry.coordinates)]]
+        : this.geometry.coordinates.map((line) => [project(line)]));
+
+    const tolerance = options.tolerance + this.options.strokeWidth / 2;
+    const filled = closed && this.options.fill !== "none" && this.options.fillOpacity > 0;
+    for (const rings of parts) {
+      let inside = false;
+      if (filled) for (const ring of rings) if (ringContainsPoint(target, ring)) inside = !inside;
+      const onStroke = rings.some((ring) => {
+        const segments = closed ? ring.length : ring.length - 1;
+        for (let index = 0; index < segments; index += 1) {
+          if (segmentDistance(target, ring[index], ring[(index + 1) % ring.length]) <= tolerance) return true;
+        }
+        return false;
+      });
+      if (inside || onStroke) {
+        return {
+          layer: this,
+          latlng: this.map.containerPointToLatLng(target),
+          source: "svg",
+          ...(this.sourceFeature?.id !== undefined ? { id: this.sourceFeature.id } : {}),
+          ...(this.sourceFeature ? { feature: this.sourceFeature } : {})
+        };
+      }
+    }
+    return null;
   }
 
   getBounds(): LatLngBounds {
@@ -602,7 +660,7 @@ export class GeoJSONLayer extends FeatureGroup {
     if (this.rendererMode === "canvas" || this.rendererMode === "webgl") {
       return this.#addBatchPath(geometry, style, convert, feature);
     }
-    const layer = new GeoJSONPathLayer(geometry, style, convert);
+    const layer = new GeoJSONPathLayer(geometry, style, convert, feature);
     this.defaultStyles.set(layer, style);
     return layer;
   }
@@ -630,7 +688,8 @@ export class GeoJSONLayer extends FeatureGroup {
           ? webglBatchFactory(common)
           : new CanvasPathBatch(common);
       const configured = this.geoJSONOptions.popup;
-      if (configured !== undefined && this.rendererMode === "canvas") {
+      // Both batches emit a `click` carrying the feature now, so the popup is no longer canvas-only.
+      if (configured !== undefined) {
         const batch = this._pathBatch;
         const content: OverlayContent = typeof configured === "function"
           ? (context) => {

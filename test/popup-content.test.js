@@ -33,6 +33,7 @@ class FakeContentNode {
 
 class FakeClassList {
   values = new Set();
+  toggle(name, force) { const on = force ?? !this.values.has(name); if (on) this.values.add(name); else this.values.delete(name); return on; }
   add(...names) {
     for (const name of names) this.values.add(name);
   }
